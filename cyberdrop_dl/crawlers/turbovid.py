@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
@@ -79,9 +79,15 @@ class TurboVidCrawler(Crawler):
             return
 
         scrape_item.possible_datetime = self.parse_iso_date(css.select_text(soup, Selector.UPLOAD_DATE))
+        name, dl_link = await self._request_download(file_id)
+        filename, ext = self.get_filename_and_ext(name)
+        await self.handle_file(dl_link, scrape_item, name, ext, custom_filename=filename)
+
+    async def _request_download(self, file_id: str) -> tuple[str, AbsoluteHttpURL]:
         sign_url = (self.PRIMARY_URL / "api/sign").with_query(v=file_id)
-        link = self.parse_url((await self.request_json(sign_url))["url"])
-        await self.direct_file(scrape_item, link)
+        resp: dict[str, Any] = await self.request_json(sign_url)
+        name: str = resp.get("original_filename") or resp["filename"]
+        return name, self.parse_url(resp["url"])
 
 
 def fix_db_referer(referer: str) -> str:
