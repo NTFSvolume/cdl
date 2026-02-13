@@ -56,7 +56,7 @@ class TurboVidCrawler(Crawler):
     @error_handling_wrapper
     async def album(self, scrape_item: ScrapeItem, album_id: str) -> None:
         soup = await self.request_soup(scrape_item.url)
-        name = css.page_title(soup).removesuffix(" - turbovid.cr")
+        name = css.select_text(soup, "h1")
         title = self.create_title(name, album_id)
         scrape_item.setup_as_album(title, album_id=album_id)
 
