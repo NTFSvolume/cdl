@@ -90,6 +90,7 @@ from .nudostartv import NudoStarTVCrawler
 from .odnoklassniki import OdnoklassnikiCrawler
 from .omegascans import OmegaScansCrawler
 from .onedrive import OneDriveCrawler
+from .onepace import OnePaceCrawler
 from .pcloud import PCloudCrawler
 from .pimp_bunny import PimpBunnyCrawler
 from .pimpandhost import PimpAndHostCrawler
@@ -136,6 +137,7 @@ from .twpornstars import TwPornstarsCrawler
 from .txxx import TXXXCrawler
 from .upload_ee import UploadEECrawler
 from .upornia import UPorniaCrawler
+from .upskirt_asian_girl import UpskirtAsianGirlCrawler
 from .vbulletin import VBULLETIN_CRAWLERS
 from .vipr_dot_im import ViprImCrawler
 from .vjav import VJavCrawler
