@@ -33,7 +33,7 @@ class FilesterCrawler(Crawler):
     }
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://filester.me")
     DOMAIN: ClassVar[str] = "filester"
-    _RATE_LIMIT = 5, 1
+    _RATE_LIMIT = 10, 1
     NEXT_PAGE_SELECTOR = Selector.NEXT_PAGE
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
@@ -69,7 +69,7 @@ class FilesterCrawler(Crawler):
             except css.SelectorError:
                 break
             else:
-                next_page = next_page.with_query(query)
+                next_page = next_page.with_query(query.strip("?"))
 
     @error_handling_wrapper
     async def file(self, scrape_item: ScrapeItem, slug: str) -> None:
