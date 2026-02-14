@@ -12,4 +12,15 @@ TEST_CASES = [
             }
         ],
     ),
+    (
+        "https://filester.me/f/c3bf3e1da9982845",
+        [
+            {
+                "url": "re:https://cache1.filester.me/d/",
+                "download_folder": "re:mirror_post-410_1771095844 (Filester)",
+                "album_id": "c3bf3e1da9982845",
+            }
+        ],
+        53,
+    ),
 ]
