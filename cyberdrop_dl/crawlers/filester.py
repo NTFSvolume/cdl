@@ -34,7 +34,6 @@ class FilesterCrawler(Crawler):
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://filester.me")
     DOMAIN: ClassVar[str] = "filester"
     _RATE_LIMIT = 10, 1
-    NEXT_PAGE_SELECTOR = Selector.NEXT_PAGE
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
@@ -47,16 +46,12 @@ class FilesterCrawler(Crawler):
 
     @error_handling_wrapper
     async def folder(self, scrape_item: ScrapeItem, album_id: str) -> None:
-        title: str = ""
+        soup = await self.request_soup(scrape_item.url)
+        name = open_graph.title(soup)
+        title = self.create_title(name, album_id)
+        scrape_item.setup_as_album(title, album_id=album_id)
 
-        next_page = scrape_item.url
         while True:
-            soup = await self.request_soup(next_page)
-            if not title:
-                name = open_graph.title(soup)
-                title = self.create_title(name, album_id)
-                scrape_item.setup_as_album(title, album_id=album_id)
-
             for row in soup.select(Selector.FILES):
                 url = get_text_between(css.get_attr(row, "onclick"), "'", "'")
                 web_url = self.parse_url(url)
@@ -68,8 +63,9 @@ class FilesterCrawler(Crawler):
                 query = css.select(soup, Selector.NEXT_PAGE, "href")
             except css.SelectorError:
                 break
-            else:
-                next_page = next_page.with_query(query.strip("?"))
+
+            next_page = scrape_item.url.with_query(query.strip("?"))
+            soup = await self.request_soup(next_page)
 
     @error_handling_wrapper
     async def file(self, scrape_item: ScrapeItem, slug: str) -> None:
