@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 import dataclasses
-import itertools
 import json
 import re
 from collections.abc import Generator
 from enum import IntEnum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 if TYPE_CHECKING:
     from collections.abc import Generator
 
     from bs4 import BeautifulSoup
+
+ChunkID: TypeAlias = str
 
 
 class FlightDataType(IntEnum):
@@ -24,12 +25,13 @@ class FlightDataType(IntEnum):
 @dataclasses.dataclass(slots=True, order=True)
 class FlightChunk:
     index: int = dataclasses.field(init=False)
-    id: str
+    id: ChunkID
     marker: str | None
-    data: Any = dataclasses.field(init=False)
+
     raw_data: str
+    data: Any = dataclasses.field(init=False)
+    hints: list[str] = dataclasses.field(init=False)
     resolved: bool = False
-    hints: list[str] = dataclasses.field(default_factory=list)
 
     def __post_init__(self) -> None:
         self.index = int(self.id, base=16)
@@ -37,7 +39,7 @@ class FlightChunk:
 
 
 # Map of chunk_id (hex index of the chunk) -> list of all the objects (components) created from that chunk
-NextJSFlight = dict[str, list[dict[str, Any]]]
+NextJSFlight = dict[ChunkID, list[dict[str, Any]]]
 
 
 _find_chunks = re.compile(r'^(?<![0-9A-Za-z:"])([0-9a-f]+):([A-Z]{0,2})(["\[\{]|null)', re.MULTILINE).finditer
@@ -90,7 +92,7 @@ def _get_flight_chunks(soup: BeautifulSoup) -> Generator[tuple[FlightDataType, s
 
 
 def _parse_chunks(flight_data: str) -> Generator[FlightChunk]:
-    chunks: dict[str, FlightChunk] = {}
+    chunks: dict[ChunkID, FlightChunk] = {}
 
     def revive(value: Any) -> Any:
         if not value:
@@ -128,7 +130,7 @@ def _parse_chunks(flight_data: str) -> Generator[FlightChunk]:
 
         elif isinstance(value, FlightChunk):
             initialize(value)
-            return revive(value.data)
+            return value.data
 
         return value
 
@@ -145,13 +147,17 @@ def _parse_chunks(flight_data: str) -> Generator[FlightChunk]:
             chunk.resolved = True
 
     flight_data = flight_data.replace('"$undefined"', "null")
-    indices = list(_find_chunks(flight_data))
+    matches = tuple(_find_chunks(flight_data))
 
-    for m, next_m in itertools.zip_longest(indices, indices[1:]):
-        chunk_id, marker, delimiter = m.groups()
-        end = next_m.start() if next_m is not None else -1
-        payload = flight_data[m.end() - 1 : end].strip()
-        chunks[chunk_id] = chunk = FlightChunk(chunk_id, marker=marker or None, raw_data=payload)
+    for idx, match in enumerate(matches):
+        chunk_id, marker, delimiter = match.groups()
+        try:
+            end = matches[idx + 1].start()
+        except IndexError:
+            end = -1
+
+        data = flight_data[match.end() - 1 : end].strip()
+        chunks[chunk_id] = chunk = FlightChunk(chunk_id, marker=marker or None, raw_data=data)
         if delimiter == "null":
             chunk.data = None
 
