@@ -567,8 +567,9 @@ class HTMLMessageBoardCrawler(MessageBoardCrawler, is_abc=True):
 
     @error_handling_wrapper
     async def resolve_confirmation_link(self, link: AbsoluteHttpURL) -> AbsoluteHttpURL | None:
-        if url := link.query.get("url"):
-            url = base64.b64decode(url).decode("utf-8")
+        if url := link.query.get("url") or link.query.get("to"):
+            padding = -len(url) % 4
+            url = base64.urlsafe_b64decode(url + "=" * padding).decode("utf-8")
             if url.startswith("https://"):
                 return self.parse_url(url)
 
@@ -692,7 +693,9 @@ def clean_link_str(link: str) -> str:
 
 
 def is_confirmation_link(link: AbsoluteHttpURL) -> bool:
-    return "masked" in link.parts or "link-confirmation" in link.path
+    return (
+        "masked" in link.parts or "link-confirmation" in link.path or ("redirect" in link.parts and "to" in link.query)
+    )
 
 
 def check_post_id(init_post_id: int | None, current_post_id: int, scrape_single_forum_post: bool) -> tuple[bool, bool]:
