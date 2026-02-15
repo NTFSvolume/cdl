@@ -127,7 +127,7 @@ class CheveretoCrawler(Crawler, is_generic=True):
                 for _, sub_album in self.iter_children(scrape_item, soup, Selector.ITEM):
                     self.create_task(self.run(sub_album))
 
-                return
+                continue
 
             self._iter_album_files(scrape_item, soup)
 
