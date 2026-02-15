@@ -21,29 +21,30 @@ class FlightDataType(IntEnum):
     BINARY = 3
 
 
+@dataclasses.dataclass(slots=True, order=True)
+class FlightChunk:
+    index: int = dataclasses.field(init=False)
+    id: str
+    marker: str | None
+    data: Any = dataclasses.field(init=False)
+    raw_data: str
+    resolved: bool = False
+    hints: list[str] = dataclasses.field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        self.index = int(self.id, base=16)
+        self.data, *self.hints = self.raw_data.split("\n:H")
+
+
+# Map of chunk_id (hex index of the chunk) -> list of all the objects (components) created from that chunk
 NextJSFlight = dict[str, list[dict[str, Any]]]
+
+
 _find_chunks = re.compile(r'^(?<![0-9A-Za-z:"])([0-9a-f]+):([A-Z]{0,2})(["\[\{]|null)', re.MULTILINE).finditer
 
 
-def _get_flight_chunks(soup: BeautifulSoup) -> Generator[tuple[FlightDataType, str]]:
-    for script in soup.select("script:-soup-contains('self.__next_f.push(')"):
-        js_text = script.get_text()
-        raw_data = js_text[js_text.find("(") + 1 : js_text.rfind(")")]
-        type, data = json.loads(raw_data)
-        type = FlightDataType(type)
-        if type is FlightDataType.PAYLOAD:
-            yield type, data
-
-
-def _extract(soup: BeautifulSoup) -> str:
-    return "".join((data for _, data in _get_flight_chunks(soup)))
-
-
-def extract(soup: BeautifulSoup) -> NextJSFlight:
-    return parse(_extract(soup))
-
-
 def ifind(next_flight: NextJSFlight, *attrs: str) -> Generator[dict[str, Any]]:
+    """Yield every object within `next_flight` that have the required `attrs`."""
     needed = frozenset(attrs)
 
     def walk(obj: Any) -> Generator[dict[str, Any]]:
@@ -62,30 +63,34 @@ def ifind(next_flight: NextJSFlight, *attrs: str) -> Generator[dict[str, Any]]:
 
 
 def find(next_flight: NextJSFlight, *attrs: str) -> dict[str, Any]:
+    """Get the first object within `next_flight` that have the required `attrs`."""
     return next(ifind(next_flight, *attrs))
 
 
-@dataclasses.dataclass(slots=True, order=True)
-class Chunk:
-    index: int = dataclasses.field(init=False)
-    id: str
-    marker: str | None
-    data: Any = dataclasses.field(init=False)
-    raw_data: str
-    resolved: bool = False
-    hints: list[str] = dataclasses.field(default_factory=list)
-
-    def __post_init__(self) -> None:
-        self.index = int(self.id, 16)
-        self.data = self.raw_data
+def extract(soup: BeautifulSoup) -> NextJSFlight:
+    return parse(_extract(soup))
 
 
 def parse(flight_data: str) -> NextJSFlight:
     return {chunk.id: chunk.data for chunk in _parse_chunks(flight_data)}
 
 
-def _parse_chunks(flight_data: str) -> Generator[Chunk]:
-    chunks: dict[str, Chunk] = {}
+def _extract(soup: BeautifulSoup) -> str:
+    return "".join((data for _, data in _get_flight_chunks(soup)))
+
+
+def _get_flight_chunks(soup: BeautifulSoup) -> Generator[tuple[FlightDataType, str]]:
+    for script in soup.select("script:-soup-contains('self.__next_f.push(')"):
+        js_text = script.get_text()
+        raw_data = js_text[js_text.find("(") + 1 : js_text.rfind(")")]
+        type, data = json.loads(raw_data)
+        type = FlightDataType(type)
+        if type is FlightDataType.PAYLOAD:
+            yield type, data
+
+
+def _parse_chunks(flight_data: str) -> Generator[FlightChunk]:
+    chunks: dict[str, FlightChunk] = {}
 
     def revive(value: Any) -> Any:
         if not value:
@@ -121,13 +126,13 @@ def _parse_chunks(flight_data: str) -> Generator[Chunk]:
             for key, obj in value.items():
                 value[key] = revive(obj)
 
-        elif isinstance(value, Chunk):
+        elif isinstance(value, FlightChunk):
             initialize(value)
             return revive(value.data)
 
         return value
 
-    def initialize(chunk: Chunk) -> None:
+    def initialize(chunk: FlightChunk) -> None:
         if chunk.resolved:
             return
         try:
@@ -146,8 +151,7 @@ def _parse_chunks(flight_data: str) -> Generator[Chunk]:
         chunk_id, marker, delimiter = m.groups()
         end = next_m.start() if next_m is not None else -1
         payload = flight_data[m.end() - 1 : end].strip()
-        chunks[chunk_id] = chunk = Chunk(chunk_id, marker=marker or None, raw_data=payload)
-        chunk.data, *chunk.hints = payload.split("\n:H")
+        chunks[chunk_id] = chunk = FlightChunk(chunk_id, marker=marker or None, raw_data=payload)
         if delimiter == "null":
             chunk.data = None
 
