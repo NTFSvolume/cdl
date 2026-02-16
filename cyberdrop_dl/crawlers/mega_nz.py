@@ -7,11 +7,11 @@ It calls checks_complete_by_referer several times even if no request is going to
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar, NamedTuple
+from typing import TYPE_CHECKING, ClassVar
 
-from mega import crypto
 from mega.api import MegaAPI
 from mega.core import MegaCore
+from mega.crypto import b64_to_a32
 from mega.data_structures import Crypto
 
 from cyberdrop_dl.crawlers.crawler import Crawler, DBPathBuilder, SupportedDomains, SupportedPaths, auto_task_id
@@ -24,13 +24,6 @@ if TYPE_CHECKING:
     from mega.filesystem import FileSystem
 
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
-
-PRIMARY_URL = AbsoluteHttpURL("https://mega.nz")
-
-
-class FileTuple(NamedTuple):
-    id: str
-    crypto: Crypto
 
 
 class MegaNzCrawler(Crawler):
@@ -48,11 +41,11 @@ class MegaNzCrawler(Crawler):
         "Subfolder": "/folder/<folder_id>#<share_key>/folder/<subfolder_id>",
         "**NOTE**": "Downloads can not be resumed. Partial downloads will always be deleted and new downloads will start over",
     }
-    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = PRIMARY_URL
+    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://mega.nz")
     SKIP_PRE_CHECK: ClassVar[bool] = True
     DOMAIN: ClassVar[str] = "mega.nz"
     FOLDER_DOMAIN: ClassVar[str] = "MegaNz"
-    OLD_DOMAINS = ("mega.co.nz",)
+    OLD_DOMAINS: ClassVar[tuple[str, ...]] = ("mega.co.nz",)
     create_db_path = staticmethod(DBPathBuilder.path_qs_frag)
 
     core: MegaCore
@@ -73,65 +66,44 @@ class MegaNzCrawler(Crawler):
         return dl
 
     async def async_startup(self) -> None:
-        await self.login(PRIMARY_URL)
+        await self.login(self.PRIMARY_URL)
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         if not self.logged_in:
             return
 
-        if frag := scrape_item.url.fragment:  # Mega stores access key in fragment. We can't do anything without the key
-            # v1 URLs
-            if frag.count("!") == 2:
-                if frag.startswith("F!"):
-                    folder_id, _, shared_key = frag.removeprefix("F!").partition("!")
-                    return await self.folder(scrape_item, folder_id, shared_key)
-                if frag.startswith("!"):
-                    # https://mega.nz/#!Ue5VRSIQ!kC2E4a4JwfWWCWYNJovGFHlbz8F
-                    file_id, _, shared_key = frag.removeprefix("!").partition("!")
-                    return await self.file(scrape_item, file_id, shared_key)
+        info = self.core.parse_url(scrape_item.url)
+        if not info.is_folder:
+            return await self.file(scrape_item, info.public_handle, info.public_key)
 
-            # v2 URLs
-            match scrape_item.url.parts[1:]:
-                # https://mega.nz/folder/oZZxyBrY#oU4jASLPpJVvqGHJIMRcgQ/file/IYZABDGY
-                # https://mega.nz/folder/oZZxyBrY#oU4jASLPpJVvqGHJIMRcgQ
-                case ["folder", folder_id]:
-                    root_id = file_id = None
-                    shared_key, *rest = frag.split("/")
-                    if rest:
-                        match rest:
-                            case ["folder", id_]:
-                                root_id = id_
-                            case ["file", id_]:
-                                file_id = id_
-                            case _:
-                                raise ValueError
-                    return await self.folder(scrape_item, folder_id, shared_key, root_id or None, file_id or None)
-                # https://mega.nz/file/cH51DYDR#qH7QOfRcM-7N9riZWdSjsRq
-                case ["file", file_id]:
-                    return await self.file(scrape_item, file_id, frag)
-
-        raise ValueError
+        await self.folder(scrape_item, info.public_handle, info.public_key, info.selected_folder, info.selected_file)
 
     @error_handling_wrapper
-    async def file(self, scrape_item: ScrapeItem, file_id: str, shared_key: str) -> None:
-        canonical_url = (PRIMARY_URL / "file" / file_id).with_fragment(shared_key)
+    async def file(self, scrape_item: ScrapeItem, handle: str, public_key: str) -> None:
+        canonical_url = (self.PRIMARY_URL / "file" / handle).with_fragment(public_key)
         if await self.check_complete_from_referer(canonical_url):
             return
 
         scrape_item.url = canonical_url
-        full_key = crypto.b64_to_a32(shared_key)
-        file = FileTuple(file_id, Crypto.decompose(full_key))
-        await self._process_file(scrape_item, file)
+        full_key = b64_to_a32(public_key)
+        await self._process_file(scrape_item, handle, Crypto.decompose(full_key))
 
     @error_handling_wrapper
-    async def _process_file(self, scrape_item: ScrapeItem, file: FileTuple, *, folder_id: str | None = None) -> None:
-        file_data = await self.core.request_file_info(file.id, folder_id, is_public=not folder_id)
-        if not file_data.url:
+    async def _process_file(
+        self,
+        scrape_item: ScrapeItem,
+        handle: str,
+        crypto: Crypto,
+        *,
+        folder_id: str | None = None,
+    ) -> None:
+        resp = await self.core.request_file_info(handle, folder_id, is_public=not folder_id)
+        if not resp.url:
             raise ScrapeError(410, "File not accessible anymore")
 
-        name = self.core.decrypt_attrs(file_data._at, file.crypto.key).name
-        self.downloader.register(scrape_item.url, file.crypto, file_data.size)
-        file_url = self.parse_url(file_data.url)
+        name = self.core.decrypt_attrs(resp._at, crypto.key).name
+        self.downloader.register(scrape_item.url, crypto, resp.size)
+        file_url = self.parse_url(resp.url)
         filename, ext = self.get_filename_and_ext(name)
         await self.handle_file(scrape_item.url, scrape_item, filename, ext, debrid_link=file_url)
 
@@ -141,8 +113,8 @@ class MegaNzCrawler(Crawler):
     async def folder(
         self,
         scrape_item: ScrapeItem,
-        folder_id: str,
-        shared_key: str,
+        handle: str,
+        public_key: str,
         root_id: str | None = None,
         single_file_id: str | None = None,
     ) -> None:
@@ -150,35 +122,29 @@ class MegaNzCrawler(Crawler):
             return
 
         selected_node = root_id or single_file_id
-        fs = await self.core.get_public_filesystem(folder_id, shared_key)
+        fs = await self.core.get_public_filesystem(handle, public_key)
         root = next(iter(fs))
-        title = self.create_title(root.name, folder_id)
-        scrape_item.setup_as_album(title, album_id=folder_id)
-        canonical_url = (PRIMARY_URL / "folder" / folder_id).with_fragment(shared_key)
+        title = self.create_title(root.attributes.name, handle)
+        scrape_item.setup_as_album(title, album_id=handle)
+        canonical_url = (self.PRIMARY_URL / "folder" / handle).with_fragment(public_key)
         scrape_item.url = canonical_url
-        await self._process_folder_filesystem(scrape_item, fs, selected_node)
+        await self._process_fs(scrape_item, fs, selected_node)
 
-    async def _process_folder_filesystem(
-        self,
-        scrape_item: ScrapeItem,
-        filesystem: FileSystem,
-        selected_node: str | None,
-    ) -> None:
-        folder_id, shared_key = scrape_item.url.name, scrape_item.url.fragment
+    async def _process_fs(self, scrape_item: ScrapeItem, filesystem: FileSystem, selected_node_id: str | None) -> None:
+        folder_id, public_key = scrape_item.url.name, scrape_item.url.fragment
 
-        for file in filesystem.files_from(selected_node):
+        for file in filesystem.files_from(selected_node_id):
             path = filesystem.relative_path(file.id)
-            file_fragment = f"{shared_key}/file/{file.id}"
+            file_fragment = f"{public_key}/file/{file.id}"
             canonical_url = scrape_item.url.with_fragment(file_fragment)
             if await self.check_complete_from_referer(canonical_url):
                 continue
 
-            new_scrape_item = scrape_item.create_child(canonical_url, possible_datetime=file.created_at)
+            child_item = scrape_item.create_child(canonical_url, possible_datetime=file.created_at)
             for part in path.parent.parts[1:]:
-                new_scrape_item.add_to_parent_title(part)
+                child_item.add_to_parent_title(part)
 
-            file = FileTuple(file.id, file._crypto)
-            self.create_task(self._process_file_task(new_scrape_item, file, folder_id=folder_id))
+            self.create_task(self._process_file_task(child_item, file.id, file._crypto, folder_id=folder_id))
             scrape_item.add_children()
 
     @error_handling_wrapper
