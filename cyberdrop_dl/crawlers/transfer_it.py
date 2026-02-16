@@ -61,4 +61,4 @@ class TransferItCrawler(Crawler):
         link = self.parse_url(dl_link)
         filename, ext = self.get_filename_and_ext(file.attributes.name)
         scrape_item.possible_datetime = file.created_at
-        await self.handle_file(link, scrape_item, file.name, ext, custom_filename=filename)
+        await self.handle_file(link, scrape_item, file.attributes.name, ext, custom_filename=filename)
