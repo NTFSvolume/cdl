@@ -13,6 +13,7 @@ import sys
 import unicodedata
 from collections.abc import Generator, Mapping
 from functools import partial, wraps
+from http import HTTPStatus
 from pathlib import Path
 from stat import S_ISREG
 from typing import (
@@ -30,6 +31,7 @@ from typing import (
 )
 
 from aiohttp import ClientConnectorError, TooManyRedirects
+from mega.errors import MegaNzError
 from pydantic import ValidationError
 from yarl import URL
 
@@ -93,6 +95,22 @@ def error_handling_context(self: Crawler | Downloader, item: ScrapeItem | MediaI
         ui_failure = "Too Many Redirects"
         info = json.dumps({"url": e.request_info.real_url, "history": [r.real_url for r in e.history]}, indent=4)
         error_log_msg = ErrorLogMessage(ui_failure, f"{ui_failure}\n{info}")
+    except MegaNzError as e:
+        if code := getattr(e, "code", None):
+            if http_code := {
+                -9: HTTPStatus.GONE,
+                -16: HTTPStatus.FORBIDDEN,
+                -24: 509,
+                -401: 509,
+            }.get(code):
+                ui_failure = create_error_msg(http_code)
+            else:
+                ui_failure = f"MegaNZ Error [{code}]"
+        else:
+            ui_failure = "MegaNZ Error"
+
+        error_log_msg = ErrorLogMessage(ui_failure, str(e))
+
     except TimeoutError as e:
         error_log_msg = ErrorLogMessage("Timeout", repr(e))
     except ClientConnectorError as e:

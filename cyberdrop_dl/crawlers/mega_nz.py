@@ -56,6 +56,7 @@ class MegaNzCrawler(Crawler):
     create_db_path = staticmethod(DBPathBuilder.path_qs_frag)
 
     core: MegaCore
+    downloader: MegaDownloader
 
     @property
     def user(self) -> str | None:
