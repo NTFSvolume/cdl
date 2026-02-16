@@ -7,16 +7,21 @@ It calls checks_complete_by_referer several times even if no request is going to
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, cast
+from typing import TYPE_CHECKING, ClassVar, NamedTuple
+
+from mega import crypto
+from mega.api import MegaAPI
+from mega.core import MegaCore
+from mega.data_structures import Crypto
 
 from cyberdrop_dl.crawlers.crawler import Crawler, DBPathBuilder, SupportedDomains, SupportedPaths, auto_task_id
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.downloader import mega_nz as mega
+from cyberdrop_dl.downloader.mega_nz import MegaDownloader
 from cyberdrop_dl.exceptions import LoginError, ScrapeError
 from cyberdrop_dl.utils.utilities import error_handling_wrapper
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    from mega.filesystem import FileSystem
 
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
@@ -25,7 +30,7 @@ PRIMARY_URL = AbsoluteHttpURL("https://mega.nz")
 
 class FileTuple(NamedTuple):
     id: str
-    crypto: mega.DecryptData
+    crypto: Crypto
 
 
 class MegaNzCrawler(Crawler):
@@ -50,8 +55,12 @@ class MegaNzCrawler(Crawler):
     OLD_DOMAINS = ("mega.co.nz",)
     create_db_path = staticmethod(DBPathBuilder.path_qs_frag)
 
+    core: MegaCore
+
     def __post_init__(self) -> None:
-        self.downloader: mega.MegaDownloader
+        api = MegaAPI(self.manager.client_manager._session)
+        self.core = MegaCore(api)
+        self.downloader: MegaDownloader
 
     @property
     def user(self) -> str | None:
@@ -61,8 +70,8 @@ class MegaNzCrawler(Crawler):
     def password(self) -> str | None:
         return self.manager.auth_config.meganz.password or None
 
-    def _init_downloader(self) -> mega.MegaDownloader:
-        self.downloader = dl = mega.MegaDownloader(self.manager, self.DOMAIN)  # type: ignore[reportIncompatibleVariableOverride]
+    def _init_downloader(self) -> MegaDownloader:
+        self.downloader = dl = MegaDownloader(self.manager, self.DOMAIN)  # type: ignore[reportIncompatibleVariableOverride]
         dl.startup()
         return dl
 
@@ -111,38 +120,25 @@ class MegaNzCrawler(Crawler):
         canonical_url = (PRIMARY_URL / "file" / file_id).with_fragment(shared_key)
         if await self.check_complete_from_referer(canonical_url):
             return
+
         scrape_item.url = canonical_url
-        full_key = mega.base64_to_a32(shared_key)
-        crypto = mega.get_decrypt_data(mega.NodeType.FILE, full_key)
-        file = FileTuple(file_id, crypto)
+        full_key = crypto.b64_to_a32(shared_key)
+        file = FileTuple(file_id, Crypto.decompose(full_key))
         await self._process_file(scrape_item, file)
 
     @error_handling_wrapper
     async def _process_file(self, scrape_item: ScrapeItem, file: FileTuple, *, folder_id: str | None = None) -> None:
-        file_data = await self._get_file_info(file.id, folder_id)
-        decrypt_data = file.crypto._replace(file_size=file_data["s"])
-        self.downloader.register(scrape_item.url, decrypt_data)
-        file_url = self.parse_url(file_data["g"])
-        attribs_bytes = mega.base64_url_decode(file_data["at"])
-        filename = mega.decrypt_attr(attribs_bytes, file.crypto.k)["n"]
-        filename, ext = self.get_filename_and_ext(filename)
+        file_data = await self.core.request_file_info(file.id, folder_id, is_public=not folder_id)
+        if not file_data.url:
+            raise ScrapeError(410, "File not accessible anymore")
+
+        name = self.core.decrypt_attrs(file_data._at, file.crypto.key).name
+        self.downloader.register(scrape_item.url, file.crypto, file_data.size)
+        file_url = self.parse_url(file_data.url)
+        filename, ext = self.get_filename_and_ext(name)
         await self.handle_file(scrape_item.url, scrape_item, filename, ext, debrid_link=file_url)
 
     _process_file_task = auto_task_id(_process_file)
-
-    async def _get_file_info(self, file_id: str, folder_id: str | None) -> dict[str, Any]:
-        data = {"a": "g", "g": 1}
-        if folder_id:
-            data = data | {"n": file_id}
-            query_params = {"n": folder_id}
-        else:
-            data = data | {"p": file_id}
-            query_params = None
-
-        file_data: dict[str, Any] = await self.downloader.api.request(data, query_params)
-        if "g" not in file_data:
-            raise ScrapeError(410, "File not accessible anymore")
-        return file_data
 
     @error_handling_wrapper
     async def folder(
@@ -155,44 +151,36 @@ class MegaNzCrawler(Crawler):
     ) -> None:
         if single_file_id and await self.check_complete_from_referer(scrape_item.url):
             return
-        nodes = await self.downloader.api.get_nodes_in_shared_folder(folder_id, shared_key)
-        root_id = root_id or next(iter(nodes))
-        folder_name = nodes[root_id]["attributes"]["n"]
-        filesystem = await self.downloader.api.build_file_system(nodes, [root_id])
-        title = self.create_title(folder_name, folder_id)
+
+        selected_node = root_id or single_file_id
+        fs = await self.core.get_public_filesystem(folder_id, shared_key)
+        root = next(iter(fs))
+        title = self.create_title(root.name, folder_id)
         scrape_item.setup_as_album(title, album_id=folder_id)
         canonical_url = (PRIMARY_URL / "folder" / folder_id).with_fragment(shared_key)
         scrape_item.url = canonical_url
-        await self._process_folder_filesystem(scrape_item, filesystem, single_file_id)
+        await self._process_folder_filesystem(scrape_item, fs, selected_node)
 
     async def _process_folder_filesystem(
         self,
         scrape_item: ScrapeItem,
-        filesystem: dict[Path, mega.Node],
-        single_file_id: str | None,
+        filesystem: FileSystem,
+        selected_node: str | None,
     ) -> None:
         folder_id, shared_key = scrape_item.url.name, scrape_item.url.fragment
 
-        def filter_files():
-            for path, node in filesystem.items():
-                if node["t"] != mega.NodeType.FILE:
-                    continue
-                if single_file_id and node["h"] != single_file_id:
-                    continue
-                yield path, cast("mega.File", node)
-
-        for path, file in filter_files():
-            file_id = file["h"]
-            file_fragment = f"{shared_key}/file/{file_id}"
+        for file in filesystem.files_from(selected_node):
+            path = filesystem.relative_path(file.id)
+            file_fragment = f"{shared_key}/file/{file.id}"
             canonical_url = scrape_item.url.with_fragment(file_fragment)
             if await self.check_complete_from_referer(canonical_url):
                 continue
 
-            new_scrape_item = scrape_item.create_child(canonical_url, possible_datetime=file["ts"])
+            new_scrape_item = scrape_item.create_child(canonical_url, possible_datetime=file.created_at)
             for part in path.parent.parts[1:]:
                 new_scrape_item.add_to_parent_title(part)
 
-            file = FileTuple(file_id, mega.DecryptData(file["k_decrypted"], file["iv"], file["meta_mac"]))
+            file = FileTuple(file.id, file._crypto)
             self.create_task(self._process_file_task(new_scrape_item, file, folder_id=folder_id))
             scrape_item.add_children()
 
@@ -202,7 +190,7 @@ class MegaNzCrawler(Crawler):
         # TODO: Add a way to cache this login
         # TODO: Show some logging message / UI about login
         try:
-            await self.downloader.api.login(self.user, self.password)
+            await self.core.login(self.user, self.password)
             self.logged_in = True
         except Exception as e:
             self.disabled = True
