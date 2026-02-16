@@ -7,6 +7,7 @@ dependencies = [
     "aiohttp[speedups] >=3.13.3",
     "aiolimiter >=1.2.1",
     "aiosqlite>=0.22.1",
+    "async-mega-py >=2.0.2,<3.0.0",
     "beautifulsoup4 >=4.14.3",
     "certifi >=2026.1.4",
     "curl-cffi >=0.13,<0.14; implementation_name == 'cpython' ",

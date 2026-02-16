@@ -268,6 +268,27 @@ dev = ["babel", "coverage", "mock", "pytest", "pytest-cov", "pytest-mock", "ruff
 windows = ["pywin32", "tzdata"]
 
 [[package]]
+name = "async-mega-py"
+version = "2.0.2"
+description = "Python library for the Mega.nz and Transfer.it API"
+optional = false
+python-versions = ">=3.11"
+groups = ["main"]
+files = [
+    {file = "async_mega_py-2.0.2-py3-none-any.whl", hash = "sha256:9c863978e67e79569c2fc0407a793d6ef754af0de6e245b96d1f71d317d115b9"},
+    {file = "async_mega_py-2.0.2.tar.gz", hash = "sha256:4fe83c594788681782c804916d1e337c18ddfb005826a8789d34cda3467b6c8e"},
+]
+
+[package.dependencies]
+aiohttp = ">=3.11.18"
+aiolimiter = ">=1.2.1"
+pycryptodome = ">=3.20.0"
+
+[package.extras]
+cli = ["async-mega-py[default]", "typer-slim (>=0.21.1)"]
+default = ["python-dotenv (>=1.2.1)", "rich (>=14.0.0)"]
+
+[[package]]
 name = "attrs"
 version = "25.4.0"
 description = "Classes Without Boilerplate"
@@ -3056,4 +3077,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4"
-content-hash = "c5ccc6e30d6b7c1e170ee8308b41c269468660badcc4dc49630c291495a62721"
+content-hash = "8b0fae6cb26d7a83817f7f34b10f1e01d9c7fea5df1f09a9fc393fc317fe020a"
