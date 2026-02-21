@@ -17,5 +17,5 @@ Brand new and improved! Cyberdrop-DL now has an updated paint job, fantastic new
 ## How to install
 
 ```powershell
-uv tool install -p 3.12 cyberdrop-dl --from "https://github.com/NTFSvolume/cdl"
+uv tool install -p 3.12 cyberdrop-dl-patched --from "git+https://github.com/NTFSvolume/cdl"
 ```
