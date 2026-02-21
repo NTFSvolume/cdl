@@ -203,7 +203,7 @@ class BunkrrCrawler(Crawler):
             if len(src.parts) > 2:
                 src = None
 
-        if not src:
+        if not src or self.deep_scrape:
             dl_link = css.select(soup, Selector.DOWNLOAD_BUTTON, "href")
             file_id = self.parse_url(dl_link).name
             src = await self._request_download(file_id)
