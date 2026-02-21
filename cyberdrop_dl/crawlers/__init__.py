@@ -43,7 +43,6 @@ from .fourchan import FourChanCrawler
 from .fsiblog import FSIBlogCrawler
 from .fucking_fast import FuckingFastCrawler
 from .fuxxx import FuXXXCrawler
-from .generic import GenericCrawler
 from .girlsreleased import GirlsReleasedCrawler
 from .gofile import GoFileCrawler
 from .google_drive import GoogleDriveCrawler
@@ -164,5 +163,5 @@ ALL_CRAWLERS: set[type[Crawler]] = {
 ALL_CRAWLERS.update(WP_CRAWLERS, GENERIC_CRAWLERS, FORUM_CRAWLERS)
 DEBUG_CRAWLERS = {SimpCityCrawler, TwitterCrawler}
 CRAWLERS = ALL_CRAWLERS
-WEBSITE_CRAWLERS = CRAWLERS - FORUM_CRAWLERS - {GenericCrawler}
+WEBSITE_CRAWLERS = CRAWLERS - FORUM_CRAWLERS
 __all__ = ["ALL_CRAWLERS", "CRAWLERS", "DEBUG_CRAWLERS", "FORUM_CRAWLERS", "Crawler"]

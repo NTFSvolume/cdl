@@ -49,9 +49,8 @@ cyberdrop-dl = "cyberdrop_dl.main:main"
 cyberdrop-dl-patched = "cyberdrop_dl.main:main"
 
 [project.urls]
-Changelog = "https://github.com/jbsparrow/CyberDropDownloader/blob/master/CHANGELOG.md"
-Documentation = "https://script-ware.gitbook.io/cyberdrop-dl/"
-Repository = "https://github.com/jbsparrow/CyberDropDownloader"
+Changelog = "https://github.com/NTFSvolume/cdl/blob/main/CHANGELOG.md"
+Repository = "https://github.com/NTFSvolume/cdl"
 
 [build-system]
 build-backend = "uv_build"

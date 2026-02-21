@@ -14,7 +14,6 @@ from cyberdrop_dl.constants import REGEX_LINKS, BlockedDomains
 from cyberdrop_dl.crawlers._chevereto import CheveretoCrawler
 from cyberdrop_dl.crawlers.crawler import Crawler, create_crawlers
 from cyberdrop_dl.crawlers.discourse import DiscourseCrawler
-from cyberdrop_dl.crawlers.generic import GenericCrawler
 from cyberdrop_dl.crawlers.http_direct import DirectHttpFile
 from cyberdrop_dl.crawlers.realdebrid import RealDebridCrawler
 from cyberdrop_dl.crawlers.wordpress import WordPressHTMLCrawler, WordPressMediaCrawler
@@ -51,7 +50,6 @@ class ScrapeMapper:
         self.using_input_file = False
         self.groups = set()
         self.count = 0
-        self.fallback_generic: GenericCrawler
         self.real_debrid: RealDebridCrawler
 
     """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
@@ -73,7 +71,6 @@ class ScrapeMapper:
         from cyberdrop_dl import plugins
 
         self.existing_crawlers = get_crawlers_mapping(self.manager)
-        self.fallback_generic = GenericCrawler(self.manager)
         generic_crawlers = create_generic_crawlers_by_config(self.global_settings.generic_crawlers_instances)
         for crawler in generic_crawlers:
             register_crawler(self.existing_crawlers, crawler(self.manager), from_user=True)
@@ -257,12 +254,6 @@ class ScrapeMapper:
             self.manager.progress_manager.scrape_stats_progress.add_unsupported(sent_to_jdownloader=success)
             return
 
-        if self.enable_generic_crawler:
-            if not self.fallback_generic.ready:
-                await self.fallback_generic.startup()
-            self.manager.task_group.create_task(self.fallback_generic.run(scrape_item))
-            return
-
         log(f"Unsupported URL: {scrape_item.url}", 30)
         self.manager.log_manager.write_unsupported_urls_log(
             scrape_item.url,
@@ -382,8 +373,6 @@ def register_crawler(
     include_generics: bool = False,
     from_user: bool | Literal["raise"] = False,
 ) -> None:
-    if crawler.IS_FALLBACK_GENERIC:
-        return
     if crawler.IS_GENERIC and include_generics:
         keys = (crawler.GENERIC_NAME,)
     else:
