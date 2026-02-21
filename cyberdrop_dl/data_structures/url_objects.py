@@ -1,4 +1,4 @@
-# type: ignore[reportIncompatibleVariableOverride]
+# pyright: ignore[reportIncompatibleVariableOverride]
 from __future__ import annotations
 
 import copy
@@ -6,45 +6,28 @@ import datetime
 from dataclasses import asdict, dataclass, field
 from enum import IntEnum
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, NamedTuple, ParamSpec, Self, TypeVar, overload
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Self, overload
 
 import yarl
 
 if TYPE_CHECKING:
-    _P = ParamSpec("_P")
-    _R = TypeVar("_R")
-    _T = TypeVar("_T")
-    import functools
-    import inspect
     from collections.abc import Callable
 
     import aiohttp
     from propcache.api import under_cached_property as cached_property
     from rich.progress import TaskID
 
+    from cyberdrop_dl import signature
     from cyberdrop_dl.managers.manager import Manager
 
-    def copy_signature(target: Callable[_P, _R]) -> Callable[[Callable[..., _T]], Callable[_P, _T]]:
-        def decorator(func: Callable[..., _T]) -> Callable[_P, _T]:
-            @functools.wraps(func)
-            def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _T:
-                return func(*args, **kwargs)
-
-            wrapper.__signature__ = inspect.signature(target).replace(  # pyright: ignore[reportAttributeAccessIssue]
-                return_annotation=inspect.signature(func).return_annotation
-            )
-            return wrapper
-
-        return decorator
-
     class AbsoluteHttpURL(yarl.URL):
-        @copy_signature(yarl.URL.__new__)
+        @signature.copy(yarl.URL.__new__)
         def __new__(cls) -> AbsoluteHttpURL: ...
 
-        @copy_signature(yarl.URL.__truediv__)
+        @signature.copy(yarl.URL.__truediv__)
         def __truediv__(self) -> AbsoluteHttpURL: ...
 
-        @copy_signature(yarl.URL.__mod__)
+        @signature.copy(yarl.URL.__mod__)
         def __mod__(self) -> AbsoluteHttpURL: ...
 
         @cached_property
@@ -59,13 +42,13 @@ if TYPE_CHECKING:
         @cached_property
         def parent(self) -> AbsoluteHttpURL: ...
 
-        @copy_signature(yarl.URL.with_path)
+        @signature.copy(yarl.URL.with_path)
         def with_path(self) -> AbsoluteHttpURL: ...
 
-        @copy_signature(yarl.URL.with_host)
+        @signature.copy(yarl.URL.with_host)
         def with_host(self) -> AbsoluteHttpURL: ...
 
-        @copy_signature(yarl.URL.origin)
+        @signature.copy(yarl.URL.origin)
         def origin(self) -> AbsoluteHttpURL: ...
 
         @overload
@@ -74,7 +57,7 @@ if TYPE_CHECKING:
         @overload
         def with_query(self, **kwargs: yarl.QueryVariable) -> AbsoluteHttpURL: ...
 
-        @copy_signature(yarl.URL.with_query)
+        @signature.copy(yarl.URL.with_query)
         def with_query(self) -> AbsoluteHttpURL: ...
 
         @overload
@@ -83,7 +66,7 @@ if TYPE_CHECKING:
         @overload
         def extend_query(self, **kwargs: yarl.QueryVariable) -> AbsoluteHttpURL: ...
 
-        @copy_signature(yarl.URL.extend_query)
+        @signature.copy(yarl.URL.extend_query)
         def extend_query(self) -> AbsoluteHttpURL: ...
 
         @overload
@@ -92,35 +75,29 @@ if TYPE_CHECKING:
         @overload
         def update_query(self, **kwargs: yarl.QueryVariable) -> AbsoluteHttpURL: ...
 
-        @copy_signature(yarl.URL.update_query)
+        @signature.copy(yarl.URL.update_query)
         def update_query(self) -> AbsoluteHttpURL: ...
 
-        @copy_signature(yarl.URL.without_query_params)
+        @signature.copy(yarl.URL.without_query_params)
         def without_query_params(self) -> AbsoluteHttpURL: ...
 
-        @copy_signature(yarl.URL.with_fragment)
+        @signature.copy(yarl.URL.with_fragment)
         def with_fragment(self) -> AbsoluteHttpURL: ...
 
-        @copy_signature(yarl.URL.with_name)
+        @signature.copy(yarl.URL.with_name)
         def with_name(self) -> AbsoluteHttpURL: ...
 
-        @copy_signature(yarl.URL.with_suffix)
+        @signature.copy(yarl.URL.with_suffix)
         def with_suffix(self) -> AbsoluteHttpURL: ...
 
-        @copy_signature(yarl.URL.join)
+        @signature.copy(yarl.URL.join)
         def join(self) -> AbsoluteHttpURL: ...
 
-        @copy_signature(yarl.URL.joinpath)
+        @signature.copy(yarl.URL.joinpath)
         def joinpath(self) -> AbsoluteHttpURL: ...
 
 else:
     AbsoluteHttpURL = yarl.URL
-
-    def copy_signature(_):
-        def call(y):
-            return y
-
-        return call
 
 
 class ScrapeItemType(IntEnum):
