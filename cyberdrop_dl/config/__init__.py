@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import shutil
 from pathlib import Path
 from time import sleep
@@ -69,11 +70,24 @@ class AppData(Path):
             dir.mkdir(parents=True, exist_ok=True)
 
 
+@dataclasses.dataclass(slots=True)
 class Config:
     """Helper class to group a single config, not necessarily the current config"""
 
+    folder: Path
+
+    apprise_file: Path
+    config_file: Path
+
+    auth_config_file: Path
+
+    auth: AuthSettings
+    settings: ConfigSettings
+    global_settings: GlobalSettings
+    apprise_urls: list[AppriseURL]
+
     def __init__(self, name: str) -> None:
-        self.apprise_urls: list[AppriseURL] = []
+        self.apprise_urls = []
         self.folder = appdata.configs_dir / name
         self.apprise_file = self.folder / "apprise.txt"
         self.config_file = self.folder / "settings.yaml"
@@ -82,9 +96,6 @@ class Config:
             self.auth_config_file = auth_override
         else:
             self.auth_config_file = appdata.default_auth_config_file
-        self.auth: AuthSettings
-        self.settings: ConfigSettings
-        self.global_settings: GlobalSettings
 
     @staticmethod
     def build(name: str, auth: AuthSettings, settings: ConfigSettings, global_settings: GlobalSettings) -> Config:
