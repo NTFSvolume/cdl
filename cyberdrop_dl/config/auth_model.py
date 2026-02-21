@@ -1,8 +1,7 @@
 from pydantic import BaseModel
 
+from cyberdrop_dl.config._common import ConfigModel
 from cyberdrop_dl.models import AliasModel
-
-from ._common import ConfigModel, Field
 
 
 class CoomerAuth(BaseModel):
@@ -10,7 +9,7 @@ class CoomerAuth(BaseModel):
 
 
 class ImgurAuth(AliasModel):
-    client_id: str = Field("", "imgur_client_id")
+    client_id: str = ""
 
 
 class MegaNzAuth(AliasModel):
@@ -19,9 +18,9 @@ class MegaNzAuth(AliasModel):
 
 
 class JDownloaderAuth(AliasModel):
-    username: str = Field("", "jdownloader_username")
-    password: str = Field("", "jdownloader_password")
-    device: str = Field("", "jdownloader_device")
+    username: str = ""
+    password: str = ""
+    device: str = ""
 
 
 class KemonoAuth(AliasModel):
@@ -29,23 +28,23 @@ class KemonoAuth(AliasModel):
 
 
 class GoFileAuth(AliasModel):
-    api_key: str = Field("", "gofile_api_key")
+    api_key: str = ""
 
 
 class PixeldrainAuth(AliasModel):
-    api_key: str = Field("", "pixeldrain_api_key")
+    api_key: str = ""
 
 
 class RealDebridAuth(AliasModel):
-    api_key: str = Field("", "realdebrid_api_key")
+    api_key: str = ""
 
 
 class AuthSettings(ConfigModel):
-    coomer: CoomerAuth = Field(CoomerAuth(), "Coomer")
-    gofile: GoFileAuth = Field(GoFileAuth(), "GoFile")
-    imgur: ImgurAuth = Field(ImgurAuth(), "Imgur")
-    jdownloader: JDownloaderAuth = Field(JDownloaderAuth(), "JDownloader")
-    kemono: KemonoAuth = Field(KemonoAuth(), "Kemono")
-    meganz: MegaNzAuth = Field(MegaNzAuth(), "MegaNz")
-    pixeldrain: PixeldrainAuth = Field(PixeldrainAuth(), "PixelDrain")
-    realdebrid: RealDebridAuth = Field(RealDebridAuth(), "RealDebrid")
+    coomer: CoomerAuth = CoomerAuth()
+    gofile: GoFileAuth = GoFileAuth()
+    imgur: ImgurAuth = ImgurAuth()
+    jdownloader: JDownloaderAuth = JDownloaderAuth()
+    kemono: KemonoAuth = KemonoAuth()
+    meganz: MegaNzAuth = MegaNzAuth()
+    pixeldrain: PixeldrainAuth = PixeldrainAuth()
+    realdebrid: RealDebridAuth = RealDebridAuth()
