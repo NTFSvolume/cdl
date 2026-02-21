@@ -2,15 +2,18 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
+import functools
 import inspect
 import itertools
+import mimetypes
 import os
 import platform
 import re
 import sys
 import unicodedata
 from collections.abc import Generator, Mapping
-from functools import lru_cache, partial, wraps
+from functools import partial, wraps
+from http import HTTPStatus
 from pathlib import Path
 from stat import S_ISREG
 from typing import (
@@ -28,6 +31,7 @@ from typing import (
 )
 
 from aiohttp import ClientConnectorError, TooManyRedirects
+from mega.errors import MegaNzError
 from pydantic import ValidationError
 from yarl import URL
 
@@ -91,6 +95,22 @@ def error_handling_context(self: Crawler | Downloader, item: ScrapeItem | MediaI
         ui_failure = "Too Many Redirects"
         info = json.dumps({"url": e.request_info.real_url, "history": [r.real_url for r in e.history]}, indent=4)
         error_log_msg = ErrorLogMessage(ui_failure, f"{ui_failure}\n{info}")
+    except MegaNzError as e:
+        if code := getattr(e, "code", None):
+            if http_code := {
+                -9: HTTPStatus.GONE,
+                -16: HTTPStatus.FORBIDDEN,
+                -24: 509,
+                -401: 509,
+            }.get(code):
+                ui_failure = create_error_msg(http_code)
+            else:
+                ui_failure = f"MegaNZ Error [{code}]"
+        else:
+            ui_failure = "MegaNZ Error"
+
+        error_log_msg = ErrorLogMessage(ui_failure, str(e))
+
     except TimeoutError as e:
         error_log_msg = ErrorLogMessage("Timeout", repr(e))
     except ClientConnectorError as e:
@@ -203,25 +223,32 @@ def truncate_str(text: str, max_length: int = 0) -> str:
     return text.strip()
 
 
-def get_filename_and_ext(filename: str, forum: bool = False) -> tuple[str, str]:
+def get_filename_and_ext(filename: str, forum: bool = False, mime_type: str | None = None) -> tuple[str, str]:
     """Returns the filename and extension of a given file, throws `NoExtensionError` if there is no extension."""
     clean_filename = Path(filename).as_posix().replace("/", "-")  # remove OS separators
     filename_as_path = Path(clean_filename)
-    if not filename_as_path.suffix:
-        raise NoExtensionError
-    ext_no_dot = filename_as_path.suffix.split(".")[1]
+    ext = filename_as_path.suffix or (mimetypes.guess_extension(mime_type) if mime_type else None)
+    if not ext:
+        raise NoExtensionError(filename)
+
+    filename_as_path = filename_as_path.with_suffix(ext)
+
+    ext_no_dot = filename_as_path.suffix.split(".", 1)[-1]
     if ext_no_dot.isdigit() and forum and "-" in filename:
         name, ext = filename_as_path.name.rsplit("-", 1)
         ext = ext.rsplit(".")[0]
         ext_w_dot = f".{ext}".lower()
+        full_name = f"{name}.{ext}"
         if ext_w_dot not in constants.MEDIA_EXTENSIONS:
-            raise InvalidExtensionError
-        filename_as_path = Path(f"{name}.{ext}")
+            raise InvalidExtensionError(full_name)
+
+        filename_as_path = Path(full_name)
+
     if len(filename_as_path.suffix) > 5:
-        raise InvalidExtensionError
+        raise InvalidExtensionError(str(filename_as_path))
 
     filename_as_path = filename_as_path.with_suffix(filename_as_path.suffix.lower())
-    filename_as_str = truncate_str(filename_as_path.stem.removesuffix(".")) + filename_as_path.suffix
+    filename_as_str = truncate_str(filename_as_path.stem) + filename_as_path.suffix
     filename_as_path = Path(sanitize_filename(filename_as_str))
     filename_as_path = Path(filename_as_path.stem.strip() + filename_as_path.suffix)
     return filename_as_path.name, filename_as_path.suffix
@@ -315,17 +342,20 @@ def check_partials_and_empty_folders(manager: Manager) -> None:
 
 
 def _partial_files(dir: Path | str) -> Generator[Path]:
-    for entry in os.scandir(dir):
-        try:
-            if entry.is_dir(follow_symlinks=False):
-                yield from _partial_files(entry.path)
-                continue
-        except OSError:
-            pass
+    try:
+        for entry in os.scandir(dir):
+            try:
+                if entry.is_dir(follow_symlinks=False):
+                    yield from _partial_files(entry.path)
+                    continue
+            except OSError:
+                pass
 
-        suffix = entry.name.rpartition(".")[-1]
-        if f".{suffix}" in constants.TempExt:
-            yield Path(entry.path)
+            suffix = entry.name.rpartition(".")[-1]
+            if f".{suffix}" in constants.TempExt:
+                yield Path(entry.path)
+    except OSError:
+        return
 
 
 def delete_partial_files(manager: Manager) -> None:
@@ -454,7 +484,7 @@ async def close_if_defined(obj: C) -> C:
     return constants.NOT_DEFINED
 
 
-@lru_cache
+@functools.cache
 def get_system_information() -> str:
     def get_common_name() -> str:
         system = platform.system()

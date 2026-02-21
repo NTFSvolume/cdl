@@ -1,20 +1,24 @@
 [project]
 name = "cyberdrop-dl-patched"
-authors = [{name = "Jacob B", email = "admin@script-ware.net"}]
+authors = [{name = "NTFSvolume", email = "NTFSvolume@proton.me"}]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14"
+]
 dependencies = [
-    "aiodns >=3.5.0",
+    "aiodns >=4.0.0",
     "aiofiles >=25.1.0",
-    "aiohttp-client-cache ==0.13.0",
-    "aiohttp[speedups] >=3.13.2",
+    "aiohttp[speedups] >=3.13.3",
     "aiolimiter >=1.2.1",
-    "aiosqlite==0.17.0",
-    "apprise >=1.9.5",
-    "asyncpraw >=7.8.1",
-    "beautifulsoup4 >=4.14.2",
-    "certifi >=2025.11.12",
-    "curl-cffi >=0.13; implementation_name == 'cpython' ",
+    "aiosqlite>=0.22.1",
+    "async-mega-py >=2.0.2",
+    "beautifulsoup4 >=4.14.3",
+    "certifi >=2026.1.4",
+    "curl-cffi >=0.13,<0.14; implementation_name == 'cpython' ",
     "dateparser >=1.2.2",
-    "get-video-properties >=0.1.1",
     "imagesize >=1.4.1",
     "inquirerpy >=0.3.4",
     "jeepney >=0.9.0; 'bsd' in sys_platform or sys_platform == 'linux'",
@@ -22,13 +26,13 @@ dependencies = [
     "myjdapi >=1.1.10",
     "packaging >=25.0",
     "propcache >=0.4.1",
-    "psutil >=7.1.0",
+    "psutil >=7.2.1",
     "pycares >=4.10.0",
     "pycryptodome >=3.23.0",
     "pydantic >=2.12.4",
     "pyyaml >=6.0.3",
     "rich >=14.2.0",
-    "send2trash >=1.8.3",
+    "send2trash >=2.0.0",
     "truststore >=0.10.4",
     "xxhash >=3.6.0",
     "yarl >=1.22.0"
@@ -37,8 +41,8 @@ description = "Bulk downloader for multiple file hosts"
 license = "GPL-3.0-only"
 license-files = ["LICENSE"]
 readme = "README.md"
-requires-python = ">=3.11,<4"
-version = "8.7.0"
+requires-python = ">=3.11"
+version = "9.0.0.dev0"
 
 [project.scripts]
 cyberdrop-dl = "cyberdrop_dl.main:main"
@@ -50,20 +54,21 @@ Documentation = "https://script-ware.gitbook.io/cyberdrop-dl/"
 Repository = "https://github.com/jbsparrow/CyberDropDownloader"
 
 [build-system]
-build-backend = "poetry.core.masonry.api"
-requires = ["poetry-core>=1.0.0"]
+build-backend = "uv_build"
+requires = ["uv_build>=0.9.26,<0.10.0"]
 
 [dependency-groups]
 dev = [
-    "pre-commit>=4.4.0",
+    "pre-commit>=4.5.1",
     "py-markdown-table>=1.3.0",
-    "ruff>=0.14.5",
-    "tox>=4.32.0"
-]
-test = [
     "pytest-asyncio>=1.3.0",
     "pytest-cov>=7.0.0",
-    "pytest>=1.0.1"
+    "pytest>=9.0.2",
+    "ruff>=0.14.11",
+    "tox>=4.34.1"
+]
+extras = [
+    "apprise >=1.9.7"
 ]
 
 [tool.coverage.report]
@@ -77,20 +82,17 @@ exclude_also = [
 
 [tool.coverage.run]
 omit = [
+    "cyberdrop_dl/crawlers/*",
     "tests/*"
 ]
 
-[tool.poetry]
-include = ["CHANGELOG.md"]
-packages = [{include = "cyberdrop_dl"}]
-requires-poetry = ">=2.2.0"
-
 [tool.pytest.ini_options]
 addopts = ["-s"]
-asyncio_default_fixture_loop_scope = "function"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
 asyncio_mode = "auto"
 filterwarnings = [
-    "ignore:Proactor event loop does not implement add_reader:UserWarning"
+    "error"
 ]
 markers = [
     "crawler_test_case: tests that do full run with a crawler (making actual network requests)"
@@ -153,3 +155,10 @@ in_place = true
 sort_first = ["name", "project", "select"]
 spaces_before_inline_comment = 2
 spaces_indent_inline_array = 4
+
+[tool.uv]
+
+[tool.uv.build-backend]
+module-name = ["cyberdrop_dl"]
+module-root = ""
+source-include = ["CHANGELOG.md"]

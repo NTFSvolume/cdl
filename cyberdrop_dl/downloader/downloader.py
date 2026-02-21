@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import shutil
 import subprocess
@@ -8,14 +9,12 @@ import sys
 from dataclasses import field
 from datetime import datetime
 from functools import wraps
-from http import HTTPStatus
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple, ParamSpec, TypeVar
 
 from aiohttp import ClientConnectorError, ClientError, ClientResponseError
 
 from cyberdrop_dl import constants
-from cyberdrop_dl.constants import CustomHTTPStatus
 from cyberdrop_dl.data_structures.url_objects import HlsSegment, MediaItem
 from cyberdrop_dl.exceptions import (
     DownloadError,
@@ -154,42 +153,61 @@ class Downloader:
         self.manager.progress_manager.download_progress.update_queued(queued_files)
         self.manager.progress_manager.download_progress.update_total(increase_total)
 
+    @contextlib.asynccontextmanager
+    async def _download_context(self, media_item: MediaItem):
+        await self.manager.states.RUNNING.wait()
+        media_item.current_attempt = 0
+        await self.client.mark_incomplete(media_item, self.domain)
+        if media_item.is_segment:
+            yield
+            return
+
+        self.waiting_items += 1
+        self.update_queued_files()
+
+        server = (media_item.debrid_link or media_item.url).host
+        server_limit, domain_limit, global_limit = (
+            self.client.server_limiter(media_item.domain, server),
+            self._semaphore,
+            self.manager.client_manager.global_download_slots,
+        )
+
+        async with server_limit, domain_limit, global_limit:
+            await self.manager.states.RUNNING.wait()
+            self.processed_items.add(media_item.db_path)
+            self.update_queued_files(increase_total=False)
+            self.waiting_items -= 1
+            yield
+
     async def run(self, media_item: MediaItem) -> bool:
         """Runs the download loop."""
 
         if media_item.url.path in self.processed_items and not self._ignore_history:
             return False
 
-        await self.manager.states.RUNNING.wait()
-        self.waiting_items += 1
-        media_item.current_attempt = 0
-        await self.client.mark_incomplete(media_item, self.domain)
-        if not media_item.is_segment:
-            self.update_queued_files()
-        server = (media_item.debrid_link or media_item.url).host
-        async with self.client.server_limiter(media_item.domain, server), self._semaphore:
-            await self.manager.states.RUNNING.wait()
-            self.waiting_items -= 1
-            self.processed_items.add(media_item.db_path)
-            self.update_queued_files(increase_total=False)
-            async with self.manager.client_manager.global_download_slots:
-                return await self.start_download(media_item)
+        async with self._download_context(media_item):
+            return await self.start_download(media_item)
 
     @error_handling_wrapper
     async def download_hls(self, media_item: MediaItem, m3u8_group: RenditionGroup) -> None:
-        await self.client.mark_incomplete(media_item, self.domain)
+        if media_item.url.path in self.processed_items and not self._ignore_history:
+            return
+
         try:
             ffmpeg.check_is_available()
         except RuntimeError as e:
             msg = f"{e} - ffmpeg and ffprobe are required for HLS downloads"
             raise DownloadError("FFmpeg Error", msg, media_item) from None
 
+        async with self._download_context(media_item):
+            await self._start_hls_download(media_item, m3u8_group)
+
+    async def _start_hls_download(self, media_item: MediaItem, m3u8_group: RenditionGroup) -> None:
         media_item.complete_file = media_item.download_folder / media_item.filename
         # TODO: register database duration from m3u8 info
         # TODO: compute approx size for UI from the m3u8 info
         media_item.download_filename = media_item.complete_file.name
         await self.manager.db_manager.history_table.add_download_filename(self.domain, media_item)
-        self.update_queued_files()
         task_id = self.manager.progress_manager.file_progress.add_task(domain=self.domain, filename=media_item.filename)
         media_item.set_task_id(task_id)
         video, audio, _subs = await self._download_rendition_group(media_item, m3u8_group)
@@ -280,17 +298,13 @@ class Downloader:
             seg_media_item = MediaItem.from_item(
                 media_item,
                 segment.url,
-                domain=media_item.domain,
+                media_item.domain,
+                db_path=media_item.db_path,
                 download_folder=download_folder,
                 filename=segment.name,
                 ext=media_item.ext,
-                is_segment=True,
-                # add_to_database=False,
-                # quiet=True,
-                # reference=media_item,
-                # skip_hashing=True,
             )
-
+            seg_media_item.is_segment = True
             return SegmentDownloadResult(
                 seg_media_item,
                 await self.start_download(seg_media_item),
@@ -482,16 +496,3 @@ class Downloader:
         self.manager.log_manager.write_download_error_log(media_item, error_log_msg.csv_log_msg)
         self.manager.progress_manager.download_stats_progress.add_failure(error_log_msg.ui_failure)
         self.manager.progress_manager.download_progress.add_failed()
-
-    @staticmethod
-    def is_failed(status: int):
-        """NO USED"""
-        SERVER_ERRORS = (HTTPStatus.SERVICE_UNAVAILABLE, HTTPStatus.BAD_GATEWAY, CustomHTTPStatus.WEB_SERVER_IS_DOWN)
-        return any(
-            (is_4xx_client_error(status) and status != HTTPStatus.TOO_MANY_REQUESTS, status in SERVER_ERRORS),
-        )
-
-
-def is_4xx_client_error(status_code: int) -> bool:
-    """Checks whether the HTTP status code is 4xx client error."""
-    return isinstance(status_code, str) or (HTTPStatus.BAD_REQUEST <= status_code < HTTPStatus.INTERNAL_SERVER_ERROR)

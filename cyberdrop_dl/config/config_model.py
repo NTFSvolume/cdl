@@ -7,8 +7,7 @@ from pathlib import Path
 from pydantic import BaseModel, ByteSize, NonNegativeInt, PositiveInt, field_serializer, field_validator
 
 from cyberdrop_dl import constants
-from cyberdrop_dl.constants import BROWSERS, DEFAULT_APP_STORAGE, DEFAULT_DOWNLOAD_STORAGE
-from cyberdrop_dl.data_structures.hash import Hashing
+from cyberdrop_dl.constants import BROWSERS, DEFAULT_APP_STORAGE, DEFAULT_DOWNLOAD_STORAGE, Hashing
 from cyberdrop_dl.models import HttpAppriseURL
 from cyberdrop_dl.models.types import (
     ByteSizeSerilized,
@@ -53,7 +52,6 @@ class DownloadOptions(BaseModel):
     separate_posts_format: NonEmptyStr = "{default}"
     separate_posts: bool = False
     skip_download_mark_completed: bool = False
-    skip_referer_seen_before: bool = False
     maximum_thread_depth: NonNegativeInt = 0
     maximum_thread_folder_depth: NonNegativeInt | None = None
 
@@ -265,7 +263,7 @@ class BrowserCookies(BaseModel):
 
     @field_validator("sites", mode="before")
     @classmethod
-    def handle_list(cls, values: list) -> list:
+    def handle_list(cls, values: list[str]) -> list[str]:
         values = falsy_as(values, [])
         if values == ALL_SUPPORTED_SITES:
             return SUPPORTED_SITES_DOMAINS
@@ -274,7 +272,7 @@ class BrowserCookies(BaseModel):
         return values
 
     @field_serializer("sites", when_used="json-unless-none")
-    def use_placeholder(self, values: list) -> list:
+    def use_placeholder(self, values: list[str]) -> list[str]:
         if set(values) == set(SUPPORTED_SITES_DOMAINS):
             return ALL_SUPPORTED_SITES
         return values

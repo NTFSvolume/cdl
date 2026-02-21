@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-import mimetypes
-from typing import TYPE_CHECKING, ClassVar, Literal
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 from pydantic import BaseModel
 
 from cyberdrop_dl import env
 from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedDomains, SupportedPaths, auto_task_id
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.exceptions import NoExtensionError
 from cyberdrop_dl.utils.utilities import error_handling_wrapper
 
 if TYPE_CHECKING:
@@ -41,7 +39,7 @@ class Folder(BaseModel):
 
 
 class Node(BaseModel):
-    id: str
+    id: str | None = None
     type: Literal["file", "dir"]
     path: str
     name: str
@@ -73,7 +71,16 @@ class FileSystem(BaseModel):
 
 
 class PixelDrainCrawler(Crawler):
-    SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = "pixeldrain.net", "pixeldrain.com", "pixeldra.in", *_BYPASS_HOSTS
+    SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = (
+        "pixeldrain.com",
+        "pixeldrain.net",
+        "pixeldra.in",
+        "pixeldrain.nl",
+        "pixeldrain.biz",
+        "pixeldrain.tech",
+        "pixeldrain.dev",
+        *_BYPASS_HOSTS,
+    )
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "File": (
             "/u/<file_id>",
@@ -105,7 +112,7 @@ class PixelDrainCrawler(Crawler):
             )
 
     @classmethod
-    def _json_response_check(cls, json_resp: dict) -> None:
+    def _json_response_check(cls, json_resp: dict[str, Any]) -> None:
         # TODO: pass the resp obj to the json check functions
         return
         if not json_resp["success"]:
@@ -182,6 +189,7 @@ class PixelDrainCrawler(Crawler):
         fs = await request_fs(path)
         base_node = fs.path[fs.base_index]
         root = fs.path[0]
+        assert root.id
         title = self.create_title(root.name, root.id)
         scrape_item.setup_as_album(title, album_id=root.id)
 
@@ -253,20 +261,13 @@ class PixelDrainCrawler(Crawler):
         if "text/plain" in file.mime_type:
             return await self._text(scrape_item, file)
 
-        try:
-            filename, ext = self.get_filename_and_ext(file.name)
-        except NoExtensionError:
-            ext = mimetypes.guess_extension(file.mime_type)
-            if not ext:
-                raise
-
-            filename, ext = self.get_filename_and_ext(f"{file.name}{ext}")
-
+        filename, ext = self.get_filename_and_ext(file.name, mime_type=file.mime_type)
         scrape_item.possible_datetime = self.parse_iso_date(file.date_upload)
         await self.handle_file(link, scrape_item, file.name, ext, debrid_link=debrid_link, custom_filename=filename)
 
     @error_handling_wrapper
     async def _text(self, scrape_item: ScrapeItem, file: File | Node) -> None:
+        assert file.id
         scrape_item.setup_as_album(self.create_title(file.name, file.id))
         api_url = scrape_item.url.origin() / "api/file" / file.id
         text = await self._api_request(api_url)

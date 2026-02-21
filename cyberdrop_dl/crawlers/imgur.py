@@ -19,7 +19,10 @@ class ImgurCrawler(Crawler):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "Album": "/a/<album_id>",
         "Gallery": "/gallery/<slug>-<album_id>",
-        "Image": "/<image_id>",
+        "Image": (
+            "/<image_id>",
+            "/download/<image_id>",
+        ),
         "Direct links": f"{_IMAGE_CDN}/<image_id>.<ext>",
     }
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://imgur.com/")
@@ -42,7 +45,7 @@ class ImgurCrawler(Crawler):
         """Get public client id."""
         with self.disable_on_error("Unable to get client id"):
             soup = await self.request_soup(self.PRIMARY_URL)
-            js_src = css.select_one_get_attr(soup, "script[src*='/desktop-assets/js/main']", "src")
+            js_src = css.select(soup, "script[src*='/desktop-assets/js/main']", "src")
             js_text = await self.request_text(self.parse_url(js_src))
             self.client_id = get_text_between(js_text, 'apiClientId:"', '"')
 
@@ -65,6 +68,8 @@ class ImgurCrawler(Crawler):
             case ["gallery", slug]:
                 album_id = slug.rpartition("-")[-1]
                 return cls.PRIMARY_URL / "a" / album_id
+            case ["download", image_id]:
+                return cls.PRIMARY_URL / image_id
             case _:
                 return url
 

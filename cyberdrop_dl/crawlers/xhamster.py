@@ -5,8 +5,9 @@ import codecs
 import dataclasses
 import itertools
 import json
-from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
+from typing import TYPE_CHECKING, Any, ClassVar
 
+from cyberdrop_dl.compat import IntEnum
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.mediaprops import Resolution
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
@@ -20,18 +21,21 @@ if TYPE_CHECKING:
 
 _PRIMARY_URL = AbsoluteHttpURL("https://xhamster.com/")
 _ALLOW_AV1 = False
-_ALLOW_HLS = False
 _DECRYPTION_KEY = b"xh7999"
 
 
 class Selector:
     VIDEO = "a.video-thumb__image-container"
-    GALLERY = "a.gallery-thumb__link"
+    GALLERY = "[data-gallery-id] > a[href]"
     NEXT_PAGE = "a[data-page='next']"
 
 
 def _decrypt_url(raw_url: str) -> str | None:
     if raw_url.startswith("http") or raw_url.startswith("/"):
+        hex_string = AbsoluteHttpURL(raw_url).parts[1].partition(",")[0]
+        decoded = _decrypt_url(hex_string)
+        if decoded:
+            return raw_url.replace(hex_string, decoded)
         return raw_url
 
     if _is_hex(raw_url):
@@ -129,29 +133,25 @@ class XhamsterCrawler(Crawler):
         if is_creator:
             info: dict[str, Any] = initials["infoComponent"]["displayUserModel"]
             web_page_url = self.parse_url(info["pageURL"])
-            has_videos = bool(initials["infoComponent"].get("pornstarTop", {}).get("videoCount", 0))
-            has_galleries = bool(initials.get("galleriesComponent", {}).get("galleriesTotal", 0))
 
         else:
             info = initials["displayUserModel"]
             web_page_url = canonical_url
-            has_videos = bool(initials["counters"]["videos"])
-            has_galleries = bool(initials["counters"]["galleries"])
 
         # every creator is an user, but not every user is a creator
         # the creator's name and the user_name are different for the same account
         # we will ignore the creator's name and always use the user_name
 
-        creator_name: str | None = info.get("pageTitle")  # noqa: F841
+        _creator_name: str | None = info.get("pageTitle")
         user_name: str = info.get("displayName") or info["name"]
         title = self.create_title(f"{user_name} [user]")
         scrape_item.setup_as_profile(title)
 
-        if has_videos and download_videos:
+        if download_videos:
             videos_url = web_page_url / "videos"
             await self._iter_profile_pages(scrape_item, videos_url, Selector.VIDEO, "videos")
 
-        if has_galleries and download_photos:
+        if download_photos:
             gallerys_url = web_page_url / "photos"
             await self._iter_profile_pages(scrape_item, gallerys_url, Selector.GALLERY, "galleries")
 
@@ -176,7 +176,7 @@ class XhamsterCrawler(Crawler):
         results = await self.get_album_results(gallery_id)
         n_pages: int = page_details["paginationProps"]["lastPageNumber"]
         index: int = 0
-        images: list[dict[str, Any]] = initials["photosGalleryModel"]["photos"]
+        images: list[dict[str, Any]] = gallery["photos"]
 
         for next_page in itertools.count(2):
             for img in images:
@@ -214,11 +214,11 @@ class XhamsterCrawler(Crawler):
             video.title,
             ".mp4",
             file_id=video.id,
-            video_codec=video.best_mp4.codec,
+            video_codec=video.best_mp4.codec.name.lower(),
             resolution=video.best_mp4.resolution,
         )
         await self.handle_file(
-            video.url,
+            scrape_item.url,
             scrape_item,
             filename=video.id + ".mp4",
             custom_filename=custom_filename,
@@ -232,9 +232,16 @@ class XhamsterCrawler(Crawler):
         return json.loads(initials)
 
 
-class Format(NamedTuple):
+class Codec(IntEnum):
+    H264 = 1
+    H265 = 2
+    AV1 = 3 if _ALLOW_AV1 else 0
+
+
+@dataclasses.dataclass(frozen=True, order=True, slots=True)
+class Format:
     resolution: Resolution
-    codec: str  #  h264 > av1
+    codec: Codec
     url: AbsoluteHttpURL
 
 
@@ -243,93 +250,68 @@ class Video:
     id: str
     title: str
     created: int
-    url: AbsoluteHttpURL
     best_hls: Format | None
     best_mp4: Format
 
 
 def _parse_video(initials: dict[str, Any]) -> Video:
-    video: dict[str, Any] = initials["videoModel"]
+    video: dict[str, Any] = initials.get("videoModel") or initials["videoPageComponent"]["videoInfo"]["videoInfo"]
 
     hls_sources: list[Format] = []
     mp4_sources: list[Format] = []
 
-    sources = itertools.chain(_parse_http_sources(initials), _parse_xplayer_sources(initials))
-
-    for src in sources:
-        if src.codec == "av1" and not _ALLOW_AV1:
-            continue
+    for src in _parse_xplayer_sources(initials):
         if src.url.suffix == ".m3u8":
-            if not _ALLOW_HLS:
-                continue
             hls_sources.append(src)
         else:
             mp4_sources.append(src)
 
     return Video(
-        id=video["idHashSlug"],
+        id=video.get("idHashSlug") or video["videoIdHashSlug"],
         title=video["title"],
-        created=video["created"],
-        url=_parse_url(video["pageURL"]),
+        created=video.get("created") or video["addTime"],
         best_hls=max(hls_sources, default=None),
         best_mp4=max(mp4_sources),
     )
 
 
-def _parse_http_sources(initials: dict[str, Any]) -> Iterable[Format]:
-    seen_urls: set[AbsoluteHttpURL] = set()
-
-    http_sources: dict[str, dict[str, str]] = initials["videoModel"].get("sources") or {}
-    if not http_sources:
-        return
-
-    for codec, formats_dict in http_sources.items():
-        for quality, url in formats_dict.items():
-            if codec == "download":
-                continue
-
-            url = _parse_url(url)
-            if url in seen_urls:
-                continue
-
-            seen_urls.add(url)
-            resolution = Resolution.parse(quality)
-            yield Format(resolution, codec, url)
-
-
 def _parse_xplayer_sources(initials: dict[str, Any]) -> Iterable[Format]:
-    xplayer_sources: dict[str, Any] = initials.get("xplayerSettings", {}).get("sources", {})
+    xplayer_sources: dict[str, Any] = initials.get("xplayerSettings2", {}).get("sources", {})
     if not xplayer_sources:
         return
 
     seen_urls: set[AbsoluteHttpURL] = set()
 
     def parse_format(format_dict: dict[str, str], codec: str):
-        for key in ("url", "fallback"):
+        for key in ("url",):
             url = format_dict.get(key)
             if not url:
                 continue
+
+            quality = format_dict.get("quality") or format_dict.get("label")
+            if quality == "auto":
+                quality = None
 
             url = _parse_url(url)
             if url in seen_urls:
                 continue
 
             seen_urls.add(url)
-            if url.suffix == ".m3u8":
-                res = 0
-            else:
-                res = format_dict.get("quality") or format_dict["label"]
+            res = Resolution.parse(quality)
+            if res == Resolution.unknown() and (multi := next((p for p in url.parts if p.startswith("multi=")), None)):
+                best = next(reversed(multi.split(",")))
+                res = Resolution.parse(best.partition(":")[0])
 
-            yield Format(Resolution.parse(res), codec, url)
-
-    hls_sources: dict[str, dict[str, str]] = xplayer_sources.get("hls", {})
-    for codec, format_dict in hls_sources.items():
-        yield from parse_format(format_dict, codec)
+            yield Format(res, Codec[codec.upper()], url)
 
     standard_sources: dict[str, list[dict[str, Any]]] = xplayer_sources.get("standard", {})
     for codec, formats_list in standard_sources.items():
         for format_dict in formats_list:
             yield from parse_format(format_dict, codec)
+
+    hls_sources: dict[str, dict[str, str]] = xplayer_sources.get("hls", {})
+    for codec, format_dict in hls_sources.items():
+        yield from parse_format(format_dict, codec)
 
 
 def _ensure_signed_32int(int32: int) -> int:

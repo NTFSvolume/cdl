@@ -286,7 +286,7 @@ class WordPressHTMLCrawler(WordPressBaseCrawler, is_generic=True):
         return await self.handle_post(scrape_item, post, is_single_post=True)
 
     def parse_post(self, scrape_item: ScrapeItem, soup: BeautifulSoup) -> Post:
-        title = open_graph.get_title(soup) or css.select_one_get_text(soup, _SELECTORS.POST_TITLE)
+        title = open_graph.get_title(soup) or css.select_text(soup, _SELECTORS.POST_TITLE)
         date = open_graph.get("published_time", soup) or _match_date_from_path(scrape_item.url.parts[1:4])
         data = {
             "id": get_post_id(soup),
@@ -294,7 +294,7 @@ class WordPressHTMLCrawler(WordPressBaseCrawler, is_generic=True):
             "title": title,
             "date_gmt": date,
             "link": str(scrape_item.url),
-            "content": str(css.select_one(soup, _SELECTORS.POST_CONTENT)),
+            "content": str(css.select(soup, _SELECTORS.POST_CONTENT)),
         }
         return Post.model_validate(data, by_name=True)
 
@@ -336,8 +336,8 @@ def _get_original_quality_link(link: str) -> str:
 
 def _iter_links(html: HTML, use_regex: bool) -> Iterable[str]:
     soup = BeautifulSoup(html, "html.parser")
-    images = css.iget(soup, *css.images)
-    iframes = css.iget(soup, *css.iframes)
+    images = css.iselect(soup, *css.images)
+    iframes = css.iselect(soup, *css.iframes)
     if use_regex:
         regex = (match.group() for match in re.finditer(_HTTP_URL_REGEX, html))
         return itertools.chain(images, iframes, regex)

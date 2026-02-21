@@ -8,7 +8,8 @@ from typing import TYPE_CHECKING, Any, Final
 from aiohttp.resolver import AsyncResolver, ThreadedResolver
 from rich.text import Text
 
-from cyberdrop_dl.compat import Enum, IntEnum, StrEnum
+from cyberdrop_dl import env
+from cyberdrop_dl.compat import Enum, StrEnum
 
 if TYPE_CHECKING:
     from cyberdrop_dl.utils.logger import LogHandler
@@ -54,12 +55,6 @@ HTTP_REGEX_LINKS = re.compile(
 console_handler: "LogHandler"
 
 
-class CustomHTTPStatus(IntEnum):
-    WEB_SERVER_IS_DOWN = 521
-    IM_A_TEAPOT = 418
-    DDOS_GUARD = 429
-
-
 class TempExt(StrEnum):
     HLS = ".cdl_hls"
     WRONG_CDL_HLS = ".cdl_hsl"  # used for a while in old versions, has a typo
@@ -69,7 +64,6 @@ class TempExt(StrEnum):
 class BlockedDomains:
     partial_match = (
         "facebook",
-        "twitter.com",
         "instagram",
         "fbcdn",
         "gfycat",
@@ -83,9 +77,13 @@ class BlockedDomains:
         "beacons.page",
         "beacons.ai",
         "allmylinks.com",
-        ".x.com",
     )
-    exact_match = ("x.com",)
+
+    exact_match = ()
+
+    if not env.ENABLE_TWITTER:
+        partial_match = *partial_match, "twitter.com", ".x.com"
+        exact_match = *exact_match, "x.com"
 
 
 DEFAULT_APP_STORAGE = Path("./AppData")
@@ -107,10 +105,7 @@ class Hashing(StrEnum):
 
     @classmethod
     def _missing_(cls, value: object) -> "Hashing":
-        try:
-            return cls[str(value).upper()]
-        except KeyError as e:
-            raise e
+        return cls[str(value).upper()]
 
 
 class BROWSERS(StrEnum):

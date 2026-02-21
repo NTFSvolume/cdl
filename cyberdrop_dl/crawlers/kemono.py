@@ -335,7 +335,7 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
         self.update_cookies({"session": ""})
 
         for item in resp:
-            url = self.PRIMARY_URL / item["service"] / "user" / (item.get("user") or ["name"])
+            url = self.PRIMARY_URL / item["service"] / "user" / (item.get("user") or item["name"])
             if type_ == "post":
                 url = url / "post" / item["id"]
 
@@ -361,13 +361,13 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
 
     # ~~~~~~~~ INTERNAL METHODS, not expected to be overridden, but could be ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-    def _register_attachments_servers(self, attachments: list[File]) -> None:
+    def _register_attachments_servers(self, attachments: list[dict[str, str]]) -> None:
         for attach in attachments:
-            server = attach.server
+            server = attach.get("server")
             if not server:
                 continue
 
-            path = attach.path
+            path = attach.get("path")
             if previous_server := self.__known_attachment_servers.get(path):
                 if previous_server != server:
                     msg = (

@@ -17,8 +17,6 @@ from cyberdrop_dl.utils.logger import log, log_with_color
 from cyberdrop_dl.utils.utilities import purge_dir_tree
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator
-
     from cyberdrop_dl.managers.manager import Manager
 
 
@@ -40,17 +38,6 @@ class Sorter:
         self.image_format: str | None = settings.sorted_image
         self.video_format: str | None = settings.sorted_video
         self.other_format: str | None = settings.sorted_other
-
-    async def _get_files(self, directory: Path) -> AsyncGenerator[Path]:
-        """Finds all files in a directory and returns them in a list."""
-
-        def resolve_if_file(path: Path) -> Path | None:
-            if path.is_file():
-                return path.resolve()
-
-        for file in directory.rglob("*"):
-            if file := await asyncio.to_thread(resolve_if_file, file):
-                yield file
 
     def _move_file(self, old_path: Path, new_path: Path) -> bool:
         """Moves a file to a destination folder."""
@@ -92,14 +79,13 @@ class Sorter:
         files_to_sort: dict[str, list[Path]] = {}
 
         with self.manager.live_manager.get_sort_live(stop=True):
-            for subfolder in self.download_folder.iterdir():
-                if not await asyncio.to_thread(subfolder.is_dir):
-                    continue
-                files_to_sort[subfolder.name] = [file async for file in self._get_files(subfolder)]
+            for subfolder in await asyncio.to_thread(_subfolders, self.download_folder):
+                files_to_sort[subfolder.name] = await asyncio.to_thread(_get_files, subfolder)
+
             await self._sort_files(files_to_sort)
             log_with_color("DONE!", "green", 20)
 
-        purge_dir_tree(self.download_folder)
+        _ = purge_dir_tree(self.download_folder)
 
     async def _sort_files(self, files_to_sort: dict[str, list[Path]]) -> None:
         queue_length = len(files_to_sort)
@@ -136,14 +122,14 @@ class Sorter:
 
         bitrate = duration = sample_rate = None
         try:
-            properties = await probe(file)
-            if audio := properties.audio:
-                duration = audio.duration
+            probe_output = await probe(file)
+            if audio := probe_output.audio:
+                duration = audio.duration or probe_output.format.duration
                 bitrate = audio.bitrate
                 sample_rate = audio.sample_rate
 
-        except (RuntimeError, CalledProcessError, OSError):
-            log(f"Unable to get audio properties of '{file}'")
+        except (RuntimeError, CalledProcessError, OSError) as e:
+            log(f"Unable to get audio properties of '{file}'", 40, exc_info=e)
 
         if await self._process_file_move(
             file,
@@ -190,17 +176,17 @@ class Sorter:
         codec = duration = framerate = height = resolution = width = None
 
         try:
-            properties = await probe(file)
-            if video := properties.video:
+            probe_output = await probe(file)
+            if video := probe_output.video:
                 width = video.width
                 height = video.height
                 resolution = video.resolution
-                codec = video.codec_name
-                duration = video.duration
+                codec = video.codec
+                duration = video.duration or probe_output.format.duration
                 framerate = video.fps
 
-        except (RuntimeError, CalledProcessError, OSError):
-            log(f"Unable to get some video properties of '{file}'")
+        except (RuntimeError, CalledProcessError, OSError) as e:
+            log(f"Unable to get some video properties of '{file}'", 40, exc_info=e)
 
         if await self._process_file_move(
             file,
@@ -247,3 +233,23 @@ class Sorter:
 
         new_file = Path(file_path)
         return self._move_file(file, new_file)
+
+
+def _subfolders(directory: Path) -> list[Path]:
+    def walk():
+        for subfolder in directory.resolve().iterdir():
+            if subfolder.is_dir():
+                yield subfolder
+
+    return list(walk())
+
+
+def _get_files(directory: Path) -> list[Path]:
+    """Finds all files in a directory and returns them in a list."""
+
+    def walk():
+        for file in directory.resolve().rglob("*"):
+            if file.is_file():
+                yield file
+
+    return list(walk())

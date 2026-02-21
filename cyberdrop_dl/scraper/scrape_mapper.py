@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import re
 from datetime import date, datetime
 from pathlib import Path
@@ -10,7 +11,6 @@ import aiofiles
 from yarl import URL
 
 from cyberdrop_dl.constants import REGEX_LINKS, BlockedDomains
-from cyberdrop_dl.crawlers import CRAWLERS
 from cyberdrop_dl.crawlers._chevereto import CheveretoCrawler
 from cyberdrop_dl.crawlers.crawler import Crawler, create_crawlers
 from cyberdrop_dl.crawlers.discourse import DiscourseCrawler
@@ -27,7 +27,6 @@ from cyberdrop_dl.utils.utilities import get_download_path, remove_trailing_slas
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator
-    from types import TracebackType
 
     import aiosqlite
 
@@ -71,34 +70,33 @@ class ScrapeMapper:
 
     def start_scrapers(self) -> None:
         """Starts all scrapers."""
+        from cyberdrop_dl import plugins
+
         self.existing_crawlers = get_crawlers_mapping(self.manager)
         self.fallback_generic = GenericCrawler(self.manager)
         generic_crawlers = create_generic_crawlers_by_config(self.global_settings.generic_crawlers_instances)
         for crawler in generic_crawlers:
             register_crawler(self.existing_crawlers, crawler(self.manager), from_user=True)
         disable_crawlers_by_config(self.existing_crawlers, self.global_settings.general.disable_crawlers)
+        plugins.load(self.manager)
 
     async def start_real_debrid(self) -> None:
         """Starts RealDebrid."""
         self.existing_crawlers["real-debrid"] = self.real_debrid = real = RealDebridCrawler(self.manager)
         await real.startup()
 
-    async def __aenter__(self) -> Self:
-        self.manager.scrape_mapper = self
-        await self.manager.client_manager.load_cookie_files()
-        await self.manager.client_manager.__aenter__()
-        self.manager.task_group = asyncio.TaskGroup()
-        await self.manager.task_group.__aenter__()
-        return self
+    @classmethod
+    @contextlib.asynccontextmanager
+    async def managed(cls, manager: Manager) -> AsyncGenerator[Self]:
+        """Creates a new scrape mapper that auto closses http session on exit"""
 
-    async def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc_val: BaseException | None,
-        exc_tb: TracebackType | None,
-    ) -> None:
-        await self.manager.task_group.__aexit__(exc_type, exc_val, exc_tb)
-        await self.manager.client_manager.__aexit__(exc_type, exc_val, exc_tb)
+        self = cls(manager)
+        await self.manager.client_manager.load_cookie_files()
+
+        async with self.manager.client_manager, asyncio.TaskGroup() as tg:
+            self.manager.scrape_mapper = self
+            self.manager.task_group = tg
+            yield self
 
     async def run(self) -> None:
         """Starts the orchestra."""
@@ -366,6 +364,7 @@ def get_crawlers_mapping(manager: Manager | None = None, include_generics: bool 
 
     If manager is `None`, the `MOCK_MANAGER` will be used, which means the crawlers won't be able to actually run"""
 
+    from cyberdrop_dl.crawlers import CRAWLERS
     from cyberdrop_dl.managers.mock_manager import MOCK_MANAGER
 
     manager_ = manager or MOCK_MANAGER

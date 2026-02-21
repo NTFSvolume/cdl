@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import itertools
 from collections import defaultdict
 from dataclasses import asdict, dataclass, field
-from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, NamedTuple
 
@@ -17,7 +17,7 @@ from cyberdrop_dl.utils.logger import log, log_debug
 if TYPE_CHECKING:
     from collections.abc import Generator
 
-    from psutil._common import sdiskpart
+    from psutil._ntuples import sdiskpart
 
     from cyberdrop_dl.data_structures.url_objects import MediaItem
     from cyberdrop_dl.managers.manager import Manager
@@ -217,7 +217,7 @@ class StorageManager:
             await asyncio.sleep(_CHECK_PERIOD)
 
 
-@lru_cache
+@functools.lru_cache
 def _get_mount_point(folder: Path, all_mounts: tuple[Path, ...]) -> Path | None:
     # Cached for performance.
     # It's not an expensive operation nor IO blocking, but it's very common for multiple files to share the same download folder

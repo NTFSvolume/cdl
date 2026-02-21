@@ -35,7 +35,6 @@ class CyberdropCrawler(Crawler):
     DOMAIN: ClassVar[str] = "cyberdrop"
     OLD_DOMAINS = ("cyberdrop.me", "cyberdrop.to")
     _RATE_LIMIT: ClassVar[tuple[float, float]] = 5, 1
-    _DOWNLOAD_SLOTS: ClassVar[int | None] = 1
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
@@ -54,11 +53,11 @@ class CyberdropCrawler(Crawler):
     async def album(self, scrape_item: ScrapeItem, album_id: str) -> None:
         scrape_item.url = scrape_item.url.with_query("nojs")
         soup = await self.request_soup(scrape_item.url)
-        title = css.select_one_get_text(soup, Selector.ALBUM_TITLE)
+        title = css.select_text(soup, Selector.ALBUM_TITLE)
         title = self.create_title(title, album_id)
         scrape_item.setup_as_album(title, album_id=album_id)
 
-        date_str = css.select_one_get_text(soup, Selector.ALBUM_DATE)
+        date_str = css.select_text(soup, Selector.ALBUM_DATE)
         scrape_item.possible_datetime = self.parse_date(date_str, "%d.%m.%Y")
 
         for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.ALBUM_ITEM):
@@ -73,7 +72,13 @@ class CyberdropCrawler(Crawler):
         info, auth = await asyncio.gather(
             self.request_json(_API_ENTRYPOINT / "file" / "info" / file_id),
             self.request_json(_API_ENTRYPOINT / "file" / "auth" / file_id),
+            return_exceptions=True,
         )
+        if isinstance(info, BaseException):
+            raise info
+
+        if isinstance(auth, BaseException):
+            raise auth
 
         name: str = info["name"]
         filename, ext = self.get_filename_and_ext(name)

@@ -13,20 +13,14 @@ import certifi
 import truststore
 from aiohttp import ClientResponse, ClientSession
 from aiolimiter import AsyncLimiter
-from bs4 import BeautifulSoup
 
-from cyberdrop_dl import constants, env
+from cyberdrop_dl import constants, ddos_guard, env
 from cyberdrop_dl.clients.download_client import DownloadClient
 from cyberdrop_dl.clients.flaresolverr import FlareSolverr
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.clients.scraper_client import ScraperClient
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
-from cyberdrop_dl.exceptions import (
-    DDOSGuardError,
-    DownloadError,
-    ScrapeError,
-    TooManyCrawlerErrors,
-)
+from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, ScrapeError, TooManyCrawlerErrors
 from cyberdrop_dl.ui.prompts.user_prompts import get_cookies_from_browsers
 from cyberdrop_dl.utils.aio import WeakAsyncLocks
 from cyberdrop_dl.utils.cookie_management import read_netscape_files
@@ -41,6 +35,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable, Mapping
     from http.cookies import BaseCookie
 
+    from bs4 import BeautifulSoup
     from curl_cffi.requests import AsyncSession
     from curl_cffi.requests.models import Response as CurlResponse
 
@@ -142,8 +137,7 @@ class ClientManager:
         self.download_client = DownloadClient(manager, self)
         self.flaresolverr = FlareSolverr(manager)
         self.file_locks: WeakAsyncLocks[str] = WeakAsyncLocks()
-        self._default_headers = {"user-agent": self.manager.global_config.general.user_agent}
-        self.reddit_session: aiohttp.ClientSession
+
         self._session: aiohttp.ClientSession
         self._download_session: aiohttp.ClientSession
         self._curl_session: AsyncSession[CurlResponse]
@@ -151,7 +145,6 @@ class ClientManager:
 
     def _startup(self) -> None:
         self._session = self.new_scrape_session()
-        self.reddit_session = self.new_scrape_session()
         self._download_session = self.new_download_session()
         if _curl_import_error is not None:
             return
@@ -164,7 +157,6 @@ class ClientManager:
 
     async def __aexit__(self, *args) -> None:
         await self._session.close()
-        await self.reddit_session.close()
         await self._download_session.close()
         if _curl_import_error is not None:
             return
@@ -247,11 +239,23 @@ class ClientManager:
 
     def new_curl_cffi_session(self) -> AsyncSession:
         # Calling code should have validated if curl is actually available
+        import warnings
+
+        from curl_cffi.aio import AsyncCurl
         from curl_cffi.requests import AsyncSession
+        from curl_cffi.utils import CurlCffiWarning
+
+        loop = asyncio.get_running_loop()
+
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=CurlCffiWarning)
+            acurl = AsyncCurl(loop=loop)
 
         proxy_or_none = str(proxy) if (proxy := self.manager.global_config.general.proxy) else None
+
         return AsyncSession(
-            headers=self._default_headers,
+            loop=loop,
+            async_curl=acurl,
             impersonate="chrome",
             verify=bool(self.ssl_context),
             proxy=proxy_or_none,
@@ -273,7 +277,7 @@ class ClientManager:
     ) -> ClientSession:
         timeout = self.rate_limiting_options._aiohttp_timeout
         return ClientSession(
-            headers=self._default_headers,
+            headers={"user-agent": self.manager.global_config.general.user_agent},
             raise_for_status=False,
             cookie_jar=self.cookies,
             timeout=timeout,
@@ -353,26 +357,14 @@ class ClientManager:
                 message = _DOWNLOAD_ERROR_ETAGS[e_tag]
                 raise DownloadError(HTTPStatus.NOT_FOUND, message=message)
 
-        async def check_ddos_guard() -> BeautifulSoup | None:
-            if "html" not in response.content_type:
-                return
-            try:
-                soup = BeautifulSoup(await response.text(), "html.parser")
-            except UnicodeDecodeError:
-                return
-            else:
-                if self.check_ddos_guard(soup) or self.check_cloudflare(soup):
-                    raise DDOSGuardError
-                return soup
-
         check_etag()
         if HTTPStatus.OK <= response.status < HTTPStatus.BAD_REQUEST:
             # Check DDosGuard even on successful pages
-            # await check_ddos_guard()
             return
 
         await self._check_json(response)
-        await check_ddos_guard()
+
+        await ddos_guard.check(response)
         raise DownloadError(status=response.status, message=message)
 
     async def _check_json(self, response: AbstractResponse) -> None:
@@ -398,22 +390,6 @@ class ClientManager:
             raise DownloadError(status="Bunkr Maintenance", message="Bunkr under maintenance")
         if content_length == "73003" and content_type == "video/mp4":
             raise DownloadError(410)  # Placeholder video with text "Video removed" (efukt)
-
-    @staticmethod
-    def check_ddos_guard(soup: BeautifulSoup) -> bool:
-        if (title := soup.select_one("title")) and (title_str := title.string):
-            if any(title.casefold() == title_str.casefold() for title in DDosGuard.TITLES):
-                return True
-
-        return bool(soup.select_one(DDosGuard.ALL_SELECTORS))
-
-    @staticmethod
-    def check_cloudflare(soup: BeautifulSoup) -> bool:
-        if (title := soup.select_one("title")) and (title_str := title.string):
-            if any(title.casefold() == title_str.casefold() for title in CloudflareTurnstile.TITLES):
-                return True
-
-        return bool(soup.select_one(CloudflareTurnstile.ALL_SELECTORS))
 
     async def check_file_duration(self, media_item: MediaItem) -> bool:
         """Checks the file runtime against the config runtime limits."""
@@ -449,11 +425,12 @@ class ClientManager:
                 headers = self.download_client._get_download_headers(media_item.domain, media_item.referer)
                 properties = await probe(media_item.url, headers=headers)
 
-            if is_video and (video := properties.video):
-                return video.duration
-            if is_audio and (audio := properties.audio):
-                return audio.duration
-            return None
+            if properties.format.duration:
+                return properties.format.duration
+            if is_video and properties.video:
+                return properties.video.duration
+            if is_audio and properties.audio:
+                return properties.audio.duration
 
         duration: float | None = await get_duration()
         media_item.duration = duration
@@ -494,7 +471,7 @@ async def _test_async_resolver(loop: asyncio.AbstractEventLoop | None = None) ->
     import aiodns
 
     async with aiodns.DNSResolver(loop=loop, timeout=5.0) as resolver:
-        _ = await resolver.query("github.com", "A")
+        _ = await resolver.query_dns("github.com", "A")
 
 
 def _create_request_log_hooks(client_type: Literal["scrape", "download"]) -> list[aiohttp.TraceConfig]:

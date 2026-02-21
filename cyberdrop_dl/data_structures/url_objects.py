@@ -153,6 +153,8 @@ class MediaItem:
     download_filename: str | None = field(default=None)
     filesize: int | None = field(default=None, compare=False)
     ext: str
+    db_path: str
+
     debrid_link: AbsoluteHttpURL | None = field(default=None, compare=False)
     duration: float | None = field(default=None, compare=False)
     is_segment: bool = False
@@ -171,7 +173,6 @@ class MediaItem:
     downloaded: bool = field(default=False, compare=False)
 
     parent_media_item: MediaItem | None = field(default=None, compare=False)
-    db_path: str = field(init=False)
     _task_id: TaskID | None = field(default=None, compare=False)
     metadata: object = field(init=False, default_factory=dict, compare=False)
 
@@ -179,26 +180,8 @@ class MediaItem:
         return f"{type(self).__name__}(domain={self.domain!r}, url={self.url!r}, referer={self.referer!r}, filename={self.filename!r}"
 
     def __post_init__(self) -> None:
-        self.db_path = self.create_db_path(self.url, self.domain)
-
-    @staticmethod
-    def create_db_path(url: yarl.URL, domain: str) -> str:
-        """Gets the URL path to be put into the DB and checked from the DB."""
-
-        if url.scheme == "metadata":
-            return ""
-
-        if domain:
-            if "e-hentai" in domain:
-                return url.path.split("keystamp")[0][:-1]
-
-            if "mediafire" in domain:
-                return url.name
-
-            if domain in ("mega.nz", "transfer.it", "koofr"):
-                return url.path_qs if not (frag := url.fragment) else f"{url.path_qs}#{frag}"
-
-        return url.path
+        if self.url.scheme == "metadata":
+            self.db_path = ""
 
     def datetime_obj(self) -> datetime.datetime | None:
         if self.datetime:
@@ -209,30 +192,25 @@ class MediaItem:
     def from_item(
         origin: ScrapeItem | MediaItem,
         url: AbsoluteHttpURL,
-        /,
         domain: str,
+        /,
+        *,
         download_folder: Path,
         filename: str,
+        db_path: str,
         original_filename: str | None = None,
-        debrid_link: AbsoluteHttpURL | None = None,
-        duration: float | None = None,
         ext: str = "",
-        is_segment: bool = False,
-        fallbacks: Callable[[aiohttp.ClientResponse, int], AbsoluteHttpURL] | list[AbsoluteHttpURL] | None = None,
     ) -> MediaItem:
         return MediaItem(
             url=url,
             domain=domain,
             download_folder=download_folder,
             filename=filename,
-            debrid_link=debrid_link,
-            duration=duration,
+            db_path=db_path,
             referer=origin.url,
             album_id=origin.album_id,
             ext=ext or Path(filename).suffix,
             original_filename=original_filename or filename,
-            is_segment=is_segment,
-            fallbacks=fallbacks,
             parents=origin.parents.copy(),
             datetime=origin.possible_datetime if isinstance(origin, ScrapeItem) else origin.datetime,
             parent_media_item=None if isinstance(origin, ScrapeItem) else origin,
@@ -286,6 +264,9 @@ class ScrapeItem:
     created_at: int | None = field(default=None, init=False)
     children_limits: list[int] = field(default_factory=list, init=False)
     password: str | None = field(default=None, init=False)
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}(url={self.url!r}, parent_title={self.parent_title!r}, possible_datetime={self.possible_datetime!r}"
 
     def __post_init__(self) -> None:
         self.password = self.url.query.get("password")
@@ -370,13 +351,16 @@ class ScrapeItem:
 
         scrape_item = self.copy()
         assert is_absolute_http_url(url)
-        scrape_item.url = url
+
         if add_parent:
             new_parent = add_parent if isinstance(add_parent, AbsoluteHttpURL) else self.url
             assert is_absolute_http_url(new_parent)
             scrape_item.parents.append(new_parent)
+
         if new_title_part:
             scrape_item.add_to_parent_title(new_title_part)
+
+        scrape_item.url = url
         scrape_item.part_of_album = part_of_album or scrape_item.part_of_album
         scrape_item.possible_datetime = possible_datetime or scrape_item.possible_datetime
         scrape_item.album_id = album_id or scrape_item.album_id

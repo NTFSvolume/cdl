@@ -28,7 +28,7 @@ startup_logger = logging.getLogger("cyberdrop_dl_startup")
 _DEFAULT_CONSOLE = Console()
 
 _USER_NAME = Path.home().resolve().name
-_NEW_ISSUE_URL = "https://github.com/jbsparrow/CyberDropDownloader/issues/new/choose"
+_NEW_ISSUE_URL = "https://github.com/NTFSvolume/cdl/issues/new/choose"
 
 
 if TYPE_CHECKING:

@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 class HashTable:
     def __init__(self, database: Database) -> None:
         self._database = database
+        self.cwd: Path = Path.cwd().absolute()
 
     @property
     def db_conn(self) -> aiosqlite.Connection:
@@ -40,9 +41,7 @@ class HashTable:
         """
         query = "SELECT hash FROM hash WHERE folder=? AND download_filename=? AND hash_type=? AND hash IS NOT NULL"
         try:
-            path = Path(path)
-            if not path.is_absolute():
-                path = path.absolute()
+            path = self.cwd / path
             folder = str(path.parent)
             filename = path.name
 
@@ -124,9 +123,7 @@ class HashTable:
         """
 
         try:
-            full_path = Path(file)
-            if not full_path.is_absolute():
-                full_path = full_path.absolute()
+            full_path = self.cwd / file
             download_filename = full_path.name
             folder = str(full_path.parent)
             await self.db_conn.execute(query, (hash_value, hash_type, folder, download_filename, hash_value))
@@ -146,9 +143,7 @@ class HashTable:
         """
         referer_ = str(referer) if referer else None
         try:
-            full_path = Path(file)
-            if not full_path.is_absolute():
-                full_path = full_path.absolute()
+            full_path = self.cwd / file
             download_filename = full_path.name
             folder = str(full_path.parent)
             stat = full_path.stat()
