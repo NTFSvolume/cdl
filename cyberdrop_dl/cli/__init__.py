@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import dataclasses
 import sys
 from argparse import SUPPRESS, ArgumentParser, RawDescriptionHelpFormatter
-from argparse import _ArgumentGroup as ArgGroup
 from shutil import get_terminal_size
 from typing import TYPE_CHECKING, Any, Final, NoReturn
 
@@ -10,11 +10,11 @@ from pydantic import BaseModel, ValidationError
 
 from cyberdrop_dl import __version__, env
 from cyberdrop_dl.cli import arguments
-from cyberdrop_dl.cli.model import CommandLineOnlyArgs
+from cyberdrop_dl.cli.model import CommandLineOnlyArgs, ParsedArgs
 from cyberdrop_dl.config import ConfigSettings, GlobalSettings
-from cyberdrop_dl.models import AliasModel
 
 if TYPE_CHECKING:
+    from argparse import _ArgumentGroup as ArgGroup  # pyright: ignore[reportPrivateUsage]
     from collections.abc import Sequence
 
 
@@ -40,24 +40,6 @@ def is_terminal_in_portrait() -> bool:
     return False
 
 
-class ParsedArgs(AliasModel):
-    cli_only_args: CommandLineOnlyArgs = CommandLineOnlyArgs()
-    config_settings: ConfigSettings = ConfigSettings()
-    global_settings: GlobalSettings = GlobalSettings()
-
-    def model_post_init(self, *_) -> None:
-        if self.cli_only_args.retry_all or self.cli_only_args.retry_maintenance:
-            self.config_settings.runtime_options.ignore_history = True
-
-        if (
-            not self.cli_only_args.fullscreen_ui
-            or self.cli_only_args.retry_any
-            or self.cli_only_args.config_file
-            or self.config_settings.sorting.sort_downloads
-        ):
-            self.cli_only_args.download = True
-
-
 class CustomHelpFormatter(RawDescriptionHelpFormatter):
     MAX_HELP_POS: Final = 80
     INDENT_INCREMENT: Final = 2
@@ -71,7 +53,33 @@ class CustomHelpFormatter(RawDescriptionHelpFormatter):
         return action.help
 
 
-def make_parser() -> tuple[ArgumentParser, dict[str, list[ArgGroup]]]:
+@dataclasses.dataclass(slots=True)
+class CLIParser:
+    parser: ArgumentParser
+    groups: dict[str, list[ArgGroup]]
+
+    def parse_args(self, args: Sequence[str] | None = None) -> dict[str, dict[str, Any]]:
+        return self._unflatten(self._parse_args(args))
+
+    def _parse_args(self, args: Sequence[str] | None = None) -> dict[str, Any]:
+        return dict(sorted(vars(self.parser.parse_intermixed_args(args)).items()))
+
+    def _unflatten(self, namespace: dict[str, Any]) -> dict[str, dict[str, Any]]:
+        parsed_args: dict[str, dict[str, Any]] = {}
+
+        for name, groups in self.groups.items():
+            parsed_args[name] = {}
+            for group in groups:
+                group_dict = {arg.dest: v for arg in group._group_actions if (v := namespace.get(arg.dest)) is not None}
+                if group_dict:
+                    assert group.title
+                    parsed_args[name][group.title] = _unflatten_nested_args(group_dict)
+
+        parsed_args["cli_only_args"] = parsed_args["cli_only_args"]["CLI-only options"]
+        return parsed_args
+
+
+def make_parser() -> CLIParser:
     kwargs: dict[str, Any] = {"color": True} if sys.version_info > (3, 14) else {}
     parser = ArgumentParser(
         description="Bulk asynchronous downloader for multiple file hosts",
@@ -85,31 +93,31 @@ def make_parser() -> tuple[ArgumentParser, dict[str, list[ArgGroup]]]:
     cli_only = parser.add_argument_group("CLI-only options")
     _add_args_from_model(cli_only, CommandLineOnlyArgs)
 
-    groups_mapping = {
+    groups = {
         "config_settings": _create_groups_from_nested_models(parser, ConfigSettings),
         "global_settings": _create_groups_from_nested_models(parser, GlobalSettings),
         "cli_only_args": [cli_only],
     }
 
-    return parser, groups_mapping
+    return CLIParser(parser, groups)
 
 
 def parse_args(args: Sequence[str] | None = None) -> ParsedArgs:
     """Parses the command line arguments passed into the program."""
     from cyberdrop_dl.utils.yaml import handle_validation_error
 
-    parsed_args_dict = _parse_args_dict(args)
+    parsed_args = make_parser().parse_args(args)
     try:
-        parsed_args_model = ParsedArgs.model_validate(parsed_args_dict, extra="forbid")
+        model = ParsedArgs.model_validate(parsed_args, extra="forbid")
 
     except ValidationError as e:
         handle_validation_error(e, title="CLI arguments")
         sys.exit(1)
 
-    if parsed_args_model.cli_only_args.show_supported_sites:
+    if model.cli_only_args.show_supported_sites:
         show_supported_sites()
 
-    return parsed_args_model
+    return model
 
 
 def show_supported_sites() -> NoReturn:
@@ -161,20 +169,3 @@ def _create_groups_from_nested_models(parser: ArgumentParser, model: type[BaseMo
         groups.append(submodel_group)
 
     return groups
-
-
-def _parse_args_dict(args: Sequence[str] | None = None) -> dict[str, dict[str, Any]]:
-    parser, groups_mapping = make_parser()
-    namespace = dict(sorted(vars(parser.parse_intermixed_args(args)).items()))
-    parsed_args: dict[str, dict[str, Any]] = {}
-
-    for name, groups in groups_mapping.items():
-        parsed_args[name] = {}
-        for group in groups:
-            group_dict = {arg.dest: v for arg in group._group_actions if (v := namespace.get(arg.dest)) is not None}
-            if group_dict:
-                assert group.title
-                parsed_args[name][group.title] = _unflatten_nested_args(group_dict)
-
-    parsed_args["cli_only_args"] = parsed_args["cli_only_args"]["CLI-only options"]
-    return parsed_args
