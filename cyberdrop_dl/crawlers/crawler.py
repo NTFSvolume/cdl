@@ -366,9 +366,7 @@ class Crawler(ABC):
     @contextlib.contextmanager
     def new_task_id(self, url: AbsoluteHttpURL) -> Generator[TaskID]:
         """Creates a new task_id (shows the URL in the UI and logs)"""
-        scrape_prefix = "Scraping"
-        scrape_prefix += f" [{self.FOLDER_DOMAIN}]"
-        log(f"{scrape_prefix}: {url}", 20)
+        log(f"Scraping [{self.FOLDER_DOMAIN}]: {url}", 20)
         task_id = self.manager.progress_manager.scraping_progress.add_task(url)
         try:
             yield task_id
