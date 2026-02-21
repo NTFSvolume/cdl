@@ -257,7 +257,7 @@ class ProgramUI:
     def _get_changelog(self) -> str | None:
         """Get latest changelog file from github. Returns its content."""
         path = self.manager.path_manager.config_folder.parent / "CHANGELOG.md"
-        url = "https://raw.githubusercontent.com/jbsparrow/CyberDropDownloader/refs/heads/master/CHANGELOG.md"
+        url = "https://raw.githubusercontent.com/NTFSvolume/cdl/refs/heads/master/CHANGELOG.md"
         _, latest_version = check_latest_pypi(logging="OFF")
         if not latest_version:
             self.print_error("UNABLE TO GET LATEST VERSION INFORMATION")

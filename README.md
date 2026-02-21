@@ -10,12 +10,12 @@ Bulk asynchronous downloader for multiple file hosts
 
 Brand new and improved! Cyberdrop-DL now has an updated paint job, fantastic new look. It's now easier to use than ever before!
 
-![Cyberdrop-DL TUI Preview](https://raw.githubusercontent.com/jbsparrow/CyberDropDownloader/refs/heads/master/docs/assets/cyberdrop-dl_tui_preview.png)
+![Cyberdrop-DL TUI Preview](https://raw.githubusercontent.com/NTFSvolume/cdl/refs/heads/master/docs/assets/cyberdrop-dl_tui_preview.png)
 
 </div>
 
 ## How to install
 
 ```powershell
-uv tool install -p 3.12 cyberdrop-dl --from "https://github.com/NTFSvolume/cdl-dynamic-crawlers"
+uv tool install -p 3.12 cyberdrop-dl --from "https://github.com/NTFSvolume/cdl"
 ```
