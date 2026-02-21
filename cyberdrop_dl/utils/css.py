@@ -105,20 +105,29 @@ def select_one_get_attr_or_none(tag: Tag, selector: str, attribute: str) -> str 
         return get_attr_or_none(inner_tag, attribute)
 
 
-def iselect(tag: Tag, selector: str) -> Generator[Tag]:
+@overload
+def iselect(tag: Tag, selector: str) -> Generator[Tag]: ...
+
+
+@overload
+def iselect(tag: Tag, selector: str, attribute: str) -> Generator[str]: ...
+
+
+def iselect(tag: Tag, selector: str, attribute: str | None = None) -> Generator[Tag] | Generator[str]:
     """Same as `tag.select(selector)`, but it returns a generator instead of a list."""
-    yield from bs4.css.CSS(tag).iselect(selector)
+    tags = bs4.css.CSS(tag).iselect(selector)
+    if not attribute:
+        yield from tags
+
+    else:
+        for inner_tag in tags:
+            if attr := get_attr_or_none(inner_tag, attribute):
+                yield attr
 
 
 def _parse_srcset(srcset: str) -> str:
     # The best src is the last one (usually)
     return [src.split(" ")[0] for src in srcset.split(", ")][-1]
-
-
-def iget(tag: Tag, selector: str, attribute: str) -> Generator[str]:
-    for inner_tag in iselect(tag, selector):
-        if link := get_attr_or_none(inner_tag, attribute):
-            yield link
 
 
 def decompose(tag: Tag, selector: str) -> None:

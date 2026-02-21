@@ -336,8 +336,8 @@ def _get_original_quality_link(link: str) -> str:
 
 def _iter_links(html: HTML, use_regex: bool) -> Iterable[str]:
     soup = BeautifulSoup(html, "html.parser")
-    images = css.iget(soup, *css.images)
-    iframes = css.iget(soup, *css.iframes)
+    images = css.iselect(soup, *css.images)
+    iframes = css.iselect(soup, *css.iframes)
     if use_regex:
         regex = (match.group() for match in re.finditer(_HTTP_URL_REGEX, html))
         return itertools.chain(images, iframes, regex)
