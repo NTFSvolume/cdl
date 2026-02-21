@@ -100,7 +100,7 @@ def parse_args(args: Sequence[str] | None = None) -> ParsedArgs:
 
     parsed_args_dict = _parse_args_dict(args)
     try:
-        parsed_args_model = ParsedArgs.model_validate(parsed_args_dict)
+        parsed_args_model = ParsedArgs.model_validate(parsed_args_dict, extra="forbid")
 
     except ValidationError as e:
         handle_validation_error(e, title="CLI arguments")
@@ -165,14 +165,13 @@ def _create_groups_from_nested_models(parser: ArgumentParser, model: type[BaseMo
 
 def _parse_args_dict(args: Sequence[str] | None = None) -> dict[str, dict[str, Any]]:
     parser, groups_mapping = make_parser()
-    namespace = parser.parse_intermixed_args(args)
+    namespace = dict(sorted(vars(parser.parse_intermixed_args(args)).items()))
     parsed_args: dict[str, dict[str, Any]] = {}
+
     for name, groups in groups_mapping.items():
         parsed_args[name] = {}
         for group in groups:
-            group_dict = {
-                arg.dest: v for arg in group._group_actions if (v := getattr(namespace, arg.dest, None)) is not None
-            }
+            group_dict = {arg.dest: v for arg in group._group_actions if (v := namespace.get(arg.dest)) is not None}
             if group_dict:
                 assert group.title
                 parsed_args[name][group.title] = _unflatten_nested_args(group_dict)
