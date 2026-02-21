@@ -16,10 +16,10 @@ import yarl
 from aiolimiter import AsyncLimiter
 from yarl import URL
 
-from cyberdrop_dl import constants
+from cyberdrop_dl import constants, signature
 from cyberdrop_dl.clients.scraper_client import ScraperClient
 from cyberdrop_dl.data_structures.mediaprops import ISO639Subtitle, Resolution
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem, copy_signature
+from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
 from cyberdrop_dl.downloader.downloader import Downloader
 from cyberdrop_dl.exceptions import MaxChildrenError, NoExtensionError, ScrapeError
 from cyberdrop_dl.utils import css, dates, m3u8
@@ -129,7 +129,7 @@ class Crawler(ABC):
 
     create_db_path = staticmethod(DBPathBuilder.path)
 
-    @copy_signature(ScraperClient._request)
+    @signature.copy(ScraperClient._request)
     @contextlib.asynccontextmanager
     async def request(self, *args, impersonate: str | bool | None = None, **kwargs) -> AsyncGenerator[AbstractResponse]:
         if impersonate is None:
@@ -141,17 +141,17 @@ class Crawler(ABC):
         ):
             yield resp
 
-    @copy_signature(ScraperClient._request)
+    @signature.copy(ScraperClient._request)
     async def request_json(self, *args, **kwargs) -> Any:
         async with self.request(*args, **kwargs) as resp:
             return await resp.json()
 
-    @copy_signature(ScraperClient._request)
+    @signature.copy(ScraperClient._request)
     async def request_soup(self, *args, **kwargs) -> BeautifulSoup:
         async with self.request(*args, **kwargs) as resp:
             return await resp.soup()
 
-    @copy_signature(ScraperClient._request)
+    @signature.copy(ScraperClient._request)
     async def request_text(self, *args, **kwargs) -> str:
         async with self.request(*args, **kwargs) as resp:
             return await resp.text()
