@@ -20,24 +20,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  no-build:
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-        matrix:
-          os: [ubuntu-latest, windows-latest, macos-latest]
-          python-version: [3.13, 3.14 ]
-        fail-fast: false
-
-    steps:
-      - name: Install uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Install CDL
-        run: uv tool install -v --no-build cyberdrop-dl-patched
-
 
   test:
     runs-on: ${{ matrix.os }}
@@ -61,19 +43,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-
       - name: Install dependencies
         run: |
-          poetry install
+          uv sync --all-extras
 
       - name: Run pytest
         timeout-minutes: 10
         run: |
-          poetry run pytest -v --cov --ignore=tests/test_apprise.py
+          uv run pytest -v --cov --ignore=tests/test_apprise.py

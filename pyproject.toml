@@ -1,6 +1,13 @@
 [project]
 name = "cyberdrop-dl-patched"
-authors = [{name = "Jacob B", email = "admin@script-ware.net"}]
+authors = [{name = "NTFSvolume", email = "NTFSvolume@proton.me"}]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14"
+]
 dependencies = [
     "aiodns >=4.0.0",
     "aiofiles >=25.1.0",
@@ -34,8 +41,8 @@ description = "Bulk downloader for multiple file hosts"
 license = "GPL-3.0-only"
 license-files = ["LICENSE"]
 readme = "README.md"
-requires-python = ">=3.11,<4"
-version = "9.0.0"
+requires-python = ">=3.11"
+version = "9.0.0.dev0"
 
 [project.scripts]
 cyberdrop-dl = "cyberdrop_dl.main:main"
@@ -47,23 +54,21 @@ Documentation = "https://script-ware.gitbook.io/cyberdrop-dl/"
 Repository = "https://github.com/jbsparrow/CyberDropDownloader"
 
 [build-system]
-build-backend = "poetry.core.masonry.api"
-requires = ["poetry-core>=1.0.0"]
+build-backend = "uv_build"
+requires = ["uv_build>=0.9.26,<0.10.0"]
 
 [dependency-groups]
 dev = [
     "pre-commit>=4.5.1",
     "py-markdown-table>=1.3.0",
+    "pytest-asyncio>=1.3.0",
+    "pytest-cov>=7.0.0",
+    "pytest>=9.0.2",
     "ruff>=0.14.11",
     "tox>=4.34.1"
 ]
 extras = [
     "apprise >=1.9.7"
-]
-test = [
-    "pytest-asyncio>=1.3.0",
-    "pytest-cov>=7.0.0",
-    "pytest>=9.0.2"
 ]
 
 [tool.coverage.report]
@@ -80,11 +85,6 @@ omit = [
     "cyberdrop_dl/crawlers/*",
     "tests/*"
 ]
-
-[tool.poetry]
-include = ["CHANGELOG.md"]
-packages = [{include = "cyberdrop_dl"}]
-requires-poetry = ">=2.2.0"
 
 [tool.pytest.ini_options]
 addopts = ["-s"]
@@ -155,3 +155,10 @@ in_place = true
 sort_first = ["name", "project", "select"]
 spaces_before_inline_comment = 2
 spaces_indent_inline_array = 4
+
+[tool.uv]
+
+[tool.uv.build-backend]
+module-name = ["cyberdrop_dl"]
+module-root = ""
+source-include = ["CHANGELOG.md"]
