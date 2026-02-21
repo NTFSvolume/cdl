@@ -1,5 +1,4 @@
 import random
-from datetime import timedelta
 from typing import Literal
 
 import aiohttp
@@ -16,7 +15,7 @@ from yarl import URL
 
 from cyberdrop_dl.config._common import ConfigModel
 from cyberdrop_dl.models.types import ByteSizeSerilized, HttpURL, ListNonEmptyStr, ListPydanticURL, NonEmptyStr
-from cyberdrop_dl.models.validators import falsy_as, falsy_as_none, to_bytesize, to_timedelta
+from cyberdrop_dl.models.validators import falsy_as, falsy_as_none, to_bytesize
 
 MIN_REQUIRED_FREE_SPACE = to_bytesize("512MB")
 DEFAULT_REQUIRED_FREE_SPACE = to_bytesize("5GB")
@@ -85,11 +84,6 @@ class RateLimiting(BaseModel):
             sock_connect=self.connection_timeout,
             sock_read=self.read_timeout,
         )
-
-    @field_validator("file_host_cache_expire_after", "forum_cache_expire_after", mode="before")
-    @staticmethod
-    def parse_cache_duration(input_date: timedelta | str | int) -> timedelta | str:
-        return to_timedelta(input_date)
 
     @property
     def total_delay(self) -> NonNegativeFloat:

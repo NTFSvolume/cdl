@@ -4,8 +4,8 @@ from unittest import mock
 import pytest
 from pydantic import ValidationError
 
+from cyberdrop_dl.cli import parse_args
 from cyberdrop_dl.main import _create_director, run
-from cyberdrop_dl.utils.args import parse_args
 
 
 @pytest.mark.parametrize(

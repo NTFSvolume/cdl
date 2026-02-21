@@ -14,8 +14,8 @@ from .config_model import ConfigSettings
 from .global_model import GlobalSettings
 
 if TYPE_CHECKING:
+    from cyberdrop_dl.cli import ParsedArgs
     from cyberdrop_dl.utils.apprise import AppriseURL
-    from cyberdrop_dl.utils.args import ParsedArgs
 
 __all__ = [
     "AuthSettings",
@@ -37,7 +37,7 @@ global_settings: GlobalSettings
 
 def startup() -> None:
     global appdata, cli
-    from cyberdrop_dl.utils.args import parse_args
+    from cyberdrop_dl.cli import parse_args
 
     cli = parse_args()
 

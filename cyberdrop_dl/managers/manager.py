@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple, TypeVar
 from pydantic import BaseModel
 
 from cyberdrop_dl import __version__, constants
+from cyberdrop_dl.cli import ParsedArgs, parse_args
 from cyberdrop_dl.database import Database
 from cyberdrop_dl.database.transfer import transfer_v5_db_to_v6
 from cyberdrop_dl.managers.cache_manager import CacheManager
@@ -21,7 +22,6 @@ from cyberdrop_dl.managers.path_manager import PathManager
 from cyberdrop_dl.managers.progress_manager import ProgressManager
 from cyberdrop_dl.managers.storage_manager import StorageManager
 from cyberdrop_dl.utils import ffmpeg
-from cyberdrop_dl.utils.args import ParsedArgs, parse_args
 from cyberdrop_dl.utils.logger import LogHandler, QueuedLogger, log
 from cyberdrop_dl.utils.utilities import close_if_defined, get_system_information
 
