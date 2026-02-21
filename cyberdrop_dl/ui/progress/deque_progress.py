@@ -41,7 +41,7 @@ class DequeProgress(ABC):
             self.queue_str.format(color=self.color, number=0, type_str=self.type_str, title=self.title_lower),
             visible=False,
         )
-        self._tasks: deque[TaskID] = deque([])
+        self._tasks: deque[TaskID] = deque()
         self._tasks_visibility_limit = visible_tasks_limit
 
     @abstractmethod
