@@ -37,7 +37,7 @@ class Selector:
 
 VIDEO_AND_IMAGE_EXTS: set[str] = FILE_FORMATS["Images"] | FILE_FORMATS["Videos"]
 HOST_OPTIONS: set[str] = {"bunkr.site", "bunkr.cr", "bunkr.ph"}
-DEEP_SCRAPE_CDNS: set[str] = {"pizza", "wiener"}  # CDNs under maintanance, ignore them and try to get a cached URL
+DEEP_SCRAPE_CDNS: set[str] = {"burger", "milkshake"}  # CDNs under maintanance, ignore them and try to get a cached URL
 FILE_KEYS = "id", "name", "original", "slug", "type", "extension", "size", "timestamp", "thumbnail", "cdnEndpoint"
 known_bad_hosts: set[str] = set()
 
@@ -216,7 +216,7 @@ class BunkrrCrawler(Crawler):
             scrape_item.url = scrape_item.url.with_host(self.DATABASE_PRIMARY_HOST)
         elif link.host == scrape_item.url.host:
             scrape_item.url = _REINFORCED_URL
-        await self.handle_file(link, scrape_item, name, ext, custom_filename=filename)
+        await self.handle_file(_override_cdn(link), scrape_item, name, ext, custom_filename=filename)
 
     async def _request_download(self, file_id: str) -> AbsoluteHttpURL:
         resp: dict[str, Any] = await self.request_json(
@@ -281,4 +281,6 @@ def _is_stream_redirect(url: AbsoluteHttpURL) -> bool:
 def _override_cdn(url: AbsoluteHttpURL) -> AbsoluteHttpURL:
     if "milkshake" in url.host:
         return url.with_host("mlk-bk.cdn.gigachad-cdn.ru")
+    if "burger." in url.host:
+        return url.with_host("brg-bk.cdn.gigachad-cdn.ru")
     return url
