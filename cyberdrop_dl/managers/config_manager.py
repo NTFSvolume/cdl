@@ -39,7 +39,7 @@ class ConfigManager:
 
     def startup(self) -> None:
         """Startup process for the config manager."""
-        self.loaded_config = self.manager.parsed_args.cli_only_args.config or self.get_loaded_config()
+        self.loaded_config = self.get_loaded_config()
         self.settings = self.manager.path_manager.config_folder / self.loaded_config / "settings.yaml"
         self.global_settings = self.manager.path_manager.config_folder / "global_settings.yaml"
         self.authentication_settings = self.manager.path_manager.config_folder / "authentication.yaml"

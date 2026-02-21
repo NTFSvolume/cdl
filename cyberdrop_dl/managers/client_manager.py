@@ -177,10 +177,6 @@ class ClientManager:
         return min(instances, self.rate_limiting_options.max_simultaneous_downloads_per_domain)
 
     @staticmethod
-    def cache_control(session: ClientSession, disabled: bool = False):
-        return _null_context
-
-    @staticmethod
     def check_curl_cffi_is_available() -> None:
         if _curl_import_error is None:
             return

@@ -121,7 +121,6 @@ class ScraperClient:
 
         request_params.setdefault("max_redirects", constants.MAX_REDIRECTS)
         async with (
-            self.client_manager.cache_control(self.client_manager._session, disabled=cache_disabled),
             self.client_manager._session.request(method, url, **request_params) as aio_resp,
         ):
             yield AbstractResponse.from_resp(aio_resp)

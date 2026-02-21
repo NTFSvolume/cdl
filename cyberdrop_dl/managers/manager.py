@@ -231,12 +231,6 @@ class Manager:
             _, queued_logger = self.loggers.popitem()
             queued_logger.stop()
 
-    def set_constants(self) -> None:
-        """
-        rewrite constants after config/arg manager have loaded
-        """
-        constants.DISABLE_CACHE = self.parsed_args.cli_only_args.disable_cache
-
 
 def add_or_remove_lists(cli_values: list[str], config_values: list[str]) -> None:
     exclude = {"+", "-"}

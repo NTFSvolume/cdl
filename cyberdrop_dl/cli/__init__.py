@@ -1,11 +1,11 @@
 import dataclasses
+import datetime
 import sys
 import time
 import warnings
 from argparse import SUPPRESS, ArgumentParser, BooleanOptionalAction, RawDescriptionHelpFormatter
 from argparse import _ArgumentGroup as ArgGroup
 from collections.abc import Iterable, Sequence
-from datetime import date
 from enum import StrEnum, auto
 from pathlib import Path
 from shutil import get_terminal_size
@@ -83,26 +83,20 @@ class CommandLineOnlyArgs(BaseModel):
         default=None,
         description="AppData folder path",
     )
-    completed_after: date | None = Field(
+    completed_after: datetime.date | None = Field(
         default=None,
         description="only retry downloads that were completed on or after this date",
     )
-    completed_before: date | None = Field(
+    completed_before: datetime.date | None = Field(
         default=None,
         description="only retry downloads that were completed on or before this date",
     )
-    config: str | None = Field(
-        default=None,
-        description="name of config to load",
-    )
+
     config_file: Path | None = Field(
         default=None,
         description="path to the CDL settings.yaml file to load",
     )
-    disable_cache: bool = Field(
-        default=False,
-        description="temporarily disable the requests cache",
-    )
+
     download: bool = Field(
         default=False,
         description="skips UI, start download immediately",
@@ -181,9 +175,6 @@ class CommandLineOnlyArgs(BaseModel):
         group1 = [self.links, self.retry_all, self.retry_failed, self.retry_maintenance]
         msg1 = "`--links`, '--retry-all', '--retry-maintenace' and '--retry-failed' are mutually exclusive"
         _check_mutually_exclusive(group1, msg1)
-        group2 = [self.config, self.config_file]
-        msg2 = "'--config' and '--config-file' are mutually exclusive"
-        _check_mutually_exclusive(group2, msg2)
         return self
 
     @field_validator("ui", mode="before")
