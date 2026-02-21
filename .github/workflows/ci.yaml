@@ -3,16 +3,14 @@ name: CI
 on:
   push:
     branches:
-      - master
-      - dev
+      - main
     paths:
       - 'cyberdrop_dl/**/*.py'
       - 'tests/**/*.py'
       - '.github/workflows/ci.yaml'
   pull_request:
     branches:
-      - master
-      - dev
+      - main
     paths:
       - 'cyberdrop_dl/**/*.py'
       - 'tests/**/*.py'

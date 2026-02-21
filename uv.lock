@@ -206,6 +206,20 @@ wheels = [
 ]
 
 [[package]]
+name = "async-mega-py"
+version = "2.0.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "aiohttp" },
+    { name = "aiolimiter" },
+    { name = "pycryptodome" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/2f/04/d7f94b5fa80ccb822ad7191110c956a926a1333f252ce1451804461bda34/async_mega_py-2.0.2.tar.gz", hash = "sha256:4fe83c594788681782c804916d1e337c18ddfb005826a8789d34cda3467b6c8e", size = 39566, upload-time = "2026-02-11T20:54:27.125Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/41/b9/9efdb8ed5cc2519c06dad23a05e8de3ac8e07a05688da25abaf5ceba076f/async_mega_py-2.0.2-py3-none-any.whl", hash = "sha256:9c863978e67e79569c2fc0407a793d6ef754af0de6e245b96d1f71d317d115b9", size = 48848, upload-time = "2026-02-11T20:54:24.647Z" },
+]
+
+[[package]]
 name = "attrs"
 version = "25.4.0"
 source = { registry = "https://pypi.org/simple" }
@@ -704,7 +718,7 @@ wheels = [
 
 [[package]]
 name = "cyberdrop-dl-patched"
-version = "9.0.0"
+version = "9.0.0.dev0"
 source = { editable = "." }
 dependencies = [
     { name = "aiodns" },
@@ -712,6 +726,7 @@ dependencies = [
     { name = "aiohttp", extra = ["speedups"] },
     { name = "aiolimiter" },
     { name = "aiosqlite" },
+    { name = "async-mega-py" },
     { name = "beautifulsoup4" },
     { name = "certifi" },
     { name = "curl-cffi", marker = "implementation_name == 'cpython'" },
@@ -756,6 +771,7 @@ requires-dist = [
     { name = "aiohttp", extras = ["speedups"], specifier = ">=3.13.3" },
     { name = "aiolimiter", specifier = ">=1.2.1" },
     { name = "aiosqlite", specifier = ">=0.22.1" },
+    { name = "async-mega-py", specifier = ">=2.0.2" },
     { name = "beautifulsoup4", specifier = ">=4.14.3" },
     { name = "certifi", specifier = ">=2026.1.4" },
     { name = "curl-cffi", marker = "implementation_name == 'cpython'", specifier = ">=0.13,<0.14" },

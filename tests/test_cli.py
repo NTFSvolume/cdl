@@ -4,8 +4,8 @@ from unittest import mock
 import pytest
 from pydantic import ValidationError
 
+from cyberdrop_dl.cli import parse_args
 from cyberdrop_dl.main import _create_director, run
-from cyberdrop_dl.utils.args import parse_args
 
 
 @pytest.mark.parametrize(
@@ -75,7 +75,7 @@ def test_startup_logger_is_created_on_yaml_error(tmp_cwd: Path) -> None:
 def test_startup_logger_when_manager_startup_fails(
     tmp_cwd: Path, exception: Exception | type[Exception], exists: bool, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    with mock.patch("cyberdrop_dl.managers.manager.Manager.set_constants", side_effect=exception):
+    with mock.patch("cyberdrop_dl.managers.manager.Manager.args_consolidation", side_effect=exception):
         try:
             run("--download")
         except SystemExit:

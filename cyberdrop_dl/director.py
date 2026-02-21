@@ -158,7 +158,7 @@ def _setup_debug_logger(manager: Manager) -> Path | None:
 
     file_io = debug_log_file_path.open("w", encoding="utf8")
 
-    file_handler = LogHandler(level=log_level, file=file_io, width=settings_data.logs.log_line_width, debug=True)
+    file_handler = LogHandler(level=log_level, file=file_io, width=500, debug=True)
     queued_logger = QueuedLogger(manager, file_handler, "debug")
     debug_logger.addHandler(queued_logger.handler)
 
@@ -181,7 +181,7 @@ def _setup_main_logger(manager: Manager) -> None:
         constants.console_handler = LogHandler(level=constants.CONSOLE_LEVEL)
 
     logger.addHandler(constants.console_handler)
-    file_handler = LogHandler(level=log_level, file=file_io, width=settings_data.logs.log_line_width)
+    file_handler = LogHandler(level=log_level, file=file_io, width=500)
     queued_logger = QueuedLogger(manager, file_handler)
     logger.addHandler(queued_logger.handler)
 

@@ -1,15 +1,15 @@
 import dataclasses
+import datetime
 import sys
 import time
 import warnings
 from argparse import SUPPRESS, ArgumentParser, BooleanOptionalAction, RawDescriptionHelpFormatter
 from argparse import _ArgumentGroup as ArgGroup
 from collections.abc import Iterable, Sequence
-from datetime import date
 from enum import StrEnum, auto
 from pathlib import Path
 from shutil import get_terminal_size
-from typing import TYPE_CHECKING, Annotated, Any, Literal, NoReturn, Self
+from typing import Annotated, Any, Literal, NoReturn, Self
 
 from pydantic import BaseModel, Field, ValidationError, computed_field, field_validator, model_validator
 
@@ -18,12 +18,6 @@ from cyberdrop_dl.config import ConfigSettings, GlobalSettings
 from cyberdrop_dl.models import AliasModel
 from cyberdrop_dl.models.types import HttpURL
 from cyberdrop_dl.utils.yaml import handle_validation_error
-
-if TYPE_CHECKING:
-    from pydantic.fields import FieldInfo
-
-
-CDL_EPILOG = "Visit the wiki for additional details: https://script-ware.gitbook.io/cyberdrop-dl"
 
 
 class UIOptions(StrEnum):
@@ -37,7 +31,7 @@ warnings.simplefilter("always", DeprecationWarning)
 WARNING_TIMEOUT = 5  # seconds
 
 
-def _check_mutually_exclusive(group: Iterable, msg: str) -> None:
+def _check_mutually_exclusive(group: Iterable[Any], msg: str) -> None:
     if sum(1 for value in group if value) >= 2:
         raise ValueError(msg)
 
@@ -81,36 +75,88 @@ class CommandOptions:
 
 
 class CommandLineOnlyArgs(BaseModel):
-    links: list[HttpURL] = Field([], description="link(s) to content to download (passing multiple links is supported)")
-    appdata_folder: Path | None = Field(None, description="AppData folder path")
-    completed_after: date | None = Field(
-        None, description="only retry downloads that were completed on or after this date"
+    links: list[HttpURL] = Field(
+        default=[],
+        description="link(s) to content to download (passing multiple links is supported)",
     )
-    completed_before: date | None = Field(
-        None, description="only retry downloads that were completed on or before this date"
+    appdata_folder: Path | None = Field(
+        default=None,
+        description="AppData folder path",
     )
-    config: str | None = Field(None, description="name of config to load")
-    config_file: Path | None = Field(None, description="path to the CDL settings.yaml file to load")
-    disable_cache: bool = Field(False, description="temporarily disable the requests cache")
-    download: bool = Field(False, description="skips UI, start download immediately")
+    completed_after: datetime.date | None = Field(
+        default=None,
+        description="only retry downloads that were completed on or after this date",
+    )
+    completed_before: datetime.date | None = Field(
+        default=None,
+        description="only retry downloads that were completed on or before this date",
+    )
+
+    config_file: Path | None = Field(
+        default=None,
+        description="path to the CDL settings.yaml file to load",
+    )
+
+    download: bool = Field(
+        default=False,
+        description="skips UI, start download immediately",
+    )
     download_tiktok_audios: bool = Field(
-        False, description="download TikTok audios from posts and save them as separate files"
+        default=False,
+        description="download TikTok audios from posts and save them as separate files",
     )
-    download_tiktok_src_quality_videos: bool = Field(False, description="download TikTok videos in source quality")
+    download_tiktok_src_quality_videos: bool = Field(
+        default=False,
+        description="download TikTok videos in source quality",
+    )
     impersonate: Annotated[
-        Literal["chrome", "edge", "safari", "safari_ios", "chrome_android", "firefox"] | bool | None,
+        Literal[
+            "chrome",
+            "edge",
+            "safari",
+            "safari_ios",
+            "chrome_android",
+            "firefox",
+        ]
+        | bool
+        | None,
         CommandOptions(nargs="?", const=True),
-    ] = Field(None, description="Use this target as impersonation for all scrape requests")
-    max_items_retry: int = Field(0, description="max number of links to retry")
-    portrait: bool = Field(is_terminal_in_portrait(), description="force CDL to run with a vertical layout")
-    print_stats: bool = Field(True, description="show stats report at the end of a run")
-    retry_all: bool = Field(False, description="retry all downloads")
-    retry_failed: bool = Field(False, description="retry failed downloads")
-    retry_maintenance: bool = Field(
-        False, description="retry download of maintenance files (bunkr). Requires files to be hashed"
+    ] = Field(
+        default=None,
+        description="Use this target as impersonation for all scrape requests",
     )
-    show_supported_sites: bool = Field(False, description="shows a list of supported sites and exits")
-    ui: UIOptions = Field(UIOptions.FULLSCREEN, description="DISABLED, ACTIVITY, SIMPLE or FULLSCREEN")
+    max_items_retry: int = Field(
+        default=0,
+        description="max number of links to retry",
+    )
+    portrait: bool = Field(
+        default=is_terminal_in_portrait(),
+        description="force CDL to run with a vertical layout",
+    )
+    print_stats: bool = Field(
+        default=True,
+        description="show stats report at the end of a run",
+    )
+    retry_all: bool = Field(
+        default=False,
+        description="retry all downloads",
+    )
+    retry_failed: bool = Field(
+        default=False,
+        description="retry failed downloads",
+    )
+    retry_maintenance: bool = Field(
+        default=False,
+        description="retry download of maintenance files (bunkr). Requires files to be hashed",
+    )
+    show_supported_sites: bool = Field(
+        default=False,
+        description="shows a list of supported sites and exits",
+    )
+    ui: UIOptions = Field(
+        default=UIOptions.FULLSCREEN,
+        description="DISABLED, ACTIVITY, SIMPLE or FULLSCREEN",
+    )
 
     @property
     def retry_any(self) -> bool:
@@ -121,7 +167,7 @@ class CommandLineOnlyArgs(BaseModel):
         return self.ui == UIOptions.FULLSCREEN
 
     @computed_field
-    def __computed__(self) -> dict:
+    def __computed__(self) -> dict[str, bool]:
         return {"retry_any": self.retry_any, "fullscreen_ui": self.fullscreen_ui}
 
     @model_validator(mode="after")
@@ -129,9 +175,6 @@ class CommandLineOnlyArgs(BaseModel):
         group1 = [self.links, self.retry_all, self.retry_failed, self.retry_maintenance]
         msg1 = "`--links`, '--retry-all', '--retry-maintenace' and '--retry-failed' are mutually exclusive"
         _check_mutually_exclusive(group1, msg1)
-        group2 = [self.config, self.config_file]
-        msg2 = "'--config' and '--config-file' are mutually exclusive"
-        _check_mutually_exclusive(group2, msg2)
         return self
 
     @field_validator("ui", mode="before")
@@ -144,18 +187,16 @@ class DeprecatedArgs(BaseModel): ...
 
 
 class ParsedArgs(AliasModel):
-    cli_only_args: CommandLineOnlyArgs = CommandLineOnlyArgs()  # type: ignore
+    cli_only_args: CommandLineOnlyArgs = CommandLineOnlyArgs()
     config_settings: ConfigSettings = ConfigSettings()
-    deprecated_args: DeprecatedArgs = DeprecatedArgs()  # type: ignore
+    deprecated_args: DeprecatedArgs = DeprecatedArgs()
     global_settings: GlobalSettings = GlobalSettings()
 
-    def model_post_init(self, _) -> None:
+    def model_post_init(self, *_) -> None:
         exit_on_warning = False
 
         if self.cli_only_args.retry_all or self.cli_only_args.retry_maintenance:
             self.config_settings.runtime_options.ignore_history = True
-
-        warnings_to_emit = self.prepare_warnings()
 
         if (
             not self.cli_only_args.fullscreen_ui
@@ -165,21 +206,22 @@ class ParsedArgs(AliasModel):
         ):
             self.cli_only_args.download = True
 
-        if warnings_to_emit:
+        if warnings_to_emit := self.prepare_warnings():
             for msg in warnings_to_emit:
                 warnings.warn(msg, DeprecationWarning, stacklevel=10)
             if exit_on_warning:
                 sys.exit(1)
+
             time.sleep(WARNING_TIMEOUT)
 
     def prepare_warnings(self) -> set[str]:
-        warnings_to_emit = set()
+        warnings_to_emit: set[str] = set()
 
         def add_warning_msg_from(field_name: str) -> None:
             if not field_name:
                 return
-            field_info: FieldInfo = self.deprecated_args.model_fields[field_name]
-            warnings_to_emit.add(field_info.deprecated)
+            info = DeprecatedArgs.model_fields[field_name].deprecated
+            warnings_to_emit.add(str(info))
 
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
@@ -200,22 +242,25 @@ def _add_args_from_model(
         full_name = prefix + name
         cli_name = full_name.replace("_", "-")
         arg_type = type(field.default)
+
         if issubclass(arg_type, BaseModel):
             _add_args_from_model(parser, arg_type, cli_args=cli_args, deprecated=deprecated, prefix=f"{cli_name}.")
             continue
+
         if arg_type not in (list, set, bool):
             arg_type = str
+
         help_text = field.description or ""
         default = field.default if cli_args else SUPPRESS
-        default_options = {"default": default, "dest": full_name, "help": help_text}
+        default_options: dict[str, Any] = {"default": default, "dest": full_name, "help": help_text}
         for meta in field.metadata:
             if isinstance(meta, CommandOptions):
                 default_options |= meta.as_dict()
                 break
 
         name_or_flags = [f"--{cli_name}"]
-        alias: str = field.alias or field.validation_alias or field.serialization_alias  # type: ignore
-        if alias and len(alias) == 1:
+        alias = field.alias or field.validation_alias or field.serialization_alias
+        if alias and len(str(alias)) == 1:
             name_or_flags.insert(0, f"-{alias}")
         if arg_type is bool:
             action = BooleanOptionalAction
@@ -226,23 +271,28 @@ def _add_args_from_model(
                 default_options = default_options | {"default": SUPPRESS}
             parser.add_argument(*name_or_flags, action=action, **default_options)
             continue
+
         if cli_name == "links":
             _ = default_options.pop("dest")
-            parser.add_argument(cli_name, metavar="LINK(S)", nargs="*", action="extend", **default_options)
+            _ = parser.add_argument(cli_name, metavar="LINK(S)", nargs="*", action="extend", **default_options)
             continue
+
         if arg_type in (list, set):
-            parser.add_argument(*name_or_flags, nargs="*", action="extend", **default_options)
+            _ = parser.add_argument(*name_or_flags, nargs="*", action="extend", **default_options)
             continue
-        parser.add_argument(*name_or_flags, type=arg_type, **default_options)
+
+        _ = parser.add_argument(*name_or_flags, type=arg_type, **default_options)
 
 
 def _create_groups_from_nested_models(parser: ArgumentParser, model: type[BaseModel]) -> list[ArgGroup]:
     groups: list[ArgGroup] = []
     for name, field in model.model_fields.items():
-        submodel: type[BaseModel] = field.annotation  # type: ignore
+        submodel = field.annotation
+        assert submodel and issubclass(submodel, BaseModel)
         submodel_group = parser.add_argument_group(name)
         _add_args_from_model(submodel_group, submodel)
         groups.append(submodel_group)
+
     return groups
 
 
@@ -266,10 +316,9 @@ def make_parser() -> tuple[ArgumentParser, dict[str, list[ArgGroup]]]:
     parser = ArgumentParser(
         description="Bulk asynchronous downloader for multiple file hosts",
         usage="cyberdrop-dl [OPTIONS] URL [URL...]",
-        epilog=CDL_EPILOG,
         formatter_class=CustomHelpFormatter,
     )
-    parser.add_argument("-V", "--version", action="version", version=f"%(prog)s {__version__}")
+    _ = parser.add_argument("-V", "--version", action="version", version=f"%(prog)s {__version__}")
 
     cli_only = parser.add_argument_group("CLI-only options")
     _add_args_from_model(cli_only, CommandLineOnlyArgs, cli_args=True)

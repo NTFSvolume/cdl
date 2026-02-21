@@ -20,7 +20,7 @@ class ScrapingProgress(DequeProgress):
     def __init__(self, manager: Manager) -> None:
         self.manager = manager
         self._progress = Progress(SpinnerColumn(), "[progress.description]{task.description}")
-        visible_tasks_limit: int = manager.config_manager.global_settings_data.ui_options.scraping_item_limit
+        visible_tasks_limit: int = 5
         super().__init__("Scraping", visible_tasks_limit)
 
     def get_queue_length(self) -> int:

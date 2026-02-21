@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple, TypeVar
 from pydantic import BaseModel
 
 from cyberdrop_dl import __version__, constants
+from cyberdrop_dl.cli import ParsedArgs, parse_args
 from cyberdrop_dl.database import Database
 from cyberdrop_dl.database.transfer import transfer_v5_db_to_v6
 from cyberdrop_dl.managers.cache_manager import CacheManager
@@ -21,7 +22,6 @@ from cyberdrop_dl.managers.path_manager import PathManager
 from cyberdrop_dl.managers.progress_manager import ProgressManager
 from cyberdrop_dl.managers.storage_manager import StorageManager
 from cyberdrop_dl.utils import ffmpeg
-from cyberdrop_dl.utils.args import ParsedArgs, parse_args
 from cyberdrop_dl.utils.logger import LogHandler, QueuedLogger, log
 from cyberdrop_dl.utils.utilities import close_if_defined, get_system_information
 
@@ -62,7 +62,6 @@ class Manager:
         self.task_group: TaskGroup = field(init=False)
         self.scrape_mapper: ScrapeMapper = field(init=False)
 
-        self.vi_mode: bool = False
         self.start_time: float = perf_counter()
         self.downloaded_data: int = 0
         self.loggers: dict[str, QueuedLogger] = {}
@@ -96,31 +95,9 @@ class Manager:
         self.config_manager.startup()
 
         self.args_consolidation()
-        self.cache_manager.load_request_cache()
-        self.vi_mode = self.config_manager.global_settings_data.ui_options.vi_mode
 
         self.path_manager.startup()
         self.log_manager = LogManager(self)
-        self.adjust_for_simpcity()
-        self.set_constants()
-
-    def adjust_for_simpcity(self) -> None:
-        """Adjusts settings for SimpCity update."""
-        simp_settings_adjusted = self.cache_manager.get("simp_settings_adjusted")
-        if not simp_settings_adjusted:
-            for config in self.config_manager.get_configs():
-                if config != self.config_manager.loaded_config:
-                    self.config_manager.change_config(config)
-                self.config_manager.settings_data.runtime_options.update_last_forum_post = True
-                self.config_manager.write_updated_settings_config()
-
-            rate_limit_options = self.config_manager.global_settings_data.rate_limiting_options
-            if rate_limit_options.download_attempts >= 10:
-                rate_limit_options.download_attempts = 5
-            if rate_limit_options.max_simultaneous_downloads_per_domain > 15:
-                rate_limit_options.max_simultaneous_downloads_per_domain = 5
-            self.config_manager.write_updated_global_settings_config()
-        self.cache_manager.save("simp_settings_adjusted", True)
 
     """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
 
@@ -183,10 +160,9 @@ class Manager:
 
     def args_logging(self) -> None:
         """Logs the runtime arguments."""
-        auth_data: dict[str, dict] = self.config_manager.authentication_data.model_dump()
         auth_provided = {}
 
-        for site, auth_entries in auth_data.items():
+        for site, auth_entries in self.config_manager.authentication_data.model_dump().items():
             auth_provided[site] = all(auth_entries.values())
 
         config_settings = self.config_manager.settings_data.model_copy()
@@ -233,12 +209,6 @@ class Manager:
         while self.loggers:
             _, queued_logger = self.loggers.popitem()
             queued_logger.stop()
-
-    def set_constants(self) -> None:
-        """
-        rewrite constants after config/arg manager have loaded
-        """
-        constants.DISABLE_CACHE = self.parsed_args.cli_only_args.disable_cache
 
 
 def add_or_remove_lists(cli_values: list[str], config_values: list[str]) -> None:

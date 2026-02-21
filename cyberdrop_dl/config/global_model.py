@@ -1,5 +1,4 @@
 import random
-from datetime import timedelta
 from typing import Literal
 
 import aiohttp
@@ -14,16 +13,15 @@ from pydantic import (
 )
 from yarl import URL
 
-from cyberdrop_dl.config._common import ConfigModel, Field
+from cyberdrop_dl.config._common import ConfigModel
 from cyberdrop_dl.models.types import ByteSizeSerilized, HttpURL, ListNonEmptyStr, ListPydanticURL, NonEmptyStr
-from cyberdrop_dl.models.validators import falsy_as, falsy_as_none, to_bytesize, to_timedelta
+from cyberdrop_dl.models.validators import falsy_as, falsy_as_none, to_bytesize
 
 MIN_REQUIRED_FREE_SPACE = to_bytesize("512MB")
 DEFAULT_REQUIRED_FREE_SPACE = to_bytesize("5GB")
 
 
 class General(BaseModel):
-    # TODO: Move `ssl_context` to an advance config section
     ssl_context: Literal["truststore", "certifi", "truststore+certifi"] | None = "truststore+certifi"
     disable_crawlers: ListNonEmptyStr = []
     flaresolverr: HttpURL | None = None
@@ -64,8 +62,6 @@ class RateLimiting(BaseModel):
     download_attempts: PositiveInt = 2
     download_delay: NonNegativeFloat = 0.0
     download_speed_limit: ByteSizeSerilized = ByteSize(0)
-    file_host_cache_expire_after: timedelta = timedelta(days=7)
-    forum_cache_expire_after: timedelta = timedelta(weeks=4)
     jitter: NonNegativeFloat = 0
     max_simultaneous_downloads_per_domain: PositiveInt = 5
     max_simultaneous_downloads: PositiveInt = 15
@@ -83,16 +79,11 @@ class RateLimiting(BaseModel):
         self._curl_timeout = self.connection_timeout
         if self.read_timeout is not None:
             self._curl_timeout = self.connection_timeout, self.read_timeout
-        self._aiohttp_timeout = aiohttp.ClientTimeout(
+        self._aiohttp_timeout: aiohttp.ClientTimeout = aiohttp.ClientTimeout(
             total=None,
             sock_connect=self.connection_timeout,
             sock_read=self.read_timeout,
         )
-
-    @field_validator("file_host_cache_expire_after", "forum_cache_expire_after", mode="before")
-    @staticmethod
-    def parse_cache_duration(input_date: timedelta | str | int) -> timedelta | str:
-        return to_timedelta(input_date)
 
     @property
     def total_delay(self) -> NonNegativeFloat:
@@ -105,10 +96,7 @@ class RateLimiting(BaseModel):
 
 
 class UIOptions(BaseModel):
-    downloading_item_limit: PositiveInt = 10
     refresh_rate: PositiveInt = 10
-    scraping_item_limit: PositiveInt = 5
-    vi_mode: bool = False
 
 
 class GenericCrawlerInstances(BaseModel):
@@ -119,7 +107,7 @@ class GenericCrawlerInstances(BaseModel):
 
 
 class GlobalSettings(ConfigModel):
-    general: General = Field(General(), "General")
-    rate_limiting_options: RateLimiting = Field(RateLimiting(), "Rate_Limiting_Options")
-    ui_options: UIOptions = Field(UIOptions(), "UI_Options")
+    general: General = General()
+    rate_limiting_options: RateLimiting = RateLimiting()
+    ui_options: UIOptions = UIOptions()
     generic_crawlers_instances: GenericCrawlerInstances = GenericCrawlerInstances()

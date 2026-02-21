@@ -4,11 +4,11 @@ from datetime import date, datetime, timedelta
 from logging import DEBUG
 from pathlib import Path
 
-from pydantic import BaseModel, ByteSize, NonNegativeInt, PositiveInt, field_serializer, field_validator
+from pydantic import BaseModel, ByteSize, Field, NonNegativeInt, field_serializer, field_validator
 
 from cyberdrop_dl import constants
 from cyberdrop_dl.constants import BROWSERS, DEFAULT_APP_STORAGE, DEFAULT_DOWNLOAD_STORAGE, Hashing
-from cyberdrop_dl.models import HttpAppriseURL
+from cyberdrop_dl.models import AliasModel, HttpAppriseURL
 from cyberdrop_dl.models.types import (
     ByteSizeSerilized,
     ListNonEmptyStr,
@@ -24,7 +24,7 @@ from cyberdrop_dl.supported_domains import SUPPORTED_SITES_DOMAINS
 from cyberdrop_dl.utils.strings import validate_format_string
 from cyberdrop_dl.utils.utilities import purge_dir_tree
 
-from ._common import ConfigModel, Field, PathAliasModel
+from ._common import ConfigModel
 
 ALL_SUPPORTED_SITES = ["<<ALL_SUPPORTED_SITES>>"]
 _SORTING_COMMON_FIELDS = {
@@ -63,28 +63,23 @@ class DownloadOptions(BaseModel):
         return value
 
 
-class Files(PathAliasModel):
-    download_folder: Path = Field(DEFAULT_DOWNLOAD_STORAGE, "d")
-    dump_json: bool = Field(False, "j")
-    input_file: Path = Field(DEFAULT_APP_STORAGE / "Configs{config}/URLs.txt", "i")
+class Files(AliasModel):
+    download_folder: Path = Field(default=DEFAULT_DOWNLOAD_STORAGE, validation_alias="d")
+    dump_json: bool = Field(default=False, validation_alias="j")
+    input_file: Path = Field(default=DEFAULT_APP_STORAGE / "Configs{config}/URLs.txt", validation_alias="i")
     save_pages_html: bool = False
 
 
-class Logs(PathAliasModel):
-    download_error_urls: LogPath = Field(Path("Download_Error_URLs.csv"), "download_error_urls_filename")
-    last_forum_post: LogPath = Field(Path("Last_Scraped_Forum_Posts.csv"), "last_forum_post_filename")
+class Logs(AliasModel):
+    download_error_urls: LogPath = Path("Download_Error_URLs.csv")
+    last_forum_post: LogPath = Path("Last_Scraped_Forum_Posts.csv")
     log_folder: Path = DEFAULT_APP_STORAGE / "Configs/{config}/Logs"
-    log_line_width: PositiveInt = Field(240, ge=50)
     logs_expire_after: timedelta | None = None
-    main_log: MainLogPath = Field(Path("downloader.log"), "main_log_filename")
+    main_log: MainLogPath = Path("downloader.log")
     rotate_logs: bool = False
-    scrape_error_urls: LogPath = Field(Path("Scrape_Error_URLs.csv"), "scrape_error_urls_filename")
-    unsupported_urls: LogPath = Field(Path("Unsupported_URLs.csv"), "unsupported_urls_filename")
-    webhook: HttpAppriseURL | None = Field(None, "webhook_url")
-
-    @property
-    def cdl_responses_dir(self) -> Path:
-        return self.main_log.parent / "cdl_responses"
+    scrape_error_urls: LogPath = Path("Scrape_Error_URLs.csv")
+    unsupported_urls: LogPath = Path("Unsupported_URLs.csv")
+    webhook: HttpAppriseURL | None = None
 
     @field_validator("webhook", mode="before")
     @classmethod
@@ -107,7 +102,7 @@ class Logs(PathAliasModel):
 
             if self.rotate_logs:
                 new_name = f"{log_file.stem}_{current_time_file_iso}{log_file.suffix}"
-                log_file: Path = log_file.parent / current_time_folder_iso / new_name
+                log_file = log_file.parent / current_time_folder_iso / new_name
                 setattr(self, attr, self.log_folder / log_file)
 
             log_file.parent.mkdir(exist_ok=True, parents=True)
@@ -171,7 +166,7 @@ class IgnoreOptions(BaseModel):
         if not value:
             return None
         try:
-            re.compile(value)
+            _ = re.compile(value)
         except re.error as e:
             raise ValueError("input is not a valid regex") from e
         return value
@@ -287,13 +282,13 @@ class DupeCleanup(BaseModel):
 
 
 class ConfigSettings(ConfigModel):
-    browser_cookies: BrowserCookies = Field(BrowserCookies(), "Browser_Cookies")
-    download_options: DownloadOptions = Field(DownloadOptions(), "Download_Options")
-    dupe_cleanup_options: DupeCleanup = Field(DupeCleanup(), "Dupe_Cleanup_Options")
-    file_size_limits: FileSizeLimits = Field(FileSizeLimits(), "File_Size_Limits")
-    media_duration_limits: MediaDurationLimits = Field(MediaDurationLimits(), "Media_Duration_Limits")
-    files: Files = Field(Files(), "Files")
-    ignore_options: IgnoreOptions = Field(IgnoreOptions(), "Ignore_Options")
-    logs: Logs = Field(Logs(), "Logs")
-    runtime_options: RuntimeOptions = Field(RuntimeOptions(), "Runtime_Options")
-    sorting: Sorting = Field(Sorting(), "Sorting")
+    browser_cookies: BrowserCookies = BrowserCookies()
+    download_options: DownloadOptions = DownloadOptions()
+    dupe_cleanup_options: DupeCleanup = DupeCleanup()
+    file_size_limits: FileSizeLimits = FileSizeLimits()
+    media_duration_limits: MediaDurationLimits = MediaDurationLimits()
+    files: Files = Files()
+    ignore_options: IgnoreOptions = IgnoreOptions()
+    logs: Logs = Logs()
+    runtime_options: RuntimeOptions = RuntimeOptions()
+    sorting: Sorting = Sorting()
