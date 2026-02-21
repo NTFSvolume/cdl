@@ -123,9 +123,9 @@ class Config:
         self.apprise_urls = get_apprise_urls(file=self.apprise_file)
 
     def _resolve_all_paths(self) -> None:
-        self.auth.resolve_paths(self.folder.name)
-        self.settings.resolve_paths(self.folder.name)
-        self.global_settings.resolve_paths(self.folder.name)
+        self.auth.resolve_paths()
+        self.settings.resolve_paths()
+        self.global_settings.resolve_paths()
 
     def _all_settings(self) -> tuple[ConfigSettings, AuthSettings, GlobalSettings]:
         return self.settings, self.auth, self.global_settings

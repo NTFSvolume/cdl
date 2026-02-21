@@ -8,7 +8,7 @@ from pydantic import BaseModel, ByteSize, Field, NonNegativeInt, field_serialize
 
 from cyberdrop_dl import constants
 from cyberdrop_dl.constants import BROWSERS, DEFAULT_APP_STORAGE, DEFAULT_DOWNLOAD_STORAGE, Hashing
-from cyberdrop_dl.models import HttpAppriseURL
+from cyberdrop_dl.models import AliasModel, HttpAppriseURL
 from cyberdrop_dl.models.types import (
     ByteSizeSerilized,
     ListNonEmptyStr,
@@ -24,7 +24,7 @@ from cyberdrop_dl.supported_domains import SUPPORTED_SITES_DOMAINS
 from cyberdrop_dl.utils.strings import validate_format_string
 from cyberdrop_dl.utils.utilities import purge_dir_tree
 
-from ._common import ConfigModel, PathAliasModel
+from ._common import ConfigModel
 
 ALL_SUPPORTED_SITES = ["<<ALL_SUPPORTED_SITES>>"]
 _SORTING_COMMON_FIELDS = {
@@ -63,14 +63,14 @@ class DownloadOptions(BaseModel):
         return value
 
 
-class Files(PathAliasModel):
+class Files(AliasModel):
     download_folder: Path = Field(default=DEFAULT_DOWNLOAD_STORAGE, validation_alias="d")
     dump_json: bool = Field(default=False, validation_alias="j")
     input_file: Path = Field(default=DEFAULT_APP_STORAGE / "Configs{config}/URLs.txt", validation_alias="i")
     save_pages_html: bool = False
 
 
-class Logs(PathAliasModel):
+class Logs(AliasModel):
     download_error_urls: LogPath = Path("Download_Error_URLs.csv")
     last_forum_post: LogPath = Path("Last_Scraped_Forum_Posts.csv")
     log_folder: Path = DEFAULT_APP_STORAGE / "Configs/{config}/Logs"
