@@ -25,7 +25,7 @@ class FileProgress(DequeProgress):
     def __init__(self, manager: Manager) -> None:
         self.manager = manager
         progress_colums = (SpinnerColumn(), "[progress.description]{task.description}", BarColumn(bar_width=None))
-        visible_tasks_limit: int = manager.config_manager.global_settings_data.ui_options.downloading_item_limit
+        visible_tasks_limit: int = 10
         horizontal_columns = (
             *progress_colums,
             "[progress.percentage]{task.percentage:>6.2f}%",

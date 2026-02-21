@@ -62,7 +62,6 @@ class Manager:
         self.task_group: TaskGroup = field(init=False)
         self.scrape_mapper: ScrapeMapper = field(init=False)
 
-        self.vi_mode: bool = False
         self.start_time: float = perf_counter()
         self.downloaded_data: int = 0
         self.loggers: dict[str, QueuedLogger] = {}
@@ -96,8 +95,6 @@ class Manager:
         self.config_manager.startup()
 
         self.args_consolidation()
-        self.cache_manager.load_request_cache()
-        self.vi_mode = self.config_manager.global_settings_data.ui_options.vi_mode
 
         self.path_manager.startup()
         self.log_manager = LogManager(self)
