@@ -98,26 +98,6 @@ class Manager:
 
         self.path_manager.startup()
         self.log_manager = LogManager(self)
-        self.adjust_for_simpcity()
-        self.set_constants()
-
-    def adjust_for_simpcity(self) -> None:
-        """Adjusts settings for SimpCity update."""
-        simp_settings_adjusted = self.cache_manager.get("simp_settings_adjusted")
-        if not simp_settings_adjusted:
-            for config in self.config_manager.get_configs():
-                if config != self.config_manager.loaded_config:
-                    self.config_manager.change_config(config)
-                self.config_manager.settings_data.runtime_options.update_last_forum_post = True
-                self.config_manager.write_updated_settings_config()
-
-            rate_limit_options = self.config_manager.global_settings_data.rate_limiting_options
-            if rate_limit_options.download_attempts >= 10:
-                rate_limit_options.download_attempts = 5
-            if rate_limit_options.max_simultaneous_downloads_per_domain > 15:
-                rate_limit_options.max_simultaneous_downloads_per_domain = 5
-            self.config_manager.write_updated_global_settings_config()
-        self.cache_manager.save("simp_settings_adjusted", True)
 
     """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
 
@@ -180,10 +160,9 @@ class Manager:
 
     def args_logging(self) -> None:
         """Logs the runtime arguments."""
-        auth_data: dict[str, dict] = self.config_manager.authentication_data.model_dump()
         auth_provided = {}
 
-        for site, auth_entries in auth_data.items():
+        for site, auth_entries in self.config_manager.authentication_data.model_dump().items():
             auth_provided[site] = all(auth_entries.values())
 
         config_settings = self.config_manager.settings_data.model_copy()

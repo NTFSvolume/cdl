@@ -75,7 +75,7 @@ def test_startup_logger_is_created_on_yaml_error(tmp_cwd: Path) -> None:
 def test_startup_logger_when_manager_startup_fails(
     tmp_cwd: Path, exception: Exception | type[Exception], exists: bool, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    with mock.patch("cyberdrop_dl.managers.manager.Manager.set_constants", side_effect=exception):
+    with mock.patch("cyberdrop_dl.managers.manager.Manager.args_consolidation", side_effect=exception):
         try:
             run("--download")
         except SystemExit:
