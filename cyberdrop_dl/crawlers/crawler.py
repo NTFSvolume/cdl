@@ -227,7 +227,6 @@ class Crawler(ABC):
         assert cls.__init__ is Crawler.__init__, msg
         cls.NAME = cls.__name__.removesuffix("Crawler")
         cls.IS_GENERIC = is_generic
-        cls.IS_FALLBACK_GENERIC = cls.NAME == "Generic"
         cls.IS_REAL_DEBRID = cls.NAME == "RealDebrid"
         cls.SUPPORTED_PATHS = _sort_supported_paths(cls.SUPPORTED_PATHS)
         cls.IS_ABC = is_abc
@@ -241,7 +240,7 @@ class Crawler(ABC):
         if is_abc:
             return
 
-        if not (cls.IS_FALLBACK_GENERIC or cls.IS_REAL_DEBRID):
+        if not cls.IS_REAL_DEBRID:
             Crawler._assert_fields_overrides(cls, "PRIMARY_URL", "DOMAIN", "SUPPORTED_PATHS")
 
         if cls.OLD_DOMAINS:
@@ -367,12 +366,7 @@ class Crawler(ABC):
     @contextlib.contextmanager
     def new_task_id(self, url: AbsoluteHttpURL) -> Generator[TaskID]:
         """Creates a new task_id (shows the URL in the UI and logs)"""
-        scrape_prefix = "Scraping"
-        if self.IS_FALLBACK_GENERIC:
-            scrape_prefix += " (unsupported domain)"
-        else:
-            scrape_prefix += f" [{self.FOLDER_DOMAIN}]"
-        log(f"{scrape_prefix}: {url}", 20)
+        log(f"Scraping [{self.FOLDER_DOMAIN}]: {url}", 20)
         task_id = self.manager.progress_manager.scraping_progress.add_task(url)
         try:
             yield task_id
