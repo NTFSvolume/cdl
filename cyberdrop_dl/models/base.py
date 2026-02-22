@@ -1,9 +1,10 @@
 """Pydantic models"""
 
 from collections.abc import Iterator, Mapping, Sequence
-from typing import TypeVar
+from typing import TypeVar, Unpack
 
 import yarl
+from cyclopts import Parameter
 from pydantic import (
     AnyUrl,
     BaseModel,
@@ -27,6 +28,19 @@ class AliasModel(BaseModel):
 
 class FrozenModel(BaseModel):
     model_config = ConfigDict(frozen=True, defer_build=True)
+
+
+@Parameter(name="*")
+class FlatNamespace: ...
+
+
+class Settings(FlatNamespace, AliasModel): ...
+
+
+class SettingsGroup(Settings):
+    def __init_subclass__(cls, name: str | None = None, **kwargs: Unpack[ConfigDict]) -> None:
+        _ = Parameter(group=name or cls.__name__)(cls)
+        return super().__init_subclass__(**kwargs)
 
 
 class AppriseURLModel(FrozenModel):

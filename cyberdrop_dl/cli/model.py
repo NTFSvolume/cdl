@@ -4,9 +4,10 @@ from pathlib import Path
 from typing import Literal
 
 from cyclopts import Parameter
-from pydantic import BaseModel, Field
+from pydantic import Field
 
-from cyberdrop_dl.config import ConfigSettings, GlobalSettings
+from cyberdrop_dl.config import Config
+from cyberdrop_dl.models import Settings
 
 
 class UIOptions(StrEnum):
@@ -17,7 +18,7 @@ class UIOptions(StrEnum):
 
 
 @Parameter(name="*", negative_bool=[])
-class CLIargs(BaseModel):
+class CLIargs(Settings):
     appdata_folder: Path | None = Field(
         default=None,
         description="AppData folder path",
@@ -54,7 +55,7 @@ class CLIargs(BaseModel):
 
 
 @Parameter(name="*", negative_bool="")
-class RetryArgs(BaseModel):
+class RetryArgs(Settings):
     completed_after: datetime.date | None = Field(
         default=None,
         description="only retry downloads that were completed on or after this date",
@@ -70,8 +71,6 @@ class RetryArgs(BaseModel):
     )
 
 
-@Parameter(name="*")
-class ParsedArgs(BaseModel):
+class ParsedArgs(Settings):
     cli_only_args: CLIargs = CLIargs()
-    config_settings: ConfigSettings = ConfigSettings()
-    global_settings: GlobalSettings = GlobalSettings()
+    config: Config = Config()

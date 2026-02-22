@@ -138,7 +138,7 @@ class Manager:
 
     def process_additive_args(self) -> None:
         cli_general_options = self.parsed_args.global_settings.general
-        cli_ignore_options = self.parsed_args.config_settings.ignore_options
+        cli_ignore_options = self.parsed_args.config.ignore_options
         config_ignore_options = self.config_manager.settings_data.ignore_options
         config_general_options = self.config_manager.global_settings_data.general
 
@@ -150,9 +150,9 @@ class Manager:
         """Consolidates runtime arguments with config values."""
         self.process_additive_args()
 
-        conf = merge_models(self.config_manager.settings_data, self.parsed_args.config_settings)
+        conf = merge_models(self.config_manager.settings_data, self.parsed_args.config)
         global_conf = merge_models(self.config_manager.global_settings_data, self.parsed_args.global_settings)
-        deep_scrape = self.parsed_args.config_settings.runtime_options.deep_scrape or self.config_manager.deep_scrape
+        deep_scrape = self.parsed_args.config.runtime_options.deep_scrape or self.config_manager.deep_scrape
 
         self.config_manager.settings_data = conf
         self.config_manager.global_settings_data = global_conf

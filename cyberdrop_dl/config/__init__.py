@@ -1,177 +1,95 @@
 from __future__ import annotations
 
-import dataclasses
-import shutil
+from contextvars import ContextVar, Token
 from pathlib import Path
-from time import sleep
-from typing import TYPE_CHECKING
+from typing import Self
 
-from cyberdrop_dl import constants, env
-from cyberdrop_dl.utils.apprise import get_apprise_urls
+from pydantic import BaseModel
 
-from .auth_model import AuthSettings
-from .config_model import ConfigSettings
-from .global_model import GlobalSettings
+from cyberdrop_dl.config.auth import AuthSettings
+from cyberdrop_dl.config.settings import ConfigSettings
+from cyberdrop_dl.models import Settings, get_model_fields
 
-if TYPE_CHECKING:
-    from cyberdrop_dl.cli import ParsedArgs
-    from cyberdrop_dl.utils.apprise import AppriseURL
-
-__all__ = [
-    "AuthSettings",
-    "ConfigSettings",
-    "GlobalSettings",
-]
-
-deep_scrape: bool = False
-
-current_config: Config
-cli: ParsedArgs
-appdata: AppData
-
-# re-export current config values for easy access
-auth: AuthSettings
-settings: ConfigSettings
-global_settings: GlobalSettings
+_config: ContextVar[Config] = ContextVar("_config")
+_appdata: ContextVar[AppData] = ContextVar("_appdata")
 
 
-def startup() -> None:
-    global appdata, cli
-    from cyberdrop_dl.cli import parse_args
+class AppData:
+    def __init__(self, path: Path) -> None:
+        self.path: Path = path
+        self.cookies_dir: Path = path / "cookies"
+        self.cache_file: Path = path / "cache.yaml"
+        self.default_config: Path = path / "config.yaml"
+        self.db_file: Path = path / "cyberdrop.db"
 
-    cli = parse_args()
+    def __fspath__(self) -> str:
+        return str(self)
 
-    if env.RUNNING_IN_IDE and Path.cwd().name == "cyberdrop_dl":
-        """This is for testing purposes only"""
-        constants.DEFAULT_APP_STORAGE = Path("../AppData")
-        constants.DEFAULT_DOWNLOAD_STORAGE = Path("../Downloads")
+    def __str__(self) -> str:
+        return str(self.path)
 
-    appdata_path = cli.cli_only_args.appdata_folder or constants.DEFAULT_APP_STORAGE
-    appdata = AppData(appdata_path.resolve())
-    appdata.mkdirs()
-    # cache.startup(appdata.cache_file)
-    load_config(get_default_config())
-    settings.logs._delete_old_logs_and_folders(constants.STARTUP_TIME)
-
-
-class AppData(Path):
-    def __init__(self, app_data_path: Path) -> None:
-        self.configs_dir = app_data_path / "Configs"
-        self.cache_dir = app_data_path / "Cache"
-        self.cookies_dir = app_data_path / "Cookies"
-        self.cache_file = self.cache_dir / "cache.yaml"
-        self.default_auth_config_file = self.configs_dir / "authentication.yaml"
-        self.global_config_file = self.configs_dir / "global_settings.yaml"
-        self.cache_db = self.cache_dir / "request_cache.db"
-        self.history_db = self.cache_dir / "cyberdrop.db"
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({vars(self)!r})"
 
     def mkdirs(self) -> None:
-        for dir in (self.configs_dir, self.cache_dir, self.cookies_dir):
+        for dir in (self.cookies_dir,):
             dir.mkdir(parents=True, exist_ok=True)
 
 
-@dataclasses.dataclass(slots=True)
-class Config:
-    """Helper class to group a single config, not necessarily the current config"""
+class Config(Settings):
+    auth: AuthSettings = AuthSettings()
+    settings: ConfigSettings = ConfigSettings()
 
-    folder: Path
+    _token: Token[Config] | None = None
+    _resolved: bool = False
 
-    apprise_file: Path
-    config_file: Path
-
-    auth_config_file: Path
-
-    auth: AuthSettings
-    settings: ConfigSettings
-    global_settings: GlobalSettings
-    apprise_urls: list[AppriseURL]
-
-    def __init__(self, name: str) -> None:
-        self.apprise_urls = []
-        self.folder = appdata.configs_dir / name
-        self.apprise_file = self.folder / "apprise.txt"
-        self.config_file = self.folder / "settings.yaml"
-        auth_override = self.folder / "authentication.yaml"
-        if auth_override.is_file():
-            self.auth_config_file = auth_override
-        else:
-            self.auth_config_file = appdata.default_auth_config_file
-
-    @staticmethod
-    def build(name: str, auth: AuthSettings, settings: ConfigSettings, global_settings: GlobalSettings) -> Config:
-        self = Config(name)
-        self.auth = auth
-        self.settings = settings
-        self.global_settings = global_settings
-        self.apprise_urls = get_apprise_urls(file=self.apprise_file)
+    def __enter__(self) -> Self:
+        self._token = _config.set(self)
         return self
 
-    @staticmethod
-    def new_empty_config(name: str) -> Config:
-        assert name not in get_all_configs()
-        self = Config(name)
-        self._load()
-        return self
+    def __exit__(self, *_) -> None:
+        assert self._token is not None
+        _config.reset(self._token)
 
-    def _load(self) -> None:
-        """Read each config module from their respective files
+    def save(self, file: Path) -> None:
+        from cyberdrop_dl.utils import yaml
 
-        If a files does not exists, uses the default config and creates it"""
-        self.auth = AuthSettings.load_file(self.auth_config_file, "socialmediagirls_username:")
-        self.settings = ConfigSettings.load_file(self.config_file, "download_error_urls_filename:")
-        self.global_settings = GlobalSettings.load_file(appdata.global_config_file, "Dupe_Cleanup_Options:")
-        self.apprise_urls = get_apprise_urls(file=self.apprise_file)
+        yaml.save(file, self)
 
-    def _resolve_all_paths(self) -> None:
-        self.auth.resolve_paths()
-        self.settings.resolve_paths()
-        self.global_settings.resolve_paths()
+    def resolve_paths(self) -> None:
+        if not self._resolved:
+            self._resolve_paths(self)
+        self._resolved = True
 
-    def _all_settings(self) -> tuple[ConfigSettings, AuthSettings, GlobalSettings]:
-        return self.settings, self.auth, self.global_settings
+    @classmethod
+    def _resolve_paths(cls, model: BaseModel) -> None:
+        for name, value in vars(model).items():
+            if isinstance(value, Path):
+                setattr(model, name, value.resolve())
 
-    def write_updated_config(self) -> None:
-        """Writes config to disk."""
-        self.auth.save_to_file(self.auth_config_file)
-        self.settings.save_to_file(self.config_file)
-        self.global_settings.save_to_file(appdata.global_config_file)
+            elif isinstance(value, BaseModel):
+                cls._resolve_paths(value)
 
 
-def get_default_config() -> str:
-    ...
-    # return cache.get(cache.DEFAULT_CONFIG_KEY) or "Default"
+def load(file: Path) -> Config:
+    from cyberdrop_dl.utils import yaml
+
+    default = Config()
+    if not file.is_file():
+        config = default
+        overwrite = True
+
+    else:
+        all_fields = get_model_fields(default, exclude_unset=False)
+        config = Config.model_validate(yaml.load(file))
+        set_fields = get_model_fields(config)
+        overwrite = all_fields != set_fields
+
+    if overwrite:
+        config.save(file)
+
+    return config
 
 
-def get_all_configs() -> list:
-    return sorted(config.name for config in appdata.configs_dir.iterdir() if config.is_dir())
-
-
-def set_default_config(config_name: str) -> None:
-    ...
-    # cache.save(cache.DEFAULT_CONFIG_KEY, config_name)
-
-
-def delete_config(config_name: str) -> None:
-    all_configs = get_all_configs()
-    assert config_name in all_configs
-    assert len(all_configs) > 1
-    assert config_name != current_config.folder.name
-    all_configs.remove(config_name)
-
-    # if cache.get(cache.DEFAULT_CONFIG_KEY) == config_name:
-    #    set_default_config(all_configs[0])
-
-    config_path = appdata.configs_dir / config_name
-    shutil.rmtree(config_path)
-
-
-def load_config(config_name: str) -> None:
-    global current_config, auth, global_settings, settings
-    assert config_name
-    current_config = Config(config_name)
-    current_config._load()
-    current_config._resolve_all_paths()
-    settings, auth, global_settings = current_config._all_settings()
-    settings.logs._set_output_filenames(constants.STARTUP_TIME)
-
-    sleep(1)
+def get() -> Config:
+    return _config.get()

@@ -16,7 +16,7 @@ from cyberdrop_dl.utils.utilities import get_size_or_none
 if TYPE_CHECKING:
     from yarl import URL
 
-    from cyberdrop_dl.config.config_model import Dedupe
+    from cyberdrop_dl.config.settings import Dedupe
     from cyberdrop_dl.data_structures.url_objects import MediaItem
     from cyberdrop_dl.managers.manager import Manager
 

@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from .base_models import AliasModel, AppriseURLModel, FrozenModel, HttpAppriseURL
+from .base import AliasModel, AppriseURLModel, FlatNamespace, FrozenModel, HttpAppriseURL, Settings, SettingsGroup
 
 
 def get_model_fields(model: BaseModel, *, exclude_unset: bool = True) -> set[str]:
@@ -12,4 +12,13 @@ def get_model_fields(model: BaseModel, *, exclude_unset: bool = True) -> set[str
     return fields
 
 
-__all__ = ["AliasModel", "AppriseURLModel", "FrozenModel", "HttpAppriseURL", "get_model_fields"]
+__all__ = [
+    "AliasModel",
+    "AppriseURLModel",
+    "FlatNamespace",
+    "FrozenModel",
+    "HttpAppriseURL",
+    "Settings",
+    "SettingsGroup",
+    "get_model_fields",
+]

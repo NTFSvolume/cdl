@@ -1,30 +1,44 @@
 # ruff: noqa: RUF012
 import itertools
+import random
 import re
 from datetime import date, datetime, timedelta
 from logging import DEBUG
 from pathlib import Path
+from typing import Literal
 
-from pydantic import ByteSize, Field, NonNegativeInt, field_validator
+import aiohttp
+from pydantic import (
+    ByteSize,
+    Field,
+    NonNegativeFloat,
+    NonNegativeInt,
+    PositiveFloat,
+    PositiveInt,
+    field_serializer,
+    field_validator,
+)
+from yarl import URL
 
 from cyberdrop_dl import constants
 from cyberdrop_dl.constants import BROWSERS, DEFAULT_APP_STORAGE, DEFAULT_DOWNLOAD_STORAGE, Hashing
-from cyberdrop_dl.models import HttpAppriseURL
+from cyberdrop_dl.models import HttpAppriseURL, Settings, SettingsGroup
 from cyberdrop_dl.models.types import (
     ByteSizeSerilized,
+    HttpURL,
     ListNonEmptyStr,
     ListNonNegativeInt,
+    ListPydanticURL,
     LogPath,
     MainLogPath,
     NonEmptyStr,
     NonEmptyStrOrNone,
     PathOrNone,
 )
-from cyberdrop_dl.models.validators import falsy_as, to_timedelta
-from cyberdrop_dl.utils.strings import validate_format_string
-from cyberdrop_dl.utils.utilities import purge_dir_tree
+from cyberdrop_dl.models.validators import falsy_as, falsy_as_none, to_bytesize, to_timedelta
 
-from ._common import ConfigFile, Settings
+MIN_REQUIRED_FREE_SPACE = to_bytesize("512MB")
+DEFAULT_REQUIRED_FREE_SPACE = to_bytesize("5GB")
 
 _SORTING_COMMON_FIELDS = {
     "base_dir",
@@ -38,7 +52,15 @@ _SORTING_COMMON_FIELDS = {
 }
 
 
-class DownloadOptions(Settings):
+class FormatValidator:
+    @classmethod
+    def _validate_format(cls, value: str, valid_keys: set[str]) -> None:
+        from cyberdrop_dl.utils.strings import validate_format_string
+
+        validate_format_string(value, valid_keys)
+
+
+class DownloadOptions(SettingsGroup):
     block_download_sub_folders: bool = False
     disable_download_attempt_limit: bool = False
     disable_file_timestamps: bool = False
@@ -57,19 +79,21 @@ class DownloadOptions(Settings):
     @field_validator("separate_posts_format", mode="after")
     @classmethod
     def valid_format(cls, value: str) -> str:
+        from cyberdrop_dl.utils.strings import validate_format_string
+
         valid_keys = {"default", "title", "id", "number", "date"}
         validate_format_string(value, valid_keys)
         return value
 
 
-class Files(Settings):
+class Files(SettingsGroup):
     download_folder: Path = Field(default=DEFAULT_DOWNLOAD_STORAGE, validation_alias="d")
     dump_json: bool = Field(default=False, validation_alias="j")
     input_file: Path = Field(default=DEFAULT_APP_STORAGE / "Configs/{config}/URLs.txt", validation_alias="i")
     save_pages_html: bool = False
 
 
-class Logs(Settings):
+class Logs(SettingsGroup):
     download_error_urls: LogPath = Path("Download_Error_URLs.csv")
     last_forum_post: LogPath = Path("Last_Scraped_Forum_Posts.csv")
     log_folder: Path = DEFAULT_APP_STORAGE / "Configs/{config}/Logs"
@@ -107,16 +131,19 @@ class Logs(Settings):
             log_file.parent.mkdir(exist_ok=True, parents=True)
 
     def _delete_old_logs_and_folders(self, now: datetime | None = None) -> None:
+        from cyberdrop_dl.utils.utilities import purge_dir_tree
+
         if now and self.logs_expire_after:
             for file in itertools.chain(self.log_folder.rglob("*.log"), self.log_folder.rglob("*.csv")):
                 file_date = file.stat().st_ctime
                 t_delta = now - datetime.fromtimestamp(file_date)
                 if t_delta > self.logs_expire_after:
                     file.unlink(missing_ok=True)
+
         purge_dir_tree(self.log_folder)
 
 
-class FileSizeLimits(Settings):
+class FileSizeLimits(SettingsGroup):
     maximum_image_size: ByteSizeSerilized = ByteSize(0)
     maximum_other_size: ByteSizeSerilized = ByteSize(0)
     maximum_video_size: ByteSizeSerilized = ByteSize(0)
@@ -125,7 +152,7 @@ class FileSizeLimits(Settings):
     minimum_video_size: ByteSizeSerilized = ByteSize(0)
 
 
-class MediaDurationLimits(Settings):
+class MediaDurationLimits(SettingsGroup):
     maximum_video_duration: timedelta = timedelta(seconds=0)
     maximum_audio_duration: timedelta = timedelta(seconds=0)
     minimum_video_duration: timedelta = timedelta(seconds=0)
@@ -145,7 +172,7 @@ class MediaDurationLimits(Settings):
         return to_timedelta(input_date)
 
 
-class IgnoreOptions(Settings):
+class IgnoreOptions(SettingsGroup):
     exclude_audio: bool = False
     exclude_images: bool = False
     exclude_other: bool = False
@@ -171,7 +198,7 @@ class IgnoreOptions(Settings):
         return value
 
 
-class Runtime(Settings):
+class Runtime(SettingsGroup):
     console_log_level: NonNegativeInt = 100
     deep_scrape: bool = False
     delete_partial_files: bool = False
@@ -187,7 +214,7 @@ class Runtime(Settings):
     update_last_forum_post: bool = True
 
 
-class Sorting(Settings):
+class Sorting(FormatValidator, SettingsGroup):
     scan_folder: PathOrNone = None
     sort_downloads: bool = False
     sort_folder: Path = DEFAULT_DOWNLOAD_STORAGE / "Cyberdrop-DL Sorted Downloads"
@@ -202,7 +229,7 @@ class Sorting(Settings):
     def valid_sort_incrementer_format(cls, value: str | None) -> str | None:
         if value is not None:
             valid_keys = {"i"}
-            validate_format_string(value, valid_keys)
+            cls._validate_format(value, valid_keys)
         return value
 
     @field_validator("sorted_audio", mode="after")
@@ -210,7 +237,7 @@ class Sorting(Settings):
     def valid_sorted_audio(cls, value: str | None) -> str | None:
         if value is not None:
             valid_keys = _SORTING_COMMON_FIELDS | {"bitrate", "duration", "length", "sample_rate"}
-            validate_format_string(value, valid_keys)
+            cls._validate_format(value, valid_keys)
         return value
 
     @field_validator("sorted_image", mode="after")
@@ -218,7 +245,7 @@ class Sorting(Settings):
     def valid_sorted_image(cls, value: str | None) -> str | None:
         if value is not None:
             valid_keys = _SORTING_COMMON_FIELDS | {"height", "resolution", "width"}
-            validate_format_string(value, valid_keys)
+            cls._validate_format(value, valid_keys)
         return value
 
     @field_validator("sorted_other", mode="after")
@@ -226,7 +253,7 @@ class Sorting(Settings):
     def valid_sorted_other(cls, value: str | None) -> str | None:
         if value is not None:
             valid_keys = _SORTING_COMMON_FIELDS | {"bitrate", "duration", "length", "sample_rate"}
-            validate_format_string(value, valid_keys)
+            cls._validate_format(value, valid_keys)
         return value
 
     @field_validator("sorted_video", mode="after")
@@ -242,11 +269,11 @@ class Sorting(Settings):
                 "resolution",
                 "width",
             }
-            validate_format_string(value, valid_keys)
+            cls._validate_format(value, valid_keys)
         return value
 
 
-class Cookies(Settings):
+class Cookies(SettingsGroup):
     auto_import: bool = False
     browser: BROWSERS | None = BROWSERS.firefox
 
@@ -255,7 +282,7 @@ class Cookies(Settings):
             raise ValueError("You need to provide a browser for auto_import to work")
 
 
-class Dedupe(Settings):
+class Dedupe(SettingsGroup):
     add_md5_hash: bool = False
     add_sha256_hash: bool = False
     auto_dedupe: bool = True
@@ -263,14 +290,107 @@ class Dedupe(Settings):
     send_deleted_to_trash: bool = True
 
 
-class ConfigSettings(ConfigFile):
+# ruff: noqa: RUF012
+
+
+class General(SettingsGroup):
+    ssl_context: Literal["truststore", "certifi", "truststore+certifi"] | None = "truststore+certifi"
+    disable_crawlers: ListNonEmptyStr = []
+    flaresolverr: HttpURL | None = None
+    max_file_name_length: PositiveInt = 95
+    max_folder_name_length: PositiveInt = 60
+    proxy: HttpURL | None = None
+    required_free_space: ByteSizeSerilized = DEFAULT_REQUIRED_FREE_SPACE
+    user_agent: NonEmptyStr = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:142.0) Gecko/20100101 Firefox/142.0"
+
+    @field_validator("ssl_context", mode="before")
+    @classmethod
+    def ssl(cls, value: str | None) -> str | None:
+        if isinstance(value, str):
+            value = value.lower().strip()
+        return falsy_as(value, None)
+
+    @field_validator("disable_crawlers", mode="after")
+    @classmethod
+    def unique_list(cls, value: list[str]) -> list[str]:
+        return sorted(set(value))
+
+    @field_serializer("flaresolverr", "proxy")
+    def serialize(self, value: URL | str) -> str | None:
+        return falsy_as(value, None, str)
+
+    @field_validator("flaresolverr", "proxy", mode="before")
+    @classmethod
+    def convert_to_str(cls, value: str) -> str | None:
+        return falsy_as(value, None, str)
+
+    @field_validator("required_free_space", mode="after")
+    @classmethod
+    def override_min(cls, value: ByteSize) -> ByteSize:
+        return max(value, MIN_REQUIRED_FREE_SPACE)
+
+
+class RateLimiting(SettingsGroup):
+    download_attempts: PositiveInt = 2
+    download_delay: NonNegativeFloat = 0.0
+    download_speed_limit: ByteSizeSerilized = ByteSize(0)
+    jitter: NonNegativeFloat = 0
+    max_simultaneous_downloads_per_domain: PositiveInt = 5
+    max_simultaneous_downloads: PositiveInt = 15
+    rate_limit: PositiveFloat = 25
+
+    connection_timeout: PositiveFloat = 15
+    read_timeout: PositiveFloat | None = 300
+
+    @field_validator("read_timeout", mode="before")
+    @classmethod
+    def parse_timeouts(cls, value: object) -> object | None:
+        return falsy_as_none(value)
+
+    def model_post_init(self, *_) -> None:
+        self._curl_timeout = self.connection_timeout
+        if self.read_timeout is not None:
+            self._curl_timeout = self.connection_timeout, self.read_timeout
+
+        self._aiohttp_timeout: aiohttp.ClientTimeout = aiohttp.ClientTimeout(
+            total=None,
+            sock_connect=self.connection_timeout,
+            sock_read=self.read_timeout,
+        )
+
+    @property
+    def total_delay(self) -> NonNegativeFloat:
+        """download_delay + jitter"""
+        return self.download_delay + self.get_jitter()
+
+    def get_jitter(self) -> NonNegativeFloat:
+        """Get a random number in the range [0, self.jitter]"""
+        return random.uniform(0, self.jitter)
+
+
+class UIOptions(SettingsGroup):
+    refresh_rate: PositiveInt = 10
+
+
+class GenericCrawlerInstances(SettingsGroup):
+    wordpress_media: ListPydanticURL = []
+    wordpress_html: ListPydanticURL = []
+    discourse: ListPydanticURL = []
+    chevereto: ListPydanticURL = []
+
+
+class ConfigSettings(Settings):
     browser_cookies: Cookies = Cookies()
     download_options: DownloadOptions = DownloadOptions()
     dupe_cleanup_options: Dedupe = Dedupe()
     file_size_limits: FileSizeLimits = FileSizeLimits()
-    media_duration_limits: MediaDurationLimits = MediaDurationLimits()
     files: Files = Files()
+    general: General = General()
+    generic_crawlers_instances: GenericCrawlerInstances = GenericCrawlerInstances()
     ignore_options: IgnoreOptions = IgnoreOptions()
     logs: Logs = Logs()
+    media_duration_limits: MediaDurationLimits = MediaDurationLimits()
+    rate_limiting_options: RateLimiting = RateLimiting()
     runtime_options: Runtime = Runtime()
     sorting: Sorting = Sorting()
+    ui_options: UIOptions = UIOptions()
