@@ -4,8 +4,10 @@ import dataclasses
 import sys
 from argparse import SUPPRESS, ArgumentParser, RawDescriptionHelpFormatter
 from shutil import get_terminal_size
-from typing import TYPE_CHECKING, Any, Final, NoReturn
+from typing import TYPE_CHECKING, Annotated, Any, Final, NoReturn
 
+from cyclopts import App, Parameter
+from cyclopts.bind import normalize_tokens
 from pydantic import BaseModel, ValidationError
 
 from cyberdrop_dl import __version__, env
@@ -16,6 +18,8 @@ from cyberdrop_dl.config import ConfigSettings, GlobalSettings
 if TYPE_CHECKING:
     from argparse import _ArgumentGroup as ArgGroup  # pyright: ignore[reportPrivateUsage]
     from collections.abc import Sequence
+
+    from cyberdrop_dl.models.types import HttpURL
 
 
 def is_terminal_in_portrait() -> bool:
@@ -102,32 +106,58 @@ def make_parser() -> CLIParser:
     return CLIParser(parser, groups)
 
 
+app = App(result_action="return_value", version=f"{__version__}NTFS")
+
+
+@app.command()
+def download(
+    links: Annotated[
+        list[HttpURL],
+        Parameter(
+            name="links",
+            consume_multiple=True,
+            negative=[],
+            help="link(s) to content to download (passing multiple links is supported)",
+        ),
+    ] = [],  # noqa: B006
+    /,
+    *,
+    parsed_settings: ParsedArgs = ParsedArgs(),  # pyright: ignore[reportCallInDefaultInitializer]  # noqa: B008
+) -> ParsedArgs:
+    return parsed_settings
+
+
+@app.command()
+def show_supported_sites() -> NoReturn:
+    from cyberdrop_dl.utils.markdown import get_crawlers_info_as_rich_table
+
+    table = get_crawlers_info_as_rich_table()
+    app.console.print(table)
+    sys.exit(0)
+
+
 def parse_args(args: Sequence[str] | None = None) -> ParsedArgs:
     """Parses the command line arguments passed into the program."""
+
     from cyberdrop_dl.utils.yaml import handle_validation_error
 
-    parsed_args = make_parser().parse_args(args)
+    args = normalize_tokens(args)
+    # if not args or args[0] != "download":
+    #   args = ["download", *args]
+
     try:
-        model = ParsedArgs.model_validate(parsed_args, extra="forbid")
+        command, bound, _ = app.parse_args(args, print_error=False, exit_on_error=False)
+        # assert command is download
+        settings: ParsedArgs = command(*bound.args, **bound.kwargs)
 
     except ValidationError as e:
         handle_validation_error(e, title="CLI arguments")
         sys.exit(1)
 
-    if model.cli_only_args.show_supported_sites:
-        show_supported_sites()
+    # if settings.cli_only_args.show_supported_sites:
+    #    show_supported_sites()
 
-    return model
-
-
-def show_supported_sites() -> NoReturn:
-    from rich import print
-
-    from cyberdrop_dl.utils.markdown import get_crawlers_info_as_rich_table
-
-    table = get_crawlers_info_as_rich_table()
-    print(table)
-    sys.exit(0)
+    return settings
 
 
 def _unflatten_nested_args(data: dict[str, Any]) -> dict[str, Any]:

@@ -1,14 +1,26 @@
 from pathlib import Path
-from typing import Self
+from typing import Self, Unpack
 
-from pydantic import BaseModel
+from cyclopts import Parameter
+from pydantic import BaseModel, ConfigDict
 
 from cyberdrop_dl.exceptions import InvalidYamlError
 from cyberdrop_dl.models import AliasModel, get_model_fields
 from cyberdrop_dl.utils import yaml
 
 
-class ConfigModel(AliasModel):
+@Parameter(name="*")
+class FlatCLIParams: ...
+
+
+class Settings(FlatCLIParams, AliasModel): ...
+
+
+class ConfigGroup(Settings):
+    def __init_subclass__(cls, name: str | None = None, **kwargs: Unpack[ConfigDict]) -> None:
+        _ = Parameter(group=name or cls.__name__)(cls)
+        return super().__init_subclass__(**kwargs)
+
     @classmethod
     def load_file(cls, file: Path, update_if_has_string: str) -> Self:
         default = cls()

@@ -22,11 +22,11 @@ _ModelT = TypeVar("_ModelT", bound=BaseModel)
 
 
 class AliasModel(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, defer_build=True)
 
 
 class FrozenModel(BaseModel):
-    model_config = ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True, defer_build=True)
 
 
 class AppriseURLModel(FrozenModel):

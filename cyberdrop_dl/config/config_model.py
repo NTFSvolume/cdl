@@ -1,14 +1,15 @@
+# ruff: noqa: RUF012
 import itertools
 import re
 from datetime import date, datetime, timedelta
 from logging import DEBUG
 from pathlib import Path
 
-from pydantic import BaseModel, ByteSize, Field, NonNegativeInt, field_serializer, field_validator
+from pydantic import ByteSize, Field, NonNegativeInt, field_serializer, field_validator
 
 from cyberdrop_dl import constants
 from cyberdrop_dl.constants import BROWSERS, DEFAULT_APP_STORAGE, DEFAULT_DOWNLOAD_STORAGE, Hashing
-from cyberdrop_dl.models import AliasModel, HttpAppriseURL
+from cyberdrop_dl.models import HttpAppriseURL
 from cyberdrop_dl.models.types import (
     ByteSizeSerilized,
     ListNonEmptyStr,
@@ -24,7 +25,7 @@ from cyberdrop_dl.supported_domains import SUPPORTED_SITES_DOMAINS
 from cyberdrop_dl.utils.strings import validate_format_string
 from cyberdrop_dl.utils.utilities import purge_dir_tree
 
-from ._common import ConfigModel
+from ._common import ConfigGroup, Settings
 
 ALL_SUPPORTED_SITES = ["<<ALL_SUPPORTED_SITES>>"]
 _SORTING_COMMON_FIELDS = {
@@ -39,7 +40,7 @@ _SORTING_COMMON_FIELDS = {
 }
 
 
-class DownloadOptions(BaseModel):
+class DownloadOptions(Settings):
     block_download_sub_folders: bool = False
     disable_download_attempt_limit: bool = False
     disable_file_timestamps: bool = False
@@ -63,14 +64,14 @@ class DownloadOptions(BaseModel):
         return value
 
 
-class Files(AliasModel):
+class Files(Settings):
     download_folder: Path = Field(default=DEFAULT_DOWNLOAD_STORAGE, validation_alias="d")
     dump_json: bool = Field(default=False, validation_alias="j")
     input_file: Path = Field(default=DEFAULT_APP_STORAGE / "Configs/{config}/URLs.txt", validation_alias="i")
     save_pages_html: bool = False
 
 
-class Logs(AliasModel):
+class Logs(Settings):
     download_error_urls: LogPath = Path("Download_Error_URLs.csv")
     last_forum_post: LogPath = Path("Last_Scraped_Forum_Posts.csv")
     log_folder: Path = DEFAULT_APP_STORAGE / "Configs/{config}/Logs"
@@ -117,7 +118,7 @@ class Logs(AliasModel):
         purge_dir_tree(self.log_folder)
 
 
-class FileSizeLimits(BaseModel):
+class FileSizeLimits(Settings):
     maximum_image_size: ByteSizeSerilized = ByteSize(0)
     maximum_other_size: ByteSizeSerilized = ByteSize(0)
     maximum_video_size: ByteSizeSerilized = ByteSize(0)
@@ -126,7 +127,7 @@ class FileSizeLimits(BaseModel):
     minimum_video_size: ByteSizeSerilized = ByteSize(0)
 
 
-class MediaDurationLimits(BaseModel):
+class MediaDurationLimits(Settings):
     maximum_video_duration: timedelta = timedelta(seconds=0)
     maximum_audio_duration: timedelta = timedelta(seconds=0)
     minimum_video_duration: timedelta = timedelta(seconds=0)
@@ -146,7 +147,7 @@ class MediaDurationLimits(BaseModel):
         return to_timedelta(input_date)
 
 
-class IgnoreOptions(BaseModel):
+class IgnoreOptions(Settings):
     exclude_audio: bool = False
     exclude_images: bool = False
     exclude_other: bool = False
@@ -172,7 +173,7 @@ class IgnoreOptions(BaseModel):
         return value
 
 
-class RuntimeOptions(BaseModel):
+class RuntimeOptions(Settings):
     console_log_level: NonNegativeInt = 100
     deep_scrape: bool = False
     delete_partial_files: bool = False
@@ -188,7 +189,7 @@ class RuntimeOptions(BaseModel):
     update_last_forum_post: bool = True
 
 
-class Sorting(BaseModel):
+class Sorting(Settings):
     scan_folder: PathOrNone = None
     sort_downloads: bool = False
     sort_folder: Path = DEFAULT_DOWNLOAD_STORAGE / "Cyberdrop-DL Sorted Downloads"
@@ -247,7 +248,7 @@ class Sorting(BaseModel):
         return value
 
 
-class BrowserCookies(BaseModel):
+class BrowserCookies(Settings):
     auto_import: bool = False
     browser: BROWSERS | None = BROWSERS.firefox
     sites: list[NonEmptyStr] = SUPPORTED_SITES_DOMAINS
@@ -273,7 +274,7 @@ class BrowserCookies(BaseModel):
         return values
 
 
-class DupeCleanup(BaseModel):
+class DupeCleanup(Settings):
     add_md5_hash: bool = False
     add_sha256_hash: bool = False
     auto_dedupe: bool = True
@@ -281,7 +282,7 @@ class DupeCleanup(BaseModel):
     send_deleted_to_trash: bool = True
 
 
-class ConfigSettings(ConfigModel):
+class ConfigSettings(ConfigGroup):
     browser_cookies: BrowserCookies = BrowserCookies()
     download_options: DownloadOptions = DownloadOptions()
     dupe_cleanup_options: DupeCleanup = DupeCleanup()

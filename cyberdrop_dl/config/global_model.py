@@ -1,9 +1,9 @@
+# ruff: noqa: RUF012
 import random
 from typing import Literal
 
 import aiohttp
 from pydantic import (
-    BaseModel,
     ByteSize,
     NonNegativeFloat,
     PositiveFloat,
@@ -13,7 +13,7 @@ from pydantic import (
 )
 from yarl import URL
 
-from cyberdrop_dl.config._common import ConfigModel
+from cyberdrop_dl.config._common import ConfigGroup, Settings
 from cyberdrop_dl.models.types import ByteSizeSerilized, HttpURL, ListNonEmptyStr, ListPydanticURL, NonEmptyStr
 from cyberdrop_dl.models.validators import falsy_as, falsy_as_none, to_bytesize
 
@@ -21,7 +21,7 @@ MIN_REQUIRED_FREE_SPACE = to_bytesize("512MB")
 DEFAULT_REQUIRED_FREE_SPACE = to_bytesize("5GB")
 
 
-class General(BaseModel):
+class General(Settings):
     ssl_context: Literal["truststore", "certifi", "truststore+certifi"] | None = "truststore+certifi"
     disable_crawlers: ListNonEmptyStr = []
     flaresolverr: HttpURL | None = None
@@ -58,7 +58,7 @@ class General(BaseModel):
         return max(value, MIN_REQUIRED_FREE_SPACE)
 
 
-class RateLimiting(BaseModel):
+class RateLimiting(Settings):
     download_attempts: PositiveInt = 2
     download_delay: NonNegativeFloat = 0.0
     download_speed_limit: ByteSizeSerilized = ByteSize(0)
@@ -95,18 +95,18 @@ class RateLimiting(BaseModel):
         return random.uniform(0, self.jitter)
 
 
-class UIOptions(BaseModel):
+class UIOptions(Settings):
     refresh_rate: PositiveInt = 10
 
 
-class GenericCrawlerInstances(BaseModel):
+class GenericCrawlerInstances(Settings):
     wordpress_media: ListPydanticURL = []
     wordpress_html: ListPydanticURL = []
     discourse: ListPydanticURL = []
     chevereto: ListPydanticURL = []
 
 
-class GlobalSettings(ConfigModel):
+class GlobalSettings(ConfigGroup):
     general: General = General()
     rate_limiting_options: RateLimiting = RateLimiting()
     ui_options: UIOptions = UIOptions()

@@ -4,6 +4,7 @@ from enum import StrEnum, auto
 from pathlib import Path
 from typing import Annotated, Any, Literal, Self
 
+from cyclopts import Parameter
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 from cyberdrop_dl.cli.arguments import ArgumentParams
@@ -18,10 +19,12 @@ class UIOptions(StrEnum):
     FULLSCREEN = auto()
 
 
+@Parameter(name="*")
 class CLIargs(BaseModel):
     links: Annotated[
         list[HttpURL],
         ArgumentParams(positional_only=True, metavar="LINK(s)"),
+        Parameter(show=False),
     ] = Field(
         default=[],
         description="link(s) to content to download (passing multiple links is supported)",
@@ -135,6 +138,7 @@ def _check_mutually_exclusive(group: Iterable[Any], msg: str) -> None:
         raise ValueError(msg)
 
 
+@Parameter(name="*")
 class ParsedArgs(BaseModel):
     cli_only_args: CLIargs = CLIargs()
     config_settings: ConfigSettings = ConfigSettings()
