@@ -39,7 +39,7 @@ _params = tuple(f.name for f in dataclasses.fields(ArgumentParams) if not f.meta
 @dataclasses.dataclass(slots=True, kw_only=True)
 class Argument:
     name_or_flags: list[str] = dataclasses.field(init=False)
-    name: str
+    python_name: str
     cli_name: str = dataclasses.field(init=False)
     aliases: tuple[str, ...]
     required: bool
@@ -50,13 +50,14 @@ class Argument:
     arg_type: type = dataclasses.field(init=False)
 
     def __post_init__(self) -> None:
-        self.cli_name = self.name.replace("_", "-")
+        self.cli_name = self.python_name.replace("_", "-")
         self.arg_type = type(self.default)
 
         if self.arg_type not in (list, set, bool):
             self.arg_type = str
 
-        self.name_or_flags = [f"{'' if self.required else '--'}{self.cli_name}"]
+        positional = override.positional_only if (override := self._overrides()) else False
+        self.name_or_flags = [f"{'' if positional else '--'}{self.cli_name}"]
 
         for alias in self.aliases:
             if alias and len(alias) == 1:
@@ -83,7 +84,7 @@ class Argument:
             action="store",
         )
         if not self.required:
-            default["dest"] = self.name
+            default["dest"] = self.python_name
 
         if self.arg_type is bool:
             default["action"] = BooleanOptionalAction
@@ -109,7 +110,7 @@ def parse(model: type[BaseModel]) -> Generator[Argument]:
         )
 
         yield Argument(
-            name=python_name,
+            python_name=python_name,
             aliases=tuple(map(str, aliases)),
             annotation=field.annotation,
             default=field.default,
