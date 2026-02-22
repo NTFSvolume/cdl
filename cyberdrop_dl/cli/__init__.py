@@ -10,7 +10,7 @@ from pydantic import BaseModel, ValidationError
 
 from cyberdrop_dl import __version__, env
 from cyberdrop_dl.cli import arguments
-from cyberdrop_dl.cli.model import CommandLineOnlyArgs, ParsedArgs
+from cyberdrop_dl.cli.model import CLIargs, ParsedArgs
 from cyberdrop_dl.config import ConfigSettings, GlobalSettings
 
 if TYPE_CHECKING:
@@ -91,7 +91,7 @@ def make_parser() -> CLIParser:
     _ = parser.add_argument("-V", "--version", action="version", version=f"%(prog)s {__version__}")
 
     cli_only = parser.add_argument_group("CLI-only options")
-    _add_args_from_model(cli_only, CommandLineOnlyArgs)
+    _add_args_from_model(cli_only, CLIargs)
 
     groups = {
         "config_settings": _create_groups_from_nested_models(parser, ConfigSettings),
@@ -147,7 +147,7 @@ def _unflatten_nested_args(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _add_args_from_model(parser: ArgumentParser | ArgGroup, model: type[BaseModel]) -> None:
-    cli_args = model is CommandLineOnlyArgs
+    cli_args = model is CLIargs
 
     for arg in arguments.parse(model):
         options = arg.compose_options()

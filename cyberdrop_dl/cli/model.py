@@ -18,7 +18,7 @@ class UIOptions(StrEnum):
     FULLSCREEN = auto()
 
 
-class CommandLineOnlyArgs(BaseModel):
+class CLIargs(BaseModel):
     links: Annotated[
         list[HttpURL],
         ArgumentParams(positional_only=True, metavar="LINK(s)"),
@@ -136,7 +136,7 @@ def _check_mutually_exclusive(group: Iterable[Any], msg: str) -> None:
 
 
 class ParsedArgs(BaseModel):
-    cli_only_args: CommandLineOnlyArgs = CommandLineOnlyArgs()
+    cli_only_args: CLIargs = CLIargs()
     config_settings: ConfigSettings = ConfigSettings()
     global_settings: GlobalSettings = GlobalSettings()
 
