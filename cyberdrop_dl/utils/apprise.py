@@ -19,7 +19,7 @@ from cyberdrop_dl import constants
 from cyberdrop_dl.dependencies import apprise
 from cyberdrop_dl.models import AppriseURLModel
 from cyberdrop_dl.utils.logger import log, log_debug, log_spacer
-from cyberdrop_dl.utils.yaml import handle_validation_error
+from cyberdrop_dl.utils.yaml import format_validation_error
 
 if TYPE_CHECKING:
     from cyberdrop_dl.managers.manager import Manager
@@ -89,7 +89,7 @@ def get_apprise_urls(*, file: Path | None = None, urls: list[str] | None = None)
         return _simplify_urls([AppriseURLModel.model_validate({"url": url}) for url in set(urls)])
 
     except ValidationError as e:
-        handle_validation_error(e, title="Apprise", file=file)
+        format_validation_error(e, title="Apprise", file=file)
         sys.exit(1)
 
 

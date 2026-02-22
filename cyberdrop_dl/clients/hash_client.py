@@ -16,7 +16,7 @@ from cyberdrop_dl.utils.utilities import get_size_or_none
 if TYPE_CHECKING:
     from yarl import URL
 
-    from cyberdrop_dl.config.config_model import DupeCleanup
+    from cyberdrop_dl.config.config_model import Dedupe
     from cyberdrop_dl.data_structures.url_objects import MediaItem
     from cyberdrop_dl.managers.manager import Manager
 
@@ -54,7 +54,7 @@ class HashClient:
         return "Sent to trash" if self._to_trash else "Permanently deleted"
 
     @property
-    def dupe_cleanup_options(self) -> DupeCleanup:
+    def dupe_cleanup_options(self) -> Dedupe:
         return self.manager.config.dupe_cleanup_options
 
     async def hash_directory(self, path: Path) -> None:

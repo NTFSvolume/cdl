@@ -38,12 +38,8 @@ RICH_HANDLER_DEBUG_CONFIG = RICH_HANDLER_CONFIG | {
     "tracebacks_extra_lines": 2,
     "locals_max_length": 20,
 }
-VALIDATION_ERROR_FOOTER = """Please delete the file or fix the errors. Read the documentation to learn what's the expected format and values: https://script-ware.gitbook.io/cyberdrop-dl/reference/configuration-options
-\nThis is not a bug. Do not open issues related to this"""
+VALIDATION_ERROR_FOOTER = """Please delete the file or fix the errors"""
 
-
-CLI_VALIDATION_ERROR_FOOTER = """Please read the documentation to learn about the expected values: https://script-ware.gitbook.io/cyberdrop-dl/reference/configuration-options
-\nThis is not a bug. Do not open issues related to this"""
 
 # regex
 RAR_MULTIPART_PATTERN = re.compile(r"^part\d+")

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import logging
-import sys
 from datetime import date, timedelta
 from enum import Enum
 from pathlib import Path, PurePath
@@ -11,7 +9,6 @@ import yaml
 from pydantic import BaseModel, ValidationError
 from yarl import URL
 
-from cyberdrop_dl.constants import CLI_VALIDATION_ERROR_FOOTER, VALIDATION_ERROR_FOOTER
 from cyberdrop_dl.exceptions import InvalidYamlError
 
 if TYPE_CHECKING:
@@ -70,10 +67,9 @@ def load(file: Path, *, create: bool = False) -> dict[str, Any]:
         raise InvalidYamlError(file, e) from None
 
 
-def handle_validation_error(e: ValidationError, *, title: str = "", file: Path | None = None):
+def format_validation_error(e: ValidationError, *, title: str = "", file: Path | None = None):
     """Logs the validation error details and exits the program."""
 
-    startup_logger = logging.getLogger("cyberdrop_dl_startup")
     error_count = e.error_count()
     msg = ""
     if file:
@@ -82,15 +78,16 @@ def handle_validation_error(e: ValidationError, *, title: str = "", file: Path |
     show_title = title or e.title
     msg += f"Found {error_count} error{'s' if error_count > 1 else ''} [{show_title}]:"
     from_cli = title == "CLI arguments"
-    footer = CLI_VALIDATION_ERROR_FOOTER if from_cli else VALIDATION_ERROR_FOOTER
+
     for error in e.errors(include_url=False):
         option_name = get_field_name(error, from_cli)
         msg += f"\n\nOption '{option_name}' with value '{error['input']}' is invalid:\n"
         msg += f"  {error['msg']}"
 
-    msg += "\n\n" + footer
-    startup_logger.error(msg)
-    sys.exit(1)
+    if not from_cli:
+        msg += "\n\n" + """Please delete the file or fix the errors"""
+
+    return msg
 
 
 def get_field_name(error: ErrorDetails, from_cli: bool = False) -> str:

@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 from logging import DEBUG
 from pathlib import Path
 
-from pydantic import ByteSize, Field, NonNegativeInt, field_serializer, field_validator
+from pydantic import ByteSize, Field, NonNegativeInt, field_validator
 
 from cyberdrop_dl import constants
 from cyberdrop_dl.constants import BROWSERS, DEFAULT_APP_STORAGE, DEFAULT_DOWNLOAD_STORAGE, Hashing
@@ -21,13 +21,11 @@ from cyberdrop_dl.models.types import (
     PathOrNone,
 )
 from cyberdrop_dl.models.validators import falsy_as, to_timedelta
-from cyberdrop_dl.supported_domains import SUPPORTED_SITES_DOMAINS
 from cyberdrop_dl.utils.strings import validate_format_string
 from cyberdrop_dl.utils.utilities import purge_dir_tree
 
-from ._common import ConfigGroup, Settings
+from ._common import ConfigFile, Settings
 
-ALL_SUPPORTED_SITES = ["<<ALL_SUPPORTED_SITES>>"]
 _SORTING_COMMON_FIELDS = {
     "base_dir",
     "ext",
@@ -173,7 +171,7 @@ class IgnoreOptions(Settings):
         return value
 
 
-class RuntimeOptions(Settings):
+class Runtime(Settings):
     console_log_level: NonNegativeInt = 100
     deep_scrape: bool = False
     delete_partial_files: bool = False
@@ -248,33 +246,16 @@ class Sorting(Settings):
         return value
 
 
-class BrowserCookies(Settings):
+class Cookies(Settings):
     auto_import: bool = False
     browser: BROWSERS | None = BROWSERS.firefox
-    sites: list[NonEmptyStr] = SUPPORTED_SITES_DOMAINS
 
     def model_post_init(self, *_) -> None:
         if self.auto_import and not self.browser:
             raise ValueError("You need to provide a browser for auto_import to work")
 
-    @field_validator("sites", mode="before")
-    @classmethod
-    def handle_list(cls, values: list[str]) -> list[str]:
-        values = falsy_as(values, [])
-        if values == ALL_SUPPORTED_SITES:
-            return SUPPORTED_SITES_DOMAINS
-        if isinstance(values, list):
-            return sorted(str(value).lower() for value in values)
-        return values
 
-    @field_serializer("sites", when_used="json-unless-none")
-    def use_placeholder(self, values: list[str]) -> list[str]:
-        if set(values) == set(SUPPORTED_SITES_DOMAINS):
-            return ALL_SUPPORTED_SITES
-        return values
-
-
-class DupeCleanup(Settings):
+class Dedupe(Settings):
     add_md5_hash: bool = False
     add_sha256_hash: bool = False
     auto_dedupe: bool = True
@@ -282,14 +263,14 @@ class DupeCleanup(Settings):
     send_deleted_to_trash: bool = True
 
 
-class ConfigSettings(ConfigGroup):
-    browser_cookies: BrowserCookies = BrowserCookies()
+class ConfigSettings(ConfigFile):
+    browser_cookies: Cookies = Cookies()
     download_options: DownloadOptions = DownloadOptions()
-    dupe_cleanup_options: DupeCleanup = DupeCleanup()
+    dupe_cleanup_options: Dedupe = Dedupe()
     file_size_limits: FileSizeLimits = FileSizeLimits()
     media_duration_limits: MediaDurationLimits = MediaDurationLimits()
     files: Files = Files()
     ignore_options: IgnoreOptions = IgnoreOptions()
     logs: Logs = Logs()
-    runtime_options: RuntimeOptions = RuntimeOptions()
+    runtime_options: Runtime = Runtime()
     sorting: Sorting = Sorting()

@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 
-from cyberdrop_dl.config._common import ConfigGroup
+from cyberdrop_dl.config._common import ConfigFile
 from cyberdrop_dl.models import AliasModel
 
 
@@ -39,7 +39,7 @@ class RealDebridAuth(AliasModel):
     api_key: str = ""
 
 
-class AuthSettings(ConfigGroup):
+class AuthSettings(ConfigFile):
     coomer: CoomerAuth = CoomerAuth()
     gofile: GoFileAuth = GoFileAuth()
     imgur: ImgurAuth = ImgurAuth()

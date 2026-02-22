@@ -29,7 +29,7 @@ from cyberdrop_dl.utils.sorting import Sorter
 from cyberdrop_dl.utils.updates import check_latest_pypi
 from cyberdrop_dl.utils.utilities import check_partials_and_empty_folders
 from cyberdrop_dl.utils.webhook import send_webhook_message
-from cyberdrop_dl.utils.yaml import handle_validation_error
+from cyberdrop_dl.utils.yaml import format_validation_error
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Sequence
@@ -207,7 +207,7 @@ def _setup_manager(args: Sequence[str] | None = None) -> Manager:
             "AuthSettings": manager.config_manager.authentication_settings,
         }.get(e.title)
 
-        handle_validation_error(e, file=file)
+        format_validation_error(e, file=file)
         sys.exit(_C.ERROR)
 
     return manager

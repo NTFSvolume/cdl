@@ -10,17 +10,19 @@ from cyberdrop_dl.utils import yaml
 
 
 @Parameter(name="*")
-class FlatCLIParams: ...
+class FlatNamespace: ...
 
 
-class Settings(FlatCLIParams, AliasModel): ...
+class _Settings(FlatNamespace, AliasModel): ...
 
 
-class ConfigGroup(Settings):
+class Settings(_Settings):
     def __init_subclass__(cls, name: str | None = None, **kwargs: Unpack[ConfigDict]) -> None:
         _ = Parameter(group=name or cls.__name__)(cls)
         return super().__init_subclass__(**kwargs)
 
+
+class ConfigFile(_Settings):
     @classmethod
     def load_file(cls, file: Path, update_if_has_string: str) -> Self:
         default = cls()
