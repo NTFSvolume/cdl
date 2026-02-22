@@ -1,13 +1,14 @@
 import shutil
-from typing import Annotated
+from typing import Annotated, Literal
 
 import cyclopts
 import pydantic
 from cyclopts import Parameter
 
 from cyberdrop_dl import __version__, env, signature
-from cyberdrop_dl.cli.model import CLIargs, ParsedArgs
+from cyberdrop_dl.cli.model import CLIargs, ParsedArgs, RetryArgs
 from cyberdrop_dl.models.types import HttpURL
+from cyberdrop_dl.utils.yaml import format_validation_error
 
 
 def is_terminal_in_portrait() -> bool:
@@ -35,8 +36,6 @@ def is_terminal_in_portrait() -> bool:
 class App(cyclopts.App):
     @signature.copy(cyclopts.App._parse_known_args)
     def _parse_known_args(self, *args, **kwargs):
-        from cyberdrop_dl.utils.yaml import format_validation_error
-
         try:
             return super()._parse_known_args(*args, **kwargs)
         except cyclopts.ValidationError as e:
@@ -46,6 +45,7 @@ class App(cyclopts.App):
 
 
 app = App(
+    name="cyberdrop-dl",
     help="Bulk asynchronous downloader for multiple file hosts",
     version=f"{__version__}.NTFS",
     default_parameter=Parameter(negative_iterable=[]),
@@ -67,15 +67,23 @@ def download(
     cli_args: CLIargs = CLIargs(),  # noqa: B008  # pyright: ignore[reportCallInDefaultInitializer]
     parsed_settings: ParsedArgs = ParsedArgs(),  # pyright: ignore[reportCallInDefaultInitializer]  # noqa: B008
 ):
+    """Scrape and download files from a list of URLs (from a file or stdin)"""
     return links, cli_args, parsed_settings
 
 
 @app.command()
 def show_supported_sites() -> None:
+    """Show a list of all supported sites"""
     from cyberdrop_dl.utils.markdown import get_crawlers_info_as_rich_table
 
     table = get_crawlers_info_as_rich_table()
     app.console.print(table)
+
+
+@app.command()
+def retry(choice: Literal["all", "failed", "maintenance"], /, *, retry: RetryArgs | None = None):
+    """Retry failed downloads"""
+    return choice, retry or RetryArgs()
 
 
 if __name__ == "__main__":
