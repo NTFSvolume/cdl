@@ -26,7 +26,7 @@ def test_command_by_console_output(tmp_cwd: Path, capsys: pytest.CaptureFixture[
 
 def test_startup_logger_should_not_be_created_on_a_successful_run(tmp_cwd: Path) -> None:
     run("--download")
-    startup_file = Path.cwd() / "startup.log"
+    startup_file = tmp_cwd / "startup.log"
     assert not startup_file.exists()
 
 
@@ -41,7 +41,7 @@ def test_startup_logger_should_not_be_created_on_invalid_cookies(tmp_cwd: Path) 
     logs = director.manager.path_manager.main_log.read_text(encoding="utf8")
     assert "does not look like a Netscape format cookies file" in logs
 
-    startup_file = Path.cwd() / "startup.log"
+    startup_file = tmp_cwd / "startup.log"
     assert not startup_file.exists()
 
 
@@ -56,7 +56,7 @@ def test_startup_logger_is_created_on_yaml_error(tmp_cwd: Path) -> None:
         except SystemExit:
             pass
 
-    startup_file = Path.cwd() / "startup.log"
+    startup_file = tmp_cwd / "startup.log"
     assert startup_file.exists()
 
     logs = startup_file.read_text(encoding="utf8")
@@ -80,7 +80,7 @@ def test_startup_logger_when_manager_startup_fails(
             run("--download")
         except SystemExit:
             pass
-        startup_file = Path.cwd() / "startup.log"
+        startup_file = tmp_cwd / "startup.log"
         assert startup_file.exists() == exists
 
 
@@ -89,7 +89,7 @@ def test_startup_logger_should_not_be_created_when_using_invalid_cli_args(tmp_cw
         run("--invalid-command")
     except SystemExit:
         pass
-    startup_file = Path.cwd() / "startup.log"
+    startup_file = tmp_cwd / "startup.log"
     assert not startup_file.exists()
 
 
