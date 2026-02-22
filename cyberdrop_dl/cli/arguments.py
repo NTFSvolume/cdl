@@ -23,7 +23,7 @@ class _ArgumentParams(TypedDict, total=False):
 @dataclasses.dataclass(slots=True, frozen=True, kw_only=True)
 class ArgumentParams:
     positional_only: bool = dataclasses.field(default=False, metadata={"exclude": True})
-    nargs: Literal["?", "*", "+"] | str | None = _NOT_SET
+    nargs: Literal["?", "*", "+"] | None = _NOT_SET
     const: Any = _NOT_SET
     dest: str = _NOT_SET
     choices: Iterable[Any] | None = _NOT_SET
@@ -47,6 +47,7 @@ class Argument:
     annotation: Any
     help: str | None
     metadata: list[Any]
+    positional_only: bool = dataclasses.field(init=False)
     arg_type: type = dataclasses.field(init=False)
 
     def __post_init__(self) -> None:
@@ -56,8 +57,9 @@ class Argument:
         if self.arg_type not in (list, set, bool):
             self.arg_type = str
 
-        positional = override.positional_only if (override := self._overrides()) else False
-        self.name_or_flags = [f"{'' if positional else '--'}{self.cli_name}"]
+        self.positional_only = override.positional_only if (override := self._overrides()) else False
+        cli_command = f"{'' if self.positional_only else '--'}{self.cli_name}"
+        self.name_or_flags = [cli_command]
 
         for alias in self.aliases:
             if alias and len(alias) == 1:
@@ -78,24 +80,24 @@ class Argument:
                 return meta
 
     def _options(self) -> _ArgumentParams:
-        default = dict(  # noqa: C408
+        options = dict(  # noqa: C408
             default=self.default,
             help=self.help,
             action="store",
         )
-        if not self.required:
-            default["dest"] = self.python_name
+        if not self.positional_only:
+            options["dest"] = self.python_name
 
         if self.arg_type is bool:
-            default["action"] = BooleanOptionalAction
+            options["action"] = BooleanOptionalAction
 
         elif self.arg_type in (list, set):
-            default.update(nargs="*", action="extend")
+            options.update(nargs="*", action="extend")
 
         else:
-            default["type"] = self.arg_type
+            options["type"] = self.arg_type
 
-        return default  # pyright: ignore[reportReturnType]
+        return options  # pyright: ignore[reportReturnType]
 
 
 def parse(model: type[BaseModel]) -> Generator[Argument]:
