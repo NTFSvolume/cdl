@@ -10,14 +10,14 @@ from typing import TYPE_CHECKING, Any
 
 import aiofiles
 
-from cyberdrop_dl import constants
+from cyberdrop_dl import config, constants
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.constants import FILE_FORMATS
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, InvalidContentTypeError, SlowDownloadError
 from cyberdrop_dl.utils import aio, dates
 from cyberdrop_dl.utils.aio import WeakAsyncLocks
-from cyberdrop_dl.utils.logger import log, log_debug
+from cyberdrop_dl.utils.logger import log
 from cyberdrop_dl.utils.utilities import get_size_or_none
 
 if TYPE_CHECKING:
@@ -67,7 +67,7 @@ class DownloadClient:
 
     def _get_download_headers(self, domain: str, referer: AbsoluteHttpURL) -> dict[str, str]:
         download_headers = {
-            "User-Agent": self.manager.global_config.general.user_agent,
+            "User-Agent": config.get().general.user_agent,
             "Referer": str(referer),
         }
         auth_data = self.manager.config_manager.authentication_data
@@ -296,7 +296,7 @@ class DownloadClient:
 
     async def download_file(self, domain: str, media_item: MediaItem) -> bool:
         """Starts a file."""
-        if self.manager.config.download_options.skip_download_mark_completed and not media_item.is_segment:
+        if config.get().download_options.skip_download_mark_completed and not media_item.is_segment:
             log(f"Download Removed {media_item.url} due to mark completed option", 10)
             self.manager.progress_manager.download_progress.add_skipped()
             # set completed path
@@ -307,7 +307,7 @@ class DownloadClient:
             downloaded = await self._download(domain, media_item)
 
         if downloaded:
-            await asyncio.to_thread(media_item.partial_file.rename, media_item.complete_file)
+            _ = await asyncio.to_thread(media_item.partial_file.rename, media_item.complete_file)
             if not media_item.is_segment:
                 proceed = await self.client_manager.check_file_duration(media_item)
                 await self.manager.db_manager.history_table.add_duration(domain, media_item)
@@ -357,8 +357,6 @@ class DownloadClient:
     def get_download_dir(self, media_item: MediaItem) -> Path:
         """Returns the download directory for the media item."""
         download_folder = media_item.download_folder
-        if self.manager.parsed_args.cli_only_args.retry_any:
-            return download_folder
 
         if self.manager.config_manager.settings_data.download_options.block_download_sub_folders:
             while download_folder.parent != self.manager.path_manager.download_folder:
@@ -379,9 +377,6 @@ class DownloadClient:
         expected_size = media_item.filesize
         proceed = True
         skip = False
-
-        if not TYPE_CHECKING:
-            log = log_debug if media_item.is_segment else globals()["log"]
 
         while True:
             if expected_size and not media_item.is_segment:

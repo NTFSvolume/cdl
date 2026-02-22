@@ -14,13 +14,14 @@ import truststore
 from aiohttp import ClientResponse, ClientSession
 from aiolimiter import AsyncLimiter
 
-from cyberdrop_dl import constants, ddos_guard, env
+from cyberdrop_dl import config, constants, ddos_guard, env
 from cyberdrop_dl.clients.download_client import DownloadClient
 from cyberdrop_dl.clients.flaresolverr import FlareSolverr
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.clients.scraper_client import ScraperClient
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
 from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, ScrapeError, TooManyCrawlerErrors
+from cyberdrop_dl.managers.manager import Manager
 from cyberdrop_dl.ui.prompts.user_prompts import get_cookies_from_browsers
 from cyberdrop_dl.utils.aio import WeakAsyncLocks
 from cyberdrop_dl.utils.cookie_management import read_netscape_files
@@ -32,6 +33,7 @@ _VALID_EXTENSIONS = (
 )
 
 if TYPE_CHECKING:
+    from asyncio.locks import Semaphore
     from collections.abc import Callable, Generator, Iterable, Mapping
     from http.cookies import BaseCookie
 
@@ -111,31 +113,40 @@ class CloudflareTurnstile:
     ALL_SELECTORS = ", ".join(SELECTORS)
 
 
+def _create_ssl():
+    ssl_context = config.get().general.ssl_context
+
+    if not ssl_context:
+        return False
+
+    if ssl_context == "certifi":
+        return ssl.create_default_context(cafile=certifi.where())
+    if ssl_context == "truststore":
+        return truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+
+    ctx = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ctx.load_verify_locations(cafile=certifi.where())
+    return ctx
+
+
 class ClientManager:
     """Creates a 'client' that can be referenced by scraping or download sessions."""
 
     def __init__(self, manager: Manager) -> None:
-        self.manager = manager
-        ssl_context = self.manager.global_config.general.ssl_context
-        if not ssl_context:
-            self.ssl_context = False
-        elif ssl_context == "certifi":
-            self.ssl_context = ssl.create_default_context(cafile=certifi.where())
-        elif ssl_context == "truststore":
-            self.ssl_context = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        elif ssl_context == "truststore+certifi":
-            self.ssl_context = ctx = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-            ctx.load_verify_locations(cafile=certifi.where())
-
-        self.cookies = aiohttp.CookieJar(quote_cookie=False)
+        self.manager: Manager = manager
+        self.ssl_context: ssl.SSLContext | Literal[False] = _create_ssl()
+        self.cookies: aiohttp.CookieJar = aiohttp.CookieJar(quote_cookie=False)
         self.rate_limits: dict[str, AsyncLimiter] = {}
         self.download_slots: dict[str, int] = {}
-        self.global_rate_limiter = AsyncLimiter(self.rate_limiting_options.rate_limit, 1)
-        self.global_download_slots = asyncio.Semaphore(self.rate_limiting_options.max_simultaneous_downloads)
-        self.scraper_client = ScraperClient(self)
-        self.speed_limiter = DownloadSpeedLimiter(self.rate_limiting_options.download_speed_limit)
-        self.download_client = DownloadClient(manager, self)
-        self.flaresolverr = FlareSolverr(manager)
+
+        rate_limits = config.get().rate_limiting_options
+
+        self.global_rate_limiter: AsyncLimiter = AsyncLimiter(rate_limits.rate_limit, 1)
+        self.global_download_slots: Semaphore = asyncio.Semaphore(rate_limits.max_simultaneous_downloads)
+        self.scraper_client: ScraperClient = ScraperClient(self)
+        self.speed_limiter: DownloadSpeedLimiter = DownloadSpeedLimiter(rate_limits.download_speed_limit)
+        self.download_client: DownloadClient = DownloadClient(manager, self)
+        self.flaresolverr: FlareSolverr = FlareSolverr(manager)
         self.file_locks: WeakAsyncLocks[str] = WeakAsyncLocks()
 
         self._session: aiohttp.ClientSession
@@ -167,7 +178,7 @@ class ClientManager:
 
     @property
     def rate_limiting_options(self):
-        return self.manager.global_config.rate_limiting_options
+        return config.get().rate_limiting_options
 
     def get_download_slots(self, domain: str) -> int:
         """Returns the download limit for a domain."""
@@ -247,7 +258,7 @@ class ClientManager:
             warnings.filterwarnings("ignore", category=CurlCffiWarning)
             acurl = AsyncCurl(loop=loop)
 
-        proxy_or_none = str(proxy) if (proxy := self.manager.global_config.general.proxy) else None
+        proxy_or_none = str(proxy) if (proxy := config.get().general.proxy) else None
 
         return AsyncSession(
             loop=loop,
@@ -262,23 +273,21 @@ class ClientManager:
 
     def new_scrape_session(self) -> ClientSession:
         trace_configs = _create_request_log_hooks("scrape")
-        return self._new_session(cached=True, trace_configs=trace_configs)
+        return self._new_session(trace_configs=trace_configs)
 
     def new_download_session(self) -> ClientSession:
         trace_configs = _create_request_log_hooks("download")
-        return self._new_session(cached=False, trace_configs=trace_configs)
+        return self._new_session(trace_configs=trace_configs)
 
-    def _new_session(
-        self, cached: bool = False, trace_configs: list[aiohttp.TraceConfig] | None = None
-    ) -> ClientSession:
+    def _new_session(self, trace_configs: list[aiohttp.TraceConfig] | None = None) -> ClientSession:
         timeout = self.rate_limiting_options._aiohttp_timeout
         return ClientSession(
-            headers={"user-agent": self.manager.global_config.general.user_agent},
+            headers={"user-agent": config.get().general.user_agent},
             raise_for_status=False,
             cookie_jar=self.cookies,
             timeout=timeout,
             trace_configs=trace_configs,
-            proxy=self.manager.global_config.general.proxy,
+            proxy=config.get().general.proxy,
             connector=self._new_tcp_connector(),
             requote_redirect_url=False,
         )
@@ -397,7 +406,7 @@ class ClientManager:
         if not (is_video or is_audio):
             return True
 
-        duration_limits = self.manager.config.media_duration_limits
+        duration_limits = config.get().media_duration_limits
         min_video_duration: float = duration_limits.minimum_video_duration.total_seconds()
         max_video_duration: float = duration_limits.maximum_video_duration.total_seconds()
         min_audio_duration: float = duration_limits.minimum_audio_duration.total_seconds()

@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from cyberdrop_dl.config.auth import AuthSettings
 from cyberdrop_dl.config.settings import ConfigSettings
-from cyberdrop_dl.models import Settings, get_model_fields
+from cyberdrop_dl.models import get_model_fields, merge_models
 
 _config: ContextVar[Config] = ContextVar("_config")
 _appdata: ContextVar[AppData] = ContextVar("_appdata")
@@ -36,12 +36,16 @@ class AppData:
             dir.mkdir(parents=True, exist_ok=True)
 
 
-class Config(Settings):
+class Config(ConfigSettings):
     auth: AuthSettings = AuthSettings()
-    settings: ConfigSettings = ConfigSettings()
+    _source: Path | None = None
 
     _token: Token[Config] | None = None
     _resolved: bool = False
+
+    @property
+    def source(self) -> Path | None:
+        return self._source
 
     def __enter__(self) -> Self:
         self._token = _config.set(self)
@@ -70,6 +74,9 @@ class Config(Settings):
             elif isinstance(value, BaseModel):
                 cls._resolve_paths(value)
 
+    def update(self, other: Self) -> Self:
+        return merge_models(self, other)
+
 
 def load(file: Path) -> Config:
     from cyberdrop_dl.utils import yaml
@@ -88,8 +95,22 @@ def load(file: Path) -> Config:
     if overwrite:
         config.save(file)
 
+    config._source = file  # pyright: ignore[reportPrivateUsage]
     return config
 
 
 def get() -> Config:
     return _config.get()
+
+
+def add_or_remove_lists(cli_values: list[str], config_values: list[str]) -> None:
+    exclude = {"+", "-"}
+    if cli_values:
+        if cli_values[0] == "+":
+            new_values_set = set(config_values + cli_values)
+            cli_values.clear()
+            cli_values.extend(sorted(new_values_set - exclude))
+        elif cli_values[0] == "-":
+            new_values_set = set(config_values) - set(cli_values)
+            cli_values.clear()
+            cli_values.extend(sorted(new_values_set - exclude))

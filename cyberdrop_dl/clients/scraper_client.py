@@ -71,7 +71,7 @@ class ScraperClient:
         request_params["json"] = json
 
         if not impersonate:
-            headers.setdefault("user-agent", self.client_manager.manager.global_config.general.user_agent)
+            headers.setdefault("user-agent", self.client_manager.config.get().general.user_agent)
 
         async with self.__request_context(url, method, request_params, impersonate, cache_disabled) as resp:
             exc = None

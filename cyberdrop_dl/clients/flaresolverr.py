@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 import aiohttp
 from multidict import CIMultiDict, CIMultiDictProxy
 
-from cyberdrop_dl import ddos_guard
+from cyberdrop_dl import config, ddos_guard
 from cyberdrop_dl.compat import StrEnum
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError
@@ -76,8 +76,8 @@ class FlareSolverr:
         self._session_id: str = ""
         self._session_lock, self._request_lock = asyncio.Lock(), asyncio.Lock()
         self._next_request_id: Callable[[], int] = itertools.count(1).__next__
-        if manager.global_config.general.flaresolverr:
-            self.url = manager.global_config.general.flaresolverr / "v1"
+        if flare := config.get().general.flaresolverr:
+            self.url = flare / "v1"
         else:
             self.url = None
 
@@ -116,7 +116,7 @@ class FlareSolverr:
         return resp.solution
 
     async def _check_user_agent(self, solution: FlareSolverrSolution) -> None:
-        cdl_user_agent = self.manager.global_config.general.user_agent
+        cdl_user_agent = config.get().general.user_agent
         mismatch_ua_msg = (
             "Config user_agent and flaresolverr user_agent do not match:"
             f"\n  Cyberdrop-DL: '{cdl_user_agent}'"
@@ -137,12 +137,12 @@ class FlareSolverr:
         if not self.url:
             raise DDOSGuardError("Found DDoS challenge, but FlareSolverr is not configured")
 
-        timeout = self.manager.global_config.rate_limiting_options._aiohttp_timeout
+        timeout = config.get().rate_limiting_options._aiohttp_timeout
         if command is _Command.CREATE_SESSION:
             timeout = aiohttp.ClientTimeout(total=5 * 60, connect=60)  # 5 minutes to create session
 
         #  timeout in milliseconds (60s)
-        playload = {"cmd": command, "maxTimeout": 60_000} | kwargs
+        playload: dict[str, Any] = {"cmd": command, "maxTimeout": 60_000} | kwargs
 
         if data:
             assert command is _Command.POST_REQUEST
@@ -164,7 +164,7 @@ class FlareSolverr:
     async def _create_session(self) -> None:
         session_id = "cyberdrop-dl"
         kwargs = {}
-        if proxy := self.manager.global_config.general.proxy:
+        if proxy := config.get().general.proxy:
             kwargs["proxy"] = {"url": str(proxy)}
 
         resp = await self._request(_Command.CREATE_SESSION, session=session_id, **kwargs)

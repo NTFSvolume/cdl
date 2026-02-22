@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Literal
 
 from send2trash import send2trash
 
-from cyberdrop_dl import constants
+from cyberdrop_dl import config, constants
 from cyberdrop_dl.constants import Hashing
 from cyberdrop_dl.ui.prompts.basic_prompts import enter_to_continue
 from cyberdrop_dl.utils.logger import log
@@ -55,7 +55,7 @@ class HashClient:
 
     @property
     def dupe_cleanup_options(self) -> Dedupe:
-        return self.manager.config.dupe_cleanup_options
+        return config.get().dupe_cleanup_options
 
     async def hash_directory(self, path: Path) -> None:
         path = Path(path)

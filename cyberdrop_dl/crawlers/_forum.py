@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, ClassVar, Protocol, final
 
 from bs4 import BeautifulSoup, Tag
 
+from cyberdrop_dl import config
 from cyberdrop_dl.constants import HTTP_REGEX_LINKS
 from cyberdrop_dl.crawlers.crawler import Crawler
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
@@ -218,7 +219,7 @@ class MessageBoardCrawler(Crawler, is_abc=True):
     @final
     @property
     def max_thread_folder_depth(self):
-        return self.manager.config.download_options.maximum_thread_folder_depth
+        return config.get().download_options.maximum_thread_folder_depth
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         if not self.logged_in and self.login_required is True:

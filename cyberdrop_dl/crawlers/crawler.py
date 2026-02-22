@@ -16,7 +16,7 @@ import yarl
 from aiolimiter import AsyncLimiter
 from yarl import URL
 
-from cyberdrop_dl import constants, signature
+from cyberdrop_dl import config, constants, signature
 from cyberdrop_dl.clients.scraper_client import ScraperClient
 from cyberdrop_dl.data_structures.mediaprops import ISO639Subtitle, Resolution
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
@@ -453,7 +453,7 @@ class Crawler(ABC):
             await self.__write_to_jsonl(media_item)
 
     async def __write_to_jsonl(self, media_item: MediaItem) -> None:
-        if not self.manager.config.files.dump_json:
+        if not config.get().files.dump_json:
             return
 
         data = [media_item.as_jsonable_dict()]
@@ -493,17 +493,15 @@ class Crawler(ABC):
     async def check_skip_by_config(self, media_item: MediaItem) -> bool:
         media_host = media_item.url.host
 
-        if (hosts := self.manager.config.ignore_options.skip_hosts) and any(host in media_host for host in hosts):
+        if (hosts := config.get().ignore_options.skip_hosts) and any(host in media_host for host in hosts):
             log(f"Download skip {media_item.url} due to skip_hosts config", 10)
             return True
 
-        if (hosts := self.manager.config.ignore_options.only_hosts) and not any(host in media_host for host in hosts):
+        if (hosts := config.get().ignore_options.only_hosts) and not any(host in media_host for host in hosts):
             log(f"Download skip {media_item.url} due to only_hosts config", 10)
             return True
 
-        if (regex := self.manager.config.ignore_options.filename_regex_filter) and re.search(
-            regex, media_item.filename
-        ):
+        if (regex := config.get().ignore_options.filename_regex_filter) and re.search(regex, media_item.filename):
             log(f"Download skip {media_item.url} due to filename regex filter config", 10)
             return True
 
@@ -581,13 +579,13 @@ class Crawler(ABC):
             title = "Untitled"
 
         title = title.strip()
-        if album_id and self.manager.config.download_options.include_album_id_in_folder_name:
+        if album_id and config.get().download_options.include_album_id_in_folder_name:
             title = f"{title} {album_id}"
 
-        if thread_id and self.manager.config.download_options.include_thread_id_in_folder_name:
+        if thread_id and config.get().download_options.include_thread_id_in_folder_name:
             title = f"{title} {thread_id}"
 
-        if not self.manager.config.download_options.remove_domains_from_folder_names:
+        if not config.get().download_options.remove_domains_from_folder_names:
             title = f"{title} ({self.FOLDER_DOMAIN})"
 
         # Remove double spaces
@@ -599,7 +597,7 @@ class Crawler(ABC):
 
     @property
     def separate_posts(self) -> bool:
-        return self.manager.config.download_options.separate_posts
+        return config.get().download_options.separate_posts
 
     def create_separate_post_title(
         self,
@@ -610,7 +608,7 @@ class Crawler(ABC):
     ) -> str:
         if not self.separate_posts:
             return ""
-        title_format = self.manager.config.download_options.separate_posts_format
+        title_format = config.get().download_options.separate_posts_format
         if title_format.strip().casefold() == "{default}":
             title_format = self.DEFAULT_POST_TITLE_FORMAT
         if isinstance(date, int):

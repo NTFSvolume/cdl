@@ -2,16 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import json
-from dataclasses import Field, field
+import logging
+from dataclasses import field
 from time import perf_counter
-from typing import TYPE_CHECKING, Any, NamedTuple, TypeVar
+from typing import TYPE_CHECKING, NamedTuple
 
-from pydantic import BaseModel
-
-from cyberdrop_dl import __version__, constants
-from cyberdrop_dl.cli import ParsedArgs, parse_args
+from cyberdrop_dl import __version__, appdata, config, constants
 from cyberdrop_dl.database import Database
-from cyberdrop_dl.database.transfer import transfer_v5_db_to_v6
 from cyberdrop_dl.managers.cache_manager import CacheManager
 from cyberdrop_dl.managers.client_manager import ClientManager
 from cyberdrop_dl.managers.config_manager import ConfigManager
@@ -22,12 +19,11 @@ from cyberdrop_dl.managers.path_manager import PathManager
 from cyberdrop_dl.managers.progress_manager import ProgressManager
 from cyberdrop_dl.managers.storage_manager import StorageManager
 from cyberdrop_dl.utils import ffmpeg
-from cyberdrop_dl.utils.logger import LogHandler, QueuedLogger, log
+from cyberdrop_dl.utils.logger import LogHandler, QueuedLogger
 from cyberdrop_dl.utils.utilities import close_if_defined, get_system_information
 
 if TYPE_CHECKING:
     from asyncio import TaskGroup
-    from collections.abc import Sequence
 
     from cyberdrop_dl.scraper.scrape_mapper import ScrapeMapper
 
@@ -37,18 +33,13 @@ class AsyncioEvents(NamedTuple):
     RUNNING: asyncio.Event
 
 
+logger = logging.getLogger(__name__)
+
+
 class Manager:
-    def __init__(self, args: Sequence[str] | None = None) -> None:
-        if isinstance(args, str):
-            args = [args]
-
-        self.parsed_args: ParsedArgs = field(init=False)
+    def __init__(self) -> None:
         self.cache_manager: CacheManager = CacheManager(self)
-        self.path_manager: PathManager = field(init=False)
-        self.config_manager: ConfigManager = field(init=False)
         self.hash_manager: HashManager = field(init=False)
-
-        self.log_manager: LogManager = field(init=False)
         self.db_manager: Database = field(init=False)
         self.client_manager: ClientManager = field(init=False)
         self.storage_manager: StorageManager = field(init=False)
@@ -56,139 +47,49 @@ class Manager:
         self.progress_manager: ProgressManager = field(init=False)
         self.live_manager: LiveManager = field(init=False)
 
-        self._loaded_args_config: bool = False
-        self._made_portable: bool = False
-
         self.task_group: TaskGroup = field(init=False)
         self.scrape_mapper: ScrapeMapper = field(init=False)
 
         self.start_time: float = perf_counter()
-        self.downloaded_data: int = 0
         self.loggers: dict[str, QueuedLogger] = {}
-        self.args = args
         self.states: AsyncioEvents
 
         constants.console_handler = LogHandler(level=constants.CONSOLE_LEVEL)
 
-    @property
-    def config(self):
-        return self.config_manager.settings_data
-
-    @property
-    def auth_config(self):
-        return self.config_manager.authentication_data
-
-    @property
-    def global_config(self):
-        return self.config_manager.global_settings_data
-
-    def startup(self) -> None:
-        """Startup process for the manager."""
-
-        if isinstance(self.parsed_args, Field):
-            self.parsed_args = parse_args(self.args)
-
-        self.path_manager = PathManager(self)
+        self.path_manager: PathManager = PathManager(self)
         self.path_manager.pre_startup()
         self.cache_manager.startup(self.path_manager.cache_folder / "cache.yaml")
-        self.config_manager = ConfigManager(self)
+        self.config_manager: ConfigManager = ConfigManager(self)
         self.config_manager.startup()
 
-        self.args_consolidation()
-
         self.path_manager.startup()
-        self.log_manager = LogManager(self)
+        self.log_manager: LogManager = LogManager(self)
+        log_app_state()
 
     """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
 
     async def async_startup(self) -> None:
         """Async startup process for the manager."""
         self.states = AsyncioEvents(asyncio.Event(), asyncio.Event())
-        self.args_logging()
-
-        if not isinstance(self.client_manager, ClientManager):
-            self.client_manager = ClientManager(self)
-            await self.client_manager.startup()
-        if not isinstance(self.storage_manager, StorageManager):
-            self.storage_manager = StorageManager(self)
-
-        elif self.states.RUNNING.is_set():
-            await self.storage_manager.reset()
+        self.client_manager = ClientManager(self)
+        await self.client_manager.startup()
+        self.storage_manager = StorageManager(self)
 
         await self.async_db_hash_startup()
 
-        constants.MAX_NAME_LENGTHS["FILE"] = self.config_manager.global_settings_data.general.max_file_name_length
-        constants.MAX_NAME_LENGTHS["FOLDER"] = self.config_manager.global_settings_data.general.max_folder_name_length
+        constants.MAX_NAME_LENGTHS["FILE"] = config.get().general.max_file_name_length
+        constants.MAX_NAME_LENGTHS["FOLDER"] = config.get().general.max_folder_name_length
 
     async def async_db_hash_startup(self) -> None:
-        if not isinstance(self.db_manager, Database):
-            self.db_manager = Database(
-                self.path_manager.history_db,
-                self.config.runtime_options.ignore_history,
-            )
-            await self.db_manager.startup()
-        transfer_v5_db_to_v6(self.path_manager.history_db)
-        if not isinstance(self.hash_manager, HashManager):
-            self.hash_manager = HashManager(self)
-        if not isinstance(self.live_manager, LiveManager):
-            self.live_manager = LiveManager(self)
-        if not isinstance(self.progress_manager, ProgressManager):
-            self.progress_manager = ProgressManager(self)
-            self.progress_manager.startup()
-
-    def process_additive_args(self) -> None:
-        cli_general_options = self.parsed_args.global_settings.general
-        cli_ignore_options = self.parsed_args.config.ignore_options
-        config_ignore_options = self.config_manager.settings_data.ignore_options
-        config_general_options = self.config_manager.global_settings_data.general
-
-        add_or_remove_lists(cli_ignore_options.skip_hosts, config_ignore_options.skip_hosts)
-        add_or_remove_lists(cli_ignore_options.only_hosts, config_ignore_options.only_hosts)
-        add_or_remove_lists(cli_general_options.disable_crawlers, config_general_options.disable_crawlers)
-
-    def args_consolidation(self) -> None:
-        """Consolidates runtime arguments with config values."""
-        self.process_additive_args()
-
-        conf = merge_models(self.config_manager.settings_data, self.parsed_args.config)
-        global_conf = merge_models(self.config_manager.global_settings_data, self.parsed_args.global_settings)
-        deep_scrape = self.parsed_args.config.runtime_options.deep_scrape or self.config_manager.deep_scrape
-
-        self.config_manager.settings_data = conf
-        self.config_manager.global_settings_data = global_conf
-        self.config_manager.deep_scrape = deep_scrape
-
-    def args_logging(self) -> None:
-        """Logs the runtime arguments."""
-        auth_provided = {}
-
-        for site, auth_entries in self.config_manager.authentication_data.model_dump().items():
-            auth_provided[site] = all(auth_entries.values())
-
-        config_settings = self.config_manager.settings_data.model_copy()
-        config_settings.runtime_options.deep_scrape = self.config_manager.deep_scrape
-        config_settings = config_settings.model_dump_json(indent=4)
-        global_settings = self.config_manager.global_settings_data.model_dump_json(indent=4)
-        cli_only_args = self.parsed_args.cli_only_args.model_dump_json(indent=4)
-        system_info = get_system_information()
-
-        args_info = (
-            "Starting Cyberdrop-DL Process",
-            f"Running Version: {__version__}",
-            f"System Info: {system_info}",
-            f"Using Config: {self.config_manager.loaded_config}",
-            f"Using Config File: {self.config_manager.settings}",
-            f"Using Input File: {self.path_manager.input_file}",
-            f"Using Download Folder: {self.path_manager.download_folder}",
-            f"Using Database File: {self.path_manager.history_db}",
-            f"Using CLI only options: {cli_only_args}",
-            f"Using Authentication: \n{json.dumps(auth_provided, indent=4, sort_keys=True)}",
-            f"Using Settings: \n{config_settings}",
-            f"Using Global Settings: \n{global_settings}",
-            f"Using ffmpeg version: {ffmpeg.get_ffmpeg_version()}",
-            f"Using ffprobe version: {ffmpeg.get_ffprobe_version()}",
+        self.db_manager = Database(
+            self.path_manager.history_db,
+            config.get().runtime_options.ignore_history,
         )
-        log("\n".join(args_info))
+        await self.db_manager.startup()
+        self.hash_manager = HashManager(self)
+        self.live_manager = LiveManager(self)
+        self.progress_manager = ProgressManager(self)
+        self.progress_manager.startup()
 
     async def async_db_close(self) -> None:
         "Partial shutdown for managers used for hash directory scanner"
@@ -211,41 +112,23 @@ class Manager:
             queued_logger.stop()
 
 
-def add_or_remove_lists(cli_values: list[str], config_values: list[str]) -> None:
-    exclude = {"+", "-"}
-    if cli_values:
-        if cli_values[0] == "+":
-            new_values_set = set(config_values + cli_values)
-            cli_values.clear()
-            cli_values.extend(sorted(new_values_set - exclude))
-        elif cli_values[0] == "-":
-            new_values_set = set(config_values) - set(cli_values)
-            cli_values.clear()
-            cli_values.extend(sorted(new_values_set - exclude))
+def log_app_state() -> None:
+    auth = {}
 
+    config_ = config.get()
+    app_data = appdata.get()
+    for site, auth_entries in config_.auth.model_dump().items():  # pyright: ignore[reportAny]
+        auth[site] = all(auth_entries.values())  # pyright: ignore[reportAny]
 
-def merge_dicts(dict1: dict[str, Any], dict2: dict[str, Any]) -> dict[str, Any]:
-    for key, val in dict1.items():
-        if isinstance(val, dict):
-            if key in dict2 and isinstance(dict2[key], dict):
-                merge_dicts(dict1[key], dict2[key])
-        else:
-            if key in dict2:
-                dict1[key] = dict2[key]
-
-    for key, val in dict2.items():
-        if key not in dict1:
-            dict1[key] = val
-
-    return dict1
-
-
-M = TypeVar("M", bound=BaseModel)
-
-
-def merge_models(default: M, new: M) -> M:
-    default_dict = default.model_dump()
-    new_dict = new.model_dump(exclude_unset=True)
-
-    updated_dict = merge_dicts(default_dict, new_dict)
-    return default.model_validate(updated_dict)
+    # f"Using Input File: {self.path_manager.input_file}",
+    stats = dict(  # noqa: C408
+        version=__version__,
+        system=get_system_information(),
+        ffmpeg=ffmpeg.get_ffmpeg_version(),
+        ffprobe=ffmpeg.get_ffprobe_version(),
+        database=app_data.db_file,
+        config_file=config_.source,
+        auth=auth,
+        config=config_.model_dump_json(indent=2, exclude={"auth"}),
+    )
+    logger.debug(json.dumps(stats, indent=2, ensure_ascii=False))

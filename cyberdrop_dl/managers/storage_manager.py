@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Final, NamedTuple
 import psutil
 from pydantic import ByteSize
 
+from cyberdrop_dl import config
 from cyberdrop_dl.exceptions import InsufficientFreeSpaceError
 from cyberdrop_dl.utils.logger import log, log_debug
 
@@ -164,7 +165,7 @@ class StorageManager:
         free_space = self._free_space[mount]
         if free_space == -1:
             return True
-        return free_space > self.manager.global_config.general.required_free_space
+        return free_space > config.get().general.required_free_space
 
     async def _get_free_space(self, mount: Path) -> int:
         exc_info = None

@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Concatenate, Literal
 
 from pydantic import BeforeValidator, Field
 
+from cyberdrop_dl import config
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, auto_task_id
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import NoExtensionError, ScrapeError
@@ -215,11 +216,11 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
 
     @property
     def ignore_content(self) -> bool:
-        return self.manager.config.ignore_options.ignore_coomer_post_content
+        return config.get().ignore_options.ignore_coomer_post_content
 
     @property
     def ignore_ads(self) -> bool:
-        return self.manager.config.ignore_options.ignore_coomer_ads
+        return config.get().ignore_options.ignore_coomer_ads
 
     async def async_startup(self) -> None:
         if getattr(self, "API_ENTRYPOINT", None):

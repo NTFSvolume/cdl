@@ -55,18 +55,13 @@ class PathManager:
     @property
     def cwd(self) -> Path:
         if env.RUNNING_IN_IDE and Path.cwd().name == "cyberdrop_dl":
-            # This is for testing purposes only"""
             return Path("..").resolve()
         return Path().resolve()
 
     @property
     def appdata(self) -> Path:
         if isinstance(self._appdata, Field):
-            if self.manager.parsed_args.cli_only_args.appdata_folder:
-                path = self.manager.parsed_args.cli_only_args.appdata_folder / "AppData"
-                self._appdata = self.cwd / path
-            else:
-                self._appdata = self.cwd / "AppData"
+            self._appdata = self.cwd / "AppData"
 
         return self._appdata
 
@@ -76,7 +71,6 @@ class PathManager:
         self.cookies_dir = self.appdata / "Cookies"
         self.cache_db = self.cache_folder / "request_cache.db"
 
-        self.cache_folder.mkdir(parents=True, exist_ok=True)
         self.config_folder.mkdir(parents=True, exist_ok=True)
         self.cookies_dir.mkdir(parents=True, exist_ok=True)
         self.cache_db.touch(exist_ok=True)
