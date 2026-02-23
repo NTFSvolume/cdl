@@ -5,12 +5,9 @@ from http import HTTPStatus
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from yaml import YAMLError
-from yarl import URL
-
-from cyberdrop_dl.constants import VALIDATION_ERROR_FOOTER
-
 if TYPE_CHECKING:
+    from yarl import URL
+
     from cyberdrop_dl.data_structures.url_objects import MediaItem, ScrapeItem
 
 
@@ -211,6 +208,8 @@ class JDownloaderError(CDLBaseError):
 class InvalidYamlError(CDLBaseError):
     def __init__(self, file: Path, e: Exception) -> None:
         """This error will be thrown when a yaml config file has invalid values."""
+        from yaml import YAMLError
+
         file_path = file.resolve()
         ui_failure = "Invalid YAML"
         msg = f"Unable to read file '{file_path}'"
@@ -221,8 +220,7 @@ class InvalidYamlError(CDLBaseError):
             msg += f"\n\nThe error was found in this line: \n {mark}"
 
         problem = getattr(e, "problem", str(e))
-        msg += f"\n\n{problem.capitalize()}"
-        msg += f"\n\n{VALIDATION_ERROR_FOOTER}"
+        msg += f"\n\n{problem.capitalize()}\n\nPlease delete the file or fix the errors"
         super().__init__(ui_failure, message=msg, origin=file)
 
 
@@ -244,6 +242,8 @@ def create_error_msg(error: int | str) -> str:
 
 
 def get_origin(origin: ScrapeItem | Path | MediaItem | URL | None = None) -> Path | URL | None:
+    from yarl import URL
+
     if origin and not isinstance(origin, URL | Path):
         return origin.parents[0] if origin.parents else None
     return origin

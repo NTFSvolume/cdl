@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import datetime
 import re
-from datetime import date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Self
 
 import aiofiles
-from yarl import URL
 
 from cyberdrop_dl import config
+from cyberdrop_dl.clients.jdownloader import JDownloader
 from cyberdrop_dl.constants import REGEX_LINKS, BlockedDomains
 from cyberdrop_dl.crawlers._chevereto import CheveretoCrawler
 from cyberdrop_dl.crawlers.crawler import Crawler, create_crawlers
@@ -20,23 +20,37 @@ from cyberdrop_dl.crawlers.realdebrid import RealDebridCrawler
 from cyberdrop_dl.crawlers.wordpress import WordPressHTMLCrawler, WordPressMediaCrawler
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.exceptions import JDownloaderError, NoExtensionError
-from cyberdrop_dl.scraper.filters import is_in_domain_list, is_outside_date_range, is_valid_url
-from cyberdrop_dl.scraper.jdownloader import JDownloader
 from cyberdrop_dl.utils.logger import log, log_spacer
 from cyberdrop_dl.utils.utilities import get_download_path, remove_trailing_slash
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Generator
+    from collections.abc import AsyncGenerator, Generator, Sequence
 
     import aiosqlite
 
-    from cyberdrop_dl.config.global_model import GenericCrawlerInstances, GlobalSettings
+    from cyberdrop_dl.config.settings import GenericCrawlerInstances
     from cyberdrop_dl.crawlers import Crawler
     from cyberdrop_dl.managers import Manager
 
 existing_crawlers: dict[str, Crawler] = {}
 _seen_urls: set[AbsoluteHttpURL] = set()
 _crawlers_disabled_at_runtime: set[str] = set()
+
+
+def is_outside_date_range(scrape_item: ScrapeItem, before: datetime.date | None, after: datetime.date | None) -> bool:
+    skip = False
+    item_date = scrape_item.completed_at or scrape_item.created_at
+    if not item_date:
+        return False
+    date = datetime.datetime.fromtimestamp(item_date).date()
+    if (after and date < after) or (before and date > before):
+        skip = True
+
+    return skip
+
+
+def is_in_domain_list(scrape_item: ScrapeItem, domain_list: Sequence[str]) -> bool:
+    return any(domain in scrape_item.url.host for domain in domain_list)
 
 
 class ScrapeMapper:
@@ -46,7 +60,7 @@ class ScrapeMapper:
         self.manager = manager
         self.existing_crawlers: dict[str, Crawler] = {}
         self.direct_crawler = DirectHttpFile(self.manager)
-        self.jdownloader = JDownloader(self.manager)
+        self.jdownloader = JDownloader.new(config.get())
         self.jdownloader_whitelist = config.get().runtime_options.jdownloader_whitelist
         self.using_input_file = False
         self.groups = set()
@@ -59,23 +73,15 @@ class ScrapeMapper:
     def group_count(self) -> int:
         return len(self.groups)
 
-    @property
-    def global_settings(self) -> GlobalSettings:
-        return config.get()
-
-    @property
-    def enable_generic_crawler(self) -> bool:
-        return self.global_settings.general.enable_generic_crawler
-
     def start_scrapers(self) -> None:
         """Starts all scrapers."""
         from cyberdrop_dl import plugins
 
         self.existing_crawlers = get_crawlers_mapping(self.manager)
-        generic_crawlers = create_generic_crawlers_by_config(self.global_settings.generic_crawlers_instances)
+        generic_crawlers = create_generic_crawlers_by_config(config.get().generic_crawlers_instances)
         for crawler in generic_crawlers:
             register_crawler(self.existing_crawlers, crawler(self.manager), from_user=True)
-        disable_crawlers_by_config(self.existing_crawlers, self.global_settings.general.disable_crawlers)
+        disable_crawlers_by_config(self.existing_crawlers, config.get().general.disable_crawlers)
         plugins.load(self.manager)
 
     async def start_real_debrid(self) -> None:
@@ -100,32 +106,20 @@ class ScrapeMapper:
         """Starts the orchestra."""
         self.start_scrapers()
         await self.manager.db_manager.history_table.update_previously_unsupported(self.existing_crawlers)
-        self.jdownloader.connect()
+        await self.jdownloader.connect()
         await self.start_real_debrid()
         self.direct_crawler._init_downloader()
         async for item in self.get_input_items():
             self.manager.task_group.create_task(self.send_to_crawler(item))
 
     async def get_input_items(self) -> AsyncGenerator[ScrapeItem]:
-        item_limit = 0
-        if self.manager.parsed_args.cli_only_args.retry_any and self.manager.parsed_args.cli_only_args.max_items_retry:
-            item_limit = self.manager.parsed_args.cli_only_args.max_items_retry
-
-        if self.manager.parsed_args.cli_only_args.retry_failed:
-            items_generator = self.load_failed_links()
-        elif self.manager.parsed_args.cli_only_args.retry_all:
-            items_generator = self.load_all_links()
-        elif self.manager.parsed_args.cli_only_args.retry_maintenance:
-            items_generator = self.load_all_bunkr_failed_links_via_hash()
-        else:
-            items_generator = self.load_links()
+        items_generator = self.load_links(self.manager.path_manager.input_file)
+        children_limits = config.get().download_options.maximum_number_of_children
 
         async for item in items_generator:
             await self.manager.states.RUNNING.wait()
-            item.children_limits = config.get().download_options.maximum_number_of_children
-            if self.filter_items(item):
-                if item_limit and self.count >= item_limit:
-                    break
+            item.children_limits = children_limits
+            if self.should_scrape(item):
                 yield item
                 self.count += 1
 
@@ -159,10 +153,10 @@ class ScrapeMapper:
 
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~``
 
-    async def load_links(self) -> AsyncGenerator[ScrapeItem]:
+    async def load_links(self, source: list[AbsoluteHttpURL] | Path) -> AsyncGenerator[ScrapeItem]:
         """Loads links from args / input file."""
 
-        if not self.manager.parsed_args.cli_only_args.links:
+        if isinstance(source, Path):
             self.using_input_file = True
             async for group_name, urls in self.parse_input_file_groups():
                 for url in urls:
@@ -176,20 +170,12 @@ class ScrapeMapper:
 
             return
 
-        for url in self.manager.parsed_args.cli_only_args.links:
+        for url in source:
             yield ScrapeItem(url=url)
 
     async def load_failed_links(self) -> AsyncGenerator[ScrapeItem]:
         """Loads failed links from database."""
         async for rows in self.manager.db_manager.history_table.get_failed_items():
-            for row in rows:
-                yield _create_item_from_row(row)
-
-    async def load_all_links(self) -> AsyncGenerator[ScrapeItem]:
-        """Loads all links from database."""
-        after = self.manager.parsed_args.cli_only_args.completed_after or date.min
-        before = self.manager.parsed_args.cli_only_args.completed_before or datetime.now().date()
-        async for rows in self.manager.db_manager.history_table.get_all_items(after, before):
             for row in rows:
                 yield _create_item_from_row(row)
 
@@ -203,9 +189,7 @@ class ScrapeMapper:
 
     async def filter_and_send_to_crawler(self, scrape_item: ScrapeItem) -> None:
         """Send scrape_item to a supported crawler."""
-        if not isinstance(scrape_item.url, URL):
-            scrape_item.url = AbsoluteHttpURL(scrape_item.url)
-        if self.filter_items(scrape_item):
+        if self.should_scrape(scrape_item):
             await self.send_to_crawler(scrape_item)
 
     async def send_to_crawler(self, scrape_item: ScrapeItem) -> None:
@@ -234,13 +218,13 @@ class ScrapeMapper:
         except (NoExtensionError, ValueError):
             pass
 
-        if self.jdownloader.enabled and jdownloader_whitelisted:
+        if self.jdownloader._enabled and jdownloader_whitelisted:
             log(f"Sending unsupported URL to JDownloader: {scrape_item.url}", 20)
             success = False
             try:
                 download_folder = get_download_path(self.manager, scrape_item, "jdownloader")
                 relative_download_dir = download_folder.relative_to(self.manager.path_manager.download_folder)
-                self.jdownloader.direct_unsupported_to_jdownloader(
+                self.jdownloader.send(
                     scrape_item.url,
                     scrape_item.parent_title,
                     relative_download_dir,
@@ -262,13 +246,12 @@ class ScrapeMapper:
         )
         self.manager.progress_manager.scrape_errors.add_unsupported()
 
-    def filter_items(self, scrape_item: ScrapeItem) -> bool:
+    def should_scrape(self, scrape_item: ScrapeItem) -> bool:
         """Pre-filter scrape items base on URL."""
-        if not is_valid_url(scrape_item):
-            return False
 
         if scrape_item.url in _seen_urls:
             return False
+
         _seen_urls.add(scrape_item.url)
 
         if (
@@ -276,12 +259,6 @@ class ScrapeMapper:
             or scrape_item.url.host in BlockedDomains.exact_match
         ):
             log(f"Skipping {scrape_item.url} as it is a blocked domain", 10)
-            return False
-
-        before = self.manager.parsed_args.cli_only_args.completed_before
-        after = self.manager.parsed_args.cli_only_args.completed_after
-        if is_outside_date_range(scrape_item, before, after):
-            log(f"Skipping {scrape_item.url} as it is outside of the desired date range", 10)
             return False
 
         skip_hosts = config.get().ignore_options.skip_hosts
@@ -343,9 +320,9 @@ def _create_item_from_row(row: aiosqlite.Row) -> ScrapeItem:
     url = AbsoluteHttpURL(referer, encoded="%" in referer)
     item = ScrapeItem(url=url, retry_path=Path(row["download_path"]), part_of_album=True)
     if completed_at := row["completed_at"]:
-        item.completed_at = int(datetime.fromisoformat(completed_at).timestamp())
+        item.completed_at = int(datetime.datetime.fromisoformat(completed_at).timestamp())
     if created_at := row["created_at"]:
-        item.created_at = int(datetime.fromisoformat(created_at).timestamp())
+        item.created_at = int(datetime.datetime.fromisoformat(created_at).timestamp())
     return item
 
 
