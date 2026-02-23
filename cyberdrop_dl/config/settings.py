@@ -1,5 +1,4 @@
 # ruff: noqa: RUF012
-import itertools
 import random
 import re
 from datetime import date, datetime, timedelta
@@ -115,7 +114,7 @@ class Logs(SettingsGroup):
         if value := falsy_as(input_date, None):
             return to_timedelta(value)
 
-    def _set_output_filenames(self, now: datetime) -> None:
+    def set_output_filenames(self, now: datetime) -> None:
         self.log_folder.mkdir(exist_ok=True, parents=True)
         current_time_file_iso: str = now.strftime(constants.LOGS_DATETIME_FORMAT)
         current_time_folder_iso: str = now.strftime(constants.LOGS_DATE_FORMAT)
@@ -130,17 +129,22 @@ class Logs(SettingsGroup):
 
             log_file.parent.mkdir(exist_ok=True, parents=True)
 
-    def _delete_old_logs_and_folders(self, now: datetime | None = None) -> None:
+    def delete_old_logs_and_folders(self, now: datetime | None = None) -> None:
+        if not (now and self.logs_expire_after):
+            return
+
         from cyberdrop_dl.utils.utilities import purge_dir_tree
 
-        if now and self.logs_expire_after:
-            for file in itertools.chain(self.log_folder.rglob("*.log"), self.log_folder.rglob("*.csv")):
-                file_date = file.stat().st_ctime
-                t_delta = now - datetime.fromtimestamp(file_date)
-                if t_delta > self.logs_expire_after:
-                    file.unlink(missing_ok=True)
+        for file in self.log_folder.rglob("*"):
+            if file.suffix not in (".log", ".csv"):
+                continue
 
-        purge_dir_tree(self.log_folder)
+            file_date = file.stat().st_ctime
+            t_delta = now - datetime.fromtimestamp(file_date)
+            if t_delta > self.logs_expire_after:
+                file.unlink(missing_ok=True)
+
+        _ = purge_dir_tree(self.log_folder)
 
 
 class FileSizeLimits(SettingsGroup):

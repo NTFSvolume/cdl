@@ -15,13 +15,7 @@ from cyberdrop_dl.dependencies import browser_cookie3
 from cyberdrop_dl.managers import Manager
 from cyberdrop_dl.scrape_mapper import ScrapeMapper
 from cyberdrop_dl.utils.apprise import send_apprise_notifications
-from cyberdrop_dl.utils.logger import (
-    LogHandler,
-    QueuedLogger,
-    log,
-    log_spacer,
-    log_with_color,
-)
+from cyberdrop_dl.utils.logger import LogHandler, QueuedLogger, log, log_spacer, log_with_color
 from cyberdrop_dl.utils.sorting import Sorter
 from cyberdrop_dl.utils.updates import check_latest_pypi
 from cyberdrop_dl.utils.utilities import check_partials_and_empty_folders
@@ -123,7 +117,7 @@ async def _post_runtime(manager: Manager) -> None:
 
     await manager.hash_manager.hash_client.cleanup_dupes_after_download()
 
-    if config.get().sorting.sort_downloads and not manager.parsed_args.cli_only_args.retry_any:
+    if config.get().sorting.sort_downloads:
         sorter = Sorter(manager)
         await sorter.run()
 
@@ -167,31 +161,14 @@ def _setup_debug_logger(manager: Manager) -> Path | None:
 
 def _setup_main_logger(manager: Manager) -> None:
     logger = logging.getLogger("cyberdrop_dl")
-    file_io = manager.path_manager.main_log.open("w", encoding="utf8")
-    settings_data = config.get()
-    log_level = settings_data.runtime_options.log_level
+    file_io = config.get().logs.main_log.open("w", encoding="utf8")
+    log_level = config.get().runtime_options.log_level
     logger.setLevel(log_level)
 
-    if not manager.parsed_args.cli_only_args.fullscreen_ui:
-        constants.CONSOLE_LEVEL = settings_data.runtime_options.console_log_level
-        constants.console_handler = LogHandler(level=constants.CONSOLE_LEVEL)
-
     logger.addHandler(constants.console_handler)
-    file_handler = LogHandler(level=log_level, file=file_io, width=500)
-    queued_logger = QueuedLogger(manager, file_handler)
-    logger.addHandler(queued_logger.handler)
-
-
-def _setup_manager(args: Sequence[str] | None = None) -> Manager:
-    """Starts the program and returns the manager.
-
-    This will also run the UI for the program
-    After this function returns, the manager will be ready to use and scraping / downloading can begin.
-    """
-
-    manager = Manager()
-
-    return manager
+    logger.addHandler(
+        QueuedLogger(manager, LogHandler(level=log_level, file=file_io, width=500)).handler,
+    )
 
 
 def _loop_factory() -> asyncio.AbstractEventLoop:
@@ -205,7 +182,7 @@ class Director:
     """Creates a manager and runs it"""
 
     def __init__(self, args: Sequence[str] | None = None) -> None:
-        self.manager = _setup_manager(args)
+        self.manager: Manager = Manager()
 
     def run(self) -> int:
         return self._run()

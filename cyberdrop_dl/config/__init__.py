@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 from contextvars import ContextVar, Token
 from pathlib import Path
 from typing import Self
@@ -61,8 +62,12 @@ class Config(ConfigSettings):
         yaml.save(file, self)
 
     def resolve_paths(self) -> None:
-        if not self._resolved:
-            self._resolve_paths(self)
+        if self._resolved:
+            return
+        self._resolve_paths(self)
+        now = datetime.datetime.now()
+        self.logs.set_output_filenames(now)
+        self.logs.delete_old_logs_and_folders(now)
         self._resolved = True
 
     @classmethod
