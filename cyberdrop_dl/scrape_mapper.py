@@ -232,18 +232,12 @@ class ScrapeMapper:
                 success = True
             except JDownloaderError as e:
                 log(f"Failed to send {scrape_item.url} to JDownloader\n{e.message}", 40)
-                self.manager.log_manager.write_unsupported_urls_log(
-                    scrape_item.url,
-                    scrape_item.parents[0] if scrape_item.parents else None,
-                )
+                self.manager.logs.write_unsupported(scrape_item.url, scrape_item)
             self.manager.progress_manager.scrape_errors.add_unsupported(sent_to_jdownloader=success)
             return
 
         log(f"Unsupported URL: {scrape_item.url}", 30)
-        self.manager.log_manager.write_unsupported_urls_log(
-            scrape_item.url,
-            scrape_item.parents[0] if scrape_item.parents else None,
-        )
+        self.manager.logs.write_unsupported(scrape_item.url, scrape_item)
         self.manager.progress_manager.scrape_errors.add_unsupported()
 
     def should_scrape(self, scrape_item: ScrapeItem) -> bool:

@@ -2,6 +2,7 @@
 import random
 import re
 from datetime import date, datetime, timedelta
+from functools import cached_property
 from logging import DEBUG
 from pathlib import Path
 from typing import Literal
@@ -102,6 +103,10 @@ class Logs(SettingsGroup):
     scrape_error_urls: LogPath = Path("Scrape_Error_URLs.csv")
     unsupported_urls: LogPath = Path("Unsupported_URLs.csv")
     webhook: HttpAppriseURL | None = None
+
+    @cached_property
+    def jsonl_file(self):
+        return self.main_log.with_suffix(".results.jsonl")
 
     @field_validator("webhook", mode="before")
     @classmethod

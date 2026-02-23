@@ -4,9 +4,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
+from cyberdrop_dl.scraper import scrape_mapper
 
 from cyberdrop_dl.managers import Manager
-from cyberdrop_dl.scraper import scrape_mapper
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -71,7 +71,7 @@ def post_startup_manager(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Man
     bare_manager = Manager(("--appdata-folder", appdata, "-d", downloads, "--download-tiktok-audios"))
     bare_manager.startup()
     bare_manager.path_manager.startup()
-    bare_manager.log_manager.startup()
+    bare_manager.logs.startup()
     return bare_manager
 
 

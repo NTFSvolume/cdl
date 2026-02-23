@@ -184,7 +184,7 @@ class ConfigManager:
 
         self.manager.path_manager.startup()
         sleep(1)
-        self.manager.log_manager = LogManager(self.manager)
+        self.manager.logs = LogManager(self.manager)
         sleep(1)
 
     def _set_apprise_fixed(self):

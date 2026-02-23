@@ -30,7 +30,6 @@ MAX_REDIRECTS: Final[int] = 8
 # logging
 CONSOLE_LEVEL = 100
 MAX_NAME_LENGTHS = {"FILE": 95, "FOLDER": 60}
-CSV_DELIMITER = ","
 LOG_OUTPUT_TEXT = Text("")
 
 VALIDATION_ERROR_FOOTER = """Please delete the file or fix the errors"""

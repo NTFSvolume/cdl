@@ -60,7 +60,7 @@ class Manager:
         self.config_manager.startup()
 
         self.path_manager.startup()
-        self.log_manager: LogManager = LogManager(self)
+        self.logs: LogManager = LogManager(config.get())
         log_app_state()
 
     """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""

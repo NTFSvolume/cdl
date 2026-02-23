@@ -457,7 +457,7 @@ class Crawler(ABC):
             return
 
         data = [media_item.as_jsonable_dict()]
-        await self.manager.log_manager.write_jsonl(data)
+        await self.manager.logs.write_jsonl(data)
 
     async def check_complete(self, url: AbsoluteHttpURL, referer: AbsoluteHttpURL) -> bool:
         """Checks if this URL has been download before.
