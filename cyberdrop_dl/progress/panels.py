@@ -56,6 +56,9 @@ class UIPanel:
     def _clean_task_desc(cls, desc: str) -> str:
         return escape(truncate(desc.encode("ascii", "ignore").decode().strip(), length=40))
 
+    def __rich__(self) -> Panel:
+        return self.get_renderable()
+
     def get_renderable(self) -> Panel:
         return Panel(
             Group(self._progress, self._overflow.progress),

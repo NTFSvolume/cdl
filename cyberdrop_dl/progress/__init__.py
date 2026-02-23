@@ -17,10 +17,10 @@ from yarl import URL
 
 from cyberdrop_dl import __version__, config
 from cyberdrop_dl.progress.downloads_progress import DownloadsProgress
+from cyberdrop_dl.progress.errors import DownloadErrors, ScrapeErrors
 from cyberdrop_dl.progress.hash_progress import HashProgress
 from cyberdrop_dl.progress.panels import DownloadsPanel, ScrapingPanel
 from cyberdrop_dl.progress.sorting import SortingPanel
-from cyberdrop_dl.progress.statistic_progress import DownloadStatsProgress, ScrapeStatsProgress
 from cyberdrop_dl.utils.logger import log_spacer
 
 if TYPE_CHECKING:
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from cyberdrop_dl.managers import Manager
-    from cyberdrop_dl.progress.statistic_progress import UiFailureTotal
+    from cyberdrop_dl.progress.errors import UIFailure
 
 
 spinner = SpinnerColumn(style="green", spinner_name="dots")
@@ -65,18 +65,16 @@ class UILayouts:
         activity = Progress(spinner, "[progress.description]{task.description}")
         _ = activity.add_task(f"Running Cyberdrop-DL: v{__version__}", total=100, completed=0)
 
-        status_message_columns = Columns([activity, progress.status.progress])
-
         upper_layouts = (
-            Layout(renderable=progress.download_progress.get_progress(), name="Files", ratio=1, minimum_size=9),
-            Layout(renderable=progress.scrape_stats_progress.get_progress(), name="Scrape Failures", ratio=1),
-            Layout(renderable=progress.download_stats_progress.get_progress(), name="Download Failures", ratio=1),
+            Layout(progress.download_progress, name="Files", ratio=1, minimum_size=9),
+            Layout(progress.scrape_stats_progress, name="Scrape Failures", ratio=1),
+            Layout(progress.download_stats_progress, name="Download Failures", ratio=1),
         )
 
         lower_layouts = (
-            Layout(renderable=progress.scraping_progress.get_renderable(), name="Scraping", ratio=20),
-            Layout(renderable=progress.file_progress.get_renderable(), name="Downloads", ratio=20),
-            Layout(renderable=status_message_columns, name="status_message", ratio=2),
+            Layout(progress.scraping_progress, name=progress.scraping_progress.title, ratio=20),
+            Layout(progress.file_progress, name=progress.file_progress.title, ratio=20),
+            Layout(Columns([activity, progress.status.progress]), name="status_message", ratio=2),
         )
 
         horizontal.split_column(Layout(name="upper", ratio=20), *lower_layouts)
@@ -98,9 +96,9 @@ class ProgressManager:
         self.scraping_progress = ScrapingPanel()
         self.status = StatusMessage()
 
-        self.download_progress: DownloadsProgress = DownloadsProgress(manager)
-        self.download_stats_progress: DownloadStatsProgress = DownloadStatsProgress()
-        self.scrape_stats_progress: ScrapeStatsProgress = ScrapeStatsProgress()
+        self.download_progress: DownloadsProgress = DownloadsProgress()
+        self.download_stats_progress: DownloadErrors = DownloadErrors()
+        self.scrape_stats_progress: ScrapeErrors = ScrapeErrors()
         self.hash_progress: HashProgress = HashProgress(manager)
         self.sorting: SortingPanel = SortingPanel(1)
 
@@ -144,7 +142,7 @@ class ProgressManager:
         logger.info("Download Stats:")
         logger.info(f"  Downloaded: {self.download_progress.completed_files:,} files")
         logger.info(f"  Skipped (By Config): {self.download_progress.skipped_files:,} files")
-        logger.info(f"  Skipped (Previously Downloaded): {self.download_progress.previously_completed_files:,} files")
+        logger.info(f"  Skipped (Previously Downloaded): {self.download_progress.previously_completed:,} files")
         logger.info(f"  Failed: {self.download_stats_progress.failed_files:,} files")
 
         logger.info("Unsupported URLs Stats:")
@@ -169,7 +167,7 @@ class ProgressManager:
         logger.info(f"  Removed (Downloads): {self.hash_progress.removed_files:,} files")
 
 
-def log_failures(failures: list[UiFailureTotal], title: str = "Failures:", last_padding: int = 0) -> int:
+def log_failures(failures: list[UIFailure], title: str = "Failures:", last_padding: int = 0) -> int:
     logger.info(title)
     if not failures:
         logger.info("  None")
