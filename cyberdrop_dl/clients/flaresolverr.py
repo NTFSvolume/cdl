@@ -150,9 +150,7 @@ class FlareSolverr:
 
         async with (
             self._request_lock,
-            self.manager.progress_manager.show_status_msg(
-                f"Waiting For Flaresolverr Response [{self._next_request_id()}]"
-            ),
+            self.manager.progress_manager.status.show(f"Waiting For Flaresolverr Response [{self._next_request_id()}]"),
         ):
             async with self.manager.client_manager._session.post(
                 self.url,

@@ -3,42 +3,26 @@ from __future__ import annotations
 from rich.panel import Panel
 from rich.progress import BarColumn, Progress
 
-from cyberdrop_dl.progress._common import TaskCounter, TasksMap
+from cyberdrop_dl.progress._common import ProgressProxy, TaskCounter
 
 
-class FileStats:
+class FileStats(ProgressProxy):
     """Class that keeps track of completed, skipped and failed files."""
+
+    _columns = (
+        "[progress.description]{task.description}",
+        BarColumn(bar_width=None),
+        "[progress.percentage]{task.percentage:>6.2f}%",
+        "━",
+        "{task.completed:,}",
+    )
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({vars(self)!r})"
 
     def __init__(self) -> None:
-        self._progress = Progress(
-            "[progress.description]{task.description}",
-            BarColumn(bar_width=None),
-            "[progress.percentage]{task.percentage:>6.2f}%",
-            "━",
-            "{task.completed:,}",
-        )
-
-        self._total_files = 0
-
-        self._panel = Panel(
-            self._progress,
-            title="Files",
-            border_style="green",
-            padding=(1, 1),
-            subtitle=f"Total Files: [white]{self._total_files:,}",
-        )
-        self.simple_progress = Progress(
-            "[progress.description]{task.description}",
-            BarColumn(bar_width=None),
-            "[progress.percentage]{task.percentage:>6.2f}%",
-            "━",
-            "{task.completed:,}",
-        )
-
-        self._tasks = TasksMap()
+        super().__init__()
+        self._total_files: int = 0
 
         for name, color, desc in (
             ("completed", "green", "Completed"),
@@ -47,65 +31,77 @@ class FileStats:
             ("queued", "cyan", "Queued"),
             ("failed", "red", "Failed"),
         ):
-            self._tasks[name] = TaskCounter(self._progress.add_task(f"[{color}]{desc}", total=0))
+            self._tasks_map[name] = TaskCounter(self._progress.add_task(f"[{color}]{desc}", total=0))
 
-        self._tasks["simple"] = TaskCounter(self.simple_progress.add_task("Completed", total=0))
+        self.simple: Progress = Progress(*self._columns)
+        self._tasks_map["simple"] = TaskCounter(self.simple.add_task("Completed", total=0))
+        self._panel = Panel(
+            self._progress,
+            title="Files",
+            border_style="green",
+            padding=(1, 1),
+            subtitle=self.subtitle,
+        )
 
     def __rich__(self) -> Panel:
         return self._panel
 
+    @property
+    def subtitle(self) -> str:
+        return f"Total Files: [white]{self._total_files:,}"
+
     def update_total(self, increase_total: bool = True) -> None:
-        self._panel.subtitle = f"Total Files: [white]{self._total_files:,}"
+        self._panel.subtitle = self.subtitle
         if not increase_total:
             return
 
         self._total_files = self._total_files + 1
-        self._progress.update(self._tasks.completed.id, total=self._total_files)
-        self._progress.update(self._tasks.previously_completed.id, total=self._total_files)
-        self._progress.update(self._tasks.skipped.id, total=self._total_files)
-        self._progress.update(self._tasks.failed.id, total=self._total_files)
-        self._progress.update(self._tasks.queued.id, total=self._total_files)
-        self.simple_progress.update(
-            self._tasks.simple.id,
+        self._progress.update(self._tasks_map["completed"].id, total=self._total_files)
+        self._progress.update(self._tasks_map["previously_completed"].id, total=self._total_files)
+        self._progress.update(self._tasks_map["skipped"].id, total=self._total_files)
+        self._progress.update(self._tasks_map["failed"].id, total=self._total_files)
+        self._progress.update(self._tasks_map["queued"].id, total=self._total_files)
+        self.simple.update(
+            self._tasks_map["simple"].id,
             total=self._total_files,
-            completed=self._total_files - self._tasks.queued.count,
+            completed=self._total_files - self._tasks_map["queued"].count,
         )
 
     def add_completed(self) -> None:
-        self._progress.advance(self._tasks.completed.id)
-        self._tasks.completed.count += 1
+        self._progress.advance(self._tasks_map["completed"].id)
+        self._tasks_map["completed"].count += 1
 
     def add_previously_completed(self, increase_total: bool = True) -> None:
         if increase_total:
             self.update_total()
 
-        self._tasks.previously_completed.count += 1
-        self._progress.advance(self._tasks.previously_completed.id)
+        self._tasks_map["previously_completed"].count += 1
+        self._progress.advance(self._tasks_map["previously_completed"].id)
 
     def add_skipped(self) -> None:
-        self._progress.advance(self._tasks.skipped.id)
-        self._tasks.skipped.count += 1
+        self._progress.advance(self._tasks_map["skipped"].id)
+        self._tasks_map["skipped"].count += 1
 
     def add_failed(self) -> None:
-        self._progress.advance(self._tasks.failed.id)
-        self._tasks.failed.count += 1
+        self._progress.advance(self._tasks_map["failed"].id)
+        self._tasks_map["failed"].count += 1
 
     def update_queued(self, count: int) -> None:
-        self._tasks.queued.count = count
-        self._progress.update(self._tasks.queued.id, completed=count)
+        self._tasks_map["queued"].count = count
+        self._progress.update(self._tasks_map["queued"].id, completed=count)
 
     @property
     def skipped_files(self) -> int:
-        return self._tasks.skipped.count
+        return self._tasks_map["skipped"].count
 
     @property
     def failed_files(self) -> int:
-        return self._tasks.failed.count
+        return self._tasks_map["failed"].count
 
     @property
     def completed_files(self) -> int:
-        return self._tasks.completed.count
+        return self._tasks_map["completed"].count
 
     @property
     def previously_completed(self) -> int:
-        return self._tasks.previously_completed.count
+        return self._tasks_map["previously_completed"].count

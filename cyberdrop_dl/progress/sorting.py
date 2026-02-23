@@ -1,27 +1,27 @@
 from __future__ import annotations
 
-from rich.progress import BarColumn, Progress, SpinnerColumn, TaskID
+from typing import ClassVar
 
-from cyberdrop_dl.progress.ui import UIPanel
+from rich.progress import BarColumn, SpinnerColumn, TaskID
+
+from cyberdrop_dl.progress.scrape import UIPanel
 
 
 class SortingPanel(UIPanel):
     """Class that keeps track of sorted files."""
 
-    title = "Sorting"
-    name = "Folders"
+    unit: ClassVar[str] = "Folders"
+    _columns = (
+        SpinnerColumn(),
+        "[progress.description]{task.description}",
+        BarColumn(bar_width=None),
+        "[progress.percentage]{task.percentage:>6.2f}%",
+        "━",
+        "{task.completed}/{task.total} files",
+    )
 
     def __init__(self) -> None:
-        progress = Progress(
-            SpinnerColumn(),
-            "[progress.description]{task.description}",
-            BarColumn(bar_width=None),
-            "[progress.percentage]{task.percentage:>6.2f}%",
-            "━",
-            "{task.completed}/{task.total} files",
-        )
-        super().__init__(progress, visible_tasks_limit=1)
-
+        super().__init__(visible_tasks_limit=1)
         self.audio_count = self.video_count = self.image_count = self.other_count = 0
 
     def new_task(self, folder: str, expected_size: int | None) -> TaskID:
@@ -29,7 +29,7 @@ class SortingPanel(UIPanel):
         return super().add_task(description, expected_size)
 
     def advance_folder(self, task_id: TaskID, amount: int = 1) -> None:
-        self._progress.advance(task_id, amount)
+        self._advance(task_id, amount)
 
     def increment_audio(self) -> None:
         self.audio_count += 1

@@ -16,11 +16,12 @@ from rich.text import Text
 from yarl import URL
 
 from cyberdrop_dl import __version__, config
+from cyberdrop_dl.progress._common import ProgressProxy
 from cyberdrop_dl.progress.errors import DownloadErrors, ScrapeErrors
 from cyberdrop_dl.progress.files import FileStats
 from cyberdrop_dl.progress.hashing import HashingPanel
+from cyberdrop_dl.progress.scrape import DownloadsPanel, ScrapingPanel
 from cyberdrop_dl.progress.sorting import SortingPanel
-from cyberdrop_dl.progress.ui import DownloadsPanel, ScrapingPanel
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -30,24 +31,41 @@ if TYPE_CHECKING:
     from cyberdrop_dl.progress.errors import UIFailure
 
 
-spinner = SpinnerColumn(style="green", spinner_name="dots")
 logger = logging.getLogger(__name__)
 
 
-class StatusMessage:
+class StatusMessage(ProgressProxy):
+    _columns = (
+        SpinnerColumn(style="green", spinner_name="dots"),
+        "[progress.description]{task.description}",
+    )
+
     def __init__(self) -> None:
-        self.progress: Progress = Progress(spinner, "[progress.description]{task.description}")
-        self._task_id = self.progress.add_task("", total=100, completed=0, visible=False)
+        super().__init__()
+        self.activity = Progress(*self._columns)
+        _ = self.activity.add_task(f"Running Cyberdrop-DL: v{__version__}", total=100, completed=0)
+        self._task_id = self._progress.add_task("", total=100, completed=0, visible=False)
+        self._panel = Columns([self.activity, self._progress])
+
+    def __rich__(self) -> Columns:
+        return self._panel
 
     def update(self, description: str | None = None) -> None:
-        self.progress.update(self._task_id, description=description, visible=bool(description))
+        self._progress.update(self._task_id, description=description, visible=bool(description))
 
-    @property
-    def msg(self) -> str:
-        return self.progress._tasks[self._task_id].description
+    def __str__(self) -> str:
+        return self._tasks[self._task_id].description
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}(msg={self.msg!r})"
+        return f"{type(self).__name__}(msg={self!s})"
+
+    @asynccontextmanager
+    async def show(self, msg: str | None) -> AsyncGenerator[None]:
+        try:
+            self.update(msg)
+            yield
+        finally:
+            self.update()
 
 
 @dataclasses.dataclass(slots=True, frozen=True)
@@ -63,28 +81,25 @@ class UILayouts:
         horizontal = Layout()
         vertical = Layout()
 
-        activity = Progress(spinner, "[progress.description]{task.description}")
-        _ = activity.add_task(f"Running Cyberdrop-DL: v{__version__}", total=100, completed=0)
-
-        upper_layouts = (
-            Layout(progress.files, name="Files", ratio=1, minimum_size=9),
-            Layout(progress.scrape_errors, name="Scrape Failures", ratio=1),
-            Layout(progress.download_errors, name="Download Failures", ratio=1),
+        top = (
+            Layout(progress.files, ratio=1, minimum_size=9),
+            Layout(progress.scrape_errors, ratio=1),
+            Layout(progress.download_errors, ratio=1),
         )
 
-        lower_layouts = (
-            Layout(progress.scrape, name=progress.scrape.title, ratio=20),
-            Layout(progress.downloads, name=progress.downloads.title, ratio=20),
-            Layout(Columns([activity, progress.status.progress]), name="status_message", ratio=2),
+        bottom = (
+            Layout(progress.scrape, ratio=20),
+            Layout(progress.downloads, ratio=20),
+            Layout(progress.status, ratio=2),
         )
 
-        horizontal.split_column(Layout(name="upper", ratio=20), *lower_layouts)
-        vertical.split_column(Layout(name="upper", ratio=60), *lower_layouts)
+        horizontal.split_column(Layout(name="top", ratio=20), *bottom)
+        vertical.split_column(Layout(name="top", ratio=60), *bottom)
 
-        horizontal["upper"].split_row(*upper_layouts)
-        vertical["upper"].split_column(*upper_layouts)
+        horizontal["top"].split_row(*top)
+        vertical["top"].split_column(*top)
 
-        simple = Group(activity, progress.files.simple_progress)
+        simple = Group(progress.status.activity, progress.files.simple)
         return cls(horizontal, vertical, simple, progress.hashing, progress.sorting)
 
 
@@ -108,14 +123,6 @@ class ProgressManager:
 
     def __post_init__(self) -> None:
         self.layouts = UILayouts.build(self)
-
-    @asynccontextmanager
-    async def show_status_msg(self, msg: str | None) -> AsyncGenerator[None]:
-        try:
-            self.status.update(msg)
-            yield
-        finally:
-            self.status.update()
 
     @property
     def layout(self) -> Layout:

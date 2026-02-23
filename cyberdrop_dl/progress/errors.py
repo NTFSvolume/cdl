@@ -2,17 +2,11 @@ from __future__ import annotations
 
 import dataclasses
 import functools
-from typing import ClassVar, NamedTuple
 
 from rich.panel import Panel
-from rich.progress import BarColumn, Progress, TaskID
+from rich.progress import BarColumn, TaskID
 
-
-class TaskInfo(NamedTuple):
-    id: TaskID
-    description: str
-    completed: float
-    total: float | None
+from cyberdrop_dl.progress._common import ProgressProxy
 
 
 @dataclasses.dataclass(slots=True, order=True)
@@ -31,41 +25,25 @@ class UIFailure:
             self.msg = self.full_msg
 
 
-def _get_tasks_info_sorted(progress: Progress) -> tuple[list[TaskInfo], bool]:
-    tasks = [
-        TaskInfo(
-            id=task.id,
-            description=task.description,
-            completed=task.completed,
-            total=task.total,
-        )
-        for task in progress.tasks
-    ]
-
-    tasks_sorted = sorted(tasks, key=lambda x: x.completed, reverse=True)
-    were_sorted = tasks == tasks_sorted
-    return tasks_sorted, were_sorted
-
-
-class _ErrorsPanel:
+class _ErrorsPanel(ProgressProxy):
     """Base class that keeps track of errors and reasons."""
 
-    title: ClassVar[str]
+    _columns = (
+        "[progress.description]{task.description}",
+        BarColumn(bar_width=None),
+        "[progress.percentage]{task.percentage:>6.2f}%",
+        "━",
+        "{task.completed:,}",
+    )
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(failed_files={self.failed_files!r}, failures={self._failures.keys()!r})"
 
     def __init__(self) -> None:
-        self._progress = Progress(
-            "[progress.description]{task.description}",
-            BarColumn(bar_width=None),
-            "[progress.percentage]{task.percentage:>6.2f}%",
-            "━",
-            "{task.completed:,}",
-        )
-
+        super().__init__()
+        self.title = type(self).__name__.removesuffix("Errors") + " Failures"
         self._failures: dict[str, TaskID] = {}
-        self.failed_files = 0
+        self.failed_files: int = 0
         self._panel = Panel(
             self._progress,
             title=self.title,
@@ -96,14 +74,13 @@ class _ErrorsPanel:
         for task_id in self._failures.values():
             self._progress.update(task_id, total=self.failed_files)
 
-        tasks_sorted, were_sorted = _get_tasks_info_sorted(self._progress)
-        if were_sorted:
+        tasks = list(self._tasks.values())
+        tasks_sorted = sorted(tasks, key=lambda x: x.completed, reverse=True)
+        if tasks == tasks_sorted:
             return
 
         for task in tasks_sorted:
             self._progress.remove_task(task.id)
-
-        for task in tasks_sorted:
             self._failures[task.description] = self._progress.add_task(
                 task.description,
                 total=task.total,
@@ -113,21 +90,15 @@ class _ErrorsPanel:
     def return_totals(self) -> list[UIFailure]:
         """Returns the total number of failed sites and reasons."""
 
-        return sorted(
-            UIFailure(msg, int(self._progress._tasks[task_id].completed)) for msg, task_id in self._failures.items()
-        )
+        return sorted(UIFailure(msg, int(self._tasks[task_id].completed)) for msg, task_id in self._failures.items())
 
 
 class DownloadErrors(_ErrorsPanel):
     """Class that keeps track of download failures and reasons."""
 
-    title: ClassVar[str] = "Download Failures"
-
 
 class ScrapeErrors(_ErrorsPanel):
     """Class that keeps track of scraping failures and reasons."""
-
-    title = "Scrape Failures"
 
     def __init__(self) -> None:
         super().__init__()
