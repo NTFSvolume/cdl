@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from cyberdrop_dl.managers.manager import Manager
+from cyberdrop_dl.managers import Manager
 from cyberdrop_dl.scraper import scrape_mapper
 
 if TYPE_CHECKING:

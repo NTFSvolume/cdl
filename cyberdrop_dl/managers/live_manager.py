@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from rich.live import Live
 
-from cyberdrop_dl import constants
+from cyberdrop_dl import config, constants
 from cyberdrop_dl.cli import is_terminal_in_portrait
 
 if TYPE_CHECKING:
@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
     from rich.console import RenderableType
 
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.managers import Manager
 
 
 class LiveManager:
@@ -23,7 +23,7 @@ class LiveManager:
         self.manager = manager
         self.ui_setting = self.manager.parsed_args.cli_only_args.ui
         self.fullscreen = f = self.manager.parsed_args.cli_only_args.fullscreen_ui
-        self.refresh_rate = rate = self.manager.config_manager.global_settings_data.ui_options.refresh_rate
+        self.refresh_rate = rate = config.get().ui_options.refresh_rate
         self.live = Live(refresh_per_second=rate, transient=True, screen=f, auto_refresh=True)
         self.current_layout: str = ""
 

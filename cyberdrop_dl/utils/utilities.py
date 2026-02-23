@@ -56,7 +56,7 @@ if TYPE_CHECKING:
     from cyberdrop_dl.crawlers import Crawler
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
     from cyberdrop_dl.downloader.downloader import Downloader
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.managers import Manager
 
     CrawerOrDownloader = TypeVar("CrawerOrDownloader", bound=Crawler | Downloader)
     Origin = TypeVar("Origin", bound=ScrapeItem | MediaItem | URL)

@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.config.settings import Dedupe
     from cyberdrop_dl.data_structures.url_objects import MediaItem
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.managers import Manager
 
 
 def hash_directory_scanner(manager: Manager, path: Path) -> None:
@@ -79,7 +79,7 @@ class HashClient:
     async def hash_item_during_download(self, media_item: MediaItem) -> None:
         if media_item.is_segment:
             return
-        if self.manager.config_manager.settings_data.dupe_cleanup_options.hashing != Hashing.IN_PLACE:
+        if config.get().dupe_cleanup_options.hashing != Hashing.IN_PLACE:
             return
         await self.manager.states.RUNNING.wait()
         try:
@@ -103,9 +103,9 @@ class HashClient:
             return
 
         hash = await self._update_db_and_retrive_hash_helper(file, original_filename, referer, hash_type=self.xxhash)
-        if self.manager.config_manager.settings_data.dupe_cleanup_options.add_md5_hash:
+        if config.get().dupe_cleanup_options.add_md5_hash:
             await self._update_db_and_retrive_hash_helper(file, original_filename, referer, hash_type=self.md5)
-        if self.manager.config_manager.settings_data.dupe_cleanup_options.add_sha256_hash:
+        if config.get().dupe_cleanup_options.add_sha256_hash:
             await self._update_db_and_retrive_hash_helper(file, original_filename, referer, hash_type=self.sha256)
         return hash
 
@@ -156,11 +156,11 @@ class HashClient:
         self.hashes_dict[hash][size].add(absolute_path)
 
     async def cleanup_dupes_after_download(self) -> None:
-        if self.manager.config_manager.settings_data.dupe_cleanup_options.hashing == Hashing.OFF:
+        if config.get().dupe_cleanup_options.hashing == Hashing.OFF:
             return
-        if not self.manager.config_manager.settings_data.dupe_cleanup_options.auto_dedupe:
+        if not config.get().dupe_cleanup_options.auto_dedupe:
             return
-        if self.manager.config_manager.settings_data.runtime_options.ignore_history:
+        if config.get().runtime_options.ignore_history:
             return
         with self.manager.live_manager.get_hash_live(stop=True):
             file_hashes_dict = await self.get_file_hashes_dict()

@@ -7,7 +7,7 @@ from rich.panel import Panel
 from rich.progress import BarColumn, Progress
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.managers import Manager
 
 
 class DownloadsProgress:

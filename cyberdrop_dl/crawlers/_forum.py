@@ -209,12 +209,12 @@ class MessageBoardCrawler(Crawler, is_abc=True):
     @final
     @property
     def scrape_single_forum_post(self) -> bool:
-        return self.manager.config_manager.settings_data.download_options.scrape_single_forum_post
+        return config.get().download_options.scrape_single_forum_post
 
     @final
     @property
     def max_thread_depth(self) -> int:
-        return self.manager.config_manager.settings_data.download_options.maximum_thread_depth
+        return config.get().download_options.maximum_thread_depth
 
     @final
     @property

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, NamedTuple, ParamSpec, TypeVar
 
 from aiohttp import ClientConnectorError, ClientError, ClientResponseError
 
-from cyberdrop_dl import constants
+from cyberdrop_dl import config, constants
 from cyberdrop_dl.data_structures.url_objects import HlsSegment, MediaItem
 from cyberdrop_dl.exceptions import (
     DownloadError,
@@ -64,7 +64,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Generator
 
     from cyberdrop_dl.clients.download_client import DownloadClient
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.managers import Manager
     from cyberdrop_dl.utils.m3u8 import M3U8, RenditionGroup
 
 P = ParamSpec("P")
@@ -135,9 +135,9 @@ class Downloader:
 
     @property
     def max_attempts(self):
-        if self.manager.config_manager.settings_data.download_options.disable_download_attempt_limit:
+        if config.get().download_options.disable_download_attempt_limit:
             return 1
-        return self.manager.config_manager.global_settings_data.rate_limiting_options.download_attempts
+        return config.get().rate_limiting_options.download_attempts
 
     def startup(self) -> None:
         """Starts the downloader."""
@@ -145,7 +145,7 @@ class Downloader:
         self._semaphore = asyncio.Semaphore(self.manager.client_manager.get_download_slots(self.domain))
 
         self.manager.path_manager.download_folder.mkdir(parents=True, exist_ok=True)
-        if self.manager.config_manager.settings_data.sorting.sort_downloads:
+        if config.get().sorting.sort_downloads:
             self.manager.path_manager.sorted_folder.mkdir(parents=True, exist_ok=True)
 
     def update_queued_files(self, increase_total: bool = True):
@@ -337,7 +337,7 @@ class Downloader:
         if media_item.is_segment:
             return
 
-        if self.manager.config_manager.settings_data.download_options.disable_file_timestamps:
+        if config.get().download_options.disable_file_timestamps:
             return
         if not media_item.datetime:
             log(f"Unable to parse upload date for {media_item.url}, using current datetime as file datetime", 30)

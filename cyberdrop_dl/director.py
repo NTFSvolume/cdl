@@ -14,7 +14,7 @@ from pydantic import ValidationError
 
 from cyberdrop_dl import constants, env
 from cyberdrop_dl.dependencies import browser_cookie3
-from cyberdrop_dl.managers.manager import Manager
+from cyberdrop_dl.managers import Manager
 from cyberdrop_dl.scraper.scrape_mapper import ScrapeMapper
 from cyberdrop_dl.ui.program_ui import ProgramUI
 from cyberdrop_dl.utils.apprise import send_apprise_notifications

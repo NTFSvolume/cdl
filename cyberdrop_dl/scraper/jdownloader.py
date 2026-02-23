@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.managers import Manager
 
 
 @dataclasses.dataclass(slots=True)

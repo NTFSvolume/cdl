@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from psutil._ntuples import sdiskpart
 
     from cyberdrop_dl.data_structures.url_objects import MediaItem
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.managers import Manager
 
 
 @dataclass(frozen=True, slots=True, order=True)

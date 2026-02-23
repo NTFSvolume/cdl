@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 import pytest
 
-from cyberdrop_dl.managers.manager import Manager, merge_dicts
+from cyberdrop_dl.managers import Manager, merge_dicts
 
 if TYPE_CHECKING:
     from pydantic import BaseModel

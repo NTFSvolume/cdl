@@ -22,7 +22,7 @@ from cyberdrop_dl.utils.logger import log, log_debug, log_spacer
 from cyberdrop_dl.utils.yaml import format_validation_error
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.managers import Manager
 
 
 @dataclass

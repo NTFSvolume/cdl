@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
     from yarl import URL
 
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.managers import Manager
 
 console = Console()
 

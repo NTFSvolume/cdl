@@ -9,7 +9,7 @@ from cyberdrop_dl.crawlers.crawler import create_crawlers
 from cyberdrop_dl.scraper import scrape_mapper
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.managers import Manager
 
 TEST_BASE_CRAWLER = next(iter(crawlers.GENERIC_CRAWLERS))
 

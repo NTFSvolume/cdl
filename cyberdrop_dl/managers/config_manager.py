@@ -6,6 +6,7 @@ from dataclasses import field
 from time import sleep
 from typing import TYPE_CHECKING
 
+from cyberdrop_dl import cache
 from cyberdrop_dl.config import AuthSettings, ConfigSettings, GlobalSettings
 from cyberdrop_dl.exceptions import InvalidYamlError
 from cyberdrop_dl.managers.log_manager import LogManager
@@ -17,7 +18,7 @@ if TYPE_CHECKING:
 
     from pydantic import BaseModel
 
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.managers import Manager
     from cyberdrop_dl.utils.apprise import AppriseURL
 
 
@@ -49,14 +50,14 @@ class ConfigManager:
             self.authentication_settings = auth_override
 
         self.settings.parent.mkdir(parents=True, exist_ok=True)
-        self.pydantic_config = self.manager.cache_manager.get("pydantic_config")
+        self.pydantic_config = cache.get().get("pydantic_config")
         self.load_configs()
 
     def get_loaded_config(self):
         return self.loaded_config or self.get_default_config()
 
     def get_default_config(self) -> str:
-        return self.manager.cache_manager.get("default_config") or "Default"
+        return cache.get().get("default_config") or "Default"
 
     def load_configs(self) -> None:
         """Loads all the configs."""
@@ -163,15 +164,15 @@ class ConfigManager:
 
     def change_default_config(self, config_name: str) -> None:
         """Changes the default config."""
-        self.manager.cache_manager.save("default_config", config_name)
+        cache.get().save("default_config", config_name)
 
     def delete_config(self, config_name: str) -> None:
         """Deletes a config."""
         configs = self.get_configs()
         configs.remove(config_name)
 
-        if self.manager.cache_manager.get("default_config") == config_name:
-            self.manager.cache_manager.save("default_config", configs[0])
+        if cache.get().get("default_config") == config_name:
+            cache.get().save("default_config", configs[0])
 
         config = self.manager.path_manager.config_folder / config_name
         shutil.rmtree(config)
@@ -187,7 +188,7 @@ class ConfigManager:
         sleep(1)
 
     def _set_apprise_fixed(self):
-        apprise_fixed = self.manager.cache_manager.get("apprise_fixed")
+        apprise_fixed = cache.get().get("apprise_fixed")
         if apprise_fixed:
             return
         if os.name == "nt":
@@ -198,12 +199,12 @@ class ConfigManager:
             else:
                 with self.apprise_file.open("a", encoding="utf8") as f:
                     f.write("windows://\n")
-        self.manager.cache_manager.save("apprise_fixed", True)
+        cache.get().save("apprise_fixed", True)
 
     def _set_pydantic_config(self):
         if self.pydantic_config:
             return
-        self.manager.cache_manager.save("pydantic_config", True)
+        cache.get().save("pydantic_config", True)
         self.pydantic_config = True
 
 

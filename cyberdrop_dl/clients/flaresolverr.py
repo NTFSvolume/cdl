@@ -19,7 +19,7 @@ from cyberdrop_dl.utils.logger import log
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.managers import Manager
 
 
 class _Command(StrEnum):

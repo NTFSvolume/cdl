@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Literal, Self
 import aiofiles
 from yarl import URL
 
+from cyberdrop_dl import config
 from cyberdrop_dl.constants import REGEX_LINKS, BlockedDomains
 from cyberdrop_dl.crawlers._chevereto import CheveretoCrawler
 from cyberdrop_dl.crawlers.crawler import Crawler, create_crawlers
@@ -31,7 +32,7 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.config.global_model import GenericCrawlerInstances, GlobalSettings
     from cyberdrop_dl.crawlers import Crawler
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.managers import Manager
 
 existing_crawlers: dict[str, Crawler] = {}
 _seen_urls: set[AbsoluteHttpURL] = set()
@@ -46,7 +47,7 @@ class ScrapeMapper:
         self.existing_crawlers: dict[str, Crawler] = {}
         self.direct_crawler = DirectHttpFile(self.manager)
         self.jdownloader = JDownloader(self.manager)
-        self.jdownloader_whitelist = self.manager.config_manager.settings_data.runtime_options.jdownloader_whitelist
+        self.jdownloader_whitelist = config.get().runtime_options.jdownloader_whitelist
         self.using_input_file = False
         self.groups = set()
         self.count = 0
@@ -60,7 +61,7 @@ class ScrapeMapper:
 
     @property
     def global_settings(self) -> GlobalSettings:
-        return self.manager.config_manager.global_settings_data
+        return config.get()
 
     @property
     def enable_generic_crawler(self) -> bool:
@@ -121,7 +122,7 @@ class ScrapeMapper:
 
         async for item in items_generator:
             await self.manager.states.RUNNING.wait()
-            item.children_limits = self.manager.config_manager.settings_data.download_options.maximum_number_of_children
+            item.children_limits = config.get().download_options.maximum_number_of_children
             if self.filter_items(item):
                 if item_limit and self.count >= item_limit:
                     break
@@ -283,12 +284,12 @@ class ScrapeMapper:
             log(f"Skipping {scrape_item.url} as it is outside of the desired date range", 10)
             return False
 
-        skip_hosts = self.manager.config_manager.settings_data.ignore_options.skip_hosts
+        skip_hosts = config.get().ignore_options.skip_hosts
         if skip_hosts and is_in_domain_list(scrape_item, skip_hosts):
             log(f"Skipping URL by skip_hosts config: {scrape_item.url}", 10)
             return False
 
-        only_hosts = self.manager.config_manager.settings_data.ignore_options.only_hosts
+        only_hosts = config.get().ignore_options.only_hosts
         if only_hosts and not is_in_domain_list(scrape_item, only_hosts):
             log(f"Skipping URL by only_hosts config: {scrape_item.url}", 10)
             return False

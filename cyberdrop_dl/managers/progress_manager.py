@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
     from rich.console import RenderableType
 
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.managers import Manager
     from cyberdrop_dl.ui.progress.statistic_progress import UiFailureTotal
 
 log_cyan = partial(log_with_color, style="cyan", level=20)

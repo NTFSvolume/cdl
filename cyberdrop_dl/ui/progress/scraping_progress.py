@@ -9,7 +9,7 @@ from cyberdrop_dl.ui.progress.deque_progress import DequeProgress
 if TYPE_CHECKING:
     from yarl import URL
 
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.managers import Manager
 
 
 class ScrapingProgress(DequeProgress):

@@ -37,7 +37,7 @@ if TYPE_CHECKING:
 
     from rich.console import ConsoleRenderable
 
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.managers import Manager
 
     _P = ParamSpec("_P")
     _ExitCode = str | int | None

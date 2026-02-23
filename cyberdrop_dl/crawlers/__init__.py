@@ -1,7 +1,7 @@
 # ruff: noqa: F401
 from __future__ import annotations
 
-from cyberdrop_dl import config, env
+from cyberdrop_dl import cache, config, env
 
 from ._chevereto import CheveretoCrawler
 from .anontransfer import AnonTransferCrawler

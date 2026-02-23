@@ -6,12 +6,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from cyberdrop_dl import env
+from cyberdrop_dl import config, env
 from cyberdrop_dl.utils.utilities import purge_dir_tree
 
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import MediaItem
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.managers import Manager
 
 
 class PathManager:
@@ -77,7 +77,7 @@ class PathManager:
 
     def startup(self) -> None:
         """Startup process for the Directory Manager."""
-        settings_data = self.manager.config_manager.settings_data
+        settings_data = config.get()
         current_config = self.manager.config_manager.loaded_config
 
         def replace(path: Path) -> Path:
@@ -110,7 +110,7 @@ class PathManager:
     def _set_output_filenames(self, now: datetime) -> None:
         current_time_file_iso: str = now.strftime("%Y%m%d_%H%M%S")
         current_time_folder_iso: str = now.strftime("%Y_%m_%d")
-        log_settings_config = self.manager.config_manager.settings_data.logs
+        log_settings_config = config.get().logs
         log_files: dict[str, Path] = log_settings_config.model_dump()
 
         for model_name, log_file in log_files.items():
@@ -130,11 +130,11 @@ class PathManager:
         self.pages_folder = self.main_log.parent / "cdl_responses"
 
     def _delete_logs_and_folders(self, now: datetime):
-        if self.manager.config_manager.settings_data.logs.logs_expire_after:
+        if config.get().logs.logs_expire_after:
             for file in set(self.log_folder.rglob("*.log")) | set(self.log_folder.rglob("*.csv")):
                 file_date = Path(file).stat().st_ctime
                 t_delta = now - datetime.fromtimestamp(file_date)
-                if t_delta > self.manager.config_manager.settings_data.logs.logs_expire_after:
+                if t_delta > config.get().logs.logs_expire_after:
                     file.unlink(missing_ok=True)
         purge_dir_tree(self.log_folder)
 
@@ -144,7 +144,7 @@ class PathManager:
             path: Path = getattr(self, internal_name)
             path.parent.mkdir(parents=True, exist_ok=True)
 
-        if self.manager.config_manager.settings_data.files.save_pages_html:
+        if config.get().files.save_pages_html:
             self.pages_folder.mkdir(parents=True, exist_ok=True)
 
     def add_completed(self, media_item: MediaItem) -> None:

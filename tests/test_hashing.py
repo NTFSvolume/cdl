@@ -11,7 +11,7 @@ from cyberdrop_dl.clients.hash_client import hash_directory_scanner
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.managers import Manager
 
 
 def get_hashes(path: Path) -> set[tuple[str, str]]:

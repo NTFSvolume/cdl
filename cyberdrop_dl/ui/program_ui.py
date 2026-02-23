@@ -11,6 +11,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.text import Text
 
+from cyberdrop_dl import cache
 from cyberdrop_dl.clients.hash_client import hash_directory_scanner
 from cyberdrop_dl.dependencies import browser_cookie3
 from cyberdrop_dl.ui.prompts import user_prompts
@@ -28,7 +29,7 @@ if TYPE_CHECKING:
 
     from InquirerPy.base.control import Choice
 
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.managers import Manager
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -156,7 +157,7 @@ class ProgramUI:
             return
         urls = user_prompts.filter_cache_urls(self.manager, domains)
         for url in urls:
-            asyncio.run(self.manager.cache_manager.request_cache.delete_url(url))
+            asyncio.run(cache.get().request_cache.delete_url(url))
 
         console.print("\nExecuting database vacuum. This may take several minutes, please wait...")
         try:
@@ -209,7 +210,7 @@ class ProgramUI:
             self.print_error("You cannot delete the currently active config")
             return
 
-        if self.manager.cache_manager.get("default_config") == selected_config:
+        if cache.get().get("default_config") == selected_config:
             self.print_error("You cannot delete the default config")
             return
 
@@ -242,7 +243,7 @@ class ProgramUI:
     def _process_answer(self, answer: Any, options_map: dict) -> Choice | None:
         """Checks prompt answer and executes corresponding function."""
         if answer == EXIT_CHOICE.value:
-            asyncio.run(self.manager.cache_manager.close())
+            asyncio.run(cache.get().close())
             sys.exit(0)
         if answer == DONE_CHOICE.value:
             return DONE_CHOICE

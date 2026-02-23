@@ -28,8 +28,8 @@ if TYPE_CHECKING:
     import aiohttp
 
     from cyberdrop_dl.data_structures.url_objects import MediaItem
+    from cyberdrop_dl.managers import Manager
     from cyberdrop_dl.managers.client_manager import ClientManager
-    from cyberdrop_dl.managers.manager import Manager
 
 
 _CONTENT_TYPES_OVERRIDES: dict[str, str] = {"text/vnd.trolltech.linguist": "video/MP2T"}
@@ -48,7 +48,7 @@ class DownloadClient:
     def __init__(self, manager: Manager, client_manager: ClientManager) -> None:
         self.manager = manager
         self.client_manager = client_manager
-        self.download_speed_threshold = self.manager.config_manager.settings_data.runtime_options.slow_download_speed
+        self.download_speed_threshold = config.get().runtime_options.slow_download_speed
         self._server_locks = WeakAsyncLocks[str]()
         self.server_locked_domains: set[str] = set()
         self._supports_ranges: bool = True
@@ -111,7 +111,7 @@ class DownloadClient:
             resume_point = size
             download_headers["Range"] = f"bytes={size}-"
 
-        await asyncio.sleep(self.manager.config_manager.global_settings_data.rate_limiting_options.total_delay)
+        await asyncio.sleep(config.get().rate_limiting_options.total_delay)
 
         def process_response(resp: aiohttp.ClientResponse | AbstractResponse):
             return self._process_response(media_item, domain, resume_point, resp)
@@ -358,7 +358,7 @@ class DownloadClient:
         """Returns the download directory for the media item."""
         download_folder = media_item.download_folder
 
-        if self.manager.config_manager.settings_data.download_options.block_download_sub_folders:
+        if config.get().download_options.block_download_sub_folders:
             while download_folder.parent != self.manager.path_manager.download_folder:
                 download_folder = download_folder.parent
             media_item.download_folder = download_folder
@@ -475,7 +475,7 @@ class DownloadClient:
 
     def check_filesize_limits(self, media: MediaItem) -> bool:
         """Checks if the file size is within the limits."""
-        file_size_limits = self.manager.config_manager.settings_data.file_size_limits
+        file_size_limits = config.get().file_size_limits
         max_video_filesize = file_size_limits.maximum_video_size or float("inf")
         min_video_filesize = file_size_limits.minimum_video_size
         max_image_filesize = file_size_limits.maximum_image_size or float("inf")

@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from rich.progress import TaskID
 
     from cyberdrop_dl import signature
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.managers import Manager
 
     class AbsoluteHttpURL(yarl.URL):
         @signature.copy(yarl.URL.__new__)

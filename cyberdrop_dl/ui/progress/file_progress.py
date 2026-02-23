@@ -16,7 +16,7 @@ from rich.progress import (
 from cyberdrop_dl.ui.progress.deque_progress import DequeProgress, adjust_title
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.managers import Manager
 
 
 class FileProgress(DequeProgress):

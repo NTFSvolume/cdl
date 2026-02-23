@@ -53,7 +53,7 @@ if TYPE_CHECKING:
     from rich.progress import TaskID
 
     from cyberdrop_dl.clients.response import AbstractResponse
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.managers import Manager
 
 
 OneOrTuple: TypeAlias = T | tuple[T, ...]
@@ -264,7 +264,7 @@ class Crawler(ABC):
     @final
     @property
     def allow_no_extension(self) -> bool:
-        return not self.manager.config_manager.settings_data.ignore_options.exclude_files_with_no_extension
+        return not config.get().ignore_options.exclude_files_with_no_extension
 
     @property
     def deep_scrape(self) -> bool:

@@ -17,7 +17,7 @@ from cyberdrop_dl.utils.logger import log, log_with_color
 from cyberdrop_dl.utils.utilities import purge_dir_tree
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.managers import Manager
 
 
 async def get_modified_date(file: Path) -> datetime:

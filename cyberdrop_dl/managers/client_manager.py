@@ -21,7 +21,7 @@ from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.clients.scraper_client import ScraperClient
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
 from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, ScrapeError, TooManyCrawlerErrors
-from cyberdrop_dl.managers.manager import Manager
+from cyberdrop_dl.managers import Manager
 from cyberdrop_dl.ui.prompts.user_prompts import get_cookies_from_browsers
 from cyberdrop_dl.utils.aio import WeakAsyncLocks
 from cyberdrop_dl.utils.cookie_management import read_netscape_files
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from curl_cffi.requests import AsyncSession
     from curl_cffi.requests.models import Response as CurlResponse
 
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.managers import Manager
 
 _curl_import_error = None
 try:
@@ -62,7 +62,7 @@ _crawler_errors: dict[str, int] = defaultdict(int)
 
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.managers import Manager
 
 _null_context = contextlib.nullcontext()
 
@@ -207,7 +207,7 @@ class ClientManager:
 
     def check_allowed_filetype(self, media_item: MediaItem) -> bool:
         """Checks if the file type is allowed to download."""
-        ignore_options = self.manager.config_manager.settings_data.ignore_options
+        ignore_options = config.get().ignore_options
 
         if media_item.ext.lower() in constants.FILE_FORMATS["Images"] and ignore_options.exclude_images:
             return False
@@ -224,7 +224,7 @@ class ClientManager:
             return True
 
         item_date = datetime.date()
-        ignore_options = self.manager.config_manager.settings_data.ignore_options
+        ignore_options = config.get().ignore_options
 
         if ignore_options.exclude_before and item_date < ignore_options.exclude_before:
             return False
@@ -324,11 +324,9 @@ class ClientManager:
             pass
 
     async def load_cookie_files(self) -> None:
-        if self.manager.config_manager.settings_data.browser_cookies.auto_import:
-            assert self.manager.config_manager.settings_data.browser_cookies.browser
-            get_cookies_from_browsers(
-                self.manager, browser=self.manager.config_manager.settings_data.browser_cookies.browser
-            )
+        if config.get().browser_cookies.auto_import:
+            assert config.get().browser_cookies.browser
+            get_cookies_from_browsers(self.manager, browser=config.get().browser_cookies.browser)
         cookie_files = sorted(self.manager.path_manager.cookies_dir.glob("*.txt"))
         if not cookie_files:
             return

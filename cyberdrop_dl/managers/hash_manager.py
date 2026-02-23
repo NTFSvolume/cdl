@@ -10,7 +10,7 @@ import xxhash
 from cyberdrop_dl.clients.hash_client import HashClient
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.managers import Manager
 
 _HASHERS: Final = {
     "md5": hashlib.md5,

@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from cyberdrop_dl.constants import BROWSERS
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.managers import Manager
 
 
 P = ParamSpec("P")
