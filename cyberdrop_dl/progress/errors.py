@@ -7,28 +7,6 @@ from typing import ClassVar, NamedTuple
 from rich.panel import Panel
 from rich.progress import BarColumn, Progress, TaskID
 
-_FAILURE_OVERRIDES = {
-    "ClientConnectorCertificateError": "Client Connector Certificate Error",
-    "ClientConnectorDNSError": "Client Connector DNS Error",
-    "ClientConnectorError": "Client Connector Error",
-    "ClientConnectorSSLError": "Client Connector SSL Error",
-    "ClientHttpProxyError": "Client HTTP Proxy Error",
-    "ClientPayloadError": "Client Payload Error",
-    "ClientProxyConnectionError": "Client Proxy Connection Error",
-    "ConnectionTimeoutError": "Connection Timeout",
-    "ContentTypeError": "Content Type Error",
-    "InvalidURL": "Invalid URL",
-    "InvalidUrlClientError": "Invalid URL Client Error",
-    "InvalidUrlRedirectClientError": "Invalid URL Redirect",
-    "NonHttpUrlRedirectClientError": "Non HTTP URL Redirect",
-    "RedirectClientError": "Redirect Error",
-    "ServerConnectionError": "Server Connection Error",
-    "ServerDisconnectedError": "Server Disconnected",
-    "ServerFingerprintMismatch": "Server Fingerprint Mismatch",
-    "ServerTimeoutError": "Server Timeout Error",
-    "SocketTimeoutError": "Socket Timeout Error",
-}
-
 
 class TaskInfo(NamedTuple):
     id: TaskID
@@ -179,3 +157,26 @@ def _capitalize_words(text: str) -> str:
         return word[0].capitalize() + word[1:]
 
     return " ".join([cap(word) for word in text.split()])
+
+
+_FAILURE_OVERRIDES = {
+    "ClientConnectorCertificateError": "Client Connector Certificate Error",
+    "ClientConnectorDNSError": "Client Connector DNS Error",
+    "ClientConnectorError": "Client Connector Error",
+    "ClientConnectorSSLError": "Client Connector SSL Error",
+    "ClientHttpProxyError": "Client HTTP Proxy Error",
+    "ClientPayloadError": "Client Payload Error",
+    "ClientProxyConnectionError": "Client Proxy Connection Error",
+    "ConnectionTimeoutError": "Connection Timeout",
+    "ContentTypeError": "Content Type Error",
+    "InvalidURL": "Invalid URL",
+    "InvalidUrlClientError": "Invalid URL Client Error",
+    "InvalidUrlRedirectClientError": "Invalid URL Redirect",
+    "NonHttpUrlRedirectClientError": "Non HTTP URL Redirect",
+    "RedirectClientError": "Redirect Error",
+    "ServerConnectionError": "Server Connection Error",
+    "ServerDisconnectedError": "Server Disconnected",
+    "ServerFingerprintMismatch": "Server Fingerprint Mismatch",
+    "ServerTimeoutError": "Server Timeout Error",
+    "SocketTimeoutError": "Socket Timeout Error",
+}

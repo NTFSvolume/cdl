@@ -9,19 +9,18 @@ from typing import TYPE_CHECKING, Self
 
 from pydantic import ByteSize
 from rich.columns import Columns
-from rich.console import Group
+from rich.console import Group, RenderableType
 from rich.layout import Layout
 from rich.progress import Progress, SpinnerColumn
 from rich.text import Text
 from yarl import URL
 
 from cyberdrop_dl import __version__, config
-from cyberdrop_dl.progress.downloads_progress import DownloadsProgress
 from cyberdrop_dl.progress.errors import DownloadErrors, ScrapeErrors
-from cyberdrop_dl.progress.hash_progress import HashProgress
-from cyberdrop_dl.progress.panels import DownloadsPanel, ScrapingPanel
+from cyberdrop_dl.progress.files import FileStats
+from cyberdrop_dl.progress.hashing import HashingPanel
 from cyberdrop_dl.progress.sorting import SortingPanel
-from cyberdrop_dl.utils.logger import log_spacer
+from cyberdrop_dl.progress.ui import DownloadsPanel, ScrapingPanel
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -51,11 +50,13 @@ class StatusMessage:
         return f"{type(self).__name__}(msg={self.msg!r})"
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass(slots=True, frozen=True)
 class UILayouts:
     horizontal: Layout
     vertical: Layout
     simple: Group
+    hashing: RenderableType
+    sorting: RenderableType
 
     @classmethod
     def build(cls, progress: ProgressManager) -> Self:
@@ -66,14 +67,14 @@ class UILayouts:
         _ = activity.add_task(f"Running Cyberdrop-DL: v{__version__}", total=100, completed=0)
 
         upper_layouts = (
-            Layout(progress.download_progress, name="Files", ratio=1, minimum_size=9),
-            Layout(progress.scrape_stats_progress, name="Scrape Failures", ratio=1),
-            Layout(progress.download_stats_progress, name="Download Failures", ratio=1),
+            Layout(progress.files, name="Files", ratio=1, minimum_size=9),
+            Layout(progress.scrape_errors, name="Scrape Failures", ratio=1),
+            Layout(progress.download_errors, name="Download Failures", ratio=1),
         )
 
         lower_layouts = (
-            Layout(progress.scraping_progress, name=progress.scraping_progress.title, ratio=20),
-            Layout(progress.file_progress, name=progress.file_progress.title, ratio=20),
+            Layout(progress.scrape, name=progress.scrape.title, ratio=20),
+            Layout(progress.downloads, name=progress.downloads.title, ratio=20),
             Layout(Columns([activity, progress.status.progress]), name="status_message", ratio=2),
         )
 
@@ -83,29 +84,30 @@ class UILayouts:
         horizontal["upper"].split_row(*upper_layouts)
         vertical["upper"].split_column(*upper_layouts)
 
-        simple = Group(activity, progress.download_progress.simple_progress)
-        return cls(horizontal, vertical, simple)
+        simple = Group(activity, progress.files.simple_progress)
+        return cls(horizontal, vertical, simple, progress.hashing, progress.sorting)
 
 
+@dataclasses.dataclass(slots=True)
 class ProgressManager:
-    def __init__(self, manager: Manager) -> None:
-        self.manager = manager
+    manager: Manager
 
-        self.portrait = True
-        self.file_progress = DownloadsPanel()
-        self.scraping_progress = ScrapingPanel()
-        self.status = StatusMessage()
+    portrait: bool
 
-        self.download_progress: DownloadsProgress = DownloadsProgress()
-        self.download_stats_progress: DownloadErrors = DownloadErrors()
-        self.scrape_stats_progress: ScrapeErrors = ScrapeErrors()
-        self.hash_progress: HashProgress = HashProgress(manager)
-        self.sorting: SortingPanel = SortingPanel(1)
+    layouts: UILayouts = dataclasses.field(init=False)
+    status: StatusMessage = dataclasses.field(default_factory=StatusMessage)
 
+    downloads: DownloadsPanel = dataclasses.field(default_factory=DownloadsPanel)
+    scrape: ScrapingPanel = dataclasses.field(default_factory=ScrapingPanel)
+    hashing: HashingPanel = dataclasses.field(default_factory=HashingPanel)
+    sorting: SortingPanel = dataclasses.field(default_factory=SortingPanel)
+
+    files: FileStats = dataclasses.field(default_factory=FileStats)
+    download_errors: DownloadErrors = dataclasses.field(default_factory=DownloadErrors)
+    scrape_errors: ScrapeErrors = dataclasses.field(default_factory=ScrapeErrors)
+
+    def __post_init__(self) -> None:
         self.layouts = UILayouts.build(self)
-        self.hash_remove_layout = self.hash_progress.get_removed_progress()
-        self.hash_layout = self.hash_progress.get_renderable()
-        self.sort_layout = self.sorting.get_renderable()
 
     @asynccontextmanager
     async def show_status_msg(self, msg: str | None) -> AsyncGenerator[None]:
@@ -125,6 +127,8 @@ class ProgressManager:
         """Prints the stats of the program."""
         # if not self.manager.parsed_args.cli_only_args.print_stats:
         #    return
+        from cyberdrop_dl.utils.logger import log_spacer
+
         end_time = time.perf_counter()
         runtime = timedelta(seconds=int(end_time - start_time))
         total_data_written = ByteSize(self.manager.storage_manager.total_data_written).human_readable(decimal=True)
@@ -140,14 +144,14 @@ class ProgressManager:
         logger.info(f"  Total Downloaded Data: {total_data_written}")
 
         logger.info("Download Stats:")
-        logger.info(f"  Downloaded: {self.download_progress.completed_files:,} files")
-        logger.info(f"  Skipped (By Config): {self.download_progress.skipped_files:,} files")
-        logger.info(f"  Skipped (Previously Downloaded): {self.download_progress.previously_completed:,} files")
-        logger.info(f"  Failed: {self.download_stats_progress.failed_files:,} files")
+        logger.info(f"  Downloaded: {self.files.completed_files:,} files")
+        logger.info(f"  Skipped (By Config): {self.files.skipped_files:,} files")
+        logger.info(f"  Skipped (Previously Downloaded): {self.files.previously_completed:,} files")
+        logger.info(f"  Failed: {self.download_errors.failed_files:,} files")
 
         logger.info("Unsupported URLs Stats:")
-        logger.info(f"  Sent to Jdownloader: {self.scrape_stats_progress.sent_to_jdownloader:,}")
-        logger.info(f"  Skipped: {self.scrape_stats_progress.unsupported_urls_skipped:,}")
+        logger.info(f"  Sent to Jdownloader: {self.scrape_errors.sent_to_jdownloader:,}")
+        logger.info(f"  Skipped: {self.scrape_errors.unsupported_urls_skipped:,}")
 
         self.print_dedupe_stats()
 
@@ -157,14 +161,14 @@ class ProgressManager:
         logger.info(f"  Videos: {self.sorting.video_count:,}")
         logger.info(f"  Other Files: {self.sorting.other_count:,}")
 
-        last_padding = log_failures(self.scrape_stats_progress.return_totals(), "Scrape Failures:")
-        log_failures(self.download_stats_progress.return_totals(), "Download Failures:", last_padding)
+        last_padding = log_failures(self.scrape_errors.return_totals(), "Scrape Failures:")
+        log_failures(self.download_errors.return_totals(), "Download Failures:", last_padding)
 
     def print_dedupe_stats(self) -> None:
         logger.info("Dupe Stats:")
-        logger.info(f"  Newly Hashed: {self.hash_progress.hashed_files:,} files")
-        logger.info(f"  Previously Hashed: {self.hash_progress.prev_hashed_files:,} files")
-        logger.info(f"  Removed (Downloads): {self.hash_progress.removed_files:,} files")
+        logger.info(f"  Newly Hashed: {self.hashing.hashed_files:,} files")
+        logger.info(f"  Previously Hashed: {self.hashing.prev_hashed_files:,} files")
+        logger.info(f"  Removed (Downloads): {self.hashing.removed_files:,} files")
 
 
 def log_failures(failures: list[UIFailure], title: str = "Failures:", last_padding: int = 0) -> int:

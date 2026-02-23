@@ -138,13 +138,13 @@ class DownloadClient:
             proceed, skip = await self.get_final_file_info(media_item, domain)
             self.client_manager.check_content_length(resp.headers)
             if skip:
-                self.manager.progress_manager.download_progress.add_skipped()
+                self.manager.progress_manager.files.add_skipped()
                 return False
             if not proceed:
                 if media_item.is_segment:
                     return True
                 log(f"Skipping {media_item.url} as it has already been downloaded", 10)
-                self.manager.progress_manager.download_progress.add_previously_completed(False)
+                self.manager.progress_manager.files.add_previously_completed(False)
                 await self.process_completed(media_item, domain)
                 await self.handle_media_item_completion(media_item, downloaded=False)
 
@@ -161,12 +161,12 @@ class DownloadClient:
         task_id = media_item.task_id
         if task_id is None:
             size = (media_item.filesize + resume_point) if media_item.filesize is not None else None
-            task_id = self.manager.progress_manager.file_progress.new_task(
+            task_id = self.manager.progress_manager.downloads.new_task(
                 domain=domain, filename=media_item.filename, expected_size=size
             )
             media_item.set_task_id(task_id)
 
-        self.manager.progress_manager.file_progress.advance_file(task_id, resume_point)
+        self.manager.progress_manager.downloads.advance_file(task_id, resume_point)
 
         await self._append_content(media_item, self._get_resp_reader(resp))
         return True
@@ -247,7 +247,7 @@ class DownloadClient:
                 chunk_size = len(chunk)
                 await self.client_manager.speed_limiter.acquire(chunk_size)
                 await f.write(chunk)
-                self.manager.progress_manager.file_progress.advance_file(media_item.task_id, chunk_size)
+                self.manager.progress_manager.downloads.advance_file(media_item.task_id, chunk_size)
                 check_download_speed()
 
         await self._post_download_check(media_item)
@@ -284,7 +284,7 @@ class DownloadClient:
             if not self.download_speed_threshold:
                 return
             assert media_item.task_id is not None
-            speed = self.manager.progress_manager.file_progress.get_speed(media_item.task_id)
+            speed = self.manager.progress_manager.downloads.get_speed(media_item.task_id)
             if speed > self.download_speed_threshold:
                 last_slow_speed_read = None
             elif not last_slow_speed_read:
@@ -298,7 +298,7 @@ class DownloadClient:
         """Starts a file."""
         if config.get().download_options.skip_download_mark_completed and not media_item.is_segment:
             log(f"Download Removed {media_item.url} due to mark completed option", 10)
-            self.manager.progress_manager.download_progress.add_skipped()
+            self.manager.progress_manager.files.add_skipped()
             # set completed path
             await self.process_completed(media_item, domain)
             return False
@@ -315,7 +315,7 @@ class DownloadClient:
                     log(f"Download Skip {media_item.url} due to runtime restrictions", 10)
                     await asyncio.to_thread(media_item.complete_file.unlink)
                     await self.mark_incomplete(media_item, domain)
-                    self.manager.progress_manager.download_progress.add_skipped()
+                    self.manager.progress_manager.files.add_skipped()
                     return False
                 await self.process_completed(media_item, domain)
                 await self.handle_media_item_completion(media_item, downloaded=True)

@@ -149,9 +149,9 @@ class Downloader:
             self.manager.path_manager.sorted_folder.mkdir(parents=True, exist_ok=True)
 
     def update_queued_files(self, increase_total: bool = True):
-        queued_files = self.manager.progress_manager.file_progress.get_queue_length()
-        self.manager.progress_manager.download_progress.update_queued(queued_files)
-        self.manager.progress_manager.download_progress.update_total(increase_total)
+        queued_files = self.manager.progress_manager.downloads.get_queue_length()
+        self.manager.progress_manager.files.update_queued(queued_files)
+        self.manager.progress_manager.files.update_total(increase_total)
 
     @contextlib.asynccontextmanager
     async def _download_context(self, media_item: MediaItem):
@@ -208,7 +208,7 @@ class Downloader:
         # TODO: compute approx size for UI from the m3u8 info
         media_item.download_filename = media_item.complete_file.name
         await self.manager.db_manager.history_table.add_download_filename(self.domain, media_item)
-        task_id = self.manager.progress_manager.file_progress.new_task(domain=self.domain, filename=media_item.filename)
+        task_id = self.manager.progress_manager.downloads.new_task(domain=self.domain, filename=media_item.filename)
         media_item.set_task_id(task_id)
         video, audio, _subs = await self._download_rendition_group(media_item, m3u8_group)
         if not audio:
@@ -317,7 +317,7 @@ class Downloader:
             await asyncio.to_thread(Path.chmod, media_item.complete_file, 0o666)
             await self.set_file_datetime(media_item, media_item.complete_file)
         self.attempt_task_removal(media_item)
-        self.manager.progress_manager.download_progress.add_completed()
+        self.manager.progress_manager.files.add_completed()
         log(f"Download finished: {media_item.url}", 20)
 
     """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
@@ -408,7 +408,7 @@ class Downloader:
             return
         if media_item.task_id is not None:
             try:
-                self.manager.progress_manager.file_progress.remove_task(media_item.task_id)
+                self.manager.progress_manager.downloads.remove_task(media_item.task_id)
             except ValueError:
                 pass
 
@@ -451,7 +451,7 @@ class Downloader:
                 await asyncio.to_thread(Path.chmod, media_item.complete_file, 0o666)
                 if not media_item.is_segment:
                     await self.set_file_datetime(media_item, media_item.complete_file)
-                    self.manager.progress_manager.download_progress.add_completed()
+                    self.manager.progress_manager.files.add_completed()
                     log(f"Download finished: {media_item.url}", 20)
             self.attempt_task_removal(media_item)
             return downloaded
@@ -459,7 +459,7 @@ class Downloader:
         except SkipDownloadError as e:
             if not media_item.is_segment:
                 log(f"Download skip {media_item.url}: {e}", 10)
-                self.manager.progress_manager.download_progress.add_skipped()
+                self.manager.progress_manager.files.add_skipped()
             self.attempt_task_removal(media_item)
 
         except (DownloadError, ClientResponseError, InvalidContentTypeError):
@@ -494,5 +494,5 @@ class Downloader:
         full_message = f"{self.log_prefix} Failed: {media_item.url} ({error_log_msg.main_log_msg}) \n -> Referer: {media_item.referer}"
         log(full_message, 40, exc_info=exc_info)
         self.manager.log_manager.write_download_error_log(media_item, error_log_msg.csv_log_msg)
-        self.manager.progress_manager.download_stats_progress.add_failure(error_log_msg.ui_failure)
-        self.manager.progress_manager.download_progress.add_failed()
+        self.manager.progress_manager.download_errors.add_failure(error_log_msg.ui_failure)
+        self.manager.progress_manager.files.add_failed()

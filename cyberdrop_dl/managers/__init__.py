@@ -42,7 +42,7 @@ class Manager:
         self.client_manager: ClientManager = field(init=False)
         self.storage_manager: StorageManager = field(init=False)
 
-        self.progress_manager = ProgressManager(self)
+        self.progress_manager: ProgressManager = ProgressManager(self, portrait=False)
         self.live_manager: LiveManager = field(init=False)
 
         self.task_group: TaskGroup = field(init=False)
@@ -90,7 +90,6 @@ class Manager:
         "Partial shutdown for managers used for hash directory scanner"
         self.db_manager = await close_if_defined(self.db_manager)
         self.hash_manager = constants.NOT_DEFINED
-        self.progress_manager.hash_progress.reset()
 
     async def close(self) -> None:
         """Closes the manager."""

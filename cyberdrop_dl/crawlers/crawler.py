@@ -367,11 +367,11 @@ class Crawler(ABC):
     def new_task_id(self, url: AbsoluteHttpURL) -> Generator[TaskID]:
         """Creates a new task_id (shows the URL in the UI and logs)"""
         log(f"Scraping [{self.FOLDER_DOMAIN}]: {url}", 20)
-        task_id = self.manager.progress_manager.scraping_progress.new_task(url)
+        task_id = self.manager.progress_manager.scrape.new_task(url)
         try:
             yield task_id
         finally:
-            self.manager.progress_manager.scraping_progress.remove_task(task_id)
+            self.manager.progress_manager.scrape.remove_task(task_id)
 
     @staticmethod
     def is_subdomain(url: AbsoluteHttpURL) -> bool:
@@ -468,7 +468,7 @@ class Crawler(ABC):
         check_complete = await self.manager.db_manager.history_table.check_complete(self.DOMAIN, url, referer, db_path)
         if check_complete:
             log(f"Skipping {url} as it has already been downloaded", 10)
-            self.manager.progress_manager.download_progress.add_previously_completed()
+            self.manager.progress_manager.files.add_previously_completed()
         return check_complete
 
     async def handle_media_item(self, media_item: MediaItem, m3u8: m3u8.RenditionGroup | None = None) -> None:
@@ -484,7 +484,7 @@ class Crawler(ABC):
             return
 
         if await self.check_skip_by_config(media_item):
-            self.manager.progress_manager.download_progress.add_skipped()
+            self.manager.progress_manager.files.add_skipped()
             return
 
         self.create_task(self._download(media_item, m3u8))
@@ -520,7 +520,7 @@ class Crawler(ABC):
         downloaded = await self.manager.db_manager.history_table.check_complete_by_referer(domain, url)
         if downloaded:
             log(f"Skipping {url} as it has already been downloaded", 10)
-            self.manager.progress_manager.download_progress.add_previously_completed()
+            self.manager.progress_manager.files.add_previously_completed()
             return True
         return False
 
@@ -533,7 +533,7 @@ class Crawler(ABC):
         if downloaded:
             url = scrape_item if isinstance(scrape_item, URL) else scrape_item.url
             log(f"Skipping {url} as its hash ({hash_type}:{hash_value}) has already been downloaded", 10)
-            self.manager.progress_manager.download_progress.add_previously_completed()
+            self.manager.progress_manager.files.add_previously_completed()
         return downloaded
 
     async def get_album_results(self, album_id: str) -> dict[str, int]:
@@ -569,7 +569,7 @@ class Crawler(ABC):
         url_path = self.create_db_path(url)
         if url_path in album_results and album_results[url_path] != 0:
             log(f"Skipping {url} as it has already been downloaded")
-            self.manager.progress_manager.download_progress.add_previously_completed()
+            self.manager.progress_manager.files.add_previously_completed()
             return True
         return False
 

@@ -252,7 +252,7 @@ class ScrapeMapper:
                     scrape_item.url,
                     scrape_item.parents[0] if scrape_item.parents else None,
                 )
-            self.manager.progress_manager.scrape_stats_progress.add_unsupported(sent_to_jdownloader=success)
+            self.manager.progress_manager.scrape_errors.add_unsupported(sent_to_jdownloader=success)
             return
 
         log(f"Unsupported URL: {scrape_item.url}", 30)
@@ -260,7 +260,7 @@ class ScrapeMapper:
             scrape_item.url,
             scrape_item.parents[0] if scrape_item.parents else None,
         )
-        self.manager.progress_manager.scrape_stats_progress.add_unsupported()
+        self.manager.progress_manager.scrape_errors.add_unsupported()
 
     def filter_items(self, scrape_item: ScrapeItem) -> bool:
         """Pre-filter scrape items base on URL."""

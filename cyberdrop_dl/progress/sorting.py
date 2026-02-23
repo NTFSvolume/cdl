@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from rich.progress import BarColumn, Progress, SpinnerColumn, TaskID
 
-from cyberdrop_dl.progress.panels import UIPanel
+from cyberdrop_dl.progress.ui import UIPanel
 
 
 class SortingPanel(UIPanel):
@@ -11,7 +11,7 @@ class SortingPanel(UIPanel):
     title = "Sorting"
     name = "Folders"
 
-    def __init__(self, visible_tasks_limit: int) -> None:
+    def __init__(self) -> None:
         progress = Progress(
             SpinnerColumn(),
             "[progress.description]{task.description}",
@@ -20,7 +20,7 @@ class SortingPanel(UIPanel):
             "━",
             "{task.completed}/{task.total} files",
         )
-        super().__init__(progress, visible_tasks_limit)
+        super().__init__(progress, visible_tasks_limit=1)
 
         self.audio_count = self.video_count = self.image_count = self.other_count = 0
 
