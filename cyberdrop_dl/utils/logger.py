@@ -12,7 +12,6 @@ from typing import IO, TYPE_CHECKING, ParamSpec
 
 from rich._log_render import LogRender
 from rich.console import Console, Group
-from rich.containers import Lines, Renderables
 from rich.logging import RichHandler
 from rich.measure import Measurement
 from rich.padding import Padding
@@ -36,6 +35,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from rich.console import ConsoleRenderable
+    from rich.containers import Lines
 
     from cyberdrop_dl.managers import Manager
 
@@ -57,7 +57,7 @@ class JsonLogRecord(logging.LogRecord):
 
         msg = str(self._proccess_msg(self.msg))
         if self.args:
-            args = map(self._proccess_msg, self.args)
+            args = tuple(map(self._proccess_msg, self.args))
             try:
                 return msg.format(*args)
             except Exception:
@@ -75,12 +75,14 @@ class JsonLogRecord(logging.LogRecord):
 
 logging.setLogRecordFactory(JsonLogRecord)
 
+DEFAULT_CONSOLE_WIDTH = 240
+
 
 class LogHandler(RichHandler):
     """Rich Handler with default settings, automatic console creation and custom log render to remove padding in files."""
 
     def __init__(
-        self, level: int = 10, file: IO[str] | None = None, width: int | None = None, debug: bool = False, **kwargs
+        self, level: int = 10, file: IO[str] | None = None, width: int | None = None, debug: bool = False
     ) -> None:
         is_file: bool = file is not None
         redacted: bool = is_file and not debug
@@ -89,9 +91,17 @@ class LogHandler(RichHandler):
             console = _DEFAULT_CONSOLE
         else:
             console = console_cls(file=file, width=width)
-        options = constants.RICH_HANDLER_DEBUG_CONFIG if debug else constants.RICH_HANDLER_CONFIG
-        options = options | kwargs
-        super().__init__(level, console, show_time=is_file, **options)
+
+        super().__init__(
+            level,
+            console,
+            show_time=is_file,
+            rich_tracebacks=True,
+            tracebacks_show_locals=True,
+            locals_max_string=DEFAULT_CONSOLE_WIDTH,
+            tracebacks_extra_lines=2,
+            locals_max_length=20,
+        )
         if is_file:
             self._log_render = NoPaddingLogRender(show_level=True)
 
@@ -136,7 +146,7 @@ class NoPaddingLogRender(LogRender):
     cdl_padding: int = 0
     EXCLUDE_PATH_LOGGING_FROM: tuple[str, ...] = "logger.py", "base.py", "session.py", "cache_control.py"
 
-    def __call__(  # type: ignore[reportIncompatibleMethodOverride]
+    def __call__(  # type: ignore[reportIncompatibleMethodOverride]  # pyright: ignore[reportIncompatibleMethodOverride]
         self,
         console: Console,
         renderables: Iterable[ConsoleRenderable],
@@ -163,6 +173,7 @@ class NoPaddingLogRender(LogRender):
                 output.append(log_time_display)
                 output.pad_right(1)
                 self._last_time = log_time_display
+
         if self.show_level:
             output.append(level)
             output.pad_right(1)
@@ -184,12 +195,13 @@ class NoPaddingLogRender(LogRender):
 
         padded_lines: list[ConsoleRenderable] = []
 
-        for renderable in Renderables(renderables):  # type: ignore
+        for renderable in renderables:
             if isinstance(renderable, Text):
                 renderable = _indent_text(renderable, console, self.cdl_padding)
                 renderable.stylize("log.message")
-                output.append(renderable)
+                _ = output.append(renderable)
                 continue
+
             padded_lines.append(Padding(renderable, (0, 0, 0, self.cdl_padding), expand=False))
 
         return Group(output, *padded_lines)
@@ -244,7 +256,7 @@ def log_with_color(message: Text | str, style: str, level: int = 20, show_in_sta
 
 
 def log_spacer(level: int, char: str = "-", *, log_to_console: bool = True, log_to_file: bool = True) -> None:
-    spacer = char * min(int(constants.DEFAULT_CONSOLE_WIDTH / 2), 50)
+    spacer = char * min(int(DEFAULT_CONSOLE_WIDTH / 2), 50)
     if log_to_file:
         log(spacer, level)
     if log_to_console and constants.CONSOLE_LEVEL >= 50:
@@ -280,7 +292,7 @@ def _setup_startup_logger() -> Generator[None]:
             file_handler = LogHandler(
                 level=10,
                 file=file.open("w", encoding="utf8"),
-                width=constants.DEFAULT_CONSOLE_WIDTH,
+                width=DEFAULT_CONSOLE_WIDTH,
             )
             startup_logger.addHandler(file_handler)
         except OSError:

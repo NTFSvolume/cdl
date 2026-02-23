@@ -1,26 +1,28 @@
+from __future__ import annotations
+
 import re
 from dataclasses import field
 from datetime import UTC, datetime
 from enum import auto
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Final
 
-from aiohttp.resolver import AsyncResolver, ThreadedResolver
 from rich.text import Text
 
 from cyberdrop_dl import env
-from cyberdrop_dl.compat import Enum, StrEnum
+from cyberdrop_dl.compat import Enum, MayBeUpperStrEnum, StrEnum
 
 if TYPE_CHECKING:
+    from aiohttp.resolver import AsyncResolver, ThreadedResolver
+
     from cyberdrop_dl.utils.logger import LogHandler
 
 # TIME
 STARTUP_TIME = datetime.now()
-STARTUP_TIME_UTC = datetime.now(UTC)
+STARTUP_TIME_UTC = STARTUP_TIME.astimezone(UTC)
 LOGS_DATETIME_FORMAT = "%Y%m%d_%H%M%S"
 LOGS_DATE_FORMAT = "%Y_%m_%d"
 STARTUP_TIME_STR = STARTUP_TIME.strftime(LOGS_DATETIME_FORMAT)
-STARTUP_TIME_UTC_STR = STARTUP_TIME_UTC.strftime(LOGS_DATETIME_FORMAT)
 DNS_RESOLVER: type[AsyncResolver] | type[ThreadedResolver] | None = None
 MAX_REDIRECTS: Final[int] = 8
 
@@ -28,16 +30,9 @@ MAX_REDIRECTS: Final[int] = 8
 # logging
 CONSOLE_LEVEL = 100
 MAX_NAME_LENGTHS = {"FILE": 95, "FOLDER": 60}
-DEFAULT_CONSOLE_WIDTH = 240
 CSV_DELIMITER = ","
 LOG_OUTPUT_TEXT = Text("")
-RICH_HANDLER_CONFIG: dict[str, Any] = {"rich_tracebacks": True, "tracebacks_show_locals": False}
-RICH_HANDLER_DEBUG_CONFIG = RICH_HANDLER_CONFIG | {
-    "tracebacks_show_locals": True,
-    "locals_max_string": DEFAULT_CONSOLE_WIDTH,
-    "tracebacks_extra_lines": 2,
-    "locals_max_length": 20,
-}
+
 VALIDATION_ERROR_FOOTER = """Please delete the file or fix the errors"""
 
 
@@ -48,7 +43,7 @@ REGEX_LINKS = re.compile(r"(?:http.*?)(?=($|\n|\r\n|\r|\s|\"|\[/URL]|']\[|]\[|\[
 HTTP_REGEX_LINKS = re.compile(
     r"https?://(www\.)?[-a-zA-Z0-9@:%._+~#=]{2,256}\.[a-z]{2,12}\b([-a-zA-Z0-9@:%_+.~#?&/=]*)"
 )
-console_handler: "LogHandler"
+console_handler: LogHandler
 
 
 class TempExt(StrEnum):
@@ -94,14 +89,10 @@ class HashType(StrEnum):
     xxh128 = "xxh128"
 
 
-class Hashing(StrEnum):
+class Hashing(MayBeUpperStrEnum):
     OFF = auto()
     IN_PLACE = auto()
     POST_DOWNLOAD = auto()
-
-    @classmethod
-    def _missing_(cls, value: object) -> "Hashing":
-        return cls[str(value).upper()]
 
 
 class BROWSERS(StrEnum):
