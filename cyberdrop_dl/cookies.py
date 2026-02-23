@@ -9,7 +9,6 @@ from http.cookies import SimpleCookie
 from textwrap import dedent
 from typing import TYPE_CHECKING, NamedTuple, ParamSpec, TypeVar
 
-from cyberdrop_dl import config
 from cyberdrop_dl.dependencies import browser_cookie3
 from cyberdrop_dl.utils.logger import log
 
@@ -64,30 +63,13 @@ def cookie_wrapper(func: Callable[P, R]) -> Callable[P, R]:
 
 
 @cookie_wrapper
-def get_cookies_from_browsers(manager: Manager, *, browser: BROWSERS, domains: list[str] | None = None) -> set[str]:
-    """Extract cookies from browsers.
-
-    :param browsers: list of browsers to extract from. If `None`, config `browser_cookies.browsers` will be used
-    :param domains: list of domains to filter cookies. If `None`, config `browser_cookies.sites` will be used
-    :return: A set with all the domains that actually had cookies
-    :raises BrowserCookieError: If there's any error while extracting cookies"""
-    from cyberdrop_dl.supported_domains import SUPPORTED_FORUMS, SUPPORTED_SITES_DOMAINS, SUPPORTED_WEBSITES
-
+def get_cookies_from_browsers(manager: Manager, *, browser: BROWSERS, domains: list[str]) -> set[str]:
     if domains == []:
         msg = "No domains selected"
         raise ValueError(msg)
 
     extractor_name = browser.lower()
-    domains_to_extract: list[str] = domains or config.get().browser_cookies.sites
-    if "all" in domains_to_extract:
-        domains_to_extract.remove("all")
-        domains_to_extract.extend(SUPPORTED_SITES_DOMAINS)
-    elif "all_forums" in domains_to_extract:
-        domains_to_extract.remove("all_forums")
-        domains_to_extract.extend(SUPPORTED_FORUMS.values())
-    elif "all_file_hosts" in domains_to_extract:
-        domains_to_extract.remove("all_file_hosts")
-        domains_to_extract.extend(SUPPORTED_WEBSITES.values())
+    domains_to_extract: list[str] = domains
 
     extracted_cookies = extract_cookies(extractor_name)
     if not extracted_cookies:
@@ -122,22 +104,19 @@ def clear_cookies(manager: Manager, domains: list[str]) -> None:
 
 
 def extract_cookies(extractor_name: str) -> CookieJar:
-    def is_decrypt_error(msg: str) -> bool:
-        return "Unable to get key for cookie decryption" in msg
-
     extractor = next(extractor for extractor in COOKIE_EXTRACTORS if extractor.name == extractor_name)
     try:
         return extractor.extract()
     except browser_cookie3.BrowserCookieError as e:
         msg = str(e)
-        if is_decrypt_error(msg) and extractor.name in CHROMIUM_BROWSERS and os.name == "nt":
+        if "Unable to get key for cookie decryption" in msg and extractor.name in CHROMIUM_BROWSERS and os.name == "nt":
             msg = f"Cookie extraction from {extractor.name.capitalize()} is not supported on Windows - {msg}"
             raise UnsupportedBrowserError(msg) from None
         raise
 
 
 async def read_netscape_files(cookie_files: list[Path]) -> AsyncIterable[tuple[str, SimpleCookie]]:
-    now = time.time()
+    now = int(time.time())
     domains_seen = set()
     cookie_jars = await asyncio.gather(*(_read_netscape_file(file) for file in cookie_files))
     for file, cookie_jar in zip(cookie_files, cookie_jars, strict=True):
@@ -155,7 +134,7 @@ async def read_netscape_files(cookie_files: list[Path]) -> AsyncIterable[tuple[s
                 if simplified_domain in domains_seen:
                     log(f"Previous cookies for domain {simplified_domain} detected. They will be overwritten", 30)
 
-            if (simplified_domain not in expired_cookies_domains) and cookie.is_expired(now):  # type: ignore
+            if (simplified_domain not in expired_cookies_domains) and cookie.is_expired(now):
                 expired_cookies_domains.add(simplified_domain)
                 log(f"Cookies for {simplified_domain} are expired", 30)
 

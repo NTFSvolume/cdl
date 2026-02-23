@@ -16,9 +16,9 @@ from rich.console import Console
 
 from cyberdrop_dl import __version__, config
 from cyberdrop_dl.constants import BROWSERS, RESERVED_CONFIG_NAMES
+from cyberdrop_dl.cookies import get_cookies_from_browsers
 from cyberdrop_dl.ui.prompts import basic_prompts
 from cyberdrop_dl.ui.prompts.defaults import ALL_CHOICE, DONE_CHOICE, EXIT_CHOICE
-from cyberdrop_dl.utils.cookie_management import get_cookies_from_browsers
 from cyberdrop_dl.utils.utilities import clear_term
 
 if TYPE_CHECKING:

@@ -14,7 +14,7 @@ from typing_extensions import TypedDict
 
 from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.data_structures.url_objects import MediaItem, ScrapeItem
-from cyberdrop_dl.scraper.scrape_mapper import ScrapeMapper
+from cyberdrop_dl.scrape_mapper import ScrapeMapper
 from cyberdrop_dl.utils.utilities import parse_url
 
 if TYPE_CHECKING:

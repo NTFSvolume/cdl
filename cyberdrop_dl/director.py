@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, ParamSpec, TypeVar
 from cyberdrop_dl import config, constants, env
 from cyberdrop_dl.dependencies import browser_cookie3
 from cyberdrop_dl.managers import Manager
-from cyberdrop_dl.scraper.scrape_mapper import ScrapeMapper
+from cyberdrop_dl.scrape_mapper import ScrapeMapper
 from cyberdrop_dl.utils.apprise import send_apprise_notifications
 from cyberdrop_dl.utils.logger import (
     LogHandler,

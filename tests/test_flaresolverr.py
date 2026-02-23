@@ -5,7 +5,7 @@ import pytest
 from cyberdrop_dl.clients.flaresolverr import FlareSolverr, _Command
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.managers import Manager
-from cyberdrop_dl.scraper.scrape_mapper import ScrapeMapper
+from cyberdrop_dl.scrape_mapper import ScrapeMapper
 
 ENV_NAME = "CDL_FLARESOLVERR"
 FLARESOLVER_URL = os.environ.get(ENV_NAME, "")  # or "http://localhost:8191"

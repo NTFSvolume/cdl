@@ -24,7 +24,7 @@ from cyberdrop_dl.utils.utilities import close_if_defined, get_system_informatio
 if TYPE_CHECKING:
     from asyncio import TaskGroup
 
-    from cyberdrop_dl.scraper.scrape_mapper import ScrapeMapper
+    from cyberdrop_dl.scrape_mapper import ScrapeMapper
 
 
 class AsyncioEvents(NamedTuple):
