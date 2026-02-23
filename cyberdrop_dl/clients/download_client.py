@@ -12,7 +12,6 @@ import aiofiles
 
 from cyberdrop_dl import config, constants
 from cyberdrop_dl.clients.response import AbstractResponse
-from cyberdrop_dl.constants import FILE_FORMATS
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, InvalidContentTypeError, SlowDownloadError
 from cyberdrop_dl.utils import aio, dates
@@ -484,9 +483,9 @@ class DownloadClient:
         min_other_filesize = file_size_limits.minimum_other_size
 
         assert media.filesize is not None
-        if media.ext in FILE_FORMATS["Images"]:
+        if media.ext in constants.FileFormats.IMAGE:
             proceed = min_image_filesize < media.filesize < max_image_filesize
-        elif media.ext in FILE_FORMATS["Videos"]:
+        elif media.ext in constants.FileFormats.VIDEO:
             proceed = min_video_filesize < media.filesize < max_video_filesize
         else:
             proceed = min_other_filesize < media.filesize < max_other_filesize
@@ -509,7 +508,7 @@ def get_content_type(ext: str, headers: Mapping[str, str]) -> str | None:
     content_type = override or content_type
     content_type = content_type.lower()
 
-    if is_html_or_text(content_type) and ext.lower() not in FILE_FORMATS["Text"]:
+    if is_html_or_text(content_type) and ext.lower() not in constants.FileFormats.TEXT:
         msg = f"Received '{content_type}', was expecting other"
         raise InvalidContentTypeError(message=msg)
 

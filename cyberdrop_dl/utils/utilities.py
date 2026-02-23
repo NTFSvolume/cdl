@@ -261,7 +261,7 @@ def get_download_path(manager: Manager, scrape_item: ScrapeItem, domain: str) ->
     return download_dir / scrape_item.create_download_path(domain)
 
 
-def remove_file_id(manager: Manager, filename: str, ext: str) -> tuple[str, str]:
+def remove_file_id(filename: str, ext: str) -> tuple[str, str]:
     """Removes the additional string some websites adds to the end of every filename."""
     original_filename = filename
     if not config.get().download_options.remove_generated_id_from_filenames:
@@ -275,7 +275,7 @@ def remove_file_id(manager: Manager, filename: str, ext: str) -> tuple[str, str]
     if re.match(constants.RAR_MULTIPART_PATTERN, tail_no_dot) and ext == ".rar" and "-" in filename:
         filename, part = filename.rsplit("-", 1)
         filename = f"{filename}.{part}"
-    elif ext_no_dot.isdigit() and tail in constants.FILE_FORMATS["7z"] and "-" in filename:
+    elif ext_no_dot.isdigit() and tail in constants.FileFormats._7Z and "-" in filename:
         filename, _7z_ext = filename.rsplit("-", 1)
         filename = f"{filename}.{_7z_ext}"
     if not filename.endswith(ext):
@@ -286,11 +286,11 @@ def remove_file_id(manager: Manager, filename: str, ext: str) -> tuple[str, str]
 """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
 
 
-def clear_term():
-    os.system("cls" if os.name == "nt" else "clear")
+def clear_term() -> None:
+    _ = os.system("cls" if os.name == "nt" else "clear")
 
 
-def get_size(path: os.DirEntry) -> int | None:
+def get_size(path: os.DirEntry[str]) -> int | None:
     try:
         return path.stat(follow_symlinks=False).st_size
     except (OSError, ValueError):

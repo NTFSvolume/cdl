@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from aiohttp import ClientConnectorError
 
-from cyberdrop_dl.constants import FILE_FORMATS
+from cyberdrop_dl import constants
 from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths, auto_task_id
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError
@@ -35,7 +35,6 @@ class Selector:
     IMAGE_PREVIEW = "img.max-h-full.w-auto.object-cover.relative"
 
 
-VIDEO_AND_IMAGE_EXTS: set[str] = FILE_FORMATS["Images"] | FILE_FORMATS["Videos"]
 HOST_OPTIONS: set[str] = {"bunkr.site", "bunkr.cr", "bunkr.ph"}
 DEEP_SCRAPE_CDNS: set[str] = {"burger", "milkshake"}  # CDNs under maintanance, ignore them and try to get a cached URL
 FILE_KEYS = "id", "name", "original", "slug", "type", "extension", "size", "timestamp", "thumbnail", "cdnEndpoint"
@@ -100,7 +99,7 @@ class File:
         src_str = self.thumbnail.replace("/thumbs/", "/")
         ext = Path(self.name).suffix
         src = parse_url(src_str).with_suffix(ext).with_query(None)
-        if src.suffix.lower() not in FILE_FORMATS["Images"]:
+        if src.suffix.lower() not in constants.FileFormats.IMAGE:
             src = src.with_host(src.host.replace("i-", ""))
         return _override_cdn(src)
 
@@ -173,10 +172,11 @@ class BunkrrCrawler(Crawler):
         try:
             src = file.src()
         except ValueError:
-            deep_scrape = True
+            src = None
 
-        deep_scrape = deep_scrape or (
-            src.suffix.lower() not in VIDEO_AND_IMAGE_EXTS
+        deep_scrape = (
+            not src
+            or src.suffix.lower() not in constants.FileFormats.VIDEO_OR_IMAGE
             or "no-image" in src.name
             or self.deep_scrape
             or any(cdn in src.host for cdn in DEEP_SCRAPE_CDNS)
@@ -185,6 +185,7 @@ class BunkrrCrawler(Crawler):
             self.create_task(self.run(scrape_item))
             return
 
+        assert src
         if self.check_album_results(src, results):
             return
 

@@ -2,16 +2,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
-from cyberdrop_dl.constants import FILE_FORMATS
+from cyberdrop_dl import constants
 from cyberdrop_dl.crawlers.crawler import Crawler
 from cyberdrop_dl.exceptions import NoExtensionError
 from cyberdrop_dl.utils.utilities import get_filename_and_ext
 
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
-
-
-MEDIA_EXTENSIONS = FILE_FORMATS["Images"] | FILE_FORMATS["Videos"] | FILE_FORMATS["Audio"]
 
 
 class DirectHttpFile(Crawler, is_generic=True):
@@ -23,7 +20,7 @@ class DirectHttpFile(Crawler, is_generic=True):
         except NoExtensionError:
             filename, ext = get_filename_and_ext(scrape_item.url.name, forum=True)
 
-        if ext not in MEDIA_EXTENSIONS:
+        if ext not in constants.FileFormats.MEDIA:
             raise ValueError
 
         scrape_item.add_to_parent_title("Loose Files")

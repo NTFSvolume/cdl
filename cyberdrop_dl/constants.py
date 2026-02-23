@@ -124,74 +124,81 @@ class NotificationResult(Enum):
     NONE = Text("No Notifications Sent", "yellow")
 
 
-# file formats
-FILE_FORMATS = {
-    "Images": {
-        ".gif",
-        ".gifv",
-        ".heic",
-        ".jfif",
-        ".jif",
-        ".jpe",
-        ".jpeg",
-        ".jpg",
-        ".jxl",
-        ".png",
-        ".svg",
-        ".tif",
-        ".tiff",
-        ".webp",
-    },
-    "Videos": {
-        ".3gp",
-        ".avchd",
-        ".avi",
-        ".f4v",
-        ".flv",
-        ".m2ts",
-        ".m4p",
-        ".m4v",
-        ".mkv",
-        ".mov",
-        ".mp2",
-        ".mp4",
-        ".mpe",
-        ".mpeg",
-        ".mpg",
-        ".mpv",
-        ".mts",
-        ".ogg",
-        ".ogv",
-        ".qt",
-        ".swf",
-        ".ts",
-        ".webm",
-        ".wmv",
-    },
-    "Audio": {
-        ".flac",
-        ".m4a",
-        ".mka",
-        ".mp3",
-        ".wav",
-    },
-    "Text": {
-        ".htm",
-        ".html",
-        ".md",
-        ".nfo",
-        ".txt",
-        ".vtt",
-        ".sub",
-    },
-    "7z": {
-        ".7z",
-        ".bz2",
-        ".gz",
-        ".tar",
-        ".zip",
-    },
-}
-
-
-MEDIA_EXTENSIONS = FILE_FORMATS["Audio"] | FILE_FORMATS["Videos"] | FILE_FORMATS["Images"]
+class FileFormats:
+    IMAGE = frozenset(
+        {
+            ".gif",
+            ".gifv",
+            ".heic",
+            ".jfif",
+            ".jif",
+            ".jpe",
+            ".jpeg",
+            ".jpg",
+            ".jxl",
+            ".png",
+            ".svg",
+            ".tif",
+            ".tiff",
+            ".webp",
+        }
+    )
+    VIDEO = frozenset(
+        {
+            ".3gp",
+            ".avchd",
+            ".avi",
+            ".f4v",
+            ".flv",
+            ".m2ts",
+            ".m4p",
+            ".m4v",
+            ".mkv",
+            ".mov",
+            ".mp2",
+            ".mp4",
+            ".mpe",
+            ".mpeg",
+            ".mpg",
+            ".mpv",
+            ".mts",
+            ".ogg",
+            ".ogv",
+            ".qt",
+            ".swf",
+            ".ts",
+            ".webm",
+            ".wmv",
+        }
+    )
+    AUDIO = frozenset(
+        {
+            ".flac",
+            ".m4a",
+            ".mka",
+            ".mp3",
+            ".wav",
+        }
+    )
+    TEXT = frozenset(
+        {
+            ".htm",
+            ".html",
+            ".md",
+            ".nfo",
+            ".txt",
+            ".vtt",
+            ".sub",
+        }
+    )
+    _7Z = frozenset(
+        {
+            ".7z",
+            ".bz2",
+            ".gz",
+            ".tar",
+            ".zip",
+        }
+    )
+    VIDEO_OR_IMAGE = VIDEO | IMAGE
+    MEDIA = AUDIO | VIDEO_OR_IMAGE

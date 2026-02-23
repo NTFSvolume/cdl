@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any
 import imagesize
 
 from cyberdrop_dl import config, constants
-from cyberdrop_dl.constants import FILE_FORMATS
 from cyberdrop_dl.utils import strings
 from cyberdrop_dl.utils.ffmpeg import probe
 from cyberdrop_dl.utils.logger import log, log_with_color
@@ -97,11 +96,11 @@ class Sorter:
                 if ext in constants.TempExt:
                     continue
 
-                if ext in FILE_FORMATS["Audio"]:
+                if ext in constants.FileFormats.AUDIO:
                     await self.sort_audio(file, folder_name)
-                elif ext in FILE_FORMATS["Images"]:
+                elif ext in constants.FileFormats.IMAGE:
                     await self.sort_image(file, folder_name)
-                elif ext in FILE_FORMATS["Videos"]:
+                elif ext in constants.FileFormats.VIDEO:
                     await self.sort_video(file, folder_name)
                 else:
                     await self.sort_other(file, folder_name)

@@ -421,7 +421,7 @@ class Crawler(ABC):
         if custom_filename:
             original_filename, filename = filename, custom_filename
         elif self.DOMAIN in ["cyberdrop"]:
-            original_filename, filename = remove_file_id(self.manager, filename, ext)
+            original_filename, filename = remove_file_id(filename, ext)
         else:
             original_filename = filename
 

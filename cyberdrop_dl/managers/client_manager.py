@@ -19,18 +19,13 @@ from cyberdrop_dl.clients.download_client import DownloadClient
 from cyberdrop_dl.clients.flaresolverr import FlareSolverr
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.clients.scraper_client import ScraperClient
-from cyberdrop_dl.cookies import read_netscape_files
+from cyberdrop_dl.cookies import get_cookies_from_browsers, read_netscape_files
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
 from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, ScrapeError, TooManyCrawlerErrors
 from cyberdrop_dl.managers import Manager
-from cyberdrop_dl.ui.prompts.user_prompts import get_cookies_from_browsers
 from cyberdrop_dl.utils.aio import WeakAsyncLocks
 from cyberdrop_dl.utils.ffmpeg import probe
 from cyberdrop_dl.utils.logger import log, log_debug, log_spacer
-
-_VALID_EXTENSIONS = (
-    constants.FILE_FORMATS["Images"] | constants.FILE_FORMATS["Videos"] | constants.FILE_FORMATS["Audio"]
-)
 
 if TYPE_CHECKING:
     from asyncio.locks import Semaphore
@@ -68,7 +63,7 @@ _null_context = contextlib.nullcontext()
 
 
 class DownloadSpeedLimiter(AsyncLimiter):
-    __slots__ = (*AsyncLimiter.__slots__, "chunk_size")
+    __slots__ = ("chunk_size",)
 
     def __init__(self, speed_limit: int) -> None:
         self.chunk_size: int = 1024 * 1024 * 10  # 10MB
@@ -84,33 +79,7 @@ class DownloadSpeedLimiter(AsyncLimiter):
         await super().acquire(amount)
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(speed_limit={self.max_rate}, chunk_size={self.chunk_size})"
-
-
-class DDosGuard:
-    TITLES = ("Just a moment...", "DDoS-Guard")
-    SELECTORS = (
-        "#cf-challenge-running",
-        ".ray_id",
-        ".attack-box",
-        "#cf-please-wait",
-        "#challenge-spinner",
-        "#trk_jschal_js",
-        "#turnstile-wrapper",
-        ".lds-ring",
-    )
-    ALL_SELECTORS = ", ".join(SELECTORS)
-
-
-class CloudflareTurnstile:
-    TITLES = ("Simpcity Cuck Detection", "Attention Required! | Cloudflare", "Sentinel CAPTCHA")
-    SELECTORS = (
-        "captchawrapper",
-        "cf-turnstile",
-        "script[src*='challenges.cloudflare.com/turnstile']",
-        "script:-soup-contains('Dont open Developer Tools')",
-    )
-    ALL_SELECTORS = ", ".join(SELECTORS)
+        return f"{type(self).__name__}(speed_limit={self.max_rate!r}, chunk_size={self.chunk_size!r})"
 
 
 def _create_ssl():
@@ -208,14 +177,16 @@ class ClientManager:
     def check_allowed_filetype(self, media_item: MediaItem) -> bool:
         """Checks if the file type is allowed to download."""
         ignore_options = config.get().ignore_options
+        ext = media_item.ext.lower()
 
-        if media_item.ext.lower() in constants.FILE_FORMATS["Images"] and ignore_options.exclude_images:
+        if ext in constants.FileFormats.IMAGE and ignore_options.exclude_images:
             return False
-        if media_item.ext.lower() in constants.FILE_FORMATS["Videos"] and ignore_options.exclude_videos:
+        if ext in constants.FileFormats.VIDEO and ignore_options.exclude_videos:
             return False
-        if media_item.ext.lower() in constants.FILE_FORMATS["Audio"] and ignore_options.exclude_audio:
+        if ext in constants.FileFormats.AUDIO and ignore_options.exclude_audio:
             return False
-        return not (ignore_options.exclude_other and media_item.ext.lower() not in _VALID_EXTENSIONS)
+
+        return ext in constants.FileFormats.MEDIA or not ignore_options.exclude_other
 
     def check_allowed_date_range(self, media_item: MediaItem) -> bool:
         """Checks if the file was uploaded within the config date range"""
@@ -244,7 +215,7 @@ class ClientManager:
     async def startup(self) -> None:
         await _set_dns_resolver()
 
-    def new_curl_cffi_session(self) -> AsyncSession:
+    def new_curl_cffi_session(self) -> AsyncSession[CurlResponse]:
         # Calling code should have validated if curl is actually available
         import warnings
 
@@ -327,6 +298,7 @@ class ClientManager:
         if config.get().browser_cookies.auto_import:
             assert config.get().browser_cookies.browser
             get_cookies_from_browsers(self.manager, browser=config.get().browser_cookies.browser)
+
         cookie_files = sorted(self.manager.path_manager.cookies_dir.glob("*.txt"))
         if not cookie_files:
             return
@@ -399,8 +371,8 @@ class ClientManager:
         if media_item.is_segment:
             return True
 
-        is_video = media_item.ext.lower() in constants.FILE_FORMATS["Videos"]
-        is_audio = media_item.ext.lower() in constants.FILE_FORMATS["Audio"]
+        is_video = media_item.ext.lower() in constants.FileFormats.VIDEO
+        is_audio = media_item.ext.lower() in constants.FileFormats.AUDIO
         if not (is_video or is_audio):
             return True
 
