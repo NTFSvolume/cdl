@@ -29,7 +29,7 @@ class ScraperClient:
 
     def __init__(self, client_manager: ClientManager) -> None:
         self.client_manager = client_manager
-        self._save_pages_html = client_manager.manager.config_manager.settings_data.files.save_pages_html
+        self._save_pages_html = client_manager.config.get().files.save_pages_html
         self._pages_folder = self.client_manager.manager.path_manager.pages_folder
         min_html_file_path_len = len(str(self._pages_folder)) + len(constants.STARTUP_TIME_STR) + 10
         self._max_html_stem_len = 245 - min_html_file_path_len

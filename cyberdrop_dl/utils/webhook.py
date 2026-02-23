@@ -7,7 +7,7 @@ import aiofiles
 import rich
 from aiohttp import FormData
 
-from cyberdrop_dl import constants
+from cyberdrop_dl import config, constants
 from cyberdrop_dl.utils import aio
 from cyberdrop_dl.utils.logger import log, log_debug, log_spacer
 
@@ -64,7 +64,7 @@ async def _prepare_form(webhook: HttpAppriseURL, main_log: Path) -> FormData:
 
 async def send_webhook_message(manager: Manager) -> None:
     """Outputs the stats to a code block for webhook messages."""
-    webhook = manager.config_manager.settings_data.logs.webhook
+    webhook = config.get().logs.webhook
 
     if not webhook:
         return

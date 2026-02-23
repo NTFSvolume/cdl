@@ -14,7 +14,7 @@ from InquirerPy.enum import (
 )
 from rich.console import Console
 
-from cyberdrop_dl import __version__
+from cyberdrop_dl import __version__, config
 from cyberdrop_dl.constants import BROWSERS, RESERVED_CONFIG_NAMES
 from cyberdrop_dl.ui.prompts import basic_prompts
 from cyberdrop_dl.ui.prompts.defaults import ALL_CHOICE, DONE_CHOICE, EXIT_CHOICE
@@ -134,7 +134,7 @@ def _check_valid_new_config_name(answer: str, manager: Manager) -> str | None:
 
 def auto_cookie_extraction(manager: Manager):
     answer = basic_prompts.ask_toggle("Enable auto cookies import:")
-    manager.config_manager.settings_data.browser_cookies.auto_import = answer
+    config.get().browser_cookies.auto_import = answer
     if answer:
         extract_cookies(manager, dry_run=True)
     manager.config_manager.write_updated_settings_config()
@@ -198,8 +198,8 @@ def extract_cookies(manager: Manager, *, dry_run: bool = False) -> None:
     browser = BROWSERS(browser_prompt())
 
     if dry_run:
-        manager.config_manager.settings_data.browser_cookies.browser = browser
-        current_sites = set(manager.config_manager.settings_data.browser_cookies.sites)
+        config.get().browser_cookies.browser = browser
+        current_sites = set(config.get().browser_cookies.sites)
         new_sites = current_sites - set(all_domains)
         if domains == supported_forums:
             new_sites -= {"all"}
@@ -216,7 +216,7 @@ def extract_cookies(manager: Manager, *, dry_run: bool = False) -> None:
         if "all_forums" in new_sites and "all_file_hosts" in new_sites:
             new_sites -= {"all_forums", "all_file_hosts"}
             new_sites.add("all")
-        manager.config_manager.settings_data.browser_cookies.sites = sorted(new_sites)
+        config.get().browser_cookies.sites = sorted(new_sites)
         return
 
     get_cookies_from_browsers(manager, browser=browser, domains=domains)

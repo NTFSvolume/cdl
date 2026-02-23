@@ -10,13 +10,10 @@ from functools import wraps
 from pathlib import Path
 from typing import TYPE_CHECKING, ParamSpec, TypeVar
 
-from pydantic import ValidationError
-
-from cyberdrop_dl import constants, env
+from cyberdrop_dl import config, constants, env
 from cyberdrop_dl.dependencies import browser_cookie3
 from cyberdrop_dl.managers import Manager
 from cyberdrop_dl.scraper.scrape_mapper import ScrapeMapper
-from cyberdrop_dl.ui.program_ui import ProgramUI
 from cyberdrop_dl.utils.apprise import send_apprise_notifications
 from cyberdrop_dl.utils.logger import (
     LogHandler,
@@ -29,7 +26,6 @@ from cyberdrop_dl.utils.sorting import Sorter
 from cyberdrop_dl.utils.updates import check_latest_pypi
 from cyberdrop_dl.utils.utilities import check_partials_and_empty_folders
 from cyberdrop_dl.utils.webhook import send_webhook_message
-from cyberdrop_dl.utils.yaml import format_validation_error
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Sequence
@@ -122,18 +118,18 @@ async def _runtime(manager: Manager) -> None:
 async def _post_runtime(manager: Manager) -> None:
     """Actions to complete after main runtime, and before ui shutdown."""
     log_spacer(20, log_to_console=False)
-    msg = f"Running Post-Download Processes For Config: {manager.config_manager.loaded_config}"
+    msg = "Running Post-Download Processes"
     log_with_color(msg, "green", 20)
 
     await manager.hash_manager.hash_client.cleanup_dupes_after_download()
 
-    if manager.config_manager.settings_data.sorting.sort_downloads and not manager.parsed_args.cli_only_args.retry_any:
+    if config.get().sorting.sort_downloads and not manager.parsed_args.cli_only_args.retry_any:
         sorter = Sorter(manager)
         await sorter.run()
 
     check_partials_and_empty_folders(manager)
 
-    if manager.config_manager.settings_data.runtime_options.update_last_forum_post:
+    if config.get().runtime_options.update_last_forum_post:
         await manager.log_manager.update_last_forum_post()
 
 
@@ -143,7 +139,7 @@ def _setup_debug_logger(manager: Manager) -> Path | None:
 
     debug_logger = logging.getLogger("cyberdrop_dl_debug")
     log_level = 10
-    settings_data = manager.config_manager.settings_data
+    settings_data = config.get()
     settings_data.runtime_options.log_level = log_level
     debug_logger.setLevel(log_level)
     debug_log_file_path = Path(__file__).parents[1] / "cyberdrop_dl_debug.log"
@@ -172,7 +168,7 @@ def _setup_debug_logger(manager: Manager) -> Path | None:
 def _setup_main_logger(manager: Manager) -> None:
     logger = logging.getLogger("cyberdrop_dl")
     file_io = manager.path_manager.main_log.open("w", encoding="utf8")
-    settings_data = manager.config_manager.settings_data
+    settings_data = config.get()
     log_level = settings_data.runtime_options.log_level
     logger.setLevel(log_level)
 
@@ -193,22 +189,7 @@ def _setup_manager(args: Sequence[str] | None = None) -> Manager:
     After this function returns, the manager will be ready to use and scraping / downloading can begin.
     """
 
-    manager = Manager(args)
-    try:
-        manager.startup()
-
-        if not manager.parsed_args.cli_only_args.download:
-            ProgramUI(manager)
-
-    except ValidationError as e:
-        file = {
-            "GlobalSettings": manager.config_manager.global_settings,
-            "ConfigSettings": manager.config_manager.settings,
-            "AuthSettings": manager.config_manager.authentication_settings,
-        }.get(e.title)
-
-        format_validation_error(e, file=file)
-        sys.exit(_C.ERROR)
+    manager = Manager()
 
     return manager
 

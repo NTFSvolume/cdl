@@ -15,8 +15,8 @@ from cyberdrop_dl.managers.hash_manager import HashManager
 from cyberdrop_dl.managers.live_manager import LiveManager
 from cyberdrop_dl.managers.log_manager import LogManager
 from cyberdrop_dl.managers.path_manager import PathManager
-from cyberdrop_dl.managers.progress_manager import ProgressManager
 from cyberdrop_dl.managers.storage_manager import StorageManager
+from cyberdrop_dl.progress import ProgressManager
 from cyberdrop_dl.utils import ffmpeg
 from cyberdrop_dl.utils.logger import LogHandler, QueuedLogger
 from cyberdrop_dl.utils.utilities import close_if_defined, get_system_information
@@ -42,7 +42,7 @@ class Manager:
         self.client_manager: ClientManager = field(init=False)
         self.storage_manager: StorageManager = field(init=False)
 
-        self.progress_manager: ProgressManager = field(init=False)
+        self.progress_manager = ProgressManager(self)
         self.live_manager: LiveManager = field(init=False)
 
         self.task_group: TaskGroup = field(init=False)
@@ -85,8 +85,6 @@ class Manager:
         await self.db_manager.startup()
         self.hash_manager = HashManager(self)
         self.live_manager = LiveManager(self)
-        self.progress_manager = ProgressManager(self)
-        self.progress_manager.startup()
 
     async def async_db_close(self) -> None:
         "Partial shutdown for managers used for hash directory scanner"

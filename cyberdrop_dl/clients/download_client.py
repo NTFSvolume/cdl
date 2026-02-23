@@ -70,7 +70,7 @@ class DownloadClient:
             "User-Agent": config.get().general.user_agent,
             "Referer": str(referer),
         }
-        auth_data = self.manager.config_manager.authentication_data
+        auth_data = config.get().auth
         if domain == "pixeldrain" and auth_data.pixeldrain.api_key:
             download_headers["Authorization"] = self.manager.client_manager.basic_auth(
                 "Cyberdrop-DL", auth_data.pixeldrain.api_key
@@ -161,7 +161,7 @@ class DownloadClient:
         task_id = media_item.task_id
         if task_id is None:
             size = (media_item.filesize + resume_point) if media_item.filesize is not None else None
-            task_id = self.manager.progress_manager.file_progress.add_task(
+            task_id = self.manager.progress_manager.file_progress.new_task(
                 domain=domain, filename=media_item.filename, expected_size=size
             )
             media_item.set_task_id(task_id)

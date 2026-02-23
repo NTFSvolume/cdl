@@ -1,9 +1,9 @@
 from pathlib import Path
 
 import pytest
+from cyberdrop_dl.ui.program_ui import ProgramUI
 
 from cyberdrop_dl.main import run
-from cyberdrop_dl.ui.program_ui import ProgramUI
 
 
 def test_startup(tmp_cwd: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:

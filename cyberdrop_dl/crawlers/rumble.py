@@ -42,7 +42,7 @@ class Format(NamedTuple):
     is_single_file: bool  # for formats with the same resolution, give priority to non hls
     bitrate: int
     size: int
-    type: FormatType  #  On formats where everything else is the same, choose mp4 over webm
+    type: FormatType  # On formats where everything else is the same, choose mp4 over webm
     url: AbsoluteHttpURL
     m3u8: m3u8.RenditionGroup | None = None
 

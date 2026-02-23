@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 import imagesize
 
-from cyberdrop_dl import constants
+from cyberdrop_dl import config, constants
 from cyberdrop_dl.constants import FILE_FORMATS
 from cyberdrop_dl.utils import strings
 from cyberdrop_dl.utils.ffmpeg import probe
@@ -30,10 +30,10 @@ class Sorter:
         self.manager = manager
         self.download_folder = manager.path_manager.scan_folder or manager.path_manager.download_folder
         self.sorted_folder = manager.path_manager.sorted_folder
-        self.incrementer_format: str = manager.config_manager.settings_data.sorting.sort_incrementer_format
+        self.incrementer_format: str = config.get().sorting.sort_incrementer_format
         self.db_manager = manager.db_manager
 
-        settings = manager.config_manager.settings_data.sorting
+        settings = config.get().sorting
         self.audio_format: str | None = settings.sorted_audio
         self.image_format: str | None = settings.sorted_image
         self.video_format: str | None = settings.sorted_video
@@ -88,11 +88,8 @@ class Sorter:
         _ = purge_dir_tree(self.download_folder)
 
     async def _sort_files(self, files_to_sort: dict[str, list[Path]]) -> None:
-        queue_length = len(files_to_sort)
-        self.manager.progress_manager.sort_progress.set_queue_length(queue_length)
-
         for folder_name, files in files_to_sort.items():
-            task_id = self.manager.progress_manager.sort_progress.add_task(folder_name, len(files))
+            task_id = self.manager.progress_manager.sorting.new_task(folder_name, len(files))
 
             for file in files:
                 ext = file.suffix.lower()
@@ -109,11 +106,9 @@ class Sorter:
                 else:
                     await self.sort_other(file, folder_name)
 
-                self.manager.progress_manager.sort_progress.advance_folder(task_id)
+                self.manager.progress_manager.sorting.advance_folder(task_id)
 
-            self.manager.progress_manager.sort_progress.remove_task(task_id)
-            queue_length -= 1
-            self.manager.progress_manager.sort_progress.set_queue_length(queue_length)
+            self.manager.progress_manager.sorting.remove_task(task_id)
 
     async def sort_audio(self, file: Path, base_name: str) -> None:
         """Sorts an audio file into the sorted audio folder."""
@@ -140,7 +135,7 @@ class Sorter:
             length=duration,
             sample_rate=sample_rate,
         ):
-            self.manager.progress_manager.sort_progress.increment_audio()
+            self.manager.progress_manager.sorting.increment_audio()
 
     async def sort_image(self, file: Path, base_name: str) -> None:
         """Sorts an image file into the sorted image folder."""
@@ -166,7 +161,7 @@ class Sorter:
             resolution=resolution,
             width=width,
         ):
-            self.manager.progress_manager.sort_progress.increment_image()
+            self.manager.progress_manager.sorting.increment_image()
 
     async def sort_video(self, file: Path, base_name: str) -> None:
         """Sorts a video file into the sorted video folder."""
@@ -199,7 +194,7 @@ class Sorter:
             resolution=resolution,
             width=width,
         ):
-            self.manager.progress_manager.sort_progress.increment_video()
+            self.manager.progress_manager.sorting.increment_video()
 
     async def sort_other(self, file: Path, base_name: str) -> None:
         """Sorts an other file into the sorted other folder."""
@@ -207,7 +202,7 @@ class Sorter:
             return
 
         if await self._process_file_move(file, base_name, self.other_format):
-            self.manager.progress_manager.sort_progress.increment_other()
+            self.manager.progress_manager.sorting.increment_other()
 
     async def _process_file_move(self, file: Path, base_name: str, format_str: str, **kwargs: Any) -> bool:
         file_date = await get_modified_date(file)

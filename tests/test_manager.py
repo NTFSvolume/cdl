@@ -5,7 +5,9 @@ from typing import TYPE_CHECKING, Any, TypeVar
 
 import pytest
 
-from cyberdrop_dl.managers import Manager, merge_dicts
+from cyberdrop_dl import config
+from cyberdrop_dl.managers import Manager, log_app_state
+from cyberdrop_dl.models import merge_dicts
 
 if TYPE_CHECKING:
     from pydantic import BaseModel
@@ -105,9 +107,10 @@ class TestMergeDicts:
 def test_args_logging_should_censor_webhook(
     running_manager: Manager, logs: pytest.LogCaptureFixture, webhook: str, output: str
 ) -> None:
-    logs_model = running_manager.config_manager.settings_data.logs
-    running_manager.config_manager.settings_data.logs = update_model(logs_model, webhook=webhook)
-    running_manager.args_logging()
+    logs_model = config.get().logs
+    config.get().logs = update_model(logs_model, webhook=webhook)
+    log_app_state()
+
     assert logs.messages
     assert "Starting Cyberdrop-DL Process" in logs.text
     assert webhook not in logs.text

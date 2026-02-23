@@ -9,6 +9,7 @@ from http.cookies import SimpleCookie
 from textwrap import dedent
 from typing import TYPE_CHECKING, NamedTuple, ParamSpec, TypeVar
 
+from cyberdrop_dl import config
 from cyberdrop_dl.dependencies import browser_cookie3
 from cyberdrop_dl.utils.logger import log
 
@@ -77,7 +78,7 @@ def get_cookies_from_browsers(manager: Manager, *, browser: BROWSERS, domains: l
         raise ValueError(msg)
 
     extractor_name = browser.lower()
-    domains_to_extract: list[str] = domains or manager.config_manager.settings_data.browser_cookies.sites
+    domains_to_extract: list[str] = domains or config.get().browser_cookies.sites
     if "all" in domains_to_extract:
         domains_to_extract.remove("all")
         domains_to_extract.extend(SUPPORTED_SITES_DOMAINS)

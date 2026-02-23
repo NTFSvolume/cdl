@@ -130,7 +130,7 @@ class Downloader:
         self._additional_headers = {}
         self._current_attempt_filesize: dict[str, int] = {}
         self._file_lock_vault = manager.client_manager.file_locks
-        self._ignore_history = manager.config_manager.settings_data.runtime_options.ignore_history
+        self._ignore_history = config.get().runtime_options.ignore_history
         self._semaphore: asyncio.Semaphore = field(init=False)
 
     @property
@@ -208,7 +208,7 @@ class Downloader:
         # TODO: compute approx size for UI from the m3u8 info
         media_item.download_filename = media_item.complete_file.name
         await self.manager.db_manager.history_table.add_download_filename(self.domain, media_item)
-        task_id = self.manager.progress_manager.file_progress.add_task(domain=self.domain, filename=media_item.filename)
+        task_id = self.manager.progress_manager.file_progress.new_task(domain=self.domain, filename=media_item.filename)
         media_item.set_task_id(task_id)
         video, audio, _subs = await self._download_rendition_group(media_item, m3u8_group)
         if not audio:

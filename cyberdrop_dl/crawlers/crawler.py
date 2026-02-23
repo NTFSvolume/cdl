@@ -268,7 +268,7 @@ class Crawler(ABC):
 
     @property
     def deep_scrape(self) -> bool:
-        return self.manager.config_manager.deep_scrape
+        return config.get().runtime_options.deep_scrape
 
     def _init_downloader(self) -> Downloader:
         self.downloader = dl = Downloader(self.manager, self.DOMAIN)
@@ -367,7 +367,7 @@ class Crawler(ABC):
     def new_task_id(self, url: AbsoluteHttpURL) -> Generator[TaskID]:
         """Creates a new task_id (shows the URL in the UI and logs)"""
         log(f"Scraping [{self.FOLDER_DOMAIN}]: {url}", 20)
-        task_id = self.manager.progress_manager.scraping_progress.add_task(url)
+        task_id = self.manager.progress_manager.scraping_progress.new_task(url)
         try:
             yield task_id
         finally:

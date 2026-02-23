@@ -619,7 +619,7 @@ class KemonoCrawler(KemonoBaseCrawler):
 
     @property
     def session_cookie(self) -> str:
-        return self.manager.config_manager.authentication_data.kemono.session
+        return config.get().auth.kemono.session
 
 
 def _thumbnail_to_src(og_url: AbsoluteHttpURL) -> AbsoluteHttpURL:

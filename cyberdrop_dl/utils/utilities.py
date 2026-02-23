@@ -35,7 +35,7 @@ from mega.errors import MegaNzError
 from pydantic import ValidationError
 from yarl import URL
 
-from cyberdrop_dl import constants
+from cyberdrop_dl import config, constants
 from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import (
     CDLBaseError,
@@ -201,7 +201,7 @@ def sanitize_folder(title: str) -> str:
 
     title = title.replace("\n", "").strip()
     title = title.replace("\t", "").strip()
-    title = re.sub(" +", " ", title)
+    title = re.sub(r" +", " ", title)
     title = sanitize_filename(title, "-")
     title = re.sub(r"\.{2,}", ".", title)
     title = title.rstrip(".").strip()
@@ -264,7 +264,7 @@ def get_download_path(manager: Manager, scrape_item: ScrapeItem, domain: str) ->
 def remove_file_id(manager: Manager, filename: str, ext: str) -> tuple[str, str]:
     """Removes the additional string some websites adds to the end of every filename."""
     original_filename = filename
-    if not manager.config_manager.settings_data.download_options.remove_generated_id_from_filenames:
+    if not config.get().download_options.remove_generated_id_from_filenames:
         return original_filename, filename
 
     filename = filename.rsplit(ext, 1)[0]
@@ -332,7 +332,7 @@ def purge_dir_tree(dirname: Path | str) -> bool:
 
 def check_partials_and_empty_folders(manager: Manager) -> None:
     """Checks for partial downloads, deletes partial files and empty folders."""
-    settings = manager.config_manager.settings_data.runtime_options
+    settings = config.get().runtime_options
     if settings.delete_partial_files:
         delete_partial_files(manager)
     if not settings.skip_check_for_partial_files:
@@ -379,7 +379,7 @@ def delete_empty_folders(manager: Manager):
     purge_dir_tree(manager.path_manager.download_folder)
 
     sorted_folder = manager.path_manager.sorted_folder
-    if sorted_folder and manager.config_manager.settings_data.sorting.sort_downloads:
+    if sorted_folder and config.get().sorting.sort_downloads:
         purge_dir_tree(sorted_folder)
 
 
