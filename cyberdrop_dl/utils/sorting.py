@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from cyberdrop_dl.managers import Manager
 
 
-async def get_modified_date(file: Path) -> datetime:
+async def _get_modified_date(file: Path) -> datetime:
     stat = await asyncio.to_thread(file.stat)
     return datetime.fromtimestamp(stat.st_mtime).replace(microsecond=0)
 
@@ -27,10 +27,9 @@ async def get_modified_date(file: Path) -> datetime:
 class Sorter:
     def __init__(self, manager: Manager) -> None:
         self.manager = manager
-        self.download_folder = manager.path_manager.scan_folder or manager.path_manager.download_folder
-        self.sorted_folder = manager.path_manager.sorted_folder
+        self.download_folder = config.get().sorting.scan_folder or config.get().files.download_folder
+        self.sorted_folder = config.get().sorting.sort_folder
         self.incrementer_format: str = config.get().sorting.sort_incrementer_format
-        self.db_manager = manager.db_manager
 
         settings = config.get().sorting
         self.audio_format: str | None = settings.sorted_audio
@@ -48,7 +47,7 @@ class Sorter:
         new_path.parent.mkdir(parents=True, exist_ok=True)
 
         try:
-            old_path.rename(new_path)
+            _ = old_path.rename(new_path)
         except FileExistsError:
             if old_path.stat().st_size == new_path.stat().st_size:
                 old_path.unlink()
@@ -57,7 +56,7 @@ class Sorter:
                 new_filename = f"{new_path.stem}{self.incrementer_format.format(i=auto_index)}{new_path.suffix}"
                 possible_new_path = new_path.parent / new_filename
                 try:
-                    old_path.rename(possible_new_path)
+                    _ = old_path.rename(possible_new_path)
                     break
                 except FileExistsError:
                     continue
@@ -204,7 +203,7 @@ class Sorter:
             self.manager.progress_manager.sorting.increment_other()
 
     async def _process_file_move(self, file: Path, base_name: str, format_str: str, **kwargs: Any) -> bool:
-        file_date = await get_modified_date(file)
+        file_date = await _get_modified_date(file)
         file_date_us = file_date.strftime("%Y-%d-%m")
         file_date_iso = file_date.strftime("%Y-%m-%d")
 
@@ -226,7 +225,7 @@ class Sorter:
         )
 
         new_file = Path(file_path)
-        return self._move_file(file, new_file)
+        return await asyncio.to_thread(self._move_file, file, new_file)
 
 
 def _subfolders(directory: Path) -> list[Path]:

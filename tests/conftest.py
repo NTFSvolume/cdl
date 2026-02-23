@@ -69,9 +69,6 @@ def post_startup_manager(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Man
     downloads = str(tmp_path / "Downloads")
     monkeypatch.chdir(tmp_path)
     bare_manager = Manager(("--appdata-folder", appdata, "-d", downloads, "--download-tiktok-audios"))
-    bare_manager.startup()
-    bare_manager.path_manager.startup()
-    bare_manager.logs.startup()
     return bare_manager
 
 

@@ -4,6 +4,7 @@ from unittest import mock
 import pytest
 from pydantic import ValidationError
 
+from cyberdrop_dl import appdata, config
 from cyberdrop_dl.cli import parse_args
 from cyberdrop_dl.main import _create_director, run
 
@@ -34,11 +35,11 @@ def test_startup_logger_should_not_be_created_on_invalid_cookies(tmp_cwd: Path) 
     from cyberdrop_dl.utils.logger import catch_exceptions
 
     director = _create_director("--download")
-    cookies_file = director.manager.path_manager.cookies_dir / "cookies.txt"
+    cookies_file = appdata.get().cookies_dir / "cookies.txt"
     cookies_file.write_text("Not a cookie file", encoding="utf8")
     catch_exceptions(director.run)()
 
-    logs = director.manager.path_manager.main_log.read_text(encoding="utf8")
+    logs = config.get().logs.main_log.read_text(encoding="utf8")
     assert "does not look like a Netscape format cookies file" in logs
 
     startup_file = tmp_cwd / "startup.log"

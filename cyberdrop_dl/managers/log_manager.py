@@ -26,7 +26,7 @@ _file_locks: defaultdict[Path, asyncio.Lock] = defaultdict(asyncio.Lock)
 @dataclasses.dataclass(slots=True, frozen=True)
 class LogManager:
     config: Config
-    task_group: asyncio.TaskGroup = dataclasses.field(default_factory=asyncio.TaskGroup, repr=False)
+    task_group: asyncio.TaskGroup = dataclasses.field(repr=False)
     _has_headers: set[Path] = dataclasses.field(init=False, default_factory=set)
 
     async def write_jsonl(self, data: Iterable[dict[str, Any]]) -> None:

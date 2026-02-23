@@ -256,7 +256,7 @@ def get_filename_and_ext(filename: str, forum: bool = False, mime_type: str | No
 
 def get_download_path(manager: Manager, scrape_item: ScrapeItem, domain: str) -> Path:
     """Returns the path to the download folder."""
-    download_dir = manager.path_manager.download_folder
+    download_dir = config.get().files.download_folder
 
     return download_dir / scrape_item.create_download_path(domain)
 
@@ -361,24 +361,24 @@ def _partial_files(dir: Path | str) -> Generator[Path]:
 def delete_partial_files(manager: Manager) -> None:
     """Deletes partial download files recursively."""
     log_red("Deleting partial downloads...")
-    for file in _partial_files(manager.path_manager.download_folder):
+    for file in _partial_files(config.get().files.download_folder):
         file.unlink(missing_ok=True)
 
 
 def check_for_partial_files(manager: Manager) -> None:
     """Checks if there are partial downloads in any subdirectory and logs if found."""
     log_yellow("Checking for partial downloads...")
-    has_partial_files = next(_partial_files(manager.path_manager.download_folder), None)
+    has_partial_files = next(_partial_files(config.get().files.download_folder), None)
     if has_partial_files:
         log_yellow("There are partial downloads in the downloads folder")
 
 
-def delete_empty_folders(manager: Manager):
+def delete_empty_folders(manager: Manager) -> None:
     """Deletes empty folders efficiently."""
     log_yellow("Checking for empty folders...")
-    purge_dir_tree(manager.path_manager.download_folder)
+    purge_dir_tree(config.get().files.download_folder)
 
-    sorted_folder = manager.path_manager.sorted_folder
+    sorted_folder = config.get().sorting.sort_folder
     if sorted_folder and config.get().sorting.sort_downloads:
         purge_dir_tree(sorted_folder)
 

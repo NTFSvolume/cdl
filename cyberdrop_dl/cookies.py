@@ -9,6 +9,7 @@ from http.cookies import SimpleCookie
 from textwrap import dedent
 from typing import TYPE_CHECKING, NamedTuple, ParamSpec, TypeVar
 
+from cyberdrop_dl import appdata
 from cyberdrop_dl.dependencies import browser_cookie3
 from cyberdrop_dl.utils.logger import log
 
@@ -76,10 +77,10 @@ def get_cookies_from_browsers(manager: Manager, *, browser: BROWSERS, domains: l
         msg = "None of the provided browsers is supported for extraction"
         raise ValueError(msg)
 
-    manager.path_manager.cookies_dir.mkdir(parents=True, exist_ok=True)
+    appdata.get().cookies_dir.mkdir(parents=True, exist_ok=True)
     domains_with_cookies: set[str] = set()
     for domain in domains_to_extract:
-        cookie_file_path = manager.path_manager.cookies_dir / f"{domain}.txt"
+        cookie_file_path = appdata.get().cookies_dir / f"{domain}.txt"
         cdl_cookie_jar = MozillaCookieJar(cookie_file_path)
         for cookie in extracted_cookies:
             if domain in cookie.domain:
@@ -92,15 +93,11 @@ def get_cookies_from_browsers(manager: Manager, *, browser: BROWSERS, domains: l
     return domains_with_cookies
 
 
-def clear_cookies(manager: Manager, domains: list[str]) -> None:
-    if not domains:
-        raise ValueError("No domains selected")
-
-    manager.path_manager.cookies_dir.mkdir(parents=True, exist_ok=True)
+def clear_cookies(*domains: str) -> None:
+    appdata.get().cookies_dir.mkdir(parents=True, exist_ok=True)
     for domain in domains:
-        cookie_file_path = manager.path_manager.cookies_dir / f"{domain}.txt"
-        cookie_jar = MozillaCookieJar(cookie_file_path)
-        cookie_jar.save(ignore_discard=True, ignore_expires=True)
+        cookie_file_path = appdata.get().cookies_dir / f"{domain}.txt"
+        cookie_file_path.unlink(missing_ok=True)
 
 
 def extract_cookies(extractor_name: str) -> CookieJar:

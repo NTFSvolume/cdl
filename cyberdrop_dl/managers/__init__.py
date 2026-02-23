@@ -10,11 +10,9 @@ from typing import TYPE_CHECKING, NamedTuple
 from cyberdrop_dl import __version__, appdata, config, constants
 from cyberdrop_dl.database import Database
 from cyberdrop_dl.managers.client_manager import ClientManager
-from cyberdrop_dl.managers.config_manager import ConfigManager
 from cyberdrop_dl.managers.hash_manager import HashManager
 from cyberdrop_dl.managers.live_manager import LiveManager
 from cyberdrop_dl.managers.log_manager import LogManager
-from cyberdrop_dl.managers.path_manager import PathManager
 from cyberdrop_dl.managers.storage_manager import StorageManager
 from cyberdrop_dl.progress import ProgressManager
 from cyberdrop_dl.utils import ffmpeg
@@ -23,7 +21,9 @@ from cyberdrop_dl.utils.utilities import close_if_defined, get_system_informatio
 
 if TYPE_CHECKING:
     from asyncio import TaskGroup
+    from pathlib import Path
 
+    from cyberdrop_dl.data_structures.url_objects import MediaItem
     from cyberdrop_dl.scrape_mapper import ScrapeMapper
 
 
@@ -45,7 +45,7 @@ class Manager:
         self.progress_manager: ProgressManager = ProgressManager(self, portrait=False)
         self.live_manager: LiveManager = field(init=False)
 
-        self.task_group: TaskGroup = field(init=False)
+        self.task_group: TaskGroup = asyncio.TaskGroup()
         self.scrape_mapper: ScrapeMapper = field(init=False)
 
         self.start_time: float = perf_counter()
@@ -54,14 +54,30 @@ class Manager:
 
         constants.console_handler = LogHandler(level=constants.CONSOLE_LEVEL)
 
-        self.path_manager: PathManager = PathManager(self)
-        self.path_manager.pre_startup()
-        self.config_manager: ConfigManager = ConfigManager(self)
-        self.config_manager.startup()
-
-        self.path_manager.startup()
-        self.logs: LogManager = LogManager(config.get())
+        self.logs: LogManager = LogManager(config.get(), self.task_group)
         log_app_state()
+        self._completed_downloads: set[MediaItem] = set()
+        self._completed_downloads_paths: set[Path] = set()
+        self._prev_downloads: set[MediaItem] = set()
+        self._prev_downloads_paths: set[Path] = set()
+
+    def add_completed(self, media_item: MediaItem) -> None:
+        if media_item.is_segment:
+            return
+        self._completed_downloads.add(media_item)
+        self._completed_downloads_paths.add(media_item.complete_file)
+
+    def add_prev(self, media_item: MediaItem) -> None:
+        self._prev_downloads.add(media_item)
+        self._prev_downloads_paths.add(media_item.complete_file)
+
+    @property
+    def completed_downloads(self) -> set[MediaItem]:
+        return self._completed_downloads
+
+    @property
+    def prev_downloads(self) -> set[MediaItem]:
+        return self._prev_downloads
 
     """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
 
@@ -79,7 +95,7 @@ class Manager:
 
     async def async_db_hash_startup(self) -> None:
         self.db_manager = Database(
-            self.path_manager.history_db,
+            appdata.get().db_file,
             config.get().runtime_options.ignore_history,
         )
         await self.db_manager.startup()

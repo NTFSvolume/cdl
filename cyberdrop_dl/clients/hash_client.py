@@ -205,21 +205,19 @@ class HashClient:
 
     async def get_file_hashes_dict(self) -> dict:
         """Get a dictionary of files based on matching file hashes and file size."""
-        downloads = self.manager.path_manager.completed_downloads - self.hashed_media_items
+        downloads = self.manager.completed_downloads - self.hashed_media_items
 
         async def exists(item: MediaItem) -> MediaItem | None:
             if await asyncio.to_thread(item.complete_file.is_file):
                 return item
 
-        results = await asyncio.gather(*(exists(item) for item in downloads))
-        for media_item in results:
-            if media_item is None:
-                continue
+        for media_item in filter(None, await asyncio.gather(*(exists(item) for item in downloads))):
             try:
                 await self.hash_item(media_item)
             except Exception as e:
                 msg = f"Unable to hash file = {media_item.complete_file}: {e}"
                 log(msg, 40)
+
         return self.hashes_dict
 
 

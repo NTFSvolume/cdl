@@ -112,8 +112,8 @@ class ScrapeMapper:
         async for item in self.get_input_items():
             self.manager.task_group.create_task(self.send_to_crawler(item))
 
-    async def get_input_items(self) -> AsyncGenerator[ScrapeItem]:
-        items_generator = self.load_links(self.manager.path_manager.input_file)
+    async def get_input_items(self, input_file) -> AsyncGenerator[ScrapeItem]:
+        items_generator = self.load_links(input_file)
         children_limits = config.get().download_options.maximum_number_of_children
 
         async for item in items_generator:
@@ -128,9 +128,9 @@ class ScrapeMapper:
 
     """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
 
-    async def parse_input_file_groups(self) -> AsyncGenerator[tuple[str, list[AbsoluteHttpURL]]]:
+    async def parse_input_file_groups(self, input_file) -> AsyncGenerator[tuple[str, list[AbsoluteHttpURL]]]:
         """Split URLs from input file by their groups."""
-        input_file = self.manager.path_manager.input_file
+
         if not await asyncio.to_thread(input_file.is_file):
             yield ("", [])
             return
@@ -223,7 +223,7 @@ class ScrapeMapper:
             success = False
             try:
                 download_folder = get_download_path(self.manager, scrape_item, "jdownloader")
-                relative_download_dir = download_folder.relative_to(self.manager.path_manager.download_folder)
+                relative_download_dir = download_folder.relative_to(config.get().files.download_folder)
                 self.jdownloader.send(
                     scrape_item.url,
                     scrape_item.parent_title,

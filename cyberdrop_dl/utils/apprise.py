@@ -15,7 +15,7 @@ import rich
 from pydantic import ValidationError
 from rich.text import Text
 
-from cyberdrop_dl import constants
+from cyberdrop_dl import config, constants
 from cyberdrop_dl.dependencies import apprise
 from cyberdrop_dl.models import AppriseURLModel
 from cyberdrop_dl.utils.logger import log, log_debug, log_spacer
@@ -193,7 +193,7 @@ async def send_apprise_notifications(manager: Manager) -> tuple[constants.Notifi
     for apprise_url in apprise_urls:
         apprise_obj.add(apprise_url.url, tag=list(apprise_url.tags))
 
-    main_log = manager.path_manager.main_log
+    main_log = config.get().logs.main_log
     all_urls = [x.raw_url for x in apprise_urls]
     log_lines = []
 

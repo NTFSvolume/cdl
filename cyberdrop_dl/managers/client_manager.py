@@ -14,7 +14,7 @@ import truststore
 from aiohttp import ClientResponse, ClientSession
 from aiolimiter import AsyncLimiter
 
-from cyberdrop_dl import config, constants, ddos_guard, env
+from cyberdrop_dl import appdata, config, constants, ddos_guard, env
 from cyberdrop_dl.clients.download_client import DownloadClient
 from cyberdrop_dl.clients.flaresolverr import FlareSolverr
 from cyberdrop_dl.clients.response import AbstractResponse
@@ -299,9 +299,10 @@ class ClientManager:
             assert config.get().browser_cookies.browser
             get_cookies_from_browsers(self.manager, browser=config.get().browser_cookies.browser)
 
-        cookie_files = sorted(self.manager.path_manager.cookies_dir.glob("*.txt"))
+        cookie_files = sorted(appdata.get().cookies_dir.glob("*.txt"))
         if not cookie_files:
             return
+
         async for domain, cookie in read_netscape_files(cookie_files):
             self.cookies.update_cookies(cookie, response_url=AbsoluteHttpURL(f"https://{domain}"))
 

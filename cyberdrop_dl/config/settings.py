@@ -18,7 +18,6 @@ from pydantic import (
     field_serializer,
     field_validator,
 )
-from yarl import URL
 
 from cyberdrop_dl import constants
 from cyberdrop_dl.constants import BROWSERS, DEFAULT_APP_STORAGE, DEFAULT_DOWNLOAD_STORAGE, Hashing
@@ -60,7 +59,7 @@ class FormatValidator:
         validate_format_string(value, valid_keys)
 
 
-class DownloadOptions(SettingsGroup):
+class DownloadOptions(FormatValidator, SettingsGroup):
     block_download_sub_folders: bool = False
     disable_download_attempt_limit: bool = False
     disable_file_timestamps: bool = False
@@ -79,10 +78,8 @@ class DownloadOptions(SettingsGroup):
     @field_validator("separate_posts_format", mode="after")
     @classmethod
     def valid_format(cls, value: str) -> str:
-        from cyberdrop_dl.utils.strings import validate_format_string
-
         valid_keys = {"default", "title", "id", "number", "date"}
-        validate_format_string(value, valid_keys)
+        cls._validate_format(value, valid_keys)
         return value
 
 
@@ -325,7 +322,7 @@ class General(SettingsGroup):
         return sorted(set(value))
 
     @field_serializer("flaresolverr", "proxy")
-    def serialize(self, value: URL | str) -> str | None:
+    def serialize(self, value: str) -> str | None:
         return falsy_as(value, None, str)
 
     @field_validator("flaresolverr", "proxy", mode="before")

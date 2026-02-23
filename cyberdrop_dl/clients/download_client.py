@@ -347,7 +347,7 @@ class DownloadClient:
         try:
             media_item.downloaded = downloaded
             await self.manager.hash_manager.hash_client.hash_item_during_download(media_item)
-            self.manager.path_manager.add_completed(media_item)
+            self.manager.add_completed(media_item)
         except Exception:
             log(f"Error handling media item completion of: {media_item.complete_file}", 10, exc_info=True)
 
@@ -358,7 +358,7 @@ class DownloadClient:
         download_folder = media_item.download_folder
 
         if config.get().download_options.block_download_sub_folders:
-            while download_folder.parent != self.manager.path_manager.download_folder:
+            while download_folder.parent != config.get().files.download_folder:
                 download_folder = download_folder.parent
             media_item.download_folder = download_folder
         return download_folder
