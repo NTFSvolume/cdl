@@ -11,11 +11,7 @@ from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Self, overload
 import yarl
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
-    import aiohttp
     from propcache.api import under_cached_property as cached_property
-    from rich.progress import TaskID
 
     from cyberdrop_dl import signature
     from cyberdrop_dl.managers import Manager
@@ -127,30 +123,24 @@ class MediaItem:
     download_folder: Path
     filename: str
     original_filename: str
-    download_filename: str | None = field(default=None)
-    filesize: int | None = field(default=None, compare=False)
+    download_filename: str | None = None
+    filesize: int | None = None
     ext: str
     db_path: str
-
-    debrid_link: AbsoluteHttpURL | None = field(default=None, compare=False)
-    duration: float | None = field(default=None, compare=False)
+    debrid_link: AbsoluteHttpURL | None = None
+    duration: float | None = None
     is_segment: bool = False
-    fallbacks: Callable[[aiohttp.ClientResponse, int], AbsoluteHttpURL] | list[AbsoluteHttpURL] | None = field(
-        default=None, compare=False
-    )
     album_id: str | None = None
-    datetime: int | None = field(default=None, compare=False)
-    parents: list[AbsoluteHttpURL] = field(default_factory=list, compare=False)
-    parent_threads: set[AbsoluteHttpURL] = field(default_factory=set, compare=False)
+    timestamp: int | None = None
 
-    current_attempt: int = field(default=0, compare=False)
-    partial_file: Path = None  # type: ignore
-    complete_file: Path = None  # type: ignore
-    hash: str | None = field(default=None, compare=False)
-    downloaded: bool = field(default=False, compare=False)
+    parents: list[AbsoluteHttpURL] = field(default_factory=list)
+    parent_threads: set[AbsoluteHttpURL] = field(default_factory=set)
+    current_attempt: int = field(default=0)
+    complete_file: Path = field(init=False)
+    hash: str | None = None
 
-    parent_media_item: MediaItem | None = field(default=None, compare=False)
-    _task_id: TaskID | None = field(default=None, compare=False)
+    headers: dict[str, str] = field(default_factory=dict, compare=False)
+    downloaded: bool = False
     metadata: object = field(init=False, default_factory=dict, compare=False)
 
     def __repr__(self) -> str:
@@ -160,10 +150,16 @@ class MediaItem:
         if self.url.scheme == "metadata":
             self.db_path = ""
 
+        self.complete_file = self.download_folder / self.filename
+
+    @property
+    def partial_file(self) -> Path:
+        return self.complete_file.with_suffix(self.complete_file.suffix + ".part")
+
     def datetime_obj(self) -> datetime.datetime | None:
-        if self.datetime:
-            assert isinstance(self.datetime, int), f"Invalid {self.datetime =!r} from {self.referer}"
-            return datetime.datetime.fromtimestamp(self.datetime)
+        if self.timestamp:
+            assert isinstance(self.timestamp, int), f"Invalid {self.timestamp =!r} from {self.referer}"
+            return datetime.datetime.fromtimestamp(self.timestamp, tz=datetime.UTC)
 
     @staticmethod
     def from_item(
@@ -189,36 +185,19 @@ class MediaItem:
             ext=ext or Path(filename).suffix,
             original_filename=original_filename or filename,
             parents=origin.parents.copy(),
-            datetime=origin.possible_datetime if isinstance(origin, ScrapeItem) else origin.datetime,
-            parent_media_item=None if isinstance(origin, ScrapeItem) else origin,
+            timestamp=origin.possible_datetime if isinstance(origin, ScrapeItem) else origin.timestamp,
             parent_threads=origin.parent_threads.copy(),
         )
-
-    @property
-    def task_id(self) -> TaskID | None:
-        if self.parent_media_item is not None:
-            return self.parent_media_item.task_id
-        return self._task_id
-
-    def set_task_id(self, task_id: TaskID | None) -> None:
-        if self.task_id is not None and task_id is not None:
-            # We already have a task_id; we can't replace it, only reset it.
-            # This should never happen. Calling code should always check the value before making a new task.
-            # We can't silently ignore it either because we will lose any reference to the created task.
-            raise ValueError("task_id is already set")
-        if self.parent_media_item is not None:
-            self.parent_media_item.set_task_id(task_id)
-        else:
-            self._task_id = task_id
 
     def as_jsonable_dict(self) -> dict[str, Any]:
         item = asdict(self)
         if datetime := self.datetime_obj():
             item["datetime"] = datetime
         item["attempts"] = item.pop("current_attempt")
+        item["partial_file"] = self.partial_file
         if self.hash:
             item["hash"] = f"xxh128:{self.hash}"
-        for name in ("fallbacks", "_task_id", "is_segment", "parent_media_item"):
+        for name in ("is_segment",):
             _ = item.pop(name)
         return item
 

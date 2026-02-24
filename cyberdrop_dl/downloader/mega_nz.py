@@ -40,7 +40,6 @@ class MegaDownloadClient(DownloadClient):
 
         async with aiofiles.open(media_item.partial_file, mode="ab") as f:
             for _, chunk_size in get_chunks(file_size):
-                await self.manager.states.RUNNING.wait()
                 raw_chunk = await content.readexactly(chunk_size)
                 chunk = chunk_decryptor.read(raw_chunk)
                 await check_free_space()

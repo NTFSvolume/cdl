@@ -23,7 +23,6 @@ from cyberdrop_dl.cookies import get_cookies_from_browsers, read_netscape_files
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
 from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, ScrapeError, TooManyCrawlerErrors
 from cyberdrop_dl.managers import Manager
-from cyberdrop_dl.utils.aio import WeakAsyncLocks
 from cyberdrop_dl.utils.ffmpeg import probe
 from cyberdrop_dl.utils.logger import log, log_debug, log_spacer
 
@@ -116,7 +115,6 @@ class ClientManager:
         self.speed_limiter: DownloadSpeedLimiter = DownloadSpeedLimiter(rate_limits.download_speed_limit)
         self.download_client: DownloadClient = DownloadClient(manager, self)
         self.flaresolverr: FlareSolverr = FlareSolverr(manager)
-        self.file_locks: WeakAsyncLocks[str] = WeakAsyncLocks()
 
         self._session: aiohttp.ClientSession
         self._download_session: aiohttp.ClientSession

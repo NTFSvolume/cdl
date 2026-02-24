@@ -3,8 +3,9 @@ from __future__ import annotations
 import datetime
 from contextvars import ContextVar, Token
 from pathlib import Path
-from typing import Self
+from typing import Annotated, Self
 
+from cyclopts import Parameter
 from pydantic import BaseModel
 
 from cyberdrop_dl.config.auth import AuthSettings
@@ -12,33 +13,10 @@ from cyberdrop_dl.config.settings import ConfigSettings
 from cyberdrop_dl.models import get_model_fields, merge_models
 
 _config: ContextVar[Config] = ContextVar("_config")
-_appdata: ContextVar[AppData] = ContextVar("_appdata")
-
-
-class AppData:
-    def __init__(self, path: Path) -> None:
-        self.path: Path = path
-        self.cookies_dir: Path = path / "cookies"
-        self.cache_file: Path = path / "cache.yaml"
-        self.default_config: Path = path / "config.yaml"
-        self.db_file: Path = path / "cyberdrop.db"
-
-    def __fspath__(self) -> str:
-        return str(self)
-
-    def __str__(self) -> str:
-        return str(self.path)
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}({vars(self)!r})"
-
-    def mkdirs(self) -> None:
-        for dir in (self.cookies_dir,):
-            dir.mkdir(parents=True, exist_ok=True)
 
 
 class Config(ConfigSettings):
-    auth: AuthSettings = AuthSettings()
+    auth: Annotated[AuthSettings, Parameter(show=False)] = AuthSettings()
     _source: Path | None = None
 
     _token: Token[Config] | None = None

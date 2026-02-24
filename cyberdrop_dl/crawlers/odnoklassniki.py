@@ -147,6 +147,19 @@ class OdnoklassnikiCrawler(Crawler):
             mobile_url, scrape_item, video_id + ".mp4", custom_filename=filename, debrid_link=cdn_url
         )
 
+    def _get_download_headers(self, referer: AbsoluteHttpURL) -> dict[str, str]:
+        return super()._get_download_headers(referer) | {
+            "Accept-Language": "en-gb, en;q=0.8",
+            "User-Agent": _CHROME_ANDROID_USER_AGENT,
+            "Referer": "https://m.ok.ru/",
+            "Origin": "https://m.ok.ru",
+        }
+
+
+_CHROME_ANDROID_USER_AGENT: str = (
+    "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.7204.180 Mobile Safari/537.36"
+)
+
 
 def _get_best_src(metadata: dict[str, Any]) -> tuple[Resolution, str]:
     def parse():

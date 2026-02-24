@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextvars import ContextVar
 from typing import TYPE_CHECKING, ClassVar
 
 from rich.console import Group
@@ -19,6 +20,9 @@ if TYPE_CHECKING:
     from yarl import URL
 
 _COLOR: str = "plum3"
+
+_links: ContextVar[ProgressHook] = ContextVar("_links")
+_downloads: ContextVar[ProgressHook] = ContextVar("_downloads")
 
 
 class OverFlow(ProgressProxy):
@@ -67,7 +71,7 @@ class UIPanel(ProgressProxy):
     def _redraw(self) -> None:
         self._overflow.update(count=len(self._tasks) - self._limit)
 
-    def add_task(self, description: str, total: float | None = None) -> TaskID:
+    def _add_task(self, description: str, total: float | None = None) -> TaskID:
         task_id = self._progress.add_task(
             self._desc_fmt.format(color=_COLOR, description=description),
             total=total,
@@ -81,7 +85,7 @@ class UIPanel(ProgressProxy):
         self._redraw()
 
     def new_hook(self, description: object, total: float | None = None) -> ProgressHook:
-        task_id = self.add_task(str(description), total)
+        task_id = self._add_task(str(description), total)
 
         def advance(amount: int) -> None:
             self._advance(task_id, amount)
@@ -110,7 +114,7 @@ class ScrapingPanel(UIPanel):
         super().__init__(visible_tasks_limit=5)
 
     def new_task(self, url: URL) -> TaskID:  # type: ignore[reportIncompatibleMethodOverride]
-        return self.add_task(str(url))
+        return self._add_task(str(url))
 
 
 class DownloadsPanel(UIPanel):
@@ -132,9 +136,15 @@ class DownloadsPanel(UIPanel):
         self.total_data_written: int = 0
         super().__init__(visible_tasks_limit=10)
 
-    def new_task(self, *, domain: str, filename: str, expected_size: int | None = None) -> TaskID:  # type: ignore[reportIncompatibleMethodOverride]
-        description = self._clean_task_desc(filename.rsplit("/", 1)[-1])
-        return self.add_task(description, expected_size)
+    @property
+    def current_hook(self) -> ProgressHook:
+        return _downloads.get()
+
+    def new(self, filename: str, size: float | None = None) -> ProgressHook:
+        description = self._clean_task_desc(str(filename).rsplit("/", 1)[-1])
+        hook = self.new_hook(description, size)
+        _ = _downloads.set(hook)
+        return hook
 
     def _advance(self, task_id: TaskID, amount: int) -> None:
         self.total_data_written += amount

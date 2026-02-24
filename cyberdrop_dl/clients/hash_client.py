@@ -81,7 +81,7 @@ class HashClient:
             return
         if config.get().dupe_cleanup_options.hashing != Hashing.IN_PLACE:
             return
-        await self.manager.states.RUNNING.wait()
+
         try:
             assert media_item.original_filename
             hash = await self.update_db_and_retrive_hash(

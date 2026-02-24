@@ -26,7 +26,7 @@ class SortingPanel(UIPanel):
 
     def new_task(self, folder: str, expected_size: int | None) -> TaskID:
         description = self._clean_task_desc(folder)
-        return super().add_task(description, expected_size)
+        return super()._add_task(description, expected_size)
 
     def advance_folder(self, task_id: TaskID, amount: int = 1) -> None:
         self._advance(task_id, amount)

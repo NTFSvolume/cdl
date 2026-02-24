@@ -113,6 +113,9 @@ class MegaCloudCrawler(Crawler):
             subtitles=tuple(parse_subs()),
         )
 
+    def _get_download_headers(self, referer: AbsoluteHttpURL) -> dict[str, str]:
+        return super()._get_download_headers(referer) | {"referer": "https://megacloud.blog/"}
+
 
 _ISO639_MAP = {
     "arabic": "ara",

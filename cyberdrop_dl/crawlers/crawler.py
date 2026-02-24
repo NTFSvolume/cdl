@@ -272,7 +272,6 @@ class Crawler(ABC):
 
     def _init_downloader(self) -> Downloader:
         self.downloader = dl = Downloader(self.manager, self.DOMAIN)
-        dl.startup()
         return dl
 
     @final
@@ -314,7 +313,6 @@ class Crawler(ABC):
 
         self.waiting_items += 1
         async with self._semaphore:
-            await self.manager.states.RUNNING.wait()
             self.waiting_items -= 1
             og_url = scrape_item.url
             scrape_item.url = url = self.transform_url(scrape_item.url)
@@ -437,6 +435,7 @@ class Crawler(ABC):
             ext=ext,
         )
         media_item.debrid_link = debrid_link
+        media_item.headers = self._get_download_headers(media_item.referer)
         if metadata is not None:
             media_item.metadata = metadata
         await self.handle_media_item(media_item, m3u8)
@@ -472,9 +471,8 @@ class Crawler(ABC):
         return check_complete
 
     async def handle_media_item(self, media_item: MediaItem, m3u8: m3u8.RenditionGroup | None = None) -> None:
-        await self.manager.states.RUNNING.wait()
-        if media_item.datetime and not isinstance(media_item.datetime, int):
-            msg = f"Invalid datetime from '{self.FOLDER_DOMAIN}' crawler . Got {media_item.datetime!r}, expected int."
+        if media_item.timestamp and not isinstance(media_item.timestamp, int):
+            msg = f"Invalid datetime from '{self.FOLDER_DOMAIN}' crawler . Got {media_item.timestamp!r}, expected int."
             log(msg, bug=True)
 
         check_complete = await self.check_complete(media_item.url, media_item.referer)
@@ -756,7 +754,9 @@ class Crawler(ABC):
             page_url = self.parse_url(page_url_str, **kwargs)
 
     @error_handling_wrapper
-    async def direct_file(self, scrape_item: ScrapeItem, url: URL | None = None, assume_ext: str | None = None) -> None:
+    async def direct_file(
+        self, scrape_item: ScrapeItem, url: AbsoluteHttpURL | None = None, assume_ext: str | None = None
+    ) -> None:
         """Download a direct link file. Filename will be the url slug"""
         link = url or scrape_item.url
         filename, ext = self.get_filename_and_ext(link.name or link.parent.name, assume_ext=assume_ext)
@@ -929,6 +929,12 @@ class Crawler(ABC):
                 )
             )
 
+    def _get_download_headers(self, referer: AbsoluteHttpURL) -> dict[str, str]:
+        return {
+            "User-Agent": config.get().general.user_agent,
+            "Referer": str(referer),
+        }
+
 
 def _make_scrape_mapper_keys(cls: type[Crawler] | Crawler) -> tuple[str, ...]:
     if cls.SUPPORTED_DOMAINS:
@@ -1036,7 +1042,6 @@ def auto_task_id(
 
     @wraps(func)
     async def wrapper(self: _CrawlerT, scrape_item: ScrapeItem, *args: P.args, **kwargs: P.kwargs) -> R:
-        await self.manager.states.RUNNING.wait()
         with self.new_task_id(scrape_item.url):
             result = func(self, scrape_item, *args, **kwargs)
             if inspect.isawaitable(result):

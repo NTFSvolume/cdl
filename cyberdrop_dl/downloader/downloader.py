@@ -3,19 +3,14 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
-import shutil
 import subprocess
-import sys
-from dataclasses import field
-from datetime import datetime
 from functools import wraps
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple, ParamSpec, TypeVar
 
 from aiohttp import ClientConnectorError, ClientError, ClientResponseError
 
-from cyberdrop_dl import config, constants
-from cyberdrop_dl.data_structures.url_objects import HlsSegment, MediaItem
+from cyberdrop_dl import config
 from cyberdrop_dl.exceptions import (
     DownloadError,
     DurationError,
@@ -24,48 +19,23 @@ from cyberdrop_dl.exceptions import (
     RestrictedDateRangeError,
     RestrictedFiletypeError,
     SkipDownloadError,
-    TooManyCrawlerErrors,
 )
-from cyberdrop_dl.utils import aio, ffmpeg
+from cyberdrop_dl.utils import aio
+from cyberdrop_dl.utils.dates import set_creation_time
 from cyberdrop_dl.utils.logger import log, log_debug
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, parse_url
+from cyberdrop_dl.utils.utilities import error_handling_wrapper
 
-# Windows epoch is January 1, 1601. Unix epoch is January 1, 1970
-WIN_EPOCH_OFFSET = 116444736e9
-MAC_OS_SET_FILE = None
 _VIDEO_HLS_BATCH_SIZE = 10
 _AUDIO_HLS_BATCH_SIZE = 50
 
 
-# Try to import win32con for Windows constants, fallback to hardcoded values if unavailable
-try:
-    import win32con  # type: ignore[reportMissingModuleSource]
-
-    FILE_WRITE_ATTRIBUTES = 256
-    OPEN_EXISTING = win32con.OPEN_EXISTING
-    FILE_ATTRIBUTE_NORMAL = win32con.FILE_ATTRIBUTE_NORMAL
-    FILE_FLAG_BACKUP_SEMANTICS = win32con.FILE_FLAG_BACKUP_SEMANTICS
-except ImportError:
-    FILE_WRITE_ATTRIBUTES = 256
-    OPEN_EXISTING = 3
-    FILE_ATTRIBUTE_NORMAL = 128
-    FILE_FLAG_BACKUP_SEMANTICS = 33554432
-
-if sys.platform == "win32":
-    from ctypes import byref, windll, wintypes
-
-
-elif sys.platform == "darwin":
-    # SetFile is non standard in macOS. Only users that have xcode installed will have SetFile
-    MAC_OS_SET_FILE = shutil.which("SetFile")
-
-
 if TYPE_CHECKING:
-    from collections.abc import Callable, Coroutine, Generator
+    from collections.abc import Callable, Coroutine
 
     from cyberdrop_dl.clients.download_client import DownloadClient
+    from cyberdrop_dl.data_structures.url_objects import MediaItem
     from cyberdrop_dl.managers import Manager
-    from cyberdrop_dl.utils.m3u8 import M3U8, RenditionGroup
+
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -87,10 +57,8 @@ KNOWN_BAD_URLS = {
 
 
 def retry(func: Callable[P, Coroutine[None, None, R]]) -> Callable[P, Coroutine[None, None, R]]:
-    """This function is a wrapper that handles retrying for failed downloads."""
-
     @wraps(func)
-    async def wrapper(*args, **kwargs) -> R:
+    async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         self: Downloader = args[0]
         media_item: MediaItem = args[1]
         while True:
@@ -100,9 +68,7 @@ def retry(func: Callable[P, Coroutine[None, None, R]]) -> Callable[P, Coroutine[
                 if not e.retry:
                     raise
 
-                self.attempt_task_removal(media_item)
-                if e.status != 999:
-                    media_item.current_attempt += 1
+                media_item.current_attempt += 1
 
                 log(f"{self.log_prefix} failed: {media_item.url} with error: {e!s}", 40)
                 if media_item.current_attempt >= self.max_attempts:
@@ -118,52 +84,41 @@ GENERIC_CRAWLERS = ".", "no_crawler"
 
 
 class Downloader:
-    def __init__(self, manager: Manager, domain: str) -> None:
+    def __init__(
+        self,
+        config: config.Config,
+        manager: Manager,
+        client: DownloadClient,
+        slots: int,
+    ) -> None:
         self.manager: Manager = manager
-        self.domain: str = domain
 
-        self.client: DownloadClient = field(init=False)
-        self.log_prefix = "Download attempt (unsupported domain)" if domain in GENERIC_CRAWLERS else "Download"
+        self.config = config
+        self.client: DownloadClient = client
+
+        self.log_prefix = "Download"
         self.processed_items: set[str] = set()
         self.waiting_items = 0
-
-        self._additional_headers = {}
         self._current_attempt_filesize: dict[str, int] = {}
-        self._file_lock_vault = manager.client_manager.file_locks
-        self._ignore_history = config.get().runtime_options.ignore_history
-        self._semaphore: asyncio.Semaphore = field(init=False)
+        self._file_lock_vault: aio.WeakAsyncLocks[str] = aio.WeakAsyncLocks()
+        self._ignore_history: bool = self.config.runtime_options.ignore_history
+        self._semaphore: asyncio.Semaphore = asyncio.Semaphore(slots)
 
     @property
     def max_attempts(self):
-        if config.get().download_options.disable_download_attempt_limit:
+        if self.config.download_options.disable_download_attempt_limit:
             return 1
-        return config.get().rate_limiting_options.download_attempts
-
-    def startup(self) -> None:
-        """Starts the downloader."""
-        self.client = self.manager.client_manager.download_client
-        self._semaphore = asyncio.Semaphore(self.manager.client_manager.get_download_slots(self.domain))
-
-        config.get().files.download_folder.mkdir(parents=True, exist_ok=True)
-        if config.get().sorting.sort_downloads:
-            config.get().sorting.sort_folder.mkdir(parents=True, exist_ok=True)
-
-    def update_queued_files(self, increase_total: bool = True):
-        queued_files = self.manager.progress_manager.downloads.get_queue_length()
-        self.manager.progress_manager.files.update_queued(queued_files)
-        self.manager.progress_manager.files.update_total(increase_total)
+        return self.config.rate_limiting_options.download_attempts
 
     @contextlib.asynccontextmanager
-    async def _download_context(self, media_item: MediaItem):
-        await self.manager.states.RUNNING.wait()
+    async def _limiter(self, media_item: MediaItem):
         media_item.current_attempt = 0
-        await self.client.mark_incomplete(media_item, self.domain)
         if media_item.is_segment:
             yield
             return
 
         self.waiting_items += 1
-        self.update_queued_files()
+        await self.client.mark_incomplete(media_item)
 
         server = (media_item.debrid_link or media_item.url).host
         server_limit, domain_limit, global_limit = (
@@ -173,157 +128,36 @@ class Downloader:
         )
 
         async with server_limit, domain_limit, global_limit:
-            await self.manager.states.RUNNING.wait()
             self.processed_items.add(media_item.db_path)
-            self.update_queued_files(increase_total=False)
             self.waiting_items -= 1
             yield
 
     async def run(self, media_item: MediaItem) -> bool:
-        """Runs the download loop."""
-
         if media_item.url.path in self.processed_items and not self._ignore_history:
             return False
 
-        async with self._download_context(media_item):
-            return await self.start_download(media_item)
+        async with self._limiter(media_item):
+            if not media_item.is_segment:
+                log(f"{self.log_prefix} starting: {media_item.url}", 20)
 
-    @error_handling_wrapper
-    async def download_hls(self, media_item: MediaItem, m3u8_group: RenditionGroup) -> None:
-        if media_item.url.path in self.processed_items and not self._ignore_history:
-            return
-
-        try:
-            ffmpeg.check_is_available()
-        except RuntimeError as e:
-            msg = f"{e} - ffmpeg and ffprobe are required for HLS downloads"
-            raise DownloadError("FFmpeg Error", msg, media_item) from None
-
-        async with self._download_context(media_item):
-            await self._start_hls_download(media_item, m3u8_group)
-
-    async def _start_hls_download(self, media_item: MediaItem, m3u8_group: RenditionGroup) -> None:
-        media_item.complete_file = media_item.download_folder / media_item.filename
-        # TODO: register database duration from m3u8 info
-        # TODO: compute approx size for UI from the m3u8 info
-        media_item.download_filename = media_item.complete_file.name
-        await self.manager.db_manager.history_table.add_download_filename(self.domain, media_item)
-        task_id = self.manager.progress_manager.downloads.new_task(domain=self.domain, filename=media_item.filename)
-        media_item.set_task_id(task_id)
-        video, audio, _subs = await self._download_rendition_group(media_item, m3u8_group)
-        if not audio:
-            await asyncio.to_thread(video.rename, media_item.complete_file)
-        else:
-            # TODO: add remux method to ffmpeg to create an mkv file instead of mp4
-            # Subtitles format may be incompatible with mp4 and they will be silently dropped by ffmpeg
-            # so we leave them as independent files for now
-            ffmpeg_result = await ffmpeg.merge((video, audio), media_item.complete_file)
-
-            if not ffmpeg_result.success:
-                raise DownloadError("FFmpeg Concat Error", ffmpeg_result.stderr, media_item)
-
-        await self.client.process_completed(media_item, self.domain)
-        await self.client.handle_media_item_completion(media_item, downloaded=True)
-        await self.finalize_download(media_item, downloaded=True)
-
-    async def _download_rendition_group(
-        self, media_item: MediaItem, m3u8_group: RenditionGroup
-    ) -> tuple[Path, Path | None, Path | None]:
-        async def download(m3u8: M3U8):
-            assert m3u8.media_type
-            if not m3u8.segments:
-                raise DownloadError(204, f"{m3u8.media_type} m3u8 manifest ({m3u8.base_uri}) has no valid segments")
-
-            download_folder = media_item.complete_file.with_suffix(constants.TempExt.HLS) / m3u8.media_type
-            coros = self._prepare_hls_downloads(media_item, m3u8, download_folder)
-            n_segmets = len(m3u8.segments)
-            if n_segmets > 1:
-                suffix = f".{m3u8.media_type}.ts"
-            else:
-                suffix = media_item.complete_file.suffix + parse_url(m3u8.segments[0].absolute_uri).suffix
-
-            output = media_item.complete_file.with_suffix(suffix)
-            if await asyncio.to_thread(output.is_file):
-                return output
-
-            batch_size = _VIDEO_HLS_BATCH_SIZE if m3u8.media_type == "video" else _AUDIO_HLS_BATCH_SIZE
-            tasks_results = await aio.gather(coros, batch_size=batch_size)
-            n_successful = sum(1 for result in tasks_results if result.downloaded)
-
-            if n_successful != n_segmets:
-                msg = f"Download of some segments failed. Successful: {n_successful:,}/{n_segmets:,} "
-                raise DownloadError("HLS Seg Error", msg, media_item)
-
-            seg_paths = [result.item.complete_file for result in tasks_results]
-
-            if n_segmets > 1:
-                ffmpeg_result = await ffmpeg.concat(seg_paths, output)
-                if not ffmpeg_result.success:
-                    raise DownloadError("FFmpeg Concat Error", ffmpeg_result.stderr, media_item)
-            else:
-                await asyncio.to_thread(seg_paths[0].rename, output)
-            return output
-
-        audio = subtitles = None
-        if m3u8_group.subtitle:
-            try:
-                subtitles = await download(m3u8_group.subtitle)
-            except Exception as e:
-                log(f"Unable to download subtitles for {media_item.url}, Skipping. {e!r}", 40)
-            else:
-                log(
-                    f"Found subtitles for {media_item.url}, but CDL is currently unable to merge them. Subtitle were saved at {subtitles} ",
-                    30,
-                )
-
-        if m3u8_group.audio:
-            audio = await download(m3u8_group.audio)
-        video = await download(m3u8_group.video)
-        return video, audio, subtitles
-
-    def _prepare_hls_downloads(
-        self, media_item: MediaItem, m3u8: M3U8, download_folder: Path
-    ) -> list[Coroutine[None, None, SegmentDownloadResult]]:
-        padding = max(5, len(str(len(m3u8.segments))))
-
-        def create_segments() -> Generator[HlsSegment]:
-            for index, segment in enumerate(m3u8.segments, 1):
-                assert segment.uri
-                name = f"{index:0{padding}d}{constants.TempExt.HLS}"
-                yield HlsSegment(segment.title, name, parse_url(segment.absolute_uri))
-
-        async def download_segment(segment: HlsSegment):
-            # TODO: segments download should bypass the downloads slots limits.
-            # They count as a single download
-            seg_media_item = MediaItem.from_item(
-                media_item,
-                segment.url,
-                media_item.domain,
-                db_path=media_item.db_path,
-                download_folder=download_folder,
-                filename=segment.name,
-                ext=media_item.ext,
-            )
-            seg_media_item.is_segment = True
-            return SegmentDownloadResult(
-                seg_media_item,
-                await self.start_download(seg_media_item),
-            )
-
-        return [download_segment(segment) for segment in create_segments()]
+            async with self._file_lock_vault[media_item.filename]:
+                log_debug(f"Lock for {media_item.filename!r} acquired", 20)
+                try:
+                    return bool(await self.download(media_item))
+                finally:
+                    log_debug(f"Lock for {media_item.filename!r} released", 20)
 
     async def finalize_download(self, media_item: MediaItem, downloaded: bool) -> None:
         if downloaded:
             await asyncio.to_thread(Path.chmod, media_item.complete_file, 0o666)
-            await self.set_file_datetime(media_item, media_item.complete_file)
-        self.attempt_task_removal(media_item)
+            await _set_file_datetime(media_item, media_item.complete_file)
+
         self.manager.progress_manager.files.add_completed()
         log(f"Download finished: {media_item.url}", 20)
 
     """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
 
     async def check_file_can_download(self, media_item: MediaItem) -> None:
-        """Checks if the file can be downloaded."""
         await self.manager.storage_manager.check_free_space(media_item)
         if not self.manager.client_manager.check_allowed_filetype(media_item):
             raise RestrictedFiletypeError(origin=media_item)
@@ -332,135 +166,30 @@ class Downloader:
         if not self.manager.client_manager.check_allowed_date_range(media_item):
             raise RestrictedDateRangeError(origin=media_item)
 
-    async def set_file_datetime(self, media_item: MediaItem, complete_file: Path) -> None:
-        """Sets the file's datetime."""
-        if media_item.is_segment:
-            return
-
-        if config.get().download_options.disable_file_timestamps:
-            return
-        if not media_item.datetime:
-            log(f"Unable to parse upload date for {media_item.url}, using current datetime as file datetime", 30)
-            return
-
-        # TODO: Make this entire method async (run in another thread)
-
-        # 1. try setting creation date
-        try:
-            if sys.platform == "win32":
-
-                def set_win_time():
-                    nano_ts: float = media_item.datetime * 1e7  # Windows uses nano seconds for dates
-                    timestamp = int(nano_ts + WIN_EPOCH_OFFSET)
-
-                    # Windows dates are 64bits, split into 2 32bits unsigned ints (dwHighDateTime , dwLowDateTime)
-                    # XOR to get the date as bytes, then shift to get the first 32 bits (dwHighDateTime)
-                    ctime = wintypes.FILETIME(timestamp & 0xFFFFFFFF, timestamp >> 32)
-                    access_mode = FILE_WRITE_ATTRIBUTES
-                    sharing_mode = 0  # Exclusive access
-                    security_mode = None  # Use default security attributes
-                    creation_disposition = OPEN_EXISTING
-
-                    # FILE_FLAG_BACKUP_SEMANTICS allows access to directories
-                    flags = FILE_ATTRIBUTE_NORMAL | FILE_FLAG_BACKUP_SEMANTICS
-                    template_file = None
-
-                    params = (
-                        access_mode,
-                        sharing_mode,
-                        security_mode,
-                        creation_disposition,
-                        flags,
-                        template_file,
-                    )
-
-                    handle = windll.kernel32.CreateFileW(str(complete_file), *params)
-                    windll.kernel32.SetFileTime(
-                        handle,
-                        byref(ctime),  # Creation time
-                        None,  # Access time
-                        None,  # Modification time
-                    )
-                    windll.kernel32.CloseHandle(handle)
-
-                await asyncio.to_thread(set_win_time)
-
-            elif sys.platform == "darwin" and MAC_OS_SET_FILE:
-                date_string = datetime.fromtimestamp(media_item.datetime).strftime("%m/%d/%Y %H:%M:%S")
-                cmd = ["-d", date_string, complete_file]
-                process = await asyncio.subprocess.create_subprocess_exec(
-                    MAC_OS_SET_FILE, *cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-                )
-                _ = await process.wait()
-
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError, ValueError):
-            pass
-
-        # 2. try setting modification and access date
-        try:
-            await asyncio.to_thread(os.utime, complete_file, (media_item.datetime, media_item.datetime))
-        except OSError:
-            pass
-
-    def attempt_task_removal(self, media_item: MediaItem) -> None:
-        """Attempts to remove the task from the progress bar."""
-        if media_item.is_segment:
-            return
-        if media_item.task_id is not None:
-            try:
-                self.manager.progress_manager.downloads.remove_task(media_item.task_id)
-            except ValueError:
-                pass
-
-            media_item.set_task_id(None)
-
-    """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
-
-    async def start_download(self, media_item: MediaItem) -> bool:
-        try:
-            self.client.client_manager.check_domain_errors(self.domain)
-        except TooManyCrawlerErrors:
-            return False
-
-        if not media_item.is_segment:
-            log(f"{self.log_prefix} starting: {media_item.url}", 20)
-
-        async with self._file_lock_vault[media_item.filename]:
-            log_debug(f"Lock for {media_item.filename} acquired", 20)
-            try:
-                return bool(await self.download(media_item))
-            finally:
-                log_debug(f"Lock for {media_item.filename} released", 20)
-
     @error_handling_wrapper
     @retry
     async def download(self, media_item: MediaItem) -> bool | None:
-        """Downloads the media item."""
-        url_as_str = str(media_item.url)
-        if url_as_str in KNOWN_BAD_URLS:
-            raise DownloadError(KNOWN_BAD_URLS[url_as_str])
         try:
-            await self.manager.states.RUNNING.wait()
-            self.client.client_manager.check_domain_errors(self.domain)
-            media_item.current_attempt = media_item.current_attempt or 1
             if not media_item.is_segment:
-                media_item.duration = await self.manager.db_manager.history_table.get_duration(self.domain, media_item)
+                media_item.duration = await self.manager.db_manager.history_table.get_duration(
+                    media_item.domain, media_item
+                )
                 await self.check_file_can_download(media_item)
-            downloaded = await self.client.download_file(self.domain, media_item)
+
+            downloaded = await self.client.download_file(media_item.domain, media_item)
             if downloaded:
                 await asyncio.to_thread(Path.chmod, media_item.complete_file, 0o666)
                 if not media_item.is_segment:
-                    await self.set_file_datetime(media_item, media_item.complete_file)
+                    await _set_file_datetime(media_item, media_item.complete_file)
                     self.manager.progress_manager.files.add_completed()
                     log(f"Download finished: {media_item.url}", 20)
-            self.attempt_task_removal(media_item)
+
             return downloaded
 
         except SkipDownloadError as e:
             if not media_item.is_segment:
                 log(f"Download skip {media_item.url}: {e}", 10)
                 self.manager.progress_manager.files.add_skipped()
-            self.attempt_task_removal(media_item)
 
         except (DownloadError, ClientResponseError, InvalidContentTypeError):
             raise
@@ -474,13 +203,6 @@ class Downloader:
             ClientConnectorError,
         ) as e:
             ui_message = getattr(e, "status", type(e).__name__)
-            if size := await aio.get_size(media_item.partial_file):
-                if self._current_attempt_filesize.get(media_item.filename, 0) >= size:
-                    raise DownloadError(ui_message, message=f"{self.log_prefix} failed", retry=True) from None
-
-                self._current_attempt_filesize[media_item.filename] = size
-                raise DownloadError(status=999, message="Download timeout reached, retrying", retry=True) from None
-
             message = str(e)
             raise DownloadError(ui_message, message, retry=True) from e
 
@@ -490,9 +212,33 @@ class Downloader:
         error_log_msg: ErrorLogMessage,
         exc_info: Exception | None = None,
     ) -> None:
-        self.attempt_task_removal(media_item)
         full_message = f"{self.log_prefix} Failed: {media_item.url} ({error_log_msg.main_log_msg}) \n -> Referer: {media_item.referer}"
         log(full_message, 40, exc_info=exc_info)
         self.manager.logs.write_download_error_log(media_item, error_log_msg.csv_log_msg)
         self.manager.progress_manager.download_errors.add_failure(error_log_msg.ui_failure)
         self.manager.progress_manager.files.add_failed()
+
+
+async def _set_file_datetime(media_item: MediaItem, complete_file: Path) -> None:
+    if media_item.is_segment:
+        return
+
+    if config.get().download_options.disable_file_timestamps:
+        return
+
+    if not media_item.timestamp:
+        log(f"Unable to parse upload date for {media_item.url}, using current datetime as file datetime", 30)
+        return
+
+    # 1. try setting creation date
+    try:
+        await set_creation_time(media_item.complete_file, media_item.timestamp)
+
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError, ValueError):
+        pass
+
+    # 2. try setting modification and access date
+    try:
+        await asyncio.to_thread(os.utime, complete_file, (media_item.timestamp, media_item.timestamp))
+    except OSError:
+        pass

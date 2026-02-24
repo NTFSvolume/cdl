@@ -90,7 +90,6 @@ class StorageManager:
     async def check_free_space(self, media_item: MediaItem) -> None:
         """Checks if there is enough free space to download this item."""
 
-        await self.manager.states.RUNNING.wait()
         if not await self._has_sufficient_space(media_item.download_folder):
             raise InsufficientFreeSpaceError(origin=media_item)
 
@@ -202,7 +201,6 @@ class StorageManager:
 
         last_check = -1
         while True:
-            await self.manager.states.RUNNING.wait()
             self._updated.clear()
             last_check += 1
             if self._used_mounts:

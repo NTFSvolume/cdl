@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -38,8 +38,8 @@ class ProgressHook:
     done: Callable[[], None]
     speed: Callable[[], float]
 
-    def __enter__(self) -> Callable[[int], None]:
-        return self.advance
+    def __enter__(self) -> Self:
+        return self
 
     def __exit__(self, *_) -> None:
         self.done()

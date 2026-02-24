@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import datetime
 import email.utils
+import shutil
+import subprocess
+import sys
 import warnings
 from functools import lru_cache
 from typing import TYPE_CHECKING, Literal, NewType, ParamSpec, TypeAlias, TypeVar
@@ -10,6 +14,94 @@ import dateparser.date
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from pathlib import Path
+
+try:
+    import tzlocal
+
+except (ImportError, LookupError):
+    tzlocal = None
+
+_TIMEZONE = tzlocal.get_localzone if tzlocal else None
+
+
+if sys.platform == "win32":
+    # Try to import win32con for Windows constants, fallback to hardcoded values if unavailable
+    try:
+        import win32con  # type: ignore[reportMissingModuleSource]  # pyright: ignore[reportMissingModuleSource]
+
+    except ImportError:
+        win32con = None
+
+    FILE_WRITE_ATTRIBUTES = 256
+    OPEN_EXISTING = win32con.OPEN_EXISTING if win32con else 3
+    FILE_ATTRIBUTE_NORMAL = win32con.FILE_ATTRIBUTE_NORMAL if win32con else 128
+    FILE_FLAG_BACKUP_SEMANTICS = win32con.FILE_FLAG_BACKUP_SEMANTICS if win32con else 33554432
+
+    # Windows epoch is January 1, 1601. Unix epoch is January 1, 1970
+    WIN_EPOCH_OFFSET = 116444736e9
+
+    from ctypes import byref, windll, wintypes
+
+    def _set_win_time(file: Path, datetime: float) -> None:
+        nano_ts: float = datetime * 1e7  # Windows uses nano seconds for dates
+        timestamp = int(nano_ts + WIN_EPOCH_OFFSET)
+
+        # Windows dates are 64bits, split into 2 32bits unsigned ints (dwHighDateTime , dwLowDateTime)
+        # XOR to get the date as bytes, then shift to get the first 32 bits (dwHighDateTime)
+        ctime = wintypes.FILETIME(timestamp & 0xFFFFFFFF, timestamp >> 32)
+        access_mode = FILE_WRITE_ATTRIBUTES
+        sharing_mode = 0  # Exclusive access
+        security_mode = None  # Use default security attributes
+        creation_disposition = OPEN_EXISTING
+
+        # FILE_FLAG_BACKUP_SEMANTICS allows access to directories
+        flags = FILE_ATTRIBUTE_NORMAL | FILE_FLAG_BACKUP_SEMANTICS
+        template_file = None
+
+        params = (
+            access_mode,
+            sharing_mode,
+            security_mode,
+            creation_disposition,
+            flags,
+            template_file,
+        )
+
+        handle = windll.kernel32.CreateFileW(str(file), *params)
+        windll.kernel32.SetFileTime(
+            handle,
+            byref(ctime),  # Creation time
+            None,  # Access time
+            None,  # Modification time
+        )
+        windll.kernel32.CloseHandle(handle)
+
+    async def set_creation_time(file: Path, timestamp: float) -> None:
+        return await asyncio.to_thread(_set_win_time, file, timestamp)
+
+
+elif sys.platform == "darwin":
+    # SetFile is non standard in macOS. Only users that have xcode installed will have SetFile
+    MAC_OS_SET_FILE = shutil.which("SetFile")
+
+    async def set_creation_time(file: Path, timestamp: float) -> None:
+        if MAC_OS_SET_FILE:
+            time_string = datetime.datetime.fromtimestamp(timestamp).strftime("%m/%d/%Y %H:%M:%S")
+            process = await asyncio.subprocess.create_subprocess_exec(
+                MAC_OS_SET_FILE,
+                "-d",
+                time_string,
+                file,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            _ = await process.wait()
+
+else:
+
+    async def set_creation_time(file: Path, timestamp: float) -> None: ...
+
 
 TimeStamp = NewType("TimeStamp", int)
 DateOrder: TypeAlias = Literal["DMY", "DYM", "MDY", "MYD", "YDM", "YMD"]
@@ -21,13 +113,6 @@ _R = TypeVar("_R", bound=datetime.datetime | None)
 
 _DEFAULT_PARSERS: list[ParserKind] = ["relative-time", "custom-formats", "absolute-time", "no-spaces-time"]
 _DEFAULT_DATE_ORDER = "MDY"
-
-try:
-    from tzlocal import get_localzone
-
-    _TIMEZONE = get_localzone()
-except (ImportError, LookupError):
-    _TIMEZONE = None
 
 
 def _coerce_to_list(value: _S | set[_S] | list[_S] | tuple[_S, ...] | None) -> list[_S]:
