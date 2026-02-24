@@ -492,15 +492,15 @@ class Crawler(ABC):
         media_host = media_item.url.host
 
         if (hosts := config.get().ignore_options.skip_hosts) and any(host in media_host for host in hosts):
-            log(f"Download skip {media_item.url} due to skip_hosts config", 10)
+            log(f"Download skipped{media_item.url} due to skip_hosts config", 10)
             return True
 
         if (hosts := config.get().ignore_options.only_hosts) and not any(host in media_host for host in hosts):
-            log(f"Download skip {media_item.url} due to only_hosts config", 10)
+            log(f"Download skipped{media_item.url} due to only_hosts config", 10)
             return True
 
         if (regex := config.get().ignore_options.filename_regex_filter) and re.search(regex, media_item.filename):
-            log(f"Download skip {media_item.url} due to filename regex filter config", 10)
+            log(f"Download skipped{media_item.url} due to filename regex filter config", 10)
             return True
 
         return False

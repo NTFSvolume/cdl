@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
+import os
 import time
 from http import HTTPStatus
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import aiofiles
@@ -12,101 +15,65 @@ from cyberdrop_dl import config, constants
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.exceptions import DownloadError, InvalidContentTypeError, SlowDownloadError
 from cyberdrop_dl.utils import aio, dates
-from cyberdrop_dl.utils.aio import WeakAsyncLocks
 from cyberdrop_dl.utils.logger import log
 from cyberdrop_dl.utils.utilities import get_size_or_none
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable, Coroutine, Mapping
-    from pathlib import Path
     from typing import Any
 
     import aiohttp
 
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
     from cyberdrop_dl.managers import Manager
-    from cyberdrop_dl.managers.client_manager import ClientManager
+    from cyberdrop_dl.managers.client_manager import HttpClient
     from cyberdrop_dl.progress._common import ProgressHook
 
 
 _CONTENT_TYPES_OVERRIDES: dict[str, str] = {"text/vnd.trolltech.linguist": "video/MP2T"}
 _SLOW_DOWNLOAD_PERIOD: int = 10  # seconds
-
 _FREE_SPACE_CHECK_PERIOD: int = 5  # Check every 5 chunks
-_NULL_CONTEXT: contextlib.nullcontext[None] = contextlib.nullcontext()
 _USE_IMPERSONATION: set[str] = {"vsco", "celebforum"}
 
 
-class DownloadClient:
-    """AIOHTTP operations for downloading."""
+logger = logging.getLogger(__name__)
 
-    def __init__(self, manager: Manager, client_manager: ClientManager) -> None:
+
+class DownloadClient:
+    """Low level class to that performs the actual download + database updates"""
+
+    def __init__(self, manager: Manager, http_client: HttpClient) -> None:
         self.manager = manager
-        self.client_manager = client_manager
+        self.http_client = http_client
         self.download_speed_threshold = config.get().runtime_options.slow_download_speed
-        self._server_locks = WeakAsyncLocks[str]()
-        self.server_locked_domains: set[str] = set()
         self._supports_ranges: bool = True
 
-    def server_limiter(self, domain: str, server: str) -> asyncio.Lock | contextlib.nullcontext[None]:
-        if domain not in self.server_locked_domains:
-            return _NULL_CONTEXT
-
-        return self._server_locks[server]
-
-    @contextlib.asynccontextmanager
-    async def _track_errors(self, domain: str):
-        with self.client_manager.request_context(domain):
-            await self.client_manager.manager.states.RUNNING.wait()
-            yield
-
-    async def _download(self, domain: str, media_item: MediaItem) -> bool:
+    async def _download(self, media_item: MediaItem) -> bool:
         resume_point = 0
         if self._supports_ranges and (size := await asyncio.to_thread(get_size_or_none, media_item.partial_file)):
             resume_point = size
             media_item.headers["Range"] = f"bytes={size}-"
 
-        await asyncio.sleep(config.get().rate_limiting_options.total_delay)
-
-        def process_response(resp: aiohttp.ClientResponse | AbstractResponse):
-            return self._process_response(media_item, domain, resume_point, resp)
-
+        await asyncio.sleep(config.get().rate_limits.total_delay)
         download_url = media_item.debrid_link or media_item.url
         async with self.__request_context(download_url, media_item.domain, media_item.headers) as resp:
-            return await process_response(resp)
+            return await self._process_response(media_item, resume_point, resp)
 
     async def _process_response(
         self,
         media_item: MediaItem,
-        domain: str,
         resume_point: int,
         resp: aiohttp.ClientResponse | AbstractResponse,
     ) -> bool:
         if resp.status == HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE:
             await asyncio.to_thread(media_item.partial_file.unlink)
 
-        _ = await self.client_manager.check_http_status(resp, download=True)
+        _ = await self.http_client.check_http_status(resp, download=True)
 
         if not media_item.is_segment:
             _ = _get_content_type(media_item.ext, resp.headers)
 
         media_item.filesize = int(resp.headers.get("Content-Length", "0")) or None
-        if not media_item.complete_file:
-            proceed, skip = await self.get_final_file_info(media_item, domain)
-            self.client_manager.check_content_length(resp.headers)
-            if skip:
-                self.manager.progress_manager.files.add_skipped()
-                return False
-            if not proceed:
-                if media_item.is_segment:
-                    return True
-                log(f"Skipping {media_item.url} as it has already been downloaded", 10)
-                self.manager.progress_manager.files.add_previously_completed(False)
-                await self.process_completed(media_item, domain)
-                await self.handle_media_item_completion(media_item, downloaded=False)
-
-                return False
-
         if resp.status != HTTPStatus.PARTIAL_CONTENT:
             await asyncio.to_thread(media_item.partial_file.unlink, missing_ok=True)
 
@@ -139,14 +106,14 @@ class DownloadClient:
         self, url: AbsoluteHttpURL, domain: str, headers: dict[str, str]
     ) -> AsyncGenerator[AbstractResponse | aiohttp.ClientResponse]:
         if domain in _USE_IMPERSONATION:
-            resp = await self.client_manager._curl_session.get(str(url), stream=True, headers=headers)
+            resp = await self.http_client._curl_session.get(str(url), stream=True, headers=headers)
             try:
                 yield AbstractResponse.from_resp(resp)
             finally:
                 await resp.aclose()
             return
 
-        async with self.client_manager._download_session.get(url, headers=headers) as resp:
+        async with self.http_client._download_session.get(url, headers=headers) as resp:
             yield resp
 
     async def _append_content(self, media_item: MediaItem, content: aiohttp.StreamReader | AbstractResponse) -> None:
@@ -160,10 +127,10 @@ class DownloadClient:
             check_download_speed = self.make_speed_checker(hook)
 
             async with aiofiles.open(media_item.partial_file, mode="ab") as f:
-                async for chunk in content.iter_chunked(self.client_manager.speed_limiter.chunk_size):
+                async for chunk in content.iter_chunked(self.http_client.speed_limiter.chunk_size):
                     await check_free_space()
                     chunk_size = len(chunk)
-                    await self.client_manager.speed_limiter.acquire(chunk_size)
+                    await self.http_client.speed_limiter.acquire(chunk_size)
                     await f.write(chunk)
                     hook.advance(chunk_size)
                     check_download_speed()
@@ -211,32 +178,44 @@ class DownloadClient:
 
         return check_download_speed
 
-    async def download_file(self, domain: str, media_item: MediaItem) -> bool:
+    async def download_file(self, media_item: MediaItem) -> bool:
         """Starts a file."""
         if config.get().download_options.skip_download_mark_completed and not media_item.is_segment:
-            log(f"Download Removed {media_item.url} due to mark completed option", 10)
+            log(f"Download skipped {media_item.url} due to mark completed option", 10)
             self.manager.progress_manager.files.add_skipped()
-            # set completed path
-            await self.process_completed(media_item, domain)
+            await self.mark_completed(media_item.domain, media_item)
             return False
 
-        async with self._track_errors(domain):
-            downloaded = await self._download(domain, media_item)
+        downloaded = await self._download(media_item)
 
         if downloaded:
             _ = await asyncio.to_thread(media_item.partial_file.rename, media_item.complete_file)
             if not media_item.is_segment:
-                proceed = await self.client_manager.check_file_duration(media_item)
-                await self.manager.db_manager.history_table.add_duration(domain, media_item)
-                if not proceed:
-                    log(f"Download Skip {media_item.url} due to runtime restrictions", 10)
+                has_valid_duration = await self.http_client.check_file_duration(media_item)
+                await self.manager.db_manager.history_table.add_duration(media_item.domain, media_item)
+                await self.manager.db_manager.history_table.add_filesize(media_item.domain, media_item)
+                if not has_valid_duration:
                     await asyncio.to_thread(media_item.complete_file.unlink)
-                    await self.mark_incomplete(media_item, media_item.domain)
+                    logger.warning(f"Download deleted {media_item.url} due to runtime restrictions")
+                    await self.mark_incomplete(media_item)
                     self.manager.progress_manager.files.add_skipped()
                     return False
-                await self.process_completed(media_item, domain)
-                await self.handle_media_item_completion(media_item, downloaded=True)
+
+            await self._finalize_download(media_item)
+
         return downloaded
+
+    async def _finalize_download(self, media_item: MediaItem) -> None:
+        await asyncio.to_thread(Path.chmod, media_item.complete_file, 0o666)
+        if media_item.is_segment:
+            return
+
+        media_item.downloaded = True
+        await self.manager.hash_manager.hash_client.hash_item_during_download(media_item)
+        self.manager.add_completed(media_item)
+        await self.mark_completed(media_item.domain, media_item)
+        await _set_file_datetime(media_item, media_item.complete_file)
+        log(f"Download finished: {media_item.url}")
 
     """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
 
@@ -246,29 +225,9 @@ class DownloadClient:
             return
         await self.manager.db_manager.history_table.insert_incompleted(media_item.domain, media_item)
 
-    async def process_completed(self, media_item: MediaItem, domain: str) -> None:
-        await self.mark_completed(domain, media_item)
-        await self.add_file_size(domain, media_item)
-
     async def mark_completed(self, domain: str, media_item: MediaItem) -> None:
+        self.manager.progress_manager.files.add_completed()
         await self.manager.db_manager.history_table.mark_complete(domain, media_item)
-
-    async def add_file_size(self, domain: str, media_item: MediaItem) -> None:
-        if await asyncio.to_thread(media_item.complete_file.is_file):
-            await self.manager.db_manager.history_table.add_filesize(domain, media_item)
-
-    async def handle_media_item_completion(self, media_item: MediaItem, downloaded: bool = False) -> None:
-        """Sends to hash client to handle hashing and marks as completed/current download."""
-        try:
-            media_item.downloaded = downloaded
-            await self.manager.hash_manager.hash_client.hash_item_during_download(media_item)
-            self.manager.add_completed(media_item)
-        except Exception:
-            log(f"Error handling media item completion of: {media_item.complete_file}", 10, exc_info=True)
-
-
-def get_file_location(media_item: MediaItem) -> Path:
-    return media_item.download_folder / media_item.filename
 
 
 def _check_filesize_limits(media: MediaItem) -> bool:
@@ -321,3 +280,28 @@ def _get_last_modified(headers: Mapping[str, str]) -> int | None:
 
 def _is_html_or_text(content_type: str) -> bool:
     return any(s in content_type for s in ("html", "text"))
+
+
+async def _set_file_datetime(media_item: MediaItem, complete_file: Path) -> None:
+    if media_item.is_segment:
+        return
+
+    if config.get().download_options.disable_file_timestamps:
+        return
+
+    if not media_item.timestamp:
+        logger.warning(f"Unable to parse upload date for {media_item.url}, using current datetime as file datetime")
+        return
+
+    # 1. try setting creation date
+    try:
+        await dates.set_creation_time(media_item.complete_file, media_item.timestamp)
+
+    except (OSError, ValueError):
+        pass
+
+    # 2. try setting modification and access date
+    try:
+        await asyncio.to_thread(os.utime, complete_file, (media_item.timestamp, media_item.timestamp))
+    except OSError:
+        pass

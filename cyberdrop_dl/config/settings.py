@@ -61,7 +61,6 @@ class FormatValidator:
 
 class DownloadOptions(FormatValidator, SettingsGroup):
     block_download_sub_folders: bool = False
-    disable_download_attempt_limit: bool = False
     disable_file_timestamps: bool = False
     include_album_id_in_folder_name: bool = False
     include_thread_id_in_folder_name: bool = False
@@ -396,7 +395,7 @@ class ConfigSettings(Settings):
     ignore_options: IgnoreOptions = IgnoreOptions()
     logs: Logs = Logs()
     media_duration_limits: MediaDurationLimits = MediaDurationLimits()
-    rate_limiting_options: RateLimiting = RateLimiting()
+    rate_limits: RateLimiting = RateLimiting()
     runtime_options: Runtime = Runtime()
     sorting: Sorting = Sorting()
     ui_options: UIOptions = UIOptions()

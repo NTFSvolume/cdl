@@ -62,7 +62,7 @@ class LogManager:
             self._write_to_csv(self.config.logs.unsupported_urls, url=url, origin=get_origin(origin))
         )
 
-    def write_download_error_log(self, media_item: MediaItem, error_message: str) -> None:
+    def write_download_error(self, media_item: MediaItem, error_message: str) -> None:
         _ = self.task_group.create_task(
             self._write_to_csv(
                 self.config.logs.download_error_urls,

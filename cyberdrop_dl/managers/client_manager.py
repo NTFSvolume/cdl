@@ -21,14 +21,13 @@ from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.clients.scraper_client import ScraperClient
 from cyberdrop_dl.cookies import get_cookies_from_browsers, read_netscape_files
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
-from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, ScrapeError, TooManyCrawlerErrors
+from cyberdrop_dl.exceptions import DownloadError, ScrapeError
 from cyberdrop_dl.managers import Manager
 from cyberdrop_dl.utils.ffmpeg import probe
 from cyberdrop_dl.utils.logger import log, log_debug, log_spacer
 
 if TYPE_CHECKING:
-    from asyncio.locks import Semaphore
-    from collections.abc import Callable, Generator, Iterable, Mapping
+    from collections.abc import Callable, Iterable, Mapping
     from http.cookies import BaseCookie
 
     from bs4 import BeautifulSoup
@@ -97,7 +96,7 @@ def _create_ssl():
     return ctx
 
 
-class ClientManager:
+class HttpClient:
     """Creates a 'client' that can be referenced by scraping or download sessions."""
 
     def __init__(self, manager: Manager) -> None:
@@ -107,10 +106,9 @@ class ClientManager:
         self.rate_limits: dict[str, AsyncLimiter] = {}
         self.download_slots: dict[str, int] = {}
 
-        rate_limits = config.get().rate_limiting_options
+        rate_limits = config.get().rate_limits
 
         self.global_rate_limiter: AsyncLimiter = AsyncLimiter(rate_limits.rate_limit, 1)
-        self.global_download_slots: Semaphore = asyncio.Semaphore(rate_limits.max_simultaneous_downloads)
         self.scraper_client: ScraperClient = ScraperClient(self)
         self.speed_limiter: DownloadSpeedLimiter = DownloadSpeedLimiter(rate_limits.download_speed_limit)
         self.download_client: DownloadClient = DownloadClient(manager, self)
@@ -145,7 +143,7 @@ class ClientManager:
 
     @property
     def rate_limiting_options(self):
-        return config.get().rate_limiting_options
+        return config.get().rate_limits
 
     def get_download_slots(self, domain: str) -> int:
         """Returns the download limit for a domain."""
@@ -266,31 +264,6 @@ class ClientManager:
         conn = aiohttp.TCPConnector(ssl=self.ssl_context, resolver=constants.DNS_RESOLVER())
         conn._resolver_owner = True
         return conn
-
-    def check_domain_errors(self, domain: str) -> None:
-        if _crawler_errors[domain] >= env.MAX_CRAWLER_ERRORS:
-            if crawler := self.manager.scrape_mapper.disable_crawler(domain):
-                msg = (
-                    f"{crawler.__class__.__name__} has been disabled after too many errors. "
-                    f"URLs from the following domains will be ignored: {crawler.SCRAPE_MAPPER_KEYS}"
-                )
-                log(msg, 40)
-            raise TooManyCrawlerErrors
-
-    @contextlib.contextmanager
-    def request_context(self, domain: str) -> Generator[None]:
-        self.check_domain_errors(domain)
-        try:
-            yield
-        except DDOSGuardError:
-            _crawler_errors[domain] += 1
-            raise
-        else:
-            # we could potentially reset the counter here
-            # _crawler_errors[domain] = 0
-            pass
-        finally:
-            pass
 
     async def load_cookie_files(self) -> None:
         if config.get().browser_cookies.auto_import:

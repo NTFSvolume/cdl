@@ -21,13 +21,13 @@ if TYPE_CHECKING:
     from curl_cffi.requests.session import HttpMethod
 
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-    from cyberdrop_dl.managers.client_manager import ClientManager
+    from cyberdrop_dl.managers.client_manager import HttpClient
 
 
 class ScraperClient:
     """AIOHTTP / CURL operations for scraping."""
 
-    def __init__(self, client_manager: ClientManager) -> None:
+    def __init__(self, client_manager: HttpClient) -> None:
         self.client_manager = client_manager
 
     @contextlib.asynccontextmanager

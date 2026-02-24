@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, NamedTuple
 
 from cyberdrop_dl import __version__, appdata, config, constants
 from cyberdrop_dl.database import Database
-from cyberdrop_dl.managers.client_manager import ClientManager
+from cyberdrop_dl.managers.client_manager import HttpClient
 from cyberdrop_dl.managers.hash_manager import HashManager
 from cyberdrop_dl.managers.live_manager import LiveManager
 from cyberdrop_dl.managers.log_manager import LogManager
@@ -39,7 +39,7 @@ class Manager:
     def __init__(self) -> None:
         self.hash_manager: HashManager = field(init=False)
         self.db_manager: Database = field(init=False)
-        self.client_manager: ClientManager = field(init=False)
+        self.client_manager: HttpClient = field(init=False)
         self.storage_manager: StorageManager = field(init=False)
 
         self.progress_manager: ProgressManager = ProgressManager(self, portrait=False)
@@ -84,7 +84,7 @@ class Manager:
     async def async_startup(self) -> None:
         """Async startup process for the manager."""
         self.states = AsyncioEvents(asyncio.Event(), asyncio.Event())
-        self.client_manager = ClientManager(self)
+        self.client_manager = HttpClient(self)
         await self.client_manager.startup()
         self.storage_manager = StorageManager(self)
 
