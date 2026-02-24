@@ -4,8 +4,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
-from cyberdrop_dl.scraper import scrape_mapper
 
+from cyberdrop_dl import scrape_mapper
 from cyberdrop_dl.managers import Manager
 
 if TYPE_CHECKING:
