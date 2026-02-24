@@ -143,7 +143,6 @@ class Downloader:
             return bool(await self._download(media_item))
 
     async def _check_file_can_download(self, media_item: MediaItem) -> None:
-        await self.manager.storage_manager.check_free_space(media_item)
         if media_item.is_segment:
             return
 

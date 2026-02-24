@@ -17,8 +17,6 @@ from cyberdrop_dl.exceptions import InsufficientFreeSpaceError
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Generator
 
-    from psutil._ntuples import sdiskpart
-
     from cyberdrop_dl.data_structures.url_objects import MediaItem
 
 
@@ -32,16 +30,6 @@ class DiskPartition:
     fstype: str = dataclasses.field(compare=False)
     opts: str = dataclasses.field(compare=False)
 
-    @staticmethod
-    def from_psutil(diskpart: sdiskpart) -> DiskPartition:
-        # Resolve converts any mapped drive to UNC paths (windows)
-        return DiskPartition(
-            Path(diskpart.mountpoint).resolve(),
-            Path(diskpart.device).resolve(),
-            diskpart.fstype,
-            diskpart.opts,
-        )
-
 
 @dataclasses.dataclass(frozen=True, slots=True, order=True)
 class DiskPartitionStats:
@@ -54,7 +42,7 @@ class DiskPartitionStats:
         return ", ".join(f"'{k}': '{v}'" for k, v in stats_as_dict.items())
 
 
-_storage: ContextVar[StorageChecker] = ContextVar("_storage")
+_storage_checker: ContextVar[StorageChecker] = ContextVar("_storage")
 _PARTITIONS: list[DiskPartition] = []
 _UNAVAILABLE: set[Path] = set()
 _LOCKS: dict[Path, asyncio.Lock] = defaultdict(asyncio.Lock)
@@ -68,7 +56,7 @@ class StorageChecker:
 
     required_free_space: int
     _free_space_map: dict[Path, int] = dataclasses.field(init=False, default_factory=dict)
-    _loop: asyncio.Task[None] | None = None
+    _loop: asyncio.Task[None] | None = dataclasses.field(init=False, default=None)
 
     def __str__(self) -> str:
         info = "\n".join(f"    {stats!s}" for stats in self._partition_stats())
@@ -96,12 +84,12 @@ class StorageChecker:
                     logger.info(self)
 
                     if self._loop is None:
-                        self._loop = asyncio.create_task(self._check_free_space_loop())
+                        self._loop = asyncio.create_task(self._start_loop())
 
         free_space = self._free_space_map[mount]
         return free_space == -1 or free_space > self.required_free_space
 
-    async def _check_free_space_loop(self) -> None:
+    async def _start_loop(self) -> None:
         """Infinite loop to get free space of all used mounts and update internal dict"""
 
         last_check = -1
@@ -110,7 +98,7 @@ class StorageChecker:
             last_check += 1
             mountpoints = sorted(mount for mount, free_space in self._free_space_map.items() if free_space != -1)
             if mountpoints:
-                results = await asyncio.gather(*(get_free_space(mount) for mount in mountpoints))
+                results = await asyncio.gather(*map(get_free_space, mountpoints))
                 self._free_space_map.update(zip(mountpoints, results, strict=True))
 
             if last_check % _LOG_PERIOD == 0:
@@ -118,13 +106,17 @@ class StorageChecker:
 
             await asyncio.sleep(_CHECK_PERIOD)
 
-    async def check_free_space(self, media_item: MediaItem) -> None:
+    async def check(self, media_item: MediaItem) -> None:
         """Checks if there is enough free space to download this item."""
 
         if not await self._has_sufficient_space(media_item.download_folder):
             raise InsufficientFreeSpaceError(origin=media_item)
 
-    async def close(self) -> None:
+    async def __aenter__(self) -> Self:
+        _ = _storage_checker.set(self)
+        return self
+
+    async def __aexit__(self, *_) -> None:
         self._free_space_map.clear()
         if self._loop is None:
             return
@@ -133,13 +125,6 @@ class StorageChecker:
             await self._loop
         except asyncio.CancelledError:
             pass
-
-    async def __aenter__(self) -> Self:
-        _ = _storage.set(self)
-        return self
-
-    async def __aexit__(self, *_) -> None:
-        await self.close()
 
 
 @functools.lru_cache
@@ -164,12 +149,18 @@ def _drive_as_path(drive: str) -> Path:
 
 
 def _get_disk_partitions() -> Generator[DiskPartition]:
-    for p in psutil.disk_partitions(all=True):
+    for diskpart in psutil.disk_partitions(all=True):
         try:
-            yield DiskPartition.from_psutil(p)
+            # Resolve converts any mapped drive to UNC paths (windows)
+            yield DiskPartition(
+                Path(diskpart.mountpoint).resolve(),
+                Path(diskpart.device).resolve(),
+                diskpart.fstype,
+                diskpart.opts,
+            )
         except OSError as e:
             logger.error(
-                f"Unable to get information about {p.mountpoint}. All files with that mountpoint as target will be skipped: {e!r}"
+                f"Unable to get information about {diskpart.mountpoint}. All files with that mountpoint as target will be skipped: {e!r}"
             )
 
 
@@ -212,7 +203,7 @@ async def _check_nt_network_drive(folder: Path) -> None:
     if folder_drive in _UNAVAILABLE:
         return
 
-    mounts = mountpoints()
+    mounts = tuple(p.mountpoint for p in partitions())
     if folder_drive in mounts:
         return
 
@@ -260,7 +251,7 @@ async def get_free_space(path: Path) -> int:
 
 def create_free_space_checker(media_item: MediaItem, *, frecuency: int = 5) -> Callable[[], Awaitable[None]]:
     current_chunk = 0
-    check = _storage.get().check_free_space
+    check = _storage_checker.get().check
 
     async def checker() -> None:
         nonlocal current_chunk
@@ -275,10 +266,6 @@ def partitions() -> tuple[DiskPartition, ...]:
     if not _PARTITIONS:
         _PARTITIONS.extend(_get_disk_partitions())
     return tuple(_PARTITIONS)
-
-
-def mountpoints() -> tuple[Path, ...]:
-    return tuple(p.mountpoint for p in partitions())
 
 
 def clear_cache() -> None:

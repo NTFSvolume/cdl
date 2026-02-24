@@ -209,17 +209,17 @@ class MessageBoardCrawler(Crawler, is_abc=True):
     @final
     @property
     def scrape_single_forum_post(self) -> bool:
-        return config.get().download_options.scrape_single_forum_post
+        return config.get().download.scrape_single_forum_post
 
     @final
     @property
     def max_thread_depth(self) -> int:
-        return config.get().download_options.maximum_thread_depth
+        return config.get().download.max_thread_depth
 
     @final
     @property
     def max_thread_folder_depth(self):
-        return config.get().download_options.maximum_thread_folder_depth
+        return config.get().download.max_thread_folder_depth
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         if not self.logged_in and self.login_required is True:

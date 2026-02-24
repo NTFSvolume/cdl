@@ -62,8 +62,11 @@ def test_storage_only_work_with_abs_paths() -> None:
 
 
 async def test_find_partition_finds_the_correct_partition() -> None:
-    def part(path: str) -> storage.DiskPartition:
+    def part(path: str):
         return storage.DiskPartition(Path(path), Path(path), "", "")
+
+    def find(path: str):
+        return storage.find_partition(Path(path))
 
     root, home, usb, external_ssd = partitions = [
         part("/"),
@@ -74,9 +77,8 @@ async def test_find_partition_finds_the_correct_partition() -> None:
 
     storage._PARTITIONS = partitions  # pyright: ignore[reportPrivateUsage]
 
-    assert storage.find_partition(Path("/swap_file")) is root
-    assert storage.find_partition(Path("/home/user/.bash_rc")) is home
-    assert storage.find_partition(Path("/home/external_SSD/song.mp3")) is external_ssd
-    assert storage.find_partition(Path("mnt/USB")) is None
-    assert storage.find_partition(Path("/mnt/USB")) is usb
-    assert storage.find_partition(Path("/mnt")) is root
+    assert find("/swap_file") is root
+    assert find("/home/user/.bash_rc") is home
+    assert find("/home/external_SSD/song.mp3") is external_ssd
+    assert find("/mnt/USB") is usb
+    assert find("/mnt") is root

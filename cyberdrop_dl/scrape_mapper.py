@@ -114,7 +114,7 @@ class ScrapeMapper:
 
     async def get_input_items(self, input_file) -> AsyncGenerator[ScrapeItem]:
         items_generator = self.load_links(input_file)
-        children_limits = config.get().download_options.maximum_number_of_children
+        children_limits = config.get().download.max_children
 
         async for item in items_generator:
             item.children_limits = children_limits
@@ -254,12 +254,12 @@ class ScrapeMapper:
             log(f"Skipping {scrape_item.url} as it is a blocked domain", 10)
             return False
 
-        skip_hosts = config.get().ignore_options.skip_hosts
+        skip_hosts = config.get().ignore.skip_hosts
         if skip_hosts and is_in_domain_list(scrape_item, skip_hosts):
             log(f"Skipping URL by skip_hosts config: {scrape_item.url}", 10)
             return False
 
-        only_hosts = config.get().ignore_options.only_hosts
+        only_hosts = config.get().ignore.only_hosts
         if only_hosts and not is_in_domain_list(scrape_item, only_hosts):
             log(f"Skipping URL by only_hosts config: {scrape_item.url}", 10)
             return False

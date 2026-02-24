@@ -1,10 +1,10 @@
 # ruff: noqa: RUF012
 import dataclasses
+import logging
 import random
 import re
 from datetime import date, datetime, timedelta
 from functools import cached_property
-from logging import DEBUG
 from pathlib import Path
 from typing import Literal
 
@@ -60,20 +60,20 @@ class FormatValidator:
         validate_format_string(value, valid_keys)
 
 
-class DownloadOptions(FormatValidator, SettingsGroup):
+class Downloads(FormatValidator, SettingsGroup):
     block_download_sub_folders: bool = False
     disable_file_timestamps: bool = False
     include_album_id_in_folder_name: bool = False
     include_thread_id_in_folder_name: bool = False
-    maximum_number_of_children: ListNonNegativeInt = []
+    max_children: ListNonNegativeInt = []
     remove_domains_from_folder_names: bool = False
     remove_generated_id_from_filenames: bool = False
     scrape_single_forum_post: bool = False
     separate_posts_format: NonEmptyStr = "{default}"
     separate_posts: bool = False
     skip_download_mark_completed: bool = False
-    maximum_thread_depth: NonNegativeInt = 0
-    maximum_thread_folder_depth: NonNegativeInt | None = None
+    max_thread_depth: NonNegativeInt = 0
+    max_thread_folder_depth: NonNegativeInt | None = None
 
     @field_validator("separate_posts_format", mode="after")
     @classmethod
@@ -159,8 +159,6 @@ class Range:
             self.max = float("inf")
 
     def __contains__(self, value: float, /) -> bool:
-        if not (self.min and self.max):
-            return True
         return self.min <= value <= self.max
 
 
@@ -236,7 +234,7 @@ class MediaDurationLimits(SettingsGroup):
         return to_timedelta(input_date)
 
 
-class IgnoreOptions(SettingsGroup):
+class Ignore(SettingsGroup):
     exclude_audio: bool = False
     exclude_images: bool = False
     exclude_other: bool = False
@@ -270,7 +268,7 @@ class Runtime(SettingsGroup):
     jdownloader_autostart: bool = False
     jdownloader_download_dir: PathOrNone = None
     jdownloader_whitelist: ListNonEmptyStr = []
-    log_level: NonNegativeInt = DEBUG
+    log_level: NonNegativeInt = logging.DEBUG
     send_unsupported_to_jdownloader: bool = False
     skip_check_for_empty_folders: bool = False
     skip_check_for_partial_files: bool = False
@@ -445,13 +443,13 @@ class GenericCrawlerInstances(SettingsGroup):
 
 class ConfigSettings(Settings):
     browser_cookies: Cookies = Cookies()
-    download_options: DownloadOptions = DownloadOptions()
-    dupe_cleanup_options: Dedupe = Dedupe()
+    download: Downloads = Downloads()
+    dedupe: Dedupe = Dedupe()
     file_size_limits: FileSizeLimits = FileSizeLimits()
     files: Files = Files()
     general: General = General()
     generic_crawlers_instances: GenericCrawlerInstances = GenericCrawlerInstances()
-    ignore_options: IgnoreOptions = IgnoreOptions()
+    ignore: Ignore = Ignore()
     logs: Logs = Logs()
     media_duration_limits: MediaDurationLimits = MediaDurationLimits()
     rate_limits: RateLimiting = RateLimiting()

@@ -69,7 +69,7 @@ class StreamDownloader:
 
     async def download(self, media_item: MediaItem) -> bool:
         """Starts a file."""
-        if self.config.download_options.skip_download_mark_completed and not media_item.is_segment:
+        if self.config.download.skip_download_mark_completed and not media_item.is_segment:
             logger.info(f"Download skipped {media_item.url} due to mark completed option", 10)
             self.manager.progress_manager.files.add_skipped()
             await self.mark_completed(media_item.domain, media_item)
@@ -275,7 +275,7 @@ async def _set_file_datetime(media_item: MediaItem, complete_file: Path) -> None
     if media_item.is_segment:
         return
 
-    if config.get().download_options.disable_file_timestamps:
+    if config.get().download.disable_file_timestamps:
         return
 
     if not media_item.timestamp:

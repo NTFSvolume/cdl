@@ -55,8 +55,8 @@ def test_hash_directory_scanner(manager: Manager, expected_results: set[tuple[st
     n_files = max(count.values())
     algos = count.keys()
     assert len(expected_results) == len(algos) * n_files
-    config.get().dupe_cleanup_options.add_md5_hash = "md5" in algos
-    config.get().dupe_cleanup_options.add_sha256_hash = "sha256" in algos
+    config.get().dedupe.add_md5_hash = "md5" in algos
+    config.get().dedupe.add_sha256_hash = "sha256" in algos
 
     config.get().files.download_folder.mkdir(parents=True)
     db_path = appdata.get().db_file

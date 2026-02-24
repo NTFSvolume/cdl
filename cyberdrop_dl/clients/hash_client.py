@@ -53,7 +53,7 @@ class HashClient:
 
     @property
     def dupe_cleanup_options(self) -> Dedupe:
-        return config.get().dupe_cleanup_options
+        return config.get().dedupe
 
     async def hash_directory(self, path: Path) -> None:
         path = Path(path)
@@ -77,7 +77,7 @@ class HashClient:
     async def hash_item_during_download(self, media_item: MediaItem) -> None:
         if media_item.is_segment:
             return
-        if config.get().dupe_cleanup_options.hashing != Hashing.IN_PLACE:
+        if config.get().dedupe.hashing != Hashing.IN_PLACE:
             return
 
         try:
@@ -101,9 +101,9 @@ class HashClient:
             return
 
         hash = await self._update_db_and_retrive_hash_helper(file, original_filename, referer, hash_type=self.xxhash)
-        if config.get().dupe_cleanup_options.add_md5_hash:
+        if config.get().dedupe.add_md5_hash:
             await self._update_db_and_retrive_hash_helper(file, original_filename, referer, hash_type=self.md5)
-        if config.get().dupe_cleanup_options.add_sha256_hash:
+        if config.get().dedupe.add_sha256_hash:
             await self._update_db_and_retrive_hash_helper(file, original_filename, referer, hash_type=self.sha256)
         return hash
 
@@ -154,9 +154,9 @@ class HashClient:
         self.hashes_dict[hash][size].add(absolute_path)
 
     async def cleanup_dupes_after_download(self) -> None:
-        if config.get().dupe_cleanup_options.hashing == Hashing.OFF:
+        if config.get().dedupe.hashing == Hashing.OFF:
             return
-        if not config.get().dupe_cleanup_options.auto_dedupe:
+        if not config.get().dedupe.auto_dedupe:
             return
         if config.get().runtime.ignore_history:
             return

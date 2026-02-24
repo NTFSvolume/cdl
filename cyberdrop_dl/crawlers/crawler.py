@@ -264,7 +264,7 @@ class Crawler(ABC):
     @final
     @property
     def allow_no_extension(self) -> bool:
-        return not config.get().ignore_options.exclude_files_with_no_extension
+        return not config.get().ignore.exclude_files_with_no_extension
 
     @property
     def deep_scrape(self) -> bool:
@@ -491,15 +491,15 @@ class Crawler(ABC):
     async def check_skip_by_config(self, media_item: MediaItem) -> bool:
         media_host = media_item.url.host
 
-        if (hosts := config.get().ignore_options.skip_hosts) and any(host in media_host for host in hosts):
+        if (hosts := config.get().ignore.skip_hosts) and any(host in media_host for host in hosts):
             log(f"Download skipped{media_item.url} due to skip_hosts config", 10)
             return True
 
-        if (hosts := config.get().ignore_options.only_hosts) and not any(host in media_host for host in hosts):
+        if (hosts := config.get().ignore.only_hosts) and not any(host in media_host for host in hosts):
             log(f"Download skipped{media_item.url} due to only_hosts config", 10)
             return True
 
-        if (regex := config.get().ignore_options.filename_regex_filter) and re.search(regex, media_item.filename):
+        if (regex := config.get().ignore.filename_regex_filter) and re.search(regex, media_item.filename):
             log(f"Download skipped{media_item.url} due to filename regex filter config", 10)
             return True
 
@@ -577,13 +577,13 @@ class Crawler(ABC):
             title = "Untitled"
 
         title = title.strip()
-        if album_id and config.get().download_options.include_album_id_in_folder_name:
+        if album_id and config.get().download.include_album_id_in_folder_name:
             title = f"{title} {album_id}"
 
-        if thread_id and config.get().download_options.include_thread_id_in_folder_name:
+        if thread_id and config.get().download.include_thread_id_in_folder_name:
             title = f"{title} {thread_id}"
 
-        if not config.get().download_options.remove_domains_from_folder_names:
+        if not config.get().download.remove_domains_from_folder_names:
             title = f"{title} ({self.FOLDER_DOMAIN})"
 
         # Remove double spaces
@@ -595,7 +595,7 @@ class Crawler(ABC):
 
     @property
     def separate_posts(self) -> bool:
-        return config.get().download_options.separate_posts
+        return config.get().download.separate_posts
 
     def create_separate_post_title(
         self,
@@ -606,7 +606,7 @@ class Crawler(ABC):
     ) -> str:
         if not self.separate_posts:
             return ""
-        title_format = config.get().download_options.separate_posts_format
+        title_format = config.get().download.separate_posts_format
         if title_format.strip().casefold() == "{default}":
             title_format = self.DEFAULT_POST_TITLE_FORMAT
         if isinstance(date, int):

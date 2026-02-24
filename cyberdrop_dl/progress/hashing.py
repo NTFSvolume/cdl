@@ -22,9 +22,9 @@ if TYPE_CHECKING:
 
 def _get_enabled_hashes():
     yield "xxh128"
-    if config.get().dupe_cleanup_options.add_md5_hash:
+    if config.get().dedupe.add_md5_hash:
         yield "md5"
-    if config.get().dupe_cleanup_options.add_sha256_hash:
+    if config.get().dedupe.add_sha256_hash:
         yield "sha256"
 
 

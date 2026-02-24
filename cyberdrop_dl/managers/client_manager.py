@@ -150,7 +150,7 @@ class HttpClient:
 
     def check_allowed_filetype(self, media_item: MediaItem) -> bool:
         """Checks if the file type is allowed to download."""
-        ignore_options = config.get().ignore_options
+        ignore_options = config.get().ignore
         ext = media_item.ext.lower()
 
         if ext in constants.FileFormats.IMAGE and ignore_options.exclude_images:
@@ -169,7 +169,7 @@ class HttpClient:
             return True
 
         item_date = datetime.date()
-        ignore_options = config.get().ignore_options
+        ignore_options = config.get().ignore
 
         if ignore_options.exclude_before and item_date < ignore_options.exclude_before:
             return False

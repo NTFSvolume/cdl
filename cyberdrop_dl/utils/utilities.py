@@ -264,7 +264,7 @@ def get_download_path(manager: Manager, scrape_item: ScrapeItem, domain: str) ->
 def remove_file_id(filename: str, ext: str) -> tuple[str, str]:
     """Removes the additional string some websites adds to the end of every filename."""
     original_filename = filename
-    if not config.get().download_options.remove_generated_id_from_filenames:
+    if not config.get().download.remove_generated_id_from_filenames:
         return original_filename, filename
 
     filename = filename.rsplit(ext, 1)[0]
