@@ -32,14 +32,14 @@ class JDownloaderConfig:
 
     @staticmethod
     def from_config(config: Config) -> JDownloaderConfig:
-        download_dir = config.runtime_options.jdownloader_download_dir or config.files.download_folder
+        download_dir = config.runtime.jdownloader_download_dir or config.files.download_folder
         return JDownloaderConfig(
-            enabled=config.runtime_options.send_unsupported_to_jdownloader,
+            enabled=config.runtime.send_unsupported_to_jdownloader,
             device=config.auth.jdownloader.device,
             username=config.auth.jdownloader.username,
             password=config.auth.jdownloader.password,
             download_dir=download_dir.resolve(),
-            autostart=config.runtime_options.jdownloader_autostart,
+            autostart=config.runtime.jdownloader_autostart,
         )
 
 

@@ -127,7 +127,7 @@ class MediaItem:
     filesize: int | None = None
     ext: str
     db_path: str
-    debrid_link: AbsoluteHttpURL | None = None
+    debrid_url: AbsoluteHttpURL | None = None
     duration: float | None = None
     is_segment: bool = False
     album_id: str | None = None
@@ -151,6 +151,10 @@ class MediaItem:
             self.db_path = ""
 
         self.complete_file = self.download_folder / self.filename
+
+    @property
+    def real_url(self) -> AbsoluteHttpURL:
+        return self.debrid_url or self.url
 
     @property
     def partial_file(self) -> Path:

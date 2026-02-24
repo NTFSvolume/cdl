@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 import aiofiles
 from mega.chunker import MegaChunker, get_chunks
 
-from cyberdrop_dl.clients.download_client import DownloadClient
+from cyberdrop_dl.clients.download_client import StreamDownloader
 from cyberdrop_dl.downloader.downloader import Downloader
 
 if TYPE_CHECKING:
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from cyberdrop_dl.managers import Manager
 
 
-class MegaDownloadClient(DownloadClient):
+class MegaDownloadClient(StreamDownloader):
     def __init__(self, manager: Manager) -> None:
         super().__init__(manager, manager.client_manager)
         self._decrypt_mapping: dict[URL, tuple[Crypto, int]] = {}
@@ -31,7 +31,7 @@ class MegaDownloadClient(DownloadClient):
 
         assert media_item.task_id is not None
         check_free_space = self.make_free_space_checker(media_item)
-        check_download_speed = self.make_speed_checker(media_item)
+        check_download_speed = self._create_speed_checker(media_item)
         await check_free_space()
         await self._pre_download_check(media_item)
 

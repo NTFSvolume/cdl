@@ -128,7 +128,7 @@ def _setup_debug_logger(manager: Manager) -> Path | None:
     debug_logger = logging.getLogger("cyberdrop_dl_debug")
     log_level = 10
     settings_data = config.get()
-    settings_data.runtime_options.log_level = log_level
+    settings_data.runtime.log_level = log_level
     debug_logger.setLevel(log_level)
     debug_log_file_path = Path(__file__).parents[1] / "cyberdrop_dl_debug.log"
     if env.DEBUG_LOG_FOLDER:
@@ -156,7 +156,7 @@ def _setup_debug_logger(manager: Manager) -> Path | None:
 def _setup_main_logger(manager: Manager) -> None:
     logger = logging.getLogger("cyberdrop_dl")
     file_io = config.get().logs.main_log.open("w", encoding="utf8")
-    log_level = config.get().runtime_options.log_level
+    log_level = config.get().runtime.log_level
     logger.setLevel(log_level)
 
     logger.addHandler(constants.console_handler)

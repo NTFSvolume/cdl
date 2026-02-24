@@ -47,7 +47,7 @@ def _make_html_rows() -> list[MarkdownRowDict]:
 
 
 def _get_crawlers_info_cols_and_rows() -> tuple[list[str], Generator[tuple[str, ...]]]:
-    from cyberdrop_dl.scraper.scrape_mapper import get_unique_crawlers
+    from cyberdrop_dl.scrape_mapper import get_unique_crawlers
 
     def make_colunm(field_name: str) -> str:
         return field_name.replace("_", " ").title().replace("Url", "URL")

@@ -88,7 +88,7 @@ class ScraperClient:
         The reverse (sync `aiohttp` -> `curl`) is not needed at the moment, so it is skipped
         """
         now = time.time()
-        for cookie in self.client_manager._curl_session.cookies.jar:
+        for cookie in self.client_manager.curl_session.cookies.jar:
             simple_cookie = make_simple_cookie(cookie, now)
             self.client_manager.cookies.update_cookies(simple_cookie, url)
 
@@ -107,7 +107,7 @@ class ScraperClient:
             if impersonate is True:
                 impersonate = "chrome"
             request_params["impersonate"] = impersonate
-            curl_resp = await self.client_manager._curl_session.request(method, str(url), stream=True, **request_params)
+            curl_resp = await self.client_manager.curl_session.request(method, str(url), stream=True, **request_params)
             try:
                 yield AbstractResponse.from_resp(curl_resp)
                 self.__sync_session_cookies(url)

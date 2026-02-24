@@ -332,7 +332,7 @@ def purge_dir_tree(dirname: Path | str) -> bool:
 
 def check_partials_and_empty_folders(manager: Manager) -> None:
     """Checks for partial downloads, deletes partial files and empty folders."""
-    settings = config.get().runtime_options
+    settings = config.get().runtime
     if settings.delete_partial_files:
         delete_partial_files(manager)
     if not settings.skip_check_for_partial_files:

@@ -1,4 +1,5 @@
 # ruff: noqa: RUF012
+import dataclasses
 import random
 import re
 from datetime import date, datetime, timedelta
@@ -15,6 +16,7 @@ from pydantic import (
     NonNegativeInt,
     PositiveFloat,
     PositiveInt,
+    computed_field,
     field_serializer,
     field_validator,
 )
@@ -148,21 +150,82 @@ class Logs(SettingsGroup):
         _ = purge_dir_tree(self.log_folder)
 
 
+@dataclasses.dataclass(slots=True)
+class Range:
+    min: float
+    max: float
+
+    def __post_init__(self) -> None:
+        if not self.max:
+            self.max = float("inf")
+
+    def __contains__(self, value: float, /) -> bool:
+        if not (self.min and self.max):
+            return True
+        return self.min <= value <= self.max
+
+
+@dataclasses.dataclass(slots=True, frozen=True)
+class FileSizeRanges:
+    video: Range
+    image: Range
+    other: Range
+
+
 class FileSizeLimits(SettingsGroup):
-    maximum_image_size: ByteSizeSerilized = ByteSize(0)
-    maximum_other_size: ByteSizeSerilized = ByteSize(0)
-    maximum_video_size: ByteSizeSerilized = ByteSize(0)
-    minimum_image_size: ByteSizeSerilized = ByteSize(0)
-    minimum_other_size: ByteSizeSerilized = ByteSize(0)
-    minimum_video_size: ByteSizeSerilized = ByteSize(0)
+    max_image_size: ByteSizeSerilized = ByteSize(0)
+    max_other_size: ByteSizeSerilized = ByteSize(0)
+    max_video_size: ByteSizeSerilized = ByteSize(0)
+    min_image_size: ByteSizeSerilized = ByteSize(0)
+    min_other_size: ByteSizeSerilized = ByteSize(0)
+    min_video_size: ByteSizeSerilized = ByteSize(0)
+
+    @computed_field
+    @property
+    def ranges(self) -> FileSizeRanges:
+        return FileSizeRanges(
+            video=Range(
+                self.min_video_size,
+                self.max_video_size,
+            ),
+            image=Range(
+                self.min_image_size,
+                self.max_image_size,
+            ),
+            other=Range(
+                self.min_other_size,
+                self.max_other_size,
+            ),
+        )
+
+
+@dataclasses.dataclass(slots=True, frozen=True)
+class MediaDurationRanges:
+    video: Range
+    audio: Range
 
 
 class MediaDurationLimits(SettingsGroup):
-    maximum_video_duration: timedelta = timedelta(seconds=0)
-    maximum_audio_duration: timedelta = timedelta(seconds=0)
-    minimum_video_duration: timedelta = timedelta(seconds=0)
-    minimum_audio_duration: timedelta = timedelta(seconds=0)
+    max_video_duration: timedelta = timedelta(seconds=0)
+    max_audio_duration: timedelta = timedelta(seconds=0)
+    min_video_duration: timedelta = timedelta(seconds=0)
+    min_audio_duration: timedelta = timedelta(seconds=0)
 
+    @computed_field
+    @property
+    def ranges(self) -> MediaDurationRanges:
+        return MediaDurationRanges(
+            video=Range(
+                self.min_video_duration.total_seconds(),
+                self.max_video_duration.total_seconds(),
+            ),
+            audio=Range(
+                self.min_audio_duration.total_seconds(),
+                self.max_audio_duration.total_seconds(),
+            ),
+        )
+
+    @cached_property
     @field_validator("*", mode="before")
     @staticmethod
     def parse_runtime_duration(input_date: timedelta | str | int | None) -> timedelta | str:
@@ -396,6 +459,6 @@ class ConfigSettings(Settings):
     logs: Logs = Logs()
     media_duration_limits: MediaDurationLimits = MediaDurationLimits()
     rate_limits: RateLimiting = RateLimiting()
-    runtime_options: Runtime = Runtime()
+    runtime: Runtime = Runtime()
     sorting: Sorting = Sorting()
     ui_options: UIOptions = UIOptions()

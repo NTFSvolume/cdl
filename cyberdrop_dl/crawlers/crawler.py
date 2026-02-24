@@ -268,7 +268,7 @@ class Crawler(ABC):
 
     @property
     def deep_scrape(self) -> bool:
-        return config.get().runtime_options.deep_scrape
+        return config.get().runtime.deep_scrape
 
     def _init_downloader(self) -> Downloader:
         self.downloader = dl = Downloader(self.manager, self.DOMAIN)
@@ -434,7 +434,7 @@ class Crawler(ABC):
             original_filename=original_filename,
             ext=ext,
         )
-        media_item.debrid_link = debrid_link
+        media_item.debrid_url = debrid_link
         media_item.headers = self._get_download_headers(media_item.referer)
         if metadata is not None:
             media_item.metadata = metadata

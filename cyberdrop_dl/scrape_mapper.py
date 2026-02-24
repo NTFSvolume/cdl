@@ -61,7 +61,7 @@ class ScrapeMapper:
         self.existing_crawlers: dict[str, Crawler] = {}
         self.direct_crawler = DirectHttpFile(self.manager)
         self.jdownloader = JDownloader.new(config.get())
-        self.jdownloader_whitelist = config.get().runtime_options.jdownloader_whitelist
+        self.jdownloader_whitelist = config.get().runtime.jdownloader_whitelist
         self.using_input_file = False
         self.groups = set()
         self.count = 0

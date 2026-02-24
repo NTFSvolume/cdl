@@ -15,14 +15,13 @@ from aiohttp import ClientResponse, ClientSession
 from aiolimiter import AsyncLimiter
 
 from cyberdrop_dl import appdata, config, constants, ddos_guard, env
-from cyberdrop_dl.clients.download_client import DownloadClient
+from cyberdrop_dl.clients.download_client import StreamDownloader
 from cyberdrop_dl.clients.flaresolverr import FlareSolverr
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.clients.scraper_client import ScraperClient
 from cyberdrop_dl.cookies import get_cookies_from_browsers, read_netscape_files
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
 from cyberdrop_dl.exceptions import DownloadError, ScrapeError
-from cyberdrop_dl.managers import Manager
 from cyberdrop_dl.utils.ffmpeg import probe
 from cyberdrop_dl.utils.logger import log, log_debug, log_spacer
 
@@ -60,26 +59,6 @@ if TYPE_CHECKING:
 _null_context = contextlib.nullcontext()
 
 
-class DownloadSpeedLimiter(AsyncLimiter):
-    __slots__ = ("chunk_size",)
-
-    def __init__(self, speed_limit: int) -> None:
-        self.chunk_size: int = 1024 * 1024 * 10  # 10MB
-        if speed_limit:
-            self.chunk_size = min(self.chunk_size, speed_limit)
-        super().__init__(speed_limit, 1)
-
-    async def acquire(self, amount: float | None = None) -> None:
-        if self.max_rate <= 0:
-            return
-        if not amount:
-            amount = self.chunk_size
-        await super().acquire(amount)
-
-    def __repr__(self):
-        return f"{type(self).__name__}(speed_limit={self.max_rate!r}, chunk_size={self.chunk_size!r})"
-
-
 def _create_ssl():
     ssl_context = config.get().general.ssl_context
 
@@ -110,22 +89,21 @@ class HttpClient:
 
         self.global_rate_limiter: AsyncLimiter = AsyncLimiter(rate_limits.rate_limit, 1)
         self.scraper_client: ScraperClient = ScraperClient(self)
-        self.speed_limiter: DownloadSpeedLimiter = DownloadSpeedLimiter(rate_limits.download_speed_limit)
-        self.download_client: DownloadClient = DownloadClient(manager, self)
+        self.download_client: StreamDownloader = StreamDownloader(manager, self)
         self.flaresolverr: FlareSolverr = FlareSolverr(manager)
 
         self._session: aiohttp.ClientSession
-        self._download_session: aiohttp.ClientSession
-        self._curl_session: AsyncSession[CurlResponse]
+        self.dl_session: aiohttp.ClientSession
+        self.curl_session: AsyncSession[CurlResponse]
         self._json_response_checks: dict[str, Callable[[Any], None]] = {}
 
     def _startup(self) -> None:
         self._session = self.new_scrape_session()
-        self._download_session = self.new_download_session()
+        self.dl_session = self.new_download_session()
         if _curl_import_error is not None:
             return
 
-        self._curl_session = self.new_curl_cffi_session()
+        self.curl_session = self.new_curl_cffi_session()
 
     async def __aenter__(self) -> Self:
         self._startup()
@@ -133,11 +111,11 @@ class HttpClient:
 
     async def __aexit__(self, *args) -> None:
         await self._session.close()
-        await self._download_session.close()
+        await self.dl_session.close()
         if _curl_import_error is not None:
             return
         try:
-            await self._curl_session.close()
+            await self.curl_session.close()
         except Exception:
             pass
 
@@ -348,29 +326,13 @@ class HttpClient:
         if not (is_video or is_audio):
             return True
 
-        duration_limits = config.get().media_duration_limits
-        min_video_duration: float = duration_limits.minimum_video_duration.total_seconds()
-        max_video_duration: float = duration_limits.maximum_video_duration.total_seconds()
-        min_audio_duration: float = duration_limits.minimum_audio_duration.total_seconds()
-        max_audio_duration: float = duration_limits.maximum_audio_duration.total_seconds()
-        video_duration_limits = min_video_duration, max_video_duration
-        audio_duration_limits = min_audio_duration, max_audio_duration
-
-        if is_video and not any(video_duration_limits):
-            return True
-        if is_audio and not any(audio_duration_limits):
-            return True
+        duration_limits = config.get().media_duration_limits.ranges
 
         async def get_duration() -> float | None:
-            if media_item.duration:
-                return media_item.duration
-
             if media_item.downloaded:
                 properties = await probe(media_item.complete_file)
-
             else:
-                headers = self.download_client._get_download_headers(media_item.domain, media_item.referer)
-                properties = await probe(media_item.url, headers=headers)
+                properties = await probe(media_item.url, headers=media_item.headers)
 
             if properties.format.duration:
                 return properties.format.duration
@@ -379,21 +341,18 @@ class HttpClient:
             if is_audio and properties.audio:
                 return properties.audio.duration
 
-        duration: float | None = await get_duration()
-        media_item.duration = duration
+        if media_item.duration is None:
+            media_item.duration = await get_duration()
 
-        if duration is None:
+        if media_item.duration is None:
             return True
 
         await self.manager.db_manager.history_table.add_duration(media_item.domain, media_item)
 
         if is_video:
-            max_video_duration = max_video_duration or float("inf")
+            return media_item.duration in duration_limits.video
 
-            return min_video_duration <= duration <= max_video_duration
-
-        max_audio_duration = max_audio_duration or float("inf")
-        return min_audio_duration <= duration <= max_audio_duration
+        return media_item.duration in duration_limits.audio
 
     async def close(self) -> None:
         await self.flaresolverr.close()

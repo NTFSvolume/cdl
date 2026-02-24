@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine
 
     from cyberdrop_dl import config
-    from cyberdrop_dl.clients.download_client import DownloadClient
+    from cyberdrop_dl.clients.download_client import StreamDownloader
     from cyberdrop_dl.config import Config
     from cyberdrop_dl.data_structures.url_objects import MediaItem
     from cyberdrop_dl.managers import Manager
@@ -74,12 +74,12 @@ class Downloader:
         self,
         config: config.Config,
         manager: Manager,
-        client: DownloadClient,
+        client: StreamDownloader,
         slots: int,
     ) -> None:
         self.manager: Manager = manager
         self.config: Config = config
-        self.client: DownloadClient = client
+        self.client: StreamDownloader = client
         self.processed_items: set[str] = set()
         self.waiting_items: int = 0
         self._current_attempt_filesize: dict[str, int] = {}
@@ -116,7 +116,7 @@ class Downloader:
         self.waiting_items += 1
         await self.client.mark_incomplete(media_item)
 
-        server = (media_item.debrid_link or media_item.url).host
+        server = (media_item.debrid_url or media_item.url).host
 
         async with (
             self._server_lock(media_item.domain, server),
@@ -133,7 +133,7 @@ class Downloader:
                 logger.debug(f"Lock for {media_item.filename!r} released")
 
     async def run(self, media_item: MediaItem) -> bool:
-        if media_item.url.path in self.processed_items and not self.config.runtime_options.ignore_history:
+        if media_item.url.path in self.processed_items and not self.config.runtime.ignore_history:
             return False
 
         async with self._limiter(media_item):
@@ -164,7 +164,7 @@ class Downloader:
                 )
                 await self._check_file_can_download(media_item)
 
-            return await self.client.download_file(media_item)
+            return await self.client.download(media_item)
 
         except SkipDownloadError as e:
             if not media_item.is_segment:

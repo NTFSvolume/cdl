@@ -9,7 +9,6 @@ from send2trash import send2trash
 
 from cyberdrop_dl import config, constants
 from cyberdrop_dl.constants import Hashing
-from cyberdrop_dl.ui.prompts.basic_prompts import enter_to_continue
 from cyberdrop_dl.utils.logger import log
 from cyberdrop_dl.utils.utilities import get_size_or_none
 
@@ -23,7 +22,6 @@ if TYPE_CHECKING:
 
 def hash_directory_scanner(manager: Manager, path: Path) -> None:
     asyncio.run(_hash_directory_scanner_helper(manager, path))
-    enter_to_continue()
 
 
 async def _hash_directory_scanner_helper(manager: Manager, path: Path) -> None:
@@ -160,7 +158,7 @@ class HashClient:
             return
         if not config.get().dupe_cleanup_options.auto_dedupe:
             return
-        if config.get().runtime_options.ignore_history:
+        if config.get().runtime.ignore_history:
             return
         with self.manager.live_manager.get_hash_live(stop=True):
             file_hashes_dict = await self.get_file_hashes_dict()
