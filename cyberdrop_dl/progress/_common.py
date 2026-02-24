@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import TYPE_CHECKING, Self
+from types import MappingProxyType
+from typing import TYPE_CHECKING, ClassVar, Self
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -10,16 +11,8 @@ if TYPE_CHECKING:
     from rich.progress import TaskID
 
 
-from types import MappingProxyType
-from typing import TYPE_CHECKING, ClassVar
-
 from rich.markup import escape
-from rich.progress import (
-    Progress,
-    ProgressColumn,
-    Task,
-    TaskID,
-)
+from rich.progress import Progress, ProgressColumn, Task, TaskID
 
 
 def truncate(s: str, length: int = 40, placeholder: str = "...") -> str:
@@ -43,6 +36,9 @@ class ProgressHook:
 
     def __exit__(self, *_) -> None:
         self.done()
+
+    def as_segment(self) -> ProgressHook:
+        return ProgressHook(self.advance, lambda: None, self.speed)
 
 
 class ProgressProxy:

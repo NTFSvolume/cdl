@@ -55,10 +55,28 @@ async def test_fuse_filesystem_should_not_return_zero() -> None:
 
 def test_storage_only_work_with_abs_paths() -> None:
     cwd = Path()
-    assert storage.find_partition(cwd) is None
+    with pytest.raises(ValueError):
+        _ = storage.find_partition(cwd)
+
     assert storage.find_partition(cwd.resolve())
 
-    with pytest.raises(AssertionError):
-        storage._get_mount_point(cwd)
 
-    assert storage._get_mount_point(cwd.resolve())
+async def test_find_partition_finds_the_correct_partition() -> None:
+    def part(path: str) -> storage.DiskPartition:
+        return storage.DiskPartition(Path(path), Path(path), "", "")
+
+    root, home, usb, external_ssd = partitions = [
+        part("/"),
+        part("/home"),
+        part("/mnt/USB"),
+        part("/home/external_SSD"),
+    ]
+
+    storage._PARTITIONS = partitions  # pyright: ignore[reportPrivateUsage]
+
+    assert storage.find_partition(Path("/swap_file")) is root
+    assert storage.find_partition(Path("/home/user/.bash_rc")) is home
+    assert storage.find_partition(Path("/home/external_SSD/song.mp3")) is external_ssd
+    assert storage.find_partition(Path("mnt/USB")) is None
+    assert storage.find_partition(Path("/mnt/USB")) is usb
+    assert storage.find_partition(Path("/mnt")) is root

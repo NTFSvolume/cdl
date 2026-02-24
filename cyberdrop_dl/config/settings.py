@@ -16,7 +16,6 @@ from pydantic import (
     NonNegativeInt,
     PositiveFloat,
     PositiveInt,
-    computed_field,
     field_serializer,
     field_validator,
 )
@@ -180,8 +179,7 @@ class FileSizeLimits(SettingsGroup):
     min_other_size: ByteSizeSerilized = ByteSize(0)
     min_video_size: ByteSizeSerilized = ByteSize(0)
 
-    @computed_field
-    @property
+    @cached_property
     def ranges(self) -> FileSizeRanges:
         return FileSizeRanges(
             video=Range(
@@ -211,8 +209,7 @@ class MediaDurationLimits(SettingsGroup):
     min_video_duration: timedelta = timedelta(seconds=0)
     min_audio_duration: timedelta = timedelta(seconds=0)
 
-    @computed_field
-    @property
+    @cached_property
     def ranges(self) -> MediaDurationRanges:
         return MediaDurationRanges(
             video=Range(
@@ -225,7 +222,6 @@ class MediaDurationLimits(SettingsGroup):
             ),
         )
 
-    @cached_property
     @field_validator("*", mode="before")
     @staticmethod
     def parse_runtime_duration(input_date: timedelta | str | int | None) -> timedelta | str:

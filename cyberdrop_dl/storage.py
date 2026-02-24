@@ -147,15 +147,8 @@ def _get_mount_point(folder: Path) -> Path | None:
     # Cached for performance.
     # It's not an expensive operation nor IO blocking, but it's very common for multiple files to share the same download folder
     # ex: HLS downloads could have over a thousand segments. All of them will go to the same folder
-    assert folder.is_absolute()
-    possible_mountpoints = (mount for mount in mountpoints() if folder.is_relative_to(mount))
-
-    # Get the closest mountpoint to `folder`
-    # mount_a = /home/user/  -> points to an internal SSD
-    # mount_b = /home/user/USB -> points to an external USB drive
-    # If `folder`` is `/home/user/USB/videos`, the correct mountpoint is mount_b
-    if mount_point := max(possible_mountpoints, key=lambda path: len(path.parts), default=None):
-        return mount_point
+    if partition := find_partition(folder):
+        return partition.mountpoint
 
     # Mount point for this path does not exists
     # This will only happen on Windows, ex: an USB drive (`D:`) that is not currently available (AKA disconnected)
@@ -181,9 +174,17 @@ def _get_disk_partitions() -> Generator[DiskPartition]:
 
 
 def find_partition(path: Path) -> DiskPartition | None:
-    for partition in partitions():
-        if path.is_relative_to(partition.mountpoint):
-            return partition
+    if not path.is_absolute():
+        raise ValueError(f"{path!r} is not absolute")
+
+    possible_partitions = (p for p in partitions() if path.is_relative_to(p.mountpoint))
+
+    # Get the closest mountpoint to `folder`
+    # mount_a = /home/user/  -> points to an internal SSD
+    # mount_b = /home/user/USB -> points to an external USB drive
+    # If `folder`` is `/home/user/USB/videos`, the correct mountpoint is mount_b
+    if partition := max(possible_partitions, key=lambda p: len(p.mountpoint.parts), default=None):
+        return partition
 
 
 def is_fuse_fs(path: Path) -> bool:
@@ -261,13 +262,13 @@ def create_free_space_checker(media_item: MediaItem, *, frecuency: int = 5) -> C
     current_chunk = 0
     check = _storage.get().check_free_space
 
-    async def check_every() -> None:
+    async def checker() -> None:
         nonlocal current_chunk
         if current_chunk % frecuency == 0:
             await check(media_item)
         current_chunk += 1
 
-    return check_every
+    return checker
 
 
 def partitions() -> tuple[DiskPartition, ...]:
