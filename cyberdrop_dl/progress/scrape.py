@@ -1,109 +1,30 @@
 from __future__ import annotations
 
+import contextlib
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, ClassVar
 
-from rich.console import Group
-from rich.panel import Panel
+from rich.columns import Columns
 from rich.progress import (
     BarColumn,
     DownloadColumn,
+    Progress,
     SpinnerColumn,
     TaskID,
     TimeRemainingColumn,
     TransferSpeedColumn,
 )
 
-from cyberdrop_dl.progress._common import ProgressHook, ProgressProxy
+from cyberdrop_dl import __version__
+from cyberdrop_dl.progress._common import ProgressHook, ProgressProxy, UIPanel
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
+
     from yarl import URL
 
-_COLOR: str = "plum3"
 
-_links: ContextVar[ProgressHook] = ContextVar("_links")
 _downloads: ContextVar[ProgressHook] = ContextVar("_downloads")
-
-
-class OverFlow(ProgressProxy):
-    _desc: ClassVar[str] = "[{color}]... and {number:,} other {name}"
-    _columns = ("[progress.description]{task.description}",)
-
-    def __init__(self, name: str) -> None:
-        super().__init__()
-        self.name: str = name
-        self._count: int = 0
-        self._task_id: TaskID = self._progress.add_task(str(self), visible=False)
-
-    def __str__(self) -> str:
-        return self._desc.format(color=_COLOR, number=self._count, name=self.name)
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}(desc={self!s})"
-
-    def update(self, count: int) -> None:
-        self._count = count
-        self._progress.update(self._task_id, description=str(self), visible=count > 0)
-
-
-class UIPanel(ProgressProxy):
-    unit: ClassVar[str]
-    _desc_fmt: ClassVar[str] = "[{color}]{description}"
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}(progress={self._progress!r})"
-
-    def __init__(self, visible_tasks_limit: int) -> None:
-        super().__init__()
-        self.title = type(self).__name__.removesuffix("Panel")
-        self._overflow = OverFlow(self.unit)
-        self._limit = visible_tasks_limit
-        self._panel = Panel(
-            Group(self._progress, self._overflow),
-            title=self.title,
-            border_style="green",
-            padding=(1, 1),
-        )
-
-    def __rich__(self) -> Panel:
-        return self._panel
-
-    def _redraw(self) -> None:
-        self._overflow.update(count=len(self._tasks) - self._limit)
-
-    def _add_task(self, description: str, total: float | None = None) -> TaskID:
-        task_id = self._progress.add_task(
-            self._desc_fmt.format(color=_COLOR, description=description),
-            total=total,
-            visible=len(self._tasks) < self._limit,
-        )
-        self._redraw()
-        return task_id
-
-    def remove_task(self, task_id: TaskID) -> None:
-        self._progress.remove_task(task_id)
-        self._redraw()
-
-    def new_hook(self, description: object, total: float | None = None) -> ProgressHook:
-        task_id = self._add_task(str(description), total)
-
-        def advance(amount: int) -> None:
-            self._advance(task_id, amount)
-
-        def done() -> None:
-            self.remove_task(task_id)
-
-        def speed() -> float:
-            return self.get_speed(task_id)
-
-        return ProgressHook(advance, done, speed)
-
-    def _advance(self, task_id: TaskID, amount: int) -> None:
-        self._progress.advance(task_id, amount)
-
-    def get_speed(self, task_id: TaskID) -> float:
-        task = self._tasks[task_id]
-        return task.finished_speed or task.speed or 0
 
 
 class ScrapingPanel(UIPanel):
@@ -152,3 +73,34 @@ class DownloadsPanel(UIPanel):
 
     def advance_file(self, task_id: TaskID, amount: int) -> None:
         self._advance(task_id, amount)
+
+
+class StatusMessage(ProgressProxy):
+    _columns = (
+        SpinnerColumn(style="green", spinner_name="dots"),
+        "[progress.description]{task.description}",
+    )
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.activity = Progress(*self._columns)
+        _ = self.activity.add_task(f"Running Cyberdrop-DL: v{__version__}", total=100, completed=0)
+        self._task_id = self._progress.add_task("", total=100, completed=0, visible=False)
+        self._renderable = Columns([self.activity, self._progress])
+
+    def update(self, description: str | None = None) -> None:
+        self._progress.update(self._task_id, description=description, visible=bool(description))
+
+    def __str__(self) -> str:
+        return self._tasks[self._task_id].description
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}(msg={self!s})"
+
+    @contextlib.contextmanager
+    def show(self, msg: str | None) -> Generator[None]:
+        try:
+            self.update(msg)
+            yield
+        finally:
+            self.update()

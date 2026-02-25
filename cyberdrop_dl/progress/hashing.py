@@ -13,8 +13,7 @@ from rich.panel import Panel
 from rich.progress import BarColumn, Progress
 
 from cyberdrop_dl import config
-
-from ._common import ProgressProxy, TaskCounter
+from cyberdrop_dl.progress._common import ProgressProxy, TaskCounter
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -56,15 +55,12 @@ class HashingPanel(ProgressProxy):
             file=TaskCounter(self._progress.add_task("")),
         )
 
-        self._panel = Panel(
+        self._renderable = Panel(
             Group(self._progress, self._hash_progress),
             title="Hashing",
             border_style="green",
             padding=(1, 1),
         )
-
-    def __rich__(self) -> Panel:
-        return self._panel
 
     @property
     def hashed_files(self) -> int:

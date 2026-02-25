@@ -35,7 +35,7 @@ class FileStats(ProgressProxy):
 
         self.simple: Progress = Progress(*self._columns)
         self._tasks_map["simple"] = TaskCounter(self.simple.add_task("Completed", total=0))
-        self._panel = Panel(
+        self._renderable: Panel = Panel(  # pyright: ignore[reportIncompatibleVariableOverride]
             self._progress,
             title="Files",
             border_style="green",
@@ -43,15 +43,12 @@ class FileStats(ProgressProxy):
             subtitle=self.subtitle,
         )
 
-    def __rich__(self) -> Panel:
-        return self._panel
-
     @property
     def subtitle(self) -> str:
         return f"Total Files: [white]{self._total_files:,}"
 
     def update_total(self, increase_total: bool = True) -> None:
-        self._panel.subtitle = self.subtitle
+        self._renderable.subtitle = self.subtitle
         if not increase_total:
             return
 

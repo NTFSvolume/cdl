@@ -4,27 +4,23 @@ import contextlib
 import dataclasses
 import logging
 import time
-from contextlib import asynccontextmanager
 from datetime import timedelta
 from typing import TYPE_CHECKING, Literal
 
 from pydantic import ByteSize
-from rich.columns import Columns
 from rich.live import Live
-from rich.progress import Progress, SpinnerColumn
 from rich.text import Text
 
-from cyberdrop_dl import __version__, config
-from cyberdrop_dl.progress._common import ProgressProxy
+from cyberdrop_dl import config
 from cyberdrop_dl.progress.errors import DownloadErrors, ScrapeErrors
 from cyberdrop_dl.progress.files import FileStats
 from cyberdrop_dl.progress.hashing import HashingPanel
-from cyberdrop_dl.progress.scrape import DownloadsPanel, ScrapingPanel
+from cyberdrop_dl.progress.scrape import DownloadsPanel, ScrapingPanel, StatusMessage
 from cyberdrop_dl.progress.screens import AppScreens
 from cyberdrop_dl.progress.sorting import SortingPanel
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Generator
+    from collections.abc import Generator
     from pathlib import Path
 
     from rich.console import RenderableType
@@ -33,40 +29,6 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
-
-
-class StatusMessage(ProgressProxy):
-    _columns = (
-        SpinnerColumn(style="green", spinner_name="dots"),
-        "[progress.description]{task.description}",
-    )
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.activity = Progress(*self._columns)
-        _ = self.activity.add_task(f"Running Cyberdrop-DL: v{__version__}", total=100, completed=0)
-        self._task_id = self._progress.add_task("", total=100, completed=0, visible=False)
-        self._panel = Columns([self.activity, self._progress])
-
-    def __rich__(self) -> Columns:
-        return self._panel
-
-    def update(self, description: str | None = None) -> None:
-        self._progress.update(self._task_id, description=description, visible=bool(description))
-
-    def __str__(self) -> str:
-        return self._tasks[self._task_id].description
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}(msg={self!s})"
-
-    @asynccontextmanager
-    async def show(self, msg: str | None) -> AsyncGenerator[None]:
-        try:
-            self.update(msg)
-            yield
-        finally:
-            self.update()
 
 
 @dataclasses.dataclass(slots=True)
@@ -98,7 +60,7 @@ class ProgressManager:
         )
 
     @contextlib.contextmanager
-    def get_live(self, name: Literal["scrape", "sorting", "hashing"]) -> Generator[None]:
+    def get_live(self, name: Literal["scraping", "sorting", "hashing"]) -> Generator[None]:
         self._current_screen = self._screens[name]
         self._live.start()
         try:

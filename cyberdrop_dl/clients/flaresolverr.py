@@ -148,15 +148,17 @@ class FlareSolverr:
             assert command is _Command.POST_REQUEST
             playload["postData"] = aiohttp.FormData(data)().decode()
 
-        async with (
-            self._request_lock,
-            self.manager.progress_manager.status.show(f"Waiting For Flaresolverr Response [{self._next_request_id()}]"),
+        with self.manager.progress_manager.status.show(
+            f"Waiting For Flaresolverr Response [{self._next_request_id()}]"
         ):
-            async with self.manager.client_manager._session.post(
-                self.url,
-                json=playload,
-                timeout=timeout,
-            ) as response:
+            async with (
+                self._request_lock,
+                self.manager.client_manager._session.post(
+                    self.url,
+                    json=playload,
+                    timeout=timeout,
+                ) as response,
+            ):
                 return _FlareSolverrResponse.from_dict(await response.json())
 
     async def _create_session(self) -> None:

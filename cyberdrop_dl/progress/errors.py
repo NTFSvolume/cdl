@@ -44,7 +44,7 @@ class _ErrorsPanel(ProgressProxy):
         self.title = type(self).__name__.removesuffix("Errors") + " Failures"
         self._failures: dict[str, TaskID] = {}
         self.failed_files: int = 0
-        self._panel = Panel(
+        self._renderable: Panel = Panel(  # pyright: ignore[reportIncompatibleVariableOverride]
             self._progress,
             title=self.title,
             border_style="green",
@@ -55,9 +55,6 @@ class _ErrorsPanel(ProgressProxy):
     @property
     def _subtitle(self) -> str:
         return f"Total {self.title}: [white]{self.failed_files:,}"
-
-    def __rich__(self) -> Panel:
-        return self._panel
 
     def add_failure(self, failure: str) -> None:
         self.failed_files += 1
@@ -70,7 +67,7 @@ class _ErrorsPanel(ProgressProxy):
         self._redraw()
 
     def _redraw(self) -> None:
-        self._panel.subtitle = self._subtitle
+        self._renderable.subtitle = self._subtitle
         for task_id in self._failures.values():
             self._progress.update(task_id, total=self.failed_files)
 

@@ -7,33 +7,33 @@ from rich.console import Group, RenderableType
 from rich.layout import Layout
 
 from cyberdrop_dl.cli import is_terminal_in_portrait
+from cyberdrop_dl.progress._common import RichProxy
 
 if TYPE_CHECKING:
     from cyberdrop_dl.progress import ProgressManager
 
 
-@dataclasses.dataclass(slots=True, frozen=True)
-class Screen:
-    _renderable: RenderableType
+@dataclasses.dataclass(slots=True)
+class Screen(RichProxy):
+    _renderable_vertical: RenderableType = ""
 
     def __rich__(self) -> RenderableType:
-        return self._renderable
+        return (
+            self._renderable_vertical if (self._renderable_vertical and is_terminal_in_portrait()) else self._renderable
+        )
 
 
-@dataclasses.dataclass(slots=True, frozen=True)
-class RotatingScreen(Screen):
-    _renderable_vertical: RenderableType
+@dataclasses.dataclass(slots=True, frozen=True, kw_only=True)
+class AppScreens:
+    scraping: Screen
+    simple: Screen
+    hashing: Screen
+    sorting: Screen
 
-    def __rich__(self) -> RenderableType:
-        return self._renderable_vertical if is_terminal_in_portrait() else self._renderable
-
-
-class ScrapingScreen(RotatingScreen):
     @classmethod
     def build(cls, progress: ProgressManager) -> Self:
         horizontal = Layout()
         vertical = Layout()
-
         top = (
             Layout(progress.files, ratio=1, minimum_size=9),
             Layout(progress.scrape_errors, ratio=1),
@@ -51,32 +51,18 @@ class ScrapingScreen(RotatingScreen):
 
         horizontal["top"].split_row(*top)
         vertical["top"].split_column(*top)
-        return cls(horizontal, vertical)
 
-
-@dataclasses.dataclass(slots=True, frozen=True)
-class AppScreens:
-    scraping: ScrapingScreen
-    simple: Screen
-    hashing: Screen
-    sorting: Screen
-
-    @classmethod
-    def build(cls, progress: ProgressManager) -> Self:
         return cls(
-            ScrapingScreen.build(progress),
-            Screen(Group(progress.status.activity, progress.files.simple)),
-            Screen(progress.hashing),
-            Screen(progress.sorting),
+            scraping=Screen(horizontal, vertical),
+            simple=Screen(Group(progress.status.activity, progress.files.simple)),
+            hashing=Screen(progress.hashing),
+            sorting=Screen(progress.sorting),
         )
 
-    def __getitem__(self, name: Literal["hashing", "sorting", "scrape"]) -> Screen:
-        if name == "hashing":
-            return self.hashing
-        if name == "sorting":
-            return self.sorting
-        if name == "simple":
-            return self.simple
-        if name == "scrape":
-            return self.scraping
-        raise KeyError
+    def __getitem__(self, name: Literal["hashing", "sorting", "scraping", "simple"]) -> Screen:
+        return {
+            "hashing": self.hashing,
+            "sorting": self.sorting,
+            "simple": self.simple,
+            "scraping": self.scraping,
+        }[name]
