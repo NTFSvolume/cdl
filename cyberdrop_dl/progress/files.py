@@ -3,7 +3,7 @@ from __future__ import annotations
 from rich.panel import Panel
 from rich.progress import BarColumn, Progress
 
-from cyberdrop_dl.progress._common import ProgressProxy, TaskCounter
+from cyberdrop_dl.progress.common import ProgressProxy, TaskCounter
 
 
 class FileStats(ProgressProxy):

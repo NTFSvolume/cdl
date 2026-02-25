@@ -5,6 +5,8 @@ import dataclasses
 import functools
 import inspect
 import itertools
+import json
+import logging
 import mimetypes
 import os
 import platform
@@ -15,7 +17,6 @@ from collections.abc import Generator, Mapping
 from functools import partial, wraps
 from http import HTTPStatus
 from pathlib import Path
-from stat import S_ISREG
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -47,8 +48,9 @@ from cyberdrop_dl.exceptions import (
     create_error_msg,
     get_origin,
 )
-from cyberdrop_dl.utils import json
-from cyberdrop_dl.utils.logger import log, log_with_color
+from cyberdrop_dl.utils.logger import log_with_color
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Generator, Iterable, Mapping
@@ -66,7 +68,7 @@ if TYPE_CHECKING:
     _R = TypeVar("_R")
 
     class Dataclass(Protocol):
-        __dataclass_fields__: ClassVar[dict]
+        __dataclass_fields__: ClassVar[dict[str, Any]]
 
 
 _ALLOWED_FILEPATH_PUNCTUATION = " .-_!#$%'()+,;=@[]^{}~"
@@ -87,13 +89,20 @@ def error_handling_context(self: Crawler | Downloader, item: ScrapeItem | MediaI
     except CDLBaseError as e:
         error_log_msg = ErrorLogMessage(e.ui_failure, str(e))
         origin = e.origin
-        link_to_show: URL | str = getattr(e, "url", None) or link_to_show
+        link_to_show = getattr(e, "url", None) or link_to_show
     except NotImplementedError as e:
         error_log_msg = ErrorLogMessage("NotImplemented")
         exc_info = e
     except TooManyRedirects as e:
         ui_failure = "Too Many Redirects"
-        info = json.dumps({"url": e.request_info.real_url, "history": [r.real_url for r in e.history]}, indent=4)
+        info = json.dumps(
+            {
+                "url": e.request_info.real_url,
+                "history": [r.real_url for r in e.history],
+            },
+            indent=4,
+            default=str,
+        )
         error_log_msg = ErrorLogMessage(ui_failure, f"{ui_failure}\n{info}")
     except MegaNzError as e:
         if code := getattr(e, "code", None):
@@ -137,7 +146,7 @@ def error_handling_context(self: Crawler | Downloader, item: ScrapeItem | MediaI
         self.write_download_error(item, error_log_msg, exc_info)
         return
 
-    log(f"Scrape Failed: {link_to_show} ({error_log_msg.main_log_msg})", 40, exc_info=exc_info)
+    logger.error(f"Scrape Failed: {link_to_show} ({error_log_msg.main_log_msg})", exc_info=exc_info)
     self.manager.logs.write_scrape_error_log(link_to_show, error_log_msg.csv_log_msg, origin)
     self.manager.progress_manager.scrape_errors.add_failure(error_log_msg.ui_failure)
 
@@ -239,7 +248,7 @@ def get_filename_and_ext(filename: str, forum: bool = False, mime_type: str | No
         ext = ext.rsplit(".")[0]
         ext_w_dot = f".{ext}".lower()
         full_name = f"{name}.{ext}"
-        if ext_w_dot not in constants.MEDIA_EXTENSIONS:
+        if ext_w_dot not in constants.FileFormats.MEDIA:
             raise InvalidExtensionError(full_name)
 
         filename_as_path = Path(full_name)
@@ -396,15 +405,7 @@ def get_text_between(original_text: str, start: str, end: str) -> str:
     return original_text[start_index:end_index].strip()
 
 
-def parse_url(link_str: str, relative_to: AbsoluteHttpURL | None = None, *, trim: bool = True) -> AbsoluteHttpURL:
-    """Parse a string into an absolute URL, handling relative URLs, encoding and optionally removes trailing slash (trimming).
-    Raises:
-        InvalidURLError: If the input string is not a valid URL or if any other error occurs during parsing.
-        TypeError: If `relative_to` is `None` and the parsed URL is relative or has no scheme.
-    """
-
-    base: AbsoluteHttpURL = relative_to  # type: ignore
-
+def _str_to_url(link_str: str) -> URL:
     def fix_query_params_encoding(link: str) -> str:
         if "?" not in link:
             return link
@@ -420,19 +421,29 @@ def parse_url(link_str: str, relative_to: AbsoluteHttpURL | None = None, *, trim
         assert isinstance(link_str, str), f"link_str must be a string object, got: {link_str!r}"
         clean_link_str = fix_multiple_slashes(fix_query_params_encoding(link_str))
         is_encoded = "%" in clean_link_str
-        new_url = URL(clean_link_str, encoded=is_encoded)
+        return URL(clean_link_str, encoded=is_encoded)
 
     except (AssertionError, AttributeError, ValueError, TypeError) as e:
         raise InvalidURLError(str(e), url=link_str) from e
 
-    if not new_url.absolute:
-        new_url = base.join(new_url)
-    if not new_url.scheme:
-        new_url = new_url.with_scheme(base.scheme or "https")
-    assert is_absolute_http_url(new_url)
+
+def parse_url(link_str: URL | str, relative_to: AbsoluteHttpURL | None = None, *, trim: bool = True) -> AbsoluteHttpURL:
+    """Parse a string into an absolute URL, handling relative URLs, encoding and optionally removes trailing slash (trimming).
+    Raises:
+        InvalidURLError: If the input string is not a valid URL or if any other error occurs during parsing.
+        TypeError: If `relative_to` is `None` and the parsed URL is relative or has no scheme.
+    """
+
+    url = _str_to_url(link_str) if isinstance(link_str, str) else link_str
+    if not url.absolute:
+        assert relative_to
+        url = relative_to.join(url)
+    if not url.scheme:
+        url = url.with_scheme("https")
+    assert is_absolute_http_url(url)
     if not trim:
-        return new_url
-    return remove_trailing_slash(new_url)
+        return url
+    return remove_trailing_slash(url)
 
 
 def is_absolute_http_url(url: URL) -> TypeGuard[AbsoluteHttpURL]:
@@ -452,19 +463,6 @@ def remove_parts(
         return url
     new_parts = [p for p in url.parts[1:] if p not in parts_to_remove]
     return url.with_path("/".join(new_parts), keep_fragment=keep_fragment, keep_query=keep_query)
-
-
-def get_size_or_none(path: Path) -> int | None:
-    """Checks if this is a file and returns its size with a single system call.
-
-    Returns `None` otherwise"""
-
-    try:
-        stat = path.stat()
-        if S_ISREG(stat.st_mode):
-            return stat.st_size
-    except (OSError, ValueError):
-        return None
 
 
 class HasClose(Protocol):

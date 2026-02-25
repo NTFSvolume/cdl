@@ -13,7 +13,7 @@ from rich.panel import Panel
 from rich.progress import BarColumn, Progress
 
 from cyberdrop_dl import config
-from cyberdrop_dl.progress._common import ProgressProxy, TaskCounter
+from cyberdrop_dl.progress.common import ProgressProxy, TaskCounter
 
 if TYPE_CHECKING:
     from collections.abc import Generator

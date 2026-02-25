@@ -6,7 +6,7 @@ import functools
 from rich.panel import Panel
 from rich.progress import BarColumn, TaskID
 
-from cyberdrop_dl.progress._common import ProgressProxy
+from cyberdrop_dl.progress.common import ProgressProxy
 
 
 @dataclasses.dataclass(slots=True, order=True)
