@@ -1,19 +1,18 @@
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import logging
 import time
 from contextlib import asynccontextmanager
 from datetime import timedelta
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import ByteSize
 from rich.columns import Columns
-from rich.console import Group, RenderableType
-from rich.layout import Layout
+from rich.live import Live
 from rich.progress import Progress, SpinnerColumn
 from rich.text import Text
-from yarl import URL
 
 from cyberdrop_dl import __version__, config
 from cyberdrop_dl.progress._common import ProgressProxy
@@ -21,13 +20,15 @@ from cyberdrop_dl.progress.errors import DownloadErrors, ScrapeErrors
 from cyberdrop_dl.progress.files import FileStats
 from cyberdrop_dl.progress.hashing import HashingPanel
 from cyberdrop_dl.progress.scrape import DownloadsPanel, ScrapingPanel
+from cyberdrop_dl.progress.screens import AppScreens
 from cyberdrop_dl.progress.sorting import SortingPanel
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator
+    from collections.abc import AsyncGenerator, Generator
     from pathlib import Path
 
-    from cyberdrop_dl.managers import Manager
+    from rich.console import RenderableType
+
     from cyberdrop_dl.progress.errors import UIFailure
 
 
@@ -68,67 +69,43 @@ class StatusMessage(ProgressProxy):
             self.update()
 
 
-@dataclasses.dataclass(slots=True, frozen=True)
-class UILayouts:
-    horizontal: Layout
-    vertical: Layout
-    simple: Group
-    hashing: RenderableType
-    sorting: RenderableType
-
-    @classmethod
-    def build(cls, progress: ProgressManager) -> Self:
-        horizontal = Layout()
-        vertical = Layout()
-
-        top = (
-            Layout(progress.files, ratio=1, minimum_size=9),
-            Layout(progress.scrape_errors, ratio=1),
-            Layout(progress.download_errors, ratio=1),
-        )
-
-        bottom = (
-            Layout(progress.scrape, ratio=20),
-            Layout(progress.downloads, ratio=20),
-            Layout(progress.status, ratio=2),
-        )
-
-        horizontal.split_column(Layout(name="top", ratio=20), *bottom)
-        vertical.split_column(Layout(name="top", ratio=60), *bottom)
-
-        horizontal["top"].split_row(*top)
-        vertical["top"].split_column(*top)
-
-        simple = Group(progress.status.activity, progress.files.simple)
-        return cls(horizontal, vertical, simple, progress.hashing, progress.sorting)
-
-
 @dataclasses.dataclass(slots=True)
 class ProgressManager:
-    manager: Manager
+    refresh_rate: int
 
-    portrait: bool
+    status: StatusMessage = dataclasses.field(init=False, default_factory=StatusMessage)
+    downloads: DownloadsPanel = dataclasses.field(init=False, default_factory=DownloadsPanel)
+    scrape: ScrapingPanel = dataclasses.field(init=False, default_factory=ScrapingPanel)
+    hashing: HashingPanel = dataclasses.field(init=False, default_factory=HashingPanel)
+    sorting: SortingPanel = dataclasses.field(init=False, default_factory=SortingPanel)
 
-    layouts: UILayouts = dataclasses.field(init=False)
-    status: StatusMessage = dataclasses.field(default_factory=StatusMessage)
+    files: FileStats = dataclasses.field(init=False, default_factory=FileStats)
+    download_errors: DownloadErrors = dataclasses.field(init=False, default_factory=DownloadErrors)
+    scrape_errors: ScrapeErrors = dataclasses.field(init=False, default_factory=ScrapeErrors)
 
-    downloads: DownloadsPanel = dataclasses.field(default_factory=DownloadsPanel)
-    scrape: ScrapingPanel = dataclasses.field(default_factory=ScrapingPanel)
-    hashing: HashingPanel = dataclasses.field(default_factory=HashingPanel)
-    sorting: SortingPanel = dataclasses.field(default_factory=SortingPanel)
-
-    files: FileStats = dataclasses.field(default_factory=FileStats)
-    download_errors: DownloadErrors = dataclasses.field(default_factory=DownloadErrors)
-    scrape_errors: ScrapeErrors = dataclasses.field(default_factory=ScrapeErrors)
+    _screens: AppScreens = dataclasses.field(init=False)
+    _live: Live = dataclasses.field(init=False)
+    _current_screen: RenderableType = dataclasses.field(init=False, default="")
 
     def __post_init__(self) -> None:
-        self.layouts = UILayouts.build(self)
+        self._screens = AppScreens.build(self)
+        self._live = Live(
+            refresh_per_second=self.refresh_rate,
+            transient=True,
+            screen=True,
+            auto_refresh=True,
+            get_renderable=lambda: self._current_screen,
+        )
 
-    @property
-    def layout(self) -> Layout:
-        if self.portrait:
-            return self.layouts.vertical
-        return self.layouts.horizontal
+    @contextlib.contextmanager
+    def get_live(self, name: Literal["scrape", "sorting", "hashing"]) -> Generator[None]:
+        self._current_screen = self._screens[name]
+        self._live.start()
+        try:
+            yield
+        finally:
+            self._current_screen = ""
+            self._live.stop()
 
     def print_stats(self, start_time: float) -> None:
         """Prints the stats of the program."""
@@ -138,14 +115,14 @@ class ProgressManager:
 
         end_time = time.perf_counter()
         runtime = timedelta(seconds=int(end_time - start_time))
-        total_data_written = ByteSize(self.manager.storage_manager.total_data_written).human_readable(decimal=True)
+        total_data_written = ByteSize(self.downloads.total_data_written).human_readable(decimal=True)
 
         log_spacer(20)
         logger.info("Printing Stats...\n")
         logger.info("Run Stats")
         logger.info(f"  Input File: {config.get().source}")
-        logger.info(f"  Input URLs: {self.manager.scrape_mapper.count:,}")
-        logger.info(f"  Input URL Groups: {self.manager.scrape_mapper.group_count:,}")
+        # logger.info(f"  Input URLs: {self.manager.scrape_mapper.count:,}")
+        # logger.info(f"  Input URL Groups: {self.manager.scrape_mapper.group_count:,}")
         # logger.info(f"  Log Folder: {log_folder_text}")
         logger.info(f"  Total Runtime: {runtime}")
         logger.info(f"  Total Downloaded Data: {total_data_written}")
@@ -168,8 +145,8 @@ class ProgressManager:
         logger.info(f"  Videos: {self.sorting.video_count:,}")
         logger.info(f"  Other Files: {self.sorting.other_count:,}")
 
-        last_padding = log_failures(self.scrape_errors.return_totals(), "Scrape Failures:")
-        log_failures(self.download_errors.return_totals(), "Download Failures:", last_padding)
+        last_padding = _log_failures(self.scrape_errors.return_totals(), "Scrape Failures:")
+        _log_failures(self.download_errors.return_totals(), "Download Failures:", last_padding)
 
     def print_dedupe_stats(self) -> None:
         logger.info("Dupe Stats:")
@@ -178,7 +155,7 @@ class ProgressManager:
         logger.info(f"  Removed (Downloads): {self.hashing.removed_files:,} files")
 
 
-def log_failures(failures: list[UIFailure], title: str = "Failures:", last_padding: int = 0) -> int:
+def _log_failures(failures: list[UIFailure], title: str = "Failures:", last_padding: int = 0) -> int:
     logger.info(title)
     if not failures:
         logger.info("  None")
@@ -196,5 +173,4 @@ def log_failures(failures: list[UIFailure], title: str = "Failures:", last_paddi
 def _get_console_hyperlink(file_path: Path, text: str = "") -> Text:
     full_path = file_path
     show_text = text or full_path
-    file_url = URL(full_path.as_posix()).with_scheme("file")
-    return Text(str(show_text), style=f"link {file_url}")
+    return Text(str(show_text), style=f"link {full_path.as_uri()}")
