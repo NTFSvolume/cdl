@@ -32,7 +32,7 @@ def test_startup_logger_should_not_be_created_on_a_successful_run(tmp_cwd: Path)
 
 
 def test_startup_logger_should_not_be_created_on_invalid_cookies(tmp_cwd: Path) -> None:
-    from cyberdrop_dl.utils.logger import catch_exceptions
+    from cyberdrop_dl.logger import catch_exceptions
 
     director = _create_director("--download")
     cookies_file = appdata.get().cookies_dir / "cookies.txt"

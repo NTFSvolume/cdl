@@ -3,19 +3,45 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import weakref
+from collections.abc import AsyncIterator, Callable, Coroutine, Iterable, Iterator
+from pathlib import Path
 from stat import S_ISREG
-from typing import TYPE_CHECKING, Final, Generic, TypeVar, cast
+from typing import IO, TYPE_CHECKING, Any, AnyStr, Generic, ParamSpec, Self, TypeVar, cast, overload
 
 if TYPE_CHECKING:
-    import pathlib
     from collections.abc import Awaitable, Sequence
+
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Sequence
+
+    from _typeshed import OpenBinaryMode, OpenTextMode
+
 
 _T = TypeVar("_T")
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
 
 
-if TYPE_CHECKING:
-    from collections.abc import Awaitable, Sequence
+class WeakAsyncLocks(Generic[_T]):
+    """A WeakValueDictionary wrapper for asyncio.Locks.
+
+    Unused locks are automatically garbage collected. When trying to retrieve a
+    lock that does not exists, a new lock will be created.
+    """
+
+    __slots__ = ("__locks",)
+
+    def __init__(self) -> None:
+        self.__locks: weakref.WeakValueDictionary[_T, asyncio.Lock] = weakref.WeakValueDictionary()
+
+    def __getitem__(self, key: _T, /) -> asyncio.Lock:
+        lock = self.__locks.get(key)
+        if lock is None:
+            self.__locks[key] = lock = asyncio.Lock()
+        return lock
 
 
 async def gather(coros: Sequence[Awaitable[_T]], batch_size: int = 10) -> list[_T]:
@@ -45,27 +71,118 @@ async def gather(coros: Sequence[Awaitable[_T]], batch_size: int = 10) -> list[_
     return results
 
 
-async def stat(path: pathlib.Path):
-    return await asyncio.to_thread(path.stat)
+def to_thread(fn: Callable[_P, _R]) -> Callable[_P, Coroutine[None, None, _R]]:
+    """Convert a blocking callable into an async callable that runs in another thread"""
+
+    async def call(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+        return await asyncio.to_thread(fn, *args, **kwargs)
+
+    return call
 
 
-async def is_dir(path: pathlib.Path) -> bool:
-    return await asyncio.to_thread(path.is_dir)
+class AsyncIO(Generic[AnyStr]):
+    """An asynchronous file object."""
+
+    def __init__(self, fp: IO[AnyStr]) -> None:
+        self._io: IO[AnyStr] = fp
+
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(self, *_) -> None:
+        return await asyncio.to_thread(self._io.close)
+
+    async def __aiter__(self) -> AsyncIterator[AnyStr]:
+        while True:
+            line = await self.readline()
+            if line:
+                yield line
+            else:
+                break
+
+    async def read(self, size: int = -1) -> AnyStr:
+        return await asyncio.to_thread(self._io.read, size)
+
+    async def readline(self) -> AnyStr:
+        return await asyncio.to_thread(self._io.readline)
+
+    async def readlines(self) -> list[AnyStr]:
+        return await asyncio.to_thread(self._io.readlines)
+
+    async def write(self, b: AnyStr, /) -> int:
+        return await asyncio.to_thread(self._io.write, b)
+
+    async def writelines(self, lines: Iterable[AnyStr], /) -> None:
+        return await asyncio.to_thread(self._io.writelines, lines)
 
 
-async def is_file(path: pathlib.Path) -> bool:
-    return await asyncio.to_thread(path.is_file)
+@dataclasses.dataclass(slots=True, eq=False)
+class _AsyncPathIterator(AsyncIterator[Path]):
+    iterator: Iterator[Path]
+
+    async def __anext__(self) -> Path:
+        path = await asyncio.to_thread(next, self.iterator, None)
+        if path is None:
+            raise StopAsyncIteration from None
+
+        return path
 
 
-async def exists(path: pathlib.Path) -> bool:
-    return await asyncio.to_thread(path.exists)
+stat = to_thread(Path.stat)
+is_dir = to_thread(Path.is_dir)
+is_file = to_thread(Path.is_file)
+exists = to_thread(Path.exists)
+unlink = remove = to_thread(Path.unlink)
+mkdir = to_thread(Path.mkdir)
+touch = to_thread(Path.touch)
+read_text = to_thread(Path.read_text)
+read_bytes = to_thread(Path.read_bytes)
+resolve = to_thread(Path.resolve)
 
 
-async def unlink(path: pathlib.Path, missing_ok: bool = False) -> None:
-    return await asyncio.to_thread(path.unlink, missing_ok)
+def glob(path: Path, pattern: str) -> _AsyncPathIterator:
+    return _AsyncPathIterator(path.glob(pattern))
 
 
-async def get_size(path: pathlib.Path) -> int | None:
+def rglob(path: Path, pattern: str) -> _AsyncPathIterator:
+    return _AsyncPathIterator(path.rglob(pattern))
+
+
+@overload
+async def open(
+    path: Path,
+    mode: OpenBinaryMode,
+    buffering: int = ...,
+    encoding: str | None = ...,
+    errors: str | None = ...,
+    newline: str | None = ...,
+) -> AsyncIO[bytes]: ...
+
+
+@overload
+async def open(
+    path: Path,
+    mode: OpenTextMode = ...,
+    buffering: int = ...,
+    encoding: str | None = ...,
+    errors: str | None = ...,
+    newline: str | None = ...,
+) -> AsyncIO[str]: ...
+
+
+async def open(
+    path: Path,
+    mode: str = "r",
+    buffering: int = -1,
+    encoding: str | None = None,
+    errors: str | None = None,
+    newline: str | None = None,
+) -> AsyncIO[Any]:
+    fp = await asyncio.to_thread(path.open, mode, buffering, encoding, errors, newline)
+    return AsyncIO(fp)
+
+
+async def get_size(path: Path) -> int | None:
     """If path exists and is a file, returns its size. Returns `None` otherwise"""
 
     # Manually parse stat result to make sure we only use 1 fs call
@@ -77,22 +194,3 @@ async def get_size(path: pathlib.Path) -> int | None:
     else:
         if S_ISREG(stat_result.st_mode):
             return stat_result.st_size
-
-
-class WeakAsyncLocks(Generic[_T]):
-    """A WeakValueDictionary wrapper for asyncio.Locks.
-
-    Unused locks are automatically garbage collected. When trying to retrieve a
-    lock that does not exists, a new lock will be created.
-    """
-
-    __slots__ = ("__locks",)
-
-    def __init__(self) -> None:
-        self.__locks: Final = weakref.WeakValueDictionary[_T, asyncio.Lock]()
-
-    def __getitem__(self, key: _T, /) -> asyncio.Lock:
-        lock = self.__locks.get(key)
-        if lock is None:
-            self.__locks[key] = lock = asyncio.Lock()
-        return lock

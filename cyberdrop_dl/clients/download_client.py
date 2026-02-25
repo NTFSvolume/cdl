@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
     from cyberdrop_dl.managers import Manager
-    from cyberdrop_dl.managers.client_manager import HttpClient
+    from cyberdrop_dl.managers.http import HttpClient
     from cyberdrop_dl.progress.common import ProgressHook
 
 

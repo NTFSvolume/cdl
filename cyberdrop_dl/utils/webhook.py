@@ -8,15 +8,15 @@ import rich
 from aiohttp import FormData
 
 from cyberdrop_dl import config, constants
+from cyberdrop_dl.logger import log, log_debug, log_spacer
 from cyberdrop_dl.utils import aio
-from cyberdrop_dl.utils.logger import log, log_debug, log_spacer
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
     from cyberdrop_dl.managers import Manager
-    from cyberdrop_dl.models.base import HttpAppriseURL
+    from cyberdrop_dl.models._base import AppriseURLModel
 
 
 _DEFAULT_DIFF_LINE_FORMAT: str = "{}"
@@ -43,7 +43,7 @@ def _prepare_diff_text() -> str:
     return "\n".join(prepare_lines())
 
 
-async def _prepare_form(webhook: HttpAppriseURL, main_log: Path) -> FormData:
+async def _prepare_form(webhook: AppriseURLModel, main_log: Path) -> FormData:
     diff_text = _prepare_diff_text()
     form = FormData()
 

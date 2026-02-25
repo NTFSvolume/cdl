@@ -9,8 +9,8 @@ from send2trash import send2trash
 
 from cyberdrop_dl import config, constants
 from cyberdrop_dl.constants import Hashing
+from cyberdrop_dl.logger import log
 from cyberdrop_dl.utils import aio
-from cyberdrop_dl.utils.logger import log
 
 if TYPE_CHECKING:
     from yarl import URL

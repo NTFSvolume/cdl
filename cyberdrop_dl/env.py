@@ -5,7 +5,7 @@ RUNNING_IN_IDE = bool(os.getenv("PYCHARM_HOSTED") or os.getenv("TERM_PROGRAM") =
 RUNNING_IN_TERMUX = bool(
     os.getenv("TERMUX_VERSION") or os.getenv("TERMUX_MAIN_PACKAGE_FORMAT") or "com.termux" in os.getenv("$PREFIX", "")
 )
-PORTRAIT_MODE = bool(RUNNING_IN_TERMUX or os.getenv("CDL_PORTRAIT_MODE"))
+FORCE_PORTRAIT = bool(RUNNING_IN_TERMUX or os.getenv("CDL_PORTRAIT_MODE"))
 
 
 DEBUG_LOG_FOLDER = os.getenv("CDL_DEBUG_LOG_FOLDER")

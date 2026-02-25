@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from dataclasses import field
 from datetime import UTC, datetime
 from enum import auto
 from pathlib import Path
@@ -10,12 +9,11 @@ from typing import TYPE_CHECKING, Final
 from rich.text import Text
 
 from cyberdrop_dl import env
-from cyberdrop_dl.compat import Enum, MayBeUpperStrEnum, StrEnum
+from cyberdrop_dl.compat import MayBeUpperStrEnum, StrEnum
 
 if TYPE_CHECKING:
     from aiohttp.resolver import AsyncResolver, ThreadedResolver
 
-    from cyberdrop_dl.utils.logger import LogHandler
 
 # TIME
 STARTUP_TIME = datetime.now()
@@ -32,8 +30,6 @@ CONSOLE_LEVEL = 100
 MAX_NAME_LENGTHS = {"FILE": 95, "FOLDER": 60}
 LOG_OUTPUT_TEXT = Text("")
 
-VALIDATION_ERROR_FOOTER = """Please delete the file or fix the errors"""
-
 
 # regex
 RAR_MULTIPART_PATTERN = re.compile(r"^part\d+")
@@ -42,7 +38,6 @@ REGEX_LINKS = re.compile(r"(?:http.*?)(?=($|\n|\r\n|\r|\s|\"|\[/URL]|']\[|]\[|\[
 HTTP_REGEX_LINKS = re.compile(
     r"https?://(www\.)?[-a-zA-Z0-9@:%._+~#=]{2,256}\.[a-z]{2,12}\b([-a-zA-Z0-9@:%_+.~#?&/=]*)"
 )
-console_handler: LogHandler
 
 
 class TempExt(StrEnum):
@@ -77,9 +72,8 @@ class BlockedDomains:
 
 
 DEFAULT_APP_STORAGE = Path("./AppData")
-DEFAULT_DOWNLOAD_STORAGE = Path("./Downloads")
+DEFAULT_DOWNLOAD_STORAGE = Path("./cdl_downloads")
 RESERVED_CONFIG_NAMES = ["all", "default"]
-NOT_DEFINED = field(init=False)
 
 
 class HashType(StrEnum):
@@ -105,13 +99,6 @@ class BROWSERS(StrEnum):
     opera_gx = auto()
     vivaldi = auto()
     chromium = auto()
-
-
-class NotificationResult(Enum):
-    SUCCESS = Text("Success", "green")
-    FAILED = Text("Failed", "bold red")
-    PARTIAL = Text("Partial Success", "yellow")
-    NONE = Text("No Notifications Sent", "yellow")
 
 
 class FileFormats:

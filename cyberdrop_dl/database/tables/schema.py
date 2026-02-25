@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 import aiosqlite
 from packaging.version import Version
 
-from cyberdrop_dl.utils.logger import log, log_spacer
+from cyberdrop_dl.logger import log, log_spacer
 
 from .definitions import create_schema_version
 

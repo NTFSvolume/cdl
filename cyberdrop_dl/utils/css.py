@@ -8,7 +8,7 @@ import bs4.css
 from bs4 import BeautifulSoup
 
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils.logger import log_debug
+from cyberdrop_dl.logger import log_debug
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator

@@ -1,40 +1,17 @@
-import shutil
 from typing import Annotated, Literal
 
 import cyclopts
 import pydantic
 from cyclopts import Parameter
 
-from cyberdrop_dl import __version__, env, signature
+from cyberdrop_dl import __version__, annotations
 from cyberdrop_dl.cli.model import CLIargs, ParsedArgs, RetryArgs
 from cyberdrop_dl.models.types import HttpURL
 from cyberdrop_dl.utils.yaml import format_validation_error
 
 
-def is_terminal_in_portrait() -> bool:
-    """Check if CDL is being run in portrait mode based on a few conditions."""
-
-    if env.PORTRAIT_MODE:
-        return True
-
-    terminal_size = shutil.get_terminal_size()
-    width, height = terminal_size.columns, terminal_size.lines
-    aspect_ratio = width / height
-
-    # High aspect ratios are likely to be in landscape mode
-    if aspect_ratio >= 3.2:
-        return False
-
-    # Check for mobile device in portrait mode
-    if (aspect_ratio < 1.5 and height >= 40) or (aspect_ratio < 2.3 and width <= 85):
-        return True
-
-    # Assume landscape mode for other cases
-    return False
-
-
 class App(cyclopts.App):
-    @signature.copy(cyclopts.App._parse_known_args)
+    @annotations.copy(cyclopts.App._parse_known_args)
     def _parse_known_args(self, *args, **kwargs):
         try:
             return super()._parse_known_args(*args, **kwargs)

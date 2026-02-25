@@ -13,17 +13,17 @@ import yarl
 if TYPE_CHECKING:
     from propcache.api import under_cached_property as cached_property
 
-    from cyberdrop_dl import signature
+    from cyberdrop_dl import annotations
     from cyberdrop_dl.managers import Manager
 
     class AbsoluteHttpURL(yarl.URL):
-        @signature.copy(yarl.URL.__new__)
+        @annotations.copy(yarl.URL.__new__)
         def __new__(cls) -> AbsoluteHttpURL: ...
 
-        @signature.copy(yarl.URL.__truediv__)
+        @annotations.copy(yarl.URL.__truediv__)
         def __truediv__(self) -> AbsoluteHttpURL: ...
 
-        @signature.copy(yarl.URL.__mod__)
+        @annotations.copy(yarl.URL.__mod__)
         def __mod__(self) -> AbsoluteHttpURL: ...
 
         @cached_property
@@ -38,13 +38,13 @@ if TYPE_CHECKING:
         @cached_property
         def parent(self) -> AbsoluteHttpURL: ...
 
-        @signature.copy(yarl.URL.with_path)
+        @annotations.copy(yarl.URL.with_path)
         def with_path(self) -> AbsoluteHttpURL: ...
 
-        @signature.copy(yarl.URL.with_host)
+        @annotations.copy(yarl.URL.with_host)
         def with_host(self) -> AbsoluteHttpURL: ...
 
-        @signature.copy(yarl.URL.origin)
+        @annotations.copy(yarl.URL.origin)
         def origin(self) -> AbsoluteHttpURL: ...
 
         @overload
@@ -53,7 +53,7 @@ if TYPE_CHECKING:
         @overload
         def with_query(self, **kwargs: yarl.QueryVariable) -> AbsoluteHttpURL: ...
 
-        @signature.copy(yarl.URL.with_query)
+        @annotations.copy(yarl.URL.with_query)
         def with_query(self) -> AbsoluteHttpURL: ...
 
         @overload
@@ -62,7 +62,7 @@ if TYPE_CHECKING:
         @overload
         def extend_query(self, **kwargs: yarl.QueryVariable) -> AbsoluteHttpURL: ...
 
-        @signature.copy(yarl.URL.extend_query)
+        @annotations.copy(yarl.URL.extend_query)
         def extend_query(self) -> AbsoluteHttpURL: ...
 
         @overload
@@ -71,25 +71,25 @@ if TYPE_CHECKING:
         @overload
         def update_query(self, **kwargs: yarl.QueryVariable) -> AbsoluteHttpURL: ...
 
-        @signature.copy(yarl.URL.update_query)
+        @annotations.copy(yarl.URL.update_query)
         def update_query(self) -> AbsoluteHttpURL: ...
 
-        @signature.copy(yarl.URL.without_query_params)
+        @annotations.copy(yarl.URL.without_query_params)
         def without_query_params(self) -> AbsoluteHttpURL: ...
 
-        @signature.copy(yarl.URL.with_fragment)
+        @annotations.copy(yarl.URL.with_fragment)
         def with_fragment(self) -> AbsoluteHttpURL: ...
 
-        @signature.copy(yarl.URL.with_name)
+        @annotations.copy(yarl.URL.with_name)
         def with_name(self) -> AbsoluteHttpURL: ...
 
-        @signature.copy(yarl.URL.with_suffix)
+        @annotations.copy(yarl.URL.with_suffix)
         def with_suffix(self) -> AbsoluteHttpURL: ...
 
-        @signature.copy(yarl.URL.join)
+        @annotations.copy(yarl.URL.join)
         def join(self) -> AbsoluteHttpURL: ...
 
-        @signature.copy(yarl.URL.joinpath)
+        @annotations.copy(yarl.URL.joinpath)
         def joinpath(self) -> AbsoluteHttpURL: ...
 
 else:

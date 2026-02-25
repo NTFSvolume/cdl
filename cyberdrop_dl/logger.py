@@ -336,3 +336,27 @@ def catch_exceptions(func: Callable[_P, _ExitCode]) -> Callable[_P, _ExitCode]:
         return 1
 
     return catch
+
+
+@contextlib.contextmanager
+def borrow_logger(name: str, level: int | None = None) -> Generator[None]:
+    logger = logging.getLogger(name)
+    old_level = logger.level
+    old_handlers = logger.handlers.copy()
+    old_propagate = logger.propagate
+
+    logger.handlers.clear()
+    for handler in logging.getLogger("cyberdrop_dl").handlers:
+        logger.addHandler(handler)
+
+    logger.propagate = False
+    if level is not None:
+        logger.setLevel(level)
+
+    try:
+        yield
+    finally:
+        logger.handlers.clear()
+        logger.handlers.extend(old_handlers)
+        logger.propagate = old_propagate
+        logger.setLevel(old_level)

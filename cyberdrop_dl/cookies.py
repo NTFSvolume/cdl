@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, NamedTuple, ParamSpec, TypeVar
 
 from cyberdrop_dl import appdata
 from cyberdrop_dl.dependencies import browser_cookie3
-from cyberdrop_dl.utils.logger import log
+from cyberdrop_dl.logger import log
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterable, Callable

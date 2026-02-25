@@ -11,7 +11,7 @@ from requests import request
 from rich.text import Text
 
 from cyberdrop_dl import __version__
-from cyberdrop_dl.utils.logger import log_with_color
+from cyberdrop_dl.logger import log_with_color
 
 if TYPE_CHECKING:
     from collections.abc import Iterable

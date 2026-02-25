@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import ssl
 from base64 import b64encode
 from collections import defaultdict
@@ -13,6 +14,7 @@ import certifi
 import truststore
 from aiohttp import ClientResponse, ClientSession
 from aiolimiter import AsyncLimiter
+from curl_cffi.requests.session import AsyncSession
 
 from cyberdrop_dl import appdata, config, constants, ddos_guard, env
 from cyberdrop_dl.clients.download_client import StreamDownloader
@@ -22,8 +24,8 @@ from cyberdrop_dl.clients.scraper_client import ScraperClient
 from cyberdrop_dl.cookies import get_cookies_from_browsers, read_netscape_files
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
 from cyberdrop_dl.exceptions import DownloadError, ScrapeError
+from cyberdrop_dl.logger import log_debug, log_spacer
 from cyberdrop_dl.utils.ffmpeg import probe
-from cyberdrop_dl.utils.logger import log, log_debug, log_spacer
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
@@ -31,9 +33,9 @@ if TYPE_CHECKING:
 
     from bs4 import BeautifulSoup
     from curl_cffi.requests import AsyncSession
+    from curl_cffi.requests.models import Response
     from curl_cffi.requests.models import Response as CurlResponse
 
-    from cyberdrop_dl.managers import Manager
 
 _curl_import_error = None
 try:
@@ -53,15 +55,12 @@ _DOWNLOAD_ERROR_ETAGS = {
 _crawler_errors: dict[str, int] = defaultdict(int)
 
 
-if TYPE_CHECKING:
-    from cyberdrop_dl.managers import Manager
-
 _null_context = contextlib.nullcontext()
+logger = logging.getLogger(__name__)
 
 
 def _create_ssl():
     ssl_context = config.get().general.ssl_context
-
     if not ssl_context:
         return False
 
@@ -78,24 +77,24 @@ def _create_ssl():
 class HttpClient:
     """Creates a 'client' that can be referenced by scraping or download sessions."""
 
-    def __init__(self, manager: Manager) -> None:
-        self.manager: Manager = manager
+    def __init__(self, config: config.Config) -> None:
+        self.config = config
         self.ssl_context: ssl.SSLContext | Literal[False] = _create_ssl()
         self.cookies: aiohttp.CookieJar = aiohttp.CookieJar(quote_cookie=False)
         self.rate_limits: dict[str, AsyncLimiter] = {}
         self.download_slots: dict[str, int] = {}
 
-        rate_limits = config.get().rate_limits
+        rate_limits = config.rate_limits
 
         self.global_rate_limiter: AsyncLimiter = AsyncLimiter(rate_limits.rate_limit, 1)
         self.scraper_client: ScraperClient = ScraperClient(self)
-        self.download_client: StreamDownloader = StreamDownloader(manager, self)
-        self.flaresolverr: FlareSolverr = FlareSolverr(manager)
+        self.download_client: StreamDownloader = StreamDownloader(self)
+        self.flaresolverr: FlareSolverr = FlareSolverr(self)
 
         self._session: aiohttp.ClientSession
         self.dl_session: aiohttp.ClientSession
-        self.curl_session: AsyncSession[CurlResponse]
         self._json_response_checks: dict[str, Callable[[Any], None]] = {}
+        self._curl_session: AsyncSession[Response] | None = None
 
     def _startup(self) -> None:
         self._session = self.new_scrape_session()
@@ -103,19 +102,24 @@ class HttpClient:
         if _curl_import_error is not None:
             return
 
-        self.curl_session = self.new_curl_cffi_session()
-
     async def __aenter__(self) -> Self:
         self._startup()
         return self
 
-    async def __aexit__(self, *args) -> None:
+    @property
+    def curl_session(self) -> AsyncSession[Response]:
+        if self._curl_session is None:
+            self.check_curl_cffi_is_available()
+            self._curl_session = self.new_curl_cffi_session()
+        return self._curl_session
+
+    async def __aexit__(self, *_) -> None:
         await self._session.close()
         await self.dl_session.close()
-        if _curl_import_error is not None:
+        if self._curl_session is None:
             return
         try:
-            await self.curl_session.close()
+            await self._curl_session.close()
         except Exception:
             pass
 
@@ -129,18 +133,6 @@ class HttpClient:
         instances = self.download_slots.get(domain, self.rate_limiting_options.max_simultaneous_downloads_per_domain)
 
         return min(instances, self.rate_limiting_options.max_simultaneous_downloads_per_domain)
-
-    @staticmethod
-    def check_curl_cffi_is_available() -> None:
-        if _curl_import_error is None:
-            return
-
-        system = "Android" if env.RUNNING_IN_TERMUX else "the system"
-        msg = (
-            f"curl_cffi is required to scrape this URL but a dependency it's not available on {system}.\n"
-            f"See: https://github.com/lexiforest/curl_cffi/issues/74#issuecomment-1849365636\n{_curl_import_error!r}"
-        )
-        raise ScrapeError("Missing Dependency", msg)
 
     @staticmethod
     def basic_auth(username: str, password: str) -> str:
@@ -225,7 +217,7 @@ class HttpClient:
         return self._new_session(trace_configs=trace_configs)
 
     def _new_session(self, trace_configs: list[aiohttp.TraceConfig] | None = None) -> ClientSession:
-        timeout = self.rate_limiting_options._aiohttp_timeout
+        timeout = self.rate_limiting_options.aiohttp_timeout
         return ClientSession(
             headers={"user-agent": config.get().general.user_agent},
             raise_for_status=False,
@@ -246,7 +238,7 @@ class HttpClient:
     async def load_cookie_files(self) -> None:
         if config.get().browser_cookies.auto_import:
             assert config.get().browser_cookies.browser
-            get_cookies_from_browsers(self.manager, browser=config.get().browser_cookies.browser)
+            get_cookies_from_browsers(browser=config.get().browser_cookies.browser)
 
         cookie_files = sorted(appdata.get().cookies_dir.glob("*.txt"))
         if not cookie_files:
@@ -316,46 +308,45 @@ class HttpClient:
         if content_length == "73003" and content_type == "video/mp4":
             raise DownloadError(410)  # Placeholder video with text "Video removed" (efukt)
 
-    async def check_file_duration(self, media_item: MediaItem) -> bool:
-        """Checks the file runtime against the config runtime limits."""
-        if media_item.is_segment:
-            return True
-
-        is_video = media_item.ext.lower() in constants.FileFormats.VIDEO
-        is_audio = media_item.ext.lower() in constants.FileFormats.AUDIO
-        if not (is_video or is_audio):
-            return True
-
-        duration_limits = config.get().media_duration_limits.ranges
-
-        async def get_duration() -> float | None:
-            if media_item.downloaded:
-                properties = await probe(media_item.complete_file)
-            else:
-                properties = await probe(media_item.url, headers=media_item.headers)
-
-            if properties.format.duration:
-                return properties.format.duration
-            if is_video and properties.video:
-                return properties.video.duration
-            if is_audio and properties.audio:
-                return properties.audio.duration
-
-        if media_item.duration is None:
-            media_item.duration = await get_duration()
-
-        if media_item.duration is None:
-            return True
-
-        await self.manager.db_manager.history_table.add_duration(media_item.domain, media_item)
-
-        if is_video:
-            return media_item.duration in duration_limits.video
-
-        return media_item.duration in duration_limits.audio
-
     async def close(self) -> None:
         await self.flaresolverr.close()
+
+
+async def check_file_duration(media_item: MediaItem) -> bool:
+    """Checks the file runtime against the config runtime limits."""
+    if media_item.is_segment:
+        return True
+
+    is_video = media_item.ext.lower() in constants.FileFormats.VIDEO
+    is_audio = media_item.ext.lower() in constants.FileFormats.AUDIO
+    if not (is_video or is_audio):
+        return True
+
+    duration_limits = config.get().media_duration_limits.ranges
+
+    async def get_duration() -> float | None:
+        if media_item.downloaded:
+            properties = await probe(media_item.complete_file)
+        else:
+            properties = await probe(media_item.url, headers=media_item.headers)
+
+        if properties.format.duration:
+            return properties.format.duration
+        if is_video and properties.video:
+            return properties.video.duration
+        if is_audio and properties.audio:
+            return properties.audio.duration
+
+    if media_item.duration is None:
+        media_item.duration = await get_duration()
+
+    if media_item.duration is None:
+        return True
+
+    if is_video:
+        return media_item.duration in duration_limits.video
+
+    return media_item.duration in duration_limits.audio
 
 
 async def _set_dns_resolver(loop: asyncio.AbstractEventLoop | None = None) -> None:
@@ -366,7 +357,7 @@ async def _set_dns_resolver(loop: asyncio.AbstractEventLoop | None = None) -> No
         constants.DNS_RESOLVER = aiohttp.AsyncResolver
     except Exception as e:
         constants.DNS_RESOLVER = aiohttp.ThreadedResolver
-        log(f"Unable to setup asynchronous DNS resolver. Falling back to thread based resolver: {e}", 30)
+        logger.warning(f"Unable to setup asynchronous DNS resolver. Falling back to thread based resolver: {e}")
 
 
 async def _test_async_resolver(loop: asyncio.AbstractEventLoop | None = None) -> None:
@@ -395,3 +386,15 @@ def _create_request_log_hooks(client_type: Literal["scrape", "download"]) -> lis
     trace_config.on_request_start.append(on_request_start)
     trace_config.on_request_end.append(on_request_end)
     return [trace_config]
+
+
+def check_curl_cffi_is_available() -> None:
+    if _curl_import_error is None:
+        return
+
+    system = "Android" if env.RUNNING_IN_TERMUX else "the system"
+    msg = (
+        f"curl_cffi is required to scrape this URL but a dependency it's not available on {system}.\n"
+        f"See: https://github.com/lexiforest/curl_cffi/issues/74#issuecomment-1849365636\n{_curl_import_error!r}"
+    )
+    raise ScrapeError("Missing Dependency", msg)

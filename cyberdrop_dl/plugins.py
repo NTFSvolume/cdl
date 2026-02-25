@@ -19,7 +19,7 @@ from importlib.metadata import entry_points
 from typing import TYPE_CHECKING, Final
 
 from cyberdrop_dl import env
-from cyberdrop_dl.utils.logger import log
+from cyberdrop_dl.logger import log
 
 if TYPE_CHECKING:
     from collections.abc import Iterable

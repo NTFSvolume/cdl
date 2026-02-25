@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import itertools
+import logging
 import time
 from http.cookies import SimpleCookie
 from typing import TYPE_CHECKING, Any
@@ -14,12 +15,13 @@ from cyberdrop_dl import config, ddos_guard
 from cyberdrop_dl.compat import StrEnum
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError
-from cyberdrop_dl.utils.logger import log
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from cyberdrop_dl.managers import Manager
+    from cyberdrop_dl.clients.http import HttpClient
+
+logger = logging.getLogger(__name__)
 
 
 class _Command(StrEnum):
@@ -66,25 +68,25 @@ class _FlareSolverrResponse:
         return _FlareSolverrResponse(status, message, status == "ok", solution)
 
 
+@dataclasses.dataclass(slots=True)
 class FlareSolverr:
     """Class that handles communication with flaresolverr."""
 
-    __slots__ = ("_next_request_id", "_request_lock", "_session_id", "_session_lock", "manager", "url")
+    http_client: HttpClient
+    url: AbsoluteHttpURL | None = None
 
-    def __init__(self, manager: Manager) -> None:
-        self.manager = manager
-        self._session_id: str = ""
-        self._session_lock, self._request_lock = asyncio.Lock(), asyncio.Lock()
-        self._next_request_id: Callable[[], int] = itertools.count(1).__next__
-        if flare := config.get().general.flaresolverr:
-            self.url = flare / "v1"
-        else:
-            self.url = None
+    _session_id: str = dataclasses.field(init=False, default="")
+    _session_lock: asyncio.Lock = dataclasses.field(init=False, default_factory=asyncio.Lock)
+    _request_lock: asyncio.Lock = dataclasses.field(init=False, default_factory=asyncio.Lock)
+    _next_request_id: Callable[[], int] = dataclasses.field(
+        init=False, default_factory=lambda: itertools.count(1).__next__
+    )
 
-    def __repr__(self):
-        return f"{type(self).__name__}(url={self.url!r})"
+    def __post_init__(self) -> None:
+        if self.url:
+            self.url = self.url.origin() / "v1"
 
-    async def close(self):
+    async def close(self) -> None:
         await self._destroy_session()
 
     async def request(self, url: AbsoluteHttpURL, data: Any = None) -> FlareSolverrSolution:
@@ -111,7 +113,7 @@ class FlareSolverr:
         if not resp.solution:
             raise invalid_response_error
 
-        self.manager.client_manager.cookies.update_cookies(resp.solution.cookies)
+        self.http_client.cookies.update_cookies(resp.solution.cookies)
         await self._check_user_agent(resp.solution)
         return resp.solution
 
@@ -130,14 +132,13 @@ class FlareSolverr:
                 raise DDOSGuardError(mismatch_ua_msg) from None
 
         if solution.user_agent != cdl_user_agent:
-            msg = f"{mismatch_ua_msg}\n Response was successful but cookies will not be valid"
-            log(msg, 30)
+            logger.warning(f"{mismatch_ua_msg}\n Response was successful but cookies will not be valid")
 
     async def _request(self, command: _Command, /, data: Any = None, **kwargs: Any) -> _FlareSolverrResponse:
         if not self.url:
             raise DDOSGuardError("Found DDoS challenge, but FlareSolverr is not configured")
 
-        timeout = config.get().rate_limits._aiohttp_timeout
+        timeout = config.get().rate_limits.aiohttp_timeout
         if command is _Command.CREATE_SESSION:
             timeout = aiohttp.ClientTimeout(total=5 * 60, connect=60)  # 5 minutes to create session
 
@@ -148,12 +149,12 @@ class FlareSolverr:
             assert command is _Command.POST_REQUEST
             playload["postData"] = aiohttp.FormData(data)().decode()
 
-        with self.manager.progress_manager.status.show(
+        with self.http_client.progress_manager.status.show(
             f"Waiting For Flaresolverr Response [{self._next_request_id()}]"
         ):
             async with (
                 self._request_lock,
-                self.manager.client_manager._session.post(
+                self.http_client._session.post(
                     self.url,
                     json=playload,
                     timeout=timeout,

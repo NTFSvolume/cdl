@@ -10,9 +10,9 @@ from typing import TYPE_CHECKING, Any
 import imagesize
 
 from cyberdrop_dl import config, constants
+from cyberdrop_dl.logger import log, log_with_color
 from cyberdrop_dl.utils import strings
 from cyberdrop_dl.utils.ffmpeg import probe
-from cyberdrop_dl.utils.logger import log, log_with_color
 from cyberdrop_dl.utils.utilities import purge_dir_tree
 
 if TYPE_CHECKING:

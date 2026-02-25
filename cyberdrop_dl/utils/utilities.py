@@ -48,7 +48,7 @@ from cyberdrop_dl.exceptions import (
     create_error_msg,
     get_origin,
 )
-from cyberdrop_dl.utils.logger import log_with_color
+from cyberdrop_dl.logger import log_with_color
 
 logger = logging.getLogger(__name__)
 

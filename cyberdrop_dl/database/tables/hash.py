@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
-from cyberdrop_dl.utils.logger import log
+from cyberdrop_dl.logger import log
 
 from .definitions import create_files, create_hash, create_hash_index
 

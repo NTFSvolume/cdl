@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from curl_cffi.requests.session import HttpMethod
 
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-    from cyberdrop_dl.managers.client_manager import HttpClient
+    from cyberdrop_dl.managers.http import HttpClient
 
 
 class ScraperClient:
@@ -32,11 +32,9 @@ class ScraperClient:
 
     @contextlib.asynccontextmanager
     async def _limiter(self, domain: str) -> AsyncGenerator[None]:
-        with self.client_manager.request_context(domain):
-            domain_limiter = self.client_manager.get_rate_limiter(domain)
-            async with self.client_manager.global_rate_limiter, domain_limiter:
-                await self.client_manager.manager.states.RUNNING.wait()
-                yield
+        domain_limiter = self.client_manager.get_rate_limiter(domain)
+        async with self.client_manager.global_rate_limiter, domain_limiter:
+            yield
 
     @contextlib.asynccontextmanager
     async def _request(

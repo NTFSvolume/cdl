@@ -12,10 +12,10 @@ from typing import TYPE_CHECKING, ParamSpec, TypeVar
 
 from cyberdrop_dl import config, constants, env
 from cyberdrop_dl.dependencies import browser_cookie3
+from cyberdrop_dl.logger import LogHandler, QueuedLogger, log, log_spacer, log_with_color
 from cyberdrop_dl.managers import Manager
 from cyberdrop_dl.scrape_mapper import ScrapeMapper
-from cyberdrop_dl.utils.apprise import send_apprise_notifications
-from cyberdrop_dl.utils.logger import LogHandler, QueuedLogger, log, log_spacer, log_with_color
+from cyberdrop_dl.utils.apprise import send_notifications
 from cyberdrop_dl.utils.sorting import Sorter
 from cyberdrop_dl.utils.updates import check_latest_pypi
 from cyberdrop_dl.utils.utilities import check_partials_and_empty_folders
@@ -82,7 +82,7 @@ async def _run_manager(manager: Manager) -> None:
     log_with_color("Finished downloading. Enjoy :)", "green", 20, show_in_stats=False)
 
     await send_webhook_message(manager)
-    await send_apprise_notifications(manager)
+    await send_notifications(manager)
 
 
 async def _scheduler(manager: Manager) -> None:
@@ -159,7 +159,7 @@ def _setup_main_logger(manager: Manager) -> None:
     log_level = config.get().runtime.log_level
     logger.setLevel(log_level)
 
-    logger.addHandler(constants.console_handler)
+    logger.addHandler(LogHandler(constants.CONSOLE_LEVEL))
     logger.addHandler(
         QueuedLogger(manager, LogHandler(level=log_level, file=file_io, width=500)).handler,
     )

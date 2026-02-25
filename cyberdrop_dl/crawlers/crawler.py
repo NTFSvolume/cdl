@@ -16,14 +16,14 @@ import yarl
 from aiolimiter import AsyncLimiter
 from yarl import URL
 
-from cyberdrop_dl import config, constants, signature
+from cyberdrop_dl import annotations, config, constants
 from cyberdrop_dl.clients.scraper_client import ScraperClient
 from cyberdrop_dl.data_structures.mediaprops import ISO639Subtitle, Resolution
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
 from cyberdrop_dl.downloader.downloader import Downloader
 from cyberdrop_dl.exceptions import MaxChildrenError, NoExtensionError, ScrapeError
+from cyberdrop_dl.logger import log, log_debug
 from cyberdrop_dl.utils import css, dates, m3u8
-from cyberdrop_dl.utils.logger import log, log_debug
 from cyberdrop_dl.utils.strings import safe_format
 from cyberdrop_dl.utils.utilities import (
     error_handling_context,
@@ -129,7 +129,7 @@ class Crawler(ABC):
 
     create_db_path = staticmethod(DBPathBuilder.path)
 
-    @signature.copy(ScraperClient._request)
+    @annotations.copy(ScraperClient._request)
     @contextlib.asynccontextmanager
     async def request(self, *args, impersonate: str | bool | None = None, **kwargs) -> AsyncGenerator[AbstractResponse]:
         if impersonate is None:
@@ -141,17 +141,17 @@ class Crawler(ABC):
         ):
             yield resp
 
-    @signature.copy(ScraperClient._request)
+    @annotations.copy(ScraperClient._request)
     async def request_json(self, *args, **kwargs) -> Any:
         async with self.request(*args, **kwargs) as resp:
             return await resp.json()
 
-    @signature.copy(ScraperClient._request)
+    @annotations.copy(ScraperClient._request)
     async def request_soup(self, *args, **kwargs) -> BeautifulSoup:
         async with self.request(*args, **kwargs) as resp:
             return await resp.soup()
 
-    @signature.copy(ScraperClient._request)
+    @annotations.copy(ScraperClient._request)
     async def request_text(self, *args, **kwargs) -> str:
         async with self.request(*args, **kwargs) as resp:
             return await resp.text()

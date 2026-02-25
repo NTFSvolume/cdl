@@ -87,7 +87,7 @@ class TUI:
         """Prints the stats of the program."""
         # if not self.manager.parsed_args.cli_only_args.print_stats:
         #    return
-        from cyberdrop_dl.utils.logger import log_spacer
+        from cyberdrop_dl.logger import log_spacer
 
         end_time = time.perf_counter()
         runtime = timedelta(seconds=int(end_time - start_time))

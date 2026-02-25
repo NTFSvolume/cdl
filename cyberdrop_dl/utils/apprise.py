@@ -1,42 +1,52 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import dataclasses
 import json
+import logging
 import shutil
 import sys
 import tempfile
-from dataclasses import dataclass
+from collections.abc import Generator
 from enum import IntEnum
-from io import StringIO
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Final
 
+import apprise
 import rich
 from pydantic import ValidationError
-from rich.text import Text
 
-from cyberdrop_dl import config, constants
-from cyberdrop_dl.dependencies import apprise
+from cyberdrop_dl import constants
+from cyberdrop_dl.logger import borrow_logger, log, log_debug, log_spacer
 from cyberdrop_dl.models import AppriseURLModel
-from cyberdrop_dl.utils.logger import log, log_debug, log_spacer
 from cyberdrop_dl.utils.yaml import format_validation_error
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.managers import Manager
+    from collections.abc import AsyncGenerator, Generator, Iterable
 
 
-@dataclass
+logger = logging.getLogger(__name__)
+
+_DEFAULT_MSG: Final = {
+    "body": "Finished downloading. Enjoy :)",
+    "title": "Cyberdrop-DL",
+    "body_format": apprise.NotifyFormat.TEXT,
+}
+
+
+@dataclasses.dataclass(slots=True, order=True)
 class AppriseURL:
     url: str
     tags: set[str]
 
-    @property
-    def raw_url(self):
-        tags = sorted(self.tags)
-        return f"{','.join(tags)}{'=' if tags else ''}{self.url}"
+    def __str__(self) -> str:
+        if not self.tags:
+            return self.url
+        return f"{','.join(sorted(self.tags))}={self.url}"
 
 
-_OS_URLS = ["windows://", "macosx://", "dbus://", "qt://", "glib://", "kde://"]
+_OS_URLS = "windows://", "macosx://", "dbus://", "qt://", "glib://", "kde://"
 
 
 class LogLevel(IntEnum):
@@ -48,16 +58,16 @@ class LogLevel(IntEnum):
     CRITICAL = 50
 
 
-_LOG_LEVEL_NAMES = [x.name for x in LogLevel]
+_LOG_LEVEL_NAMES = tuple(x.name for x in LogLevel)
 
 
-@dataclass
+@dataclasses.dataclass(slots=True, order=True)
 class LogLine:
     level: LogLevel = LogLevel.INFO
     msg: str = ""
 
 
-def get_apprise_urls(*, file: Path | None = None, urls: list[str] | None = None) -> list[AppriseURL]:
+def read(*, file: Path | None = None, urls: list[str] | None = None) -> tuple[AppriseURL, ...]:
     """
     Get Apprise URLs from the specified file or directly from a provided URL.
 
@@ -76,41 +86,40 @@ def get_apprise_urls(*, file: Path | None = None, urls: list[str] | None = None)
 
     if file:
         if not file.is_file():
-            return []
+            return ()
         with file.open(encoding="utf8") as apprise_file:
             urls = [line.strip() for line in apprise_file if line.strip()]
 
     if not urls:
-        return []
+        return ()
+
     if apprise is None:
-        log("Found apprise URLs for notifications but apprise is not installed. Ignoring", 30)
-        return []
+        logger.warning("Found apprise URLs for notifications but apprise is not installed. Ignoring")
+        return ()
     try:
-        return _simplify_urls([AppriseURLModel.model_validate({"url": url}) for url in set(urls)])
+        return tuple(_simplify(AppriseURLModel.model_validate({"url": url}) for url in set(urls)))
 
     except ValidationError as e:
-        format_validation_error(e, title="Apprise", file=file)
+        logger.error(format_validation_error(e, title="Apprise", file=file))
         sys.exit(1)
 
 
-def _simplify_urls(apprise_urls: list[AppriseURLModel]) -> list[AppriseURL]:
-    final_urls = []
+def _simplify(apprise_urls: Iterable[AppriseURLModel]) -> Generator[AppriseURL]:
     valid_tags = {"no_logs", "attach_logs", "simplified"}
 
-    def use_simplified(url: str) -> bool:
-        special_urls = _OS_URLS
-        return any(key in url.casefold() for key in special_urls)
+    def is_os_url(url: str) -> bool:
+        return any(scheme in url.casefold() for scheme in _OS_URLS)
 
-    for apprise_url in apprise_urls:
-        url = str(apprise_url.url.get_secret_value())
-        tags = apprise_url.tags or {"no_logs"}
-        if not any(tag in tags for tag in valid_tags):
+    for model in apprise_urls:
+        url = str(model.url.get_secret_value())
+        tags = model.tags
+        if not tags.intersection(valid_tags):
             tags = tags | {"no_logs"}
-        if use_simplified(url):
-            tags = tags - valid_tags | {"simplified"}
-        entry = AppriseURL(url=url, tags=tags)
-        final_urls.append(entry)
-    return sorted(final_urls, key=lambda x: x.url)
+
+        if is_os_url(url):
+            tags = (tags - valid_tags) | {"simplified"}
+
+        yield AppriseURL(url=url, tags=tags)
 
 
 def _process_results(
@@ -170,68 +179,43 @@ def _parse_apprise_logs(apprise_logs: str) -> list[LogLine]:
     return parsed_lines
 
 
-async def send_apprise_notifications(manager: Manager) -> tuple[constants.NotificationResult, list[LogLine]]:
-    """
-    Send notifications using Apprise based on the URLs set in the manager.
-
-    Args:
-        manager (Manager): The manager instance containing.
-
-    Returns:
-        tuple[NotificationResult, list[LogLine]]: A tuple containing the overall notification result and a list of log lines.
-
-    """
-    apprise_urls = manager.config_manager.apprise_urls
+async def send_notifications(text: str, *apprise_urls: AppriseURL, attachment: Path) -> None:
     if not apprise_urls:
-        return constants.NotificationResult.NONE, [LogLine(msg=constants.NotificationResult.NONE.value.plain)]
+        return
 
-    rich.print("\nSending Apprise Notifications.. ")
-    text: Text = constants.LOG_OUTPUT_TEXT
-    constants.LOG_OUTPUT_TEXT = Text("")
-
+    logger.info("Sending Apprise notifications.. ")
     apprise_obj = apprise.Apprise()
+    send_logs: bool = False
     for apprise_url in apprise_urls:
-        apprise_obj.add(apprise_url.url, tag=list(apprise_url.tags))
+        if not send_logs:
+            send_logs = "attach_logs" in apprise_url.tags
+        _ = apprise_obj.add(apprise_url.url, tag=sorted(apprise_url.tags))  # pyright: ignore[reportUnknownMemberType]
 
-    main_log = config.get().logs.main_log
-    all_urls = [x.raw_url for x in apprise_urls]
-    log_lines = []
+    messages: dict[str, dict[str, str]] = {
+        "no_logs": _DEFAULT_MSG | {"body": text},
+        "attach_logs": _DEFAULT_MSG | {"body": text},
+        "simplified": _DEFAULT_MSG,
+    }
+    with borrow_logger("apprise", level=logging.INFO):
+        async with _temp_copy(send_logs, attachment) as file:
+            if file:
+                messages["attach_logs"]["attach"] = str(file)
 
-    with (
-        apprise.LogCapture(level=10, fmt="%(levelname)-7s - %(message)s") as capture,
-        tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp_dir,
-    ):
-        temp_dir = Path(temp_dir)
-        assert isinstance(capture, StringIO)
-        temp_main_log = temp_dir / main_log.name
-        notifications_to_send: dict[str, dict[str, Any]] = {
-            "no_logs": {"body": text.plain},
-            "attach_logs": {"body": text.plain},
-            "simplified": {},
-        }
-        attach_file_failed_msg = "Unable to get copy of main log file. 'attach_logs' URLs will be processed without it"
-        log_lines = [LogLine(LogLevel.ERROR, attach_file_failed_msg)]
+            _ = await asyncio.gather(*(apprise_obj.async_notify(**msg, tag=tag) for tag, msg in messages.items()))
+
+
+@contextlib.asynccontextmanager
+async def _temp_copy(send_logs: bool, attachment: Path) -> AsyncGenerator[Path | None]:
+    if not send_logs:
+        yield
+        return
+
+    with tempfile.TemporaryDirectory(prefix="cdl_", ignore_cleanup_errors=True) as temp_dir:
+        file = Path(temp_dir) / attachment.name
         try:
-            shutil.copy(main_log, temp_main_log)
-            notifications_to_send["attach_logs"]["attach"] = str(temp_main_log.resolve())
+            _ = await asyncio.to_thread(shutil.copy, attachment, file)
         except OSError:
-            log(attach_file_failed_msg, 40)
-
-        async def notify(tag: str, msg: dict[str, Any]) -> tuple[str, bool | None]:
-            result = await apprise_obj.async_notify(**msg, tag=tag)
-            return tag, result
-
-        def prepare_notifications():
-            for tag, extras in notifications_to_send.items():
-                msg = {
-                    "body": "Finished downloading. Enjoy :)",
-                    "title": "Cyberdrop-DL",
-                    "body_format": apprise.NotifyFormat.TEXT,
-                } | extras
-                yield notify(tag, msg)
-
-        results = dict(await asyncio.gather(*prepare_notifications()))
-        apprise_logs = capture.getvalue()
-
-    result, new_log_lines = _process_results(all_urls, results, apprise_logs)
-    return result, log_lines + new_log_lines
+            logger.error("Unable to get copy of the main log file. 'attach_logs' URLs will be processed without it")
+            yield
+        else:
+            yield await asyncio.to_thread(file.resolve)

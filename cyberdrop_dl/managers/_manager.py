@@ -9,14 +9,13 @@ from typing import TYPE_CHECKING, NamedTuple
 
 from cyberdrop_dl import __version__, appdata, config, constants
 from cyberdrop_dl.database import Database
-from cyberdrop_dl.managers.client_manager import HttpClient
 from cyberdrop_dl.managers.hash_manager import HashManager
+from cyberdrop_dl.managers.http import HttpClient
 from cyberdrop_dl.managers.live_manager import LiveManager
-from cyberdrop_dl.managers.log_manager import LogManager
+from cyberdrop_dl.managers.logs import LogManager
 from cyberdrop_dl.progress import ProgressManager
 from cyberdrop_dl.storage import StorageChecker
 from cyberdrop_dl.utils import ffmpeg
-from cyberdrop_dl.utils.logger import LogHandler, QueuedLogger
 from cyberdrop_dl.utils.utilities import close_if_defined, get_system_information
 
 if TYPE_CHECKING:
@@ -24,6 +23,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from cyberdrop_dl.data_structures.url_objects import MediaItem
+    from cyberdrop_dl.logger import QueuedLogger
     from cyberdrop_dl.scrape_mapper import ScrapeMapper
 
 
@@ -51,8 +51,6 @@ class Manager:
         self.start_time: float = perf_counter()
         self.loggers: dict[str, QueuedLogger] = {}
         self.states: AsyncioEvents
-
-        constants.console_handler = LogHandler(level=constants.CONSOLE_LEVEL)
 
         self.logs: LogManager = LogManager(config.get(), self.task_group)
         log_app_state()
@@ -122,12 +120,9 @@ class Manager:
 
 
 def log_app_state() -> None:
-    auth = {}
-
     config_ = config.get()
     app_data = appdata.get()
-    for site, auth_entries in config_.auth.model_dump().items():  # pyright: ignore[reportAny]
-        auth[site] = all(auth_entries.values())  # pyright: ignore[reportAny]
+    auth = {site: all(credentials.values()) for site, credentials in config_.auth.model_dump().items()}
 
     # f"Using Input File: {self.path_manager.input_file}",
     stats = dict(  # noqa: C408

@@ -38,29 +38,29 @@ class AppriseTestCase:
 
 def test_get_apprise_urls() -> None:
     with pytest.raises(ValueError):
-        apprise.get_apprise_urls()
+        apprise.read()
 
     with pytest.raises(ValueError):
-        apprise.get_apprise_urls(urls=["url"], file=Path.cwd())
+        apprise.read(urls=["url"], file=Path.cwd())
 
     with pytest.raises(SystemExit):
-        apprise.get_apprise_urls(file=TEST_FILES_PATH / "invalid_single_url.txt")
+        apprise.read(file=TEST_FILES_PATH / "invalid_single_url.txt")
 
     with pytest.raises(SystemExit):
-        apprise.get_apprise_urls(file=TEST_FILES_PATH / "invalid_multiple_urls.txt")
+        apprise.read(file=TEST_FILES_PATH / "invalid_multiple_urls.txt")
 
-    result = apprise.get_apprise_urls(file=TEST_FILES_PATH / "file_that_does_not_exists.txt")
+    result = apprise.read(file=TEST_FILES_PATH / "file_that_does_not_exists.txt")
     assert result == []
 
-    result = apprise.get_apprise_urls(file=TEST_FILES_PATH / "empty_file.txt")
+    result = apprise.read(file=TEST_FILES_PATH / "empty_file.txt")
     assert result == []
 
-    result = apprise.get_apprise_urls(file=TEST_FILES_PATH / "valid_single_url.txt")
+    result = apprise.read(file=TEST_FILES_PATH / "valid_single_url.txt")
     assert isinstance(result, list), "Result is not a list"
     assert len(result) == 1, "This should be a single URL"
     assert isinstance(result[0], apprise.AppriseURL), "Parsed URL is not an AppriseURL"
 
-    result = apprise.get_apprise_urls(file=TEST_FILES_PATH / "valid_multiple_urls.txt")
+    result = apprise.read(file=TEST_FILES_PATH / "valid_multiple_urls.txt")
     assert isinstance(result, list), "Result is not a list"
     assert len(result) == 5, "These should be 5 URLs"
 
@@ -81,7 +81,7 @@ def test_get_apprise_urls() -> None:
 
 async def send_notification(test_case: AppriseTestCase) -> None:
     constants.LOG_OUTPUT_TEXT = Text(test_case.name)
-    result, logs = await apprise.send_apprise_notifications(FAKE_MANAGER)
+    result, logs = await apprise.send_notifications(FAKE_MANAGER)
     assert result.value == test_case.result.value, f"Result for this case should be {test_case.result.value}"
     assert isinstance(logs, list), "Invalid return type for logs"
     assert logs, "Logs can't be empty"

@@ -8,6 +8,7 @@ from pydantic import (
     AfterValidator,
     BeforeValidator,
     ByteSize,
+    HttpUrl,
     NonNegativeInt,
     PlainSerializer,
     PlainValidator,
@@ -19,7 +20,7 @@ from cyberdrop_dl.models.validators import (
     change_path_suffix,
     falsy_as_list,
     falsy_as_none,
-    to_yarl_url_w_pydantyc_validation,
+    to_yarl_url,
 )
 
 T = TypeVar("T")
@@ -38,7 +39,7 @@ MainLogPath = Annotated[LogPath, AfterValidator(change_path_suffix(".log"))]
 # URL with pydantic.HttpUrl validation (must be absolute, must be http/https, detailed validation error).
 # In type hints it's a yarl.URL. After validation the result is parsed with `parse_url` so this is also a yarl.URL at runtime
 # Only use for config validation. To parse URLs internally while scraping, call `parse_url` directly
-HttpURL = Annotated[yarl.URL, PlainValidator(to_yarl_url_w_pydantyc_validation), StrSerializer]
+HttpURL = Annotated[yarl.URL, PlainValidator(lambda x: to_yarl_url(HttpUrl(str(x)))), StrSerializer]
 
 # ~~~~~ Others ~~~~~~~
 ByteSizeSerilized = Annotated[ByteSize, PlainSerializer(bytesize_to_str, return_type=str)]

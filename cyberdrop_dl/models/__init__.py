@@ -4,7 +4,7 @@ from typing import Any, TypeVar
 
 from pydantic import BaseModel
 
-from .base import AliasModel, AppriseURLModel, FlatNamespace, FrozenModel, HttpAppriseURL, Settings, SettingsGroup
+from ._base import AliasModel, AppriseURLModel, Settings, SettingsGroup
 
 M = TypeVar("M", bound=BaseModel)
 
@@ -18,20 +18,20 @@ def get_model_fields(model: BaseModel, *, exclude_unset: bool = True) -> set[str
     return fields
 
 
-def merge_dicts(dict1: dict[str, Any], dict2: dict[str, Any]) -> dict[str, Any]:
-    for key, val in dict1.items():
+def merge_dicts(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
+    for key, val in old.items():
         if isinstance(val, dict):
-            if key in dict2 and isinstance(dict2[key], dict):
-                merge_dicts(dict1[key], dict2[key])
+            if key in new and isinstance(new[key], dict):
+                merge_dicts(old[key], new[key])
         else:
-            if key in dict2:
-                dict1[key] = dict2[key]
+            if key in new:
+                old[key] = new[key]
 
-    for key, val in dict2.items():
-        if key not in dict1:
-            dict1[key] = val
+    for key, val in new.items():
+        if key not in old:
+            old[key] = val
 
-    return dict1
+    return old
 
 
 def merge_models(old: M, new: M) -> M:
@@ -45,9 +45,7 @@ def merge_models(old: M, new: M) -> M:
 __all__ = [
     "AliasModel",
     "AppriseURLModel",
-    "FlatNamespace",
-    "FrozenModel",
-    "HttpAppriseURL",
+    "AppriseURLModel",
     "Settings",
     "SettingsGroup",
     "get_model_fields",

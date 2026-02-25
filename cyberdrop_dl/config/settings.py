@@ -22,7 +22,7 @@ from pydantic import (
 
 from cyberdrop_dl import constants
 from cyberdrop_dl.constants import BROWSERS, DEFAULT_APP_STORAGE, DEFAULT_DOWNLOAD_STORAGE, Hashing
-from cyberdrop_dl.models import HttpAppriseURL, Settings, SettingsGroup
+from cyberdrop_dl.models import AppriseURLModel, Settings, SettingsGroup
 from cyberdrop_dl.models.types import (
     ByteSizeSerilized,
     HttpURL,
@@ -99,7 +99,7 @@ class Logs(SettingsGroup):
     rotate_logs: bool = False
     scrape_error_urls: LogPath = Path("Scrape_Error_URLs.csv")
     unsupported_urls: LogPath = Path("Unsupported_URLs.csv")
-    webhook: HttpAppriseURL | None = None
+    webhook: AppriseURLModel | None = None
 
     @cached_property
     def jsonl_file(self):
@@ -409,12 +409,13 @@ class RateLimiting(SettingsGroup):
     def parse_timeouts(cls, value: object) -> object | None:
         return falsy_as_none(value)
 
-    def model_post_init(self, *_) -> None:
-        self._curl_timeout = self.connection_timeout
-        if self.read_timeout is not None:
-            self._curl_timeout = self.connection_timeout, self.read_timeout
+    @property
+    def _curl_timeout(self) -> tuple[float, float]:
+        return self.connection_timeout, self.read_timeout or 0
 
-        self._aiohttp_timeout: aiohttp.ClientTimeout = aiohttp.ClientTimeout(
+    @property
+    def aiohttp_timeout(self) -> aiohttp.ClientTimeout:
+        return aiohttp.ClientTimeout(
             total=None,
             sock_connect=self.connection_timeout,
             sock_read=self.read_timeout,
