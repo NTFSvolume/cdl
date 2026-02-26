@@ -16,7 +16,7 @@ from rich.progress import (
 )
 
 from cyberdrop_dl import __version__
-from cyberdrop_dl.progress.common import ProgressHook, ProgressProxy, UIPanel
+from cyberdrop_dl.progress.common import ProgressHook, ProgressProxy, UIOverFlowPanel
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 _downloads: ContextVar[ProgressHook] = ContextVar("_downloads")
 
 
-class ScrapingPanel(UIPanel):
+class ScrapingPanel(UIOverFlowPanel):
     unit: ClassVar[str] = "URLs"
     _columns = SpinnerColumn(), "[progress.description]{task.description}"
 
@@ -38,7 +38,7 @@ class ScrapingPanel(UIPanel):
         return self._add_task(str(url))
 
 
-class DownloadsPanel(UIPanel):
+class DownloadsPanel(UIOverFlowPanel):
     unit: ClassVar[str] = "files"
     _columns = (
         SpinnerColumn(),
@@ -88,7 +88,7 @@ class StatusMessage(ProgressProxy):
         self._task_id = self._progress.add_task("", total=100, completed=0, visible=False)
         self._renderable = Columns([self.activity, self._progress])
 
-    def update(self, description: str | None = None) -> None:
+    def _update(self, description: str | None = None) -> None:
         self._progress.update(self._task_id, description=description, visible=bool(description))
 
     def __str__(self) -> str:
@@ -100,7 +100,7 @@ class StatusMessage(ProgressProxy):
     @contextlib.contextmanager
     def show(self, msg: str | None) -> Generator[None]:
         try:
-            self.update(msg)
+            self._update(msg)
             yield
         finally:
-            self.update()
+            self._update()

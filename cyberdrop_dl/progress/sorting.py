@@ -4,10 +4,10 @@ from typing import ClassVar
 
 from rich.progress import BarColumn, SpinnerColumn, TaskID
 
-from cyberdrop_dl.progress.common import UIPanel
+from cyberdrop_dl.progress.common import UIOverFlowPanel
 
 
-class SortingPanel(UIPanel):
+class SortingPanel(UIOverFlowPanel):
     """Class that keeps track of sorted files."""
 
     unit: ClassVar[str] = "Folders"

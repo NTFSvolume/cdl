@@ -70,6 +70,10 @@ class ProgressProxy(RichProxy):
         super().__init__(self._progress)
 
 
+class UIPanel(ProgressProxy):
+    _renderable: Panel  # pyright: ignore[reportIncompatibleVariableOverride]
+
+
 class OverFlow(ProgressProxy):
     _desc: ClassVar[str] = "[{color}]... and {number:,} other {name}"
     _columns = ("[progress.description]{task.description}",)
@@ -91,7 +95,7 @@ class OverFlow(ProgressProxy):
         self._progress.update(self._task_id, description=str(self), visible=count > 0)
 
 
-class UIPanel(ProgressProxy):
+class UIOverFlowPanel(UIPanel):
     unit: ClassVar[str]
     _desc_fmt: ClassVar[str] = "[{color}]{description}"
 

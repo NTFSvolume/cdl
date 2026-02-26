@@ -3,10 +3,10 @@ from __future__ import annotations
 from rich.panel import Panel
 from rich.progress import BarColumn, Progress
 
-from cyberdrop_dl.progress.common import ProgressProxy, TaskCounter
+from cyberdrop_dl.progress.common import TaskCounter, UIPanel
 
 
-class FileStats(ProgressProxy):
+class FileStats(UIPanel):
     """Class that keeps track of completed, skipped and failed files."""
 
     _columns = (
@@ -35,7 +35,7 @@ class FileStats(ProgressProxy):
 
         self.simple: Progress = Progress(*self._columns)
         self._tasks_map["simple"] = TaskCounter(self.simple.add_task("Completed", total=0))
-        self._renderable: Panel = Panel(  # pyright: ignore[reportIncompatibleVariableOverride]
+        self._renderable = Panel(
             self._progress,
             title="Files",
             border_style="green",
@@ -52,17 +52,15 @@ class FileStats(ProgressProxy):
         if not increase_total:
             return
 
-        self._total_files = self._total_files + 1
-        self._progress.update(self._tasks_map["completed"].id, total=self._total_files)
-        self._progress.update(self._tasks_map["previously_completed"].id, total=self._total_files)
-        self._progress.update(self._tasks_map["skipped"].id, total=self._total_files)
-        self._progress.update(self._tasks_map["failed"].id, total=self._total_files)
-        self._progress.update(self._tasks_map["queued"].id, total=self._total_files)
-        self.simple.update(
-            self._tasks_map["simple"].id,
-            total=self._total_files,
-            completed=self._total_files - self._tasks_map["queued"].count,
-        )
+        self._total_files += 1
+        for name, task in self._tasks_map.items():
+            if name == "simple":
+                completed = self._total_files - self._tasks_map["queued"].count
+                progress = self.simple
+            else:
+                progress, completed = self._progress, None
+
+            progress.update(task.id, total=self._total_files, completed=completed)
 
     def add_completed(self) -> None:
         self._progress.advance(self._tasks_map["completed"].id)

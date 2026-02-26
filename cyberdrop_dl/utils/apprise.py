@@ -18,7 +18,7 @@ import rich
 from pydantic import ValidationError
 
 from cyberdrop_dl import constants
-from cyberdrop_dl.logger import borrow_logger, log, log_debug, log_spacer
+from cyberdrop_dl.logger import enable_3p_logger, log, log_debug, log_spacer
 from cyberdrop_dl.models import AppriseURLModel
 from cyberdrop_dl.utils.yaml import format_validation_error
 
@@ -196,7 +196,7 @@ async def send_notifications(text: str, *apprise_urls: AppriseURL, attachment: P
         "attach_logs": _DEFAULT_MSG | {"body": text},
         "simplified": _DEFAULT_MSG,
     }
-    with borrow_logger("apprise", level=logging.INFO):
+    with enable_3p_logger("apprise", level=logging.INFO):
         async with _temp_copy(send_logs, attachment) as file:
             if file:
                 messages["attach_logs"]["attach"] = str(file)

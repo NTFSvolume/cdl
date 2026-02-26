@@ -13,7 +13,7 @@ from rich.panel import Panel
 from rich.progress import BarColumn, Progress
 
 from cyberdrop_dl import config
-from cyberdrop_dl.progress.common import ProgressProxy, TaskCounter
+from cyberdrop_dl.progress.common import TaskCounter, UIPanel
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -30,7 +30,7 @@ def _get_enabled_hashes():
 _base_dir: ContextVar[Path] = ContextVar("_base_dir")
 
 
-class HashingPanel(ProgressProxy):
+class HashingPanel(UIPanel):
     """Class that keeps track of hashed files."""
 
     _columns = ("{task.description}",)
