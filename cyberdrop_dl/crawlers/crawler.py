@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import datetime
 import inspect
+import logging
 import re
 from abc import ABC, abstractmethod
 from collections import Counter
@@ -16,13 +17,13 @@ import yarl
 from aiolimiter import AsyncLimiter
 from yarl import URL
 
-from cyberdrop_dl import annotations, config, constants
-from cyberdrop_dl.clients.scraper_client import ScraperClient
+from cyberdrop_dl import config, constants
+from cyberdrop_dl.annotations import copy_signature
+from cyberdrop_dl.clients.http import HttpClient
 from cyberdrop_dl.data_structures.mediaprops import ISO639Subtitle, Resolution
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
 from cyberdrop_dl.downloader.downloader import Downloader
 from cyberdrop_dl.exceptions import MaxChildrenError, NoExtensionError, ScrapeError
-from cyberdrop_dl.logger import log, log_debug
 from cyberdrop_dl.utils import css, dates, m3u8
 from cyberdrop_dl.utils.strings import safe_format
 from cyberdrop_dl.utils.utilities import (
@@ -50,6 +51,7 @@ if TYPE_CHECKING:
     from http.cookies import BaseCookie
 
     from bs4 import BeautifulSoup, Tag
+    from curl_cffi.requests.impersonate import BrowserTypeLiteral
     from rich.progress import TaskID
 
     from cyberdrop_dl.clients.response import AbstractResponse
@@ -125,33 +127,34 @@ class Crawler(ABC):
     _RATE_LIMIT: ClassVar[RateLimit] = 25, 1
     _DOWNLOAD_SLOTS: ClassVar[int | None] = None
     _USE_DOWNLOAD_SERVERS_LOCKS: ClassVar[bool] = False
-    _IMPERSONATE: ClassVar[str | bool | None] = None
+    _IMPERSONATE: ClassVar[BrowserTypeLiteral | bool | None] = None
 
     create_db_path = staticmethod(DBPathBuilder.path)
 
-    @annotations.copy(ScraperClient._request)
+    @copy_signature(HttpClient._request)
     @contextlib.asynccontextmanager
-    async def request(self, *args, impersonate: str | bool | None = None, **kwargs) -> AsyncGenerator[AbstractResponse]:
+    async def request(
+        self, *args, impersonate: BrowserTypeLiteral | bool | None = None, **kwargs
+    ) -> AsyncGenerator[AbstractResponse]:
         if impersonate is None:
             impersonate = self._IMPERSONATE
 
         async with (
-            self.client._limiter(self.DOMAIN),
             self.client._request(*args, impersonate=impersonate, **kwargs) as resp,
         ):
             yield resp
 
-    @annotations.copy(ScraperClient._request)
+    @copy_signature(HttpClient._request)
     async def request_json(self, *args, **kwargs) -> Any:
         async with self.request(*args, **kwargs) as resp:
             return await resp.json()
 
-    @annotations.copy(ScraperClient._request)
+    @copy_signature(HttpClient._request)
     async def request_soup(self, *args, **kwargs) -> BeautifulSoup:
         async with self.request(*args, **kwargs) as resp:
             return await resp.soup()
 
-    @annotations.copy(ScraperClient._request)
+    @copy_signature(HttpClient._request)
     async def request_text(self, *args, **kwargs) -> str:
         async with self.request(*args, **kwargs) as resp:
             return await resp.text()
@@ -160,15 +163,14 @@ class Crawler(ABC):
     def __init__(self, manager: Manager) -> None:
         self.manager = manager
         self.downloader: Downloader = field(init=False)
-        self.client: ScraperClient = field(init=False)
+        self.client: HttpClient = field(init=False)
         self.startup_lock = asyncio.Lock()
         self.ready: bool = False
         self.disabled: bool = False
         self.logged_in: bool = False
         self.scraped_items: set[str] = set()
         self.waiting_items = 0
-        self.log = log
-        self.log_debug = log_debug
+        self.logger = logging.getLogger(type(self).__module__)
         self._semaphore = asyncio.Semaphore(20)
         self.__post_init__()
 
@@ -296,7 +298,7 @@ class Crawler(ABC):
         try:
             yield
         except Exception:
-            self.log(f"[{self.FOLDER_DOMAIN}] {msg}. Crawler has been disabled", 40)
+            self.logger(f"[{self.FOLDER_DOMAIN}] {msg}. Crawler has been disabled", 40)
             self.disabled = True
             raise
 
@@ -316,10 +318,12 @@ class Crawler(ABC):
             og_url = scrape_item.url
             scrape_item.url = url = self.transform_url(scrape_item.url)
             if og_url != url:
-                log(f"URL transformation applied [{self.FOLDER_DOMAIN}]: \n  old_url: {og_url}\n  new_url: {url}")
+                self.logger.info(
+                    f"URL transformation applied [{self.FOLDER_DOMAIN}]: \n  old_url: {og_url}\n  new_url: {url}"
+                )
 
             if url.path_qs in self.scraped_items:
-                return log(f"Skipping {url} as it has already been scraped", 10)
+                return self.logger.info(f"Skipping {url} as it has already been scraped")
 
             self.scraped_items.add(url.path_qs)
             async with self._fetch_context(scrape_item):
@@ -363,7 +367,7 @@ class Crawler(ABC):
     @contextlib.contextmanager
     def new_task_id(self, url: AbsoluteHttpURL) -> Generator[TaskID]:
         """Creates a new task_id (shows the URL in the UI and logs)"""
-        log(f"Scraping [{self.FOLDER_DOMAIN}]: {url}", 20)
+        self.logger.info(f"Scraping [{self.FOLDER_DOMAIN}]: {url}", 20)
         task_id = self.manager.progress.scrape.new_task(url)
         try:
             yield task_id
@@ -465,14 +469,14 @@ class Crawler(ABC):
         db_path = self.create_db_path(url)
         check_complete = await self.manager.db_manager.history_table.check_complete(self.DOMAIN, url, referer, db_path)
         if check_complete:
-            log(f"Skipping {url} as it has already been downloaded", 10)
+            self.logger.info(f"Skipping {url} as it has already been downloaded", 10)
             self.manager.progress.files.add_previously_completed()
         return check_complete
 
     async def handle_media_item(self, media_item: MediaItem, m3u8: m3u8.RenditionGroup | None = None) -> None:
         if media_item.timestamp and not isinstance(media_item.timestamp, int):
             msg = f"Invalid datetime from '{self.FOLDER_DOMAIN}' crawler . Got {media_item.timestamp!r}, expected int."
-            log(msg, bug=True)
+            self.logger.info(msg)
 
         check_complete = await self.check_complete(media_item.url, media_item.referer)
         if check_complete:
@@ -491,15 +495,15 @@ class Crawler(ABC):
         media_host = media_item.url.host
 
         if (hosts := config.get().ignore.skip_hosts) and any(host in media_host for host in hosts):
-            log(f"Download skipped{media_item.url} due to skip_hosts config", 10)
+            self.logger.info(f"Download skipped{media_item.url} due to skip_hosts config", 10)
             return True
 
         if (hosts := config.get().ignore.only_hosts) and not any(host in media_host for host in hosts):
-            log(f"Download skipped{media_item.url} due to only_hosts config", 10)
+            self.logger.info(f"Download skipped{media_item.url} due to only_hosts config", 10)
             return True
 
         if (regex := config.get().ignore.filename_regex_filter) and re.search(regex, media_item.filename):
-            log(f"Download skipped{media_item.url} due to filename regex filter config", 10)
+            self.logger.info(f"Download skipped{media_item.url} due to filename regex filter config", 10)
             return True
 
         return False
@@ -516,7 +520,7 @@ class Crawler(ABC):
         domain = None if any_crawler else self.DOMAIN
         downloaded = await self.manager.db_manager.history_table.check_complete_by_referer(domain, url)
         if downloaded:
-            log(f"Skipping {url} as it has already been downloaded", 10)
+            self.logger.info(f"Skipping {url} as it has already been downloaded", 10)
             self.manager.progress.files.add_previously_completed()
             return True
         return False
@@ -529,7 +533,7 @@ class Crawler(ABC):
         downloaded = await self.manager.db_manager.hash_table.check_hash_exists(hash_type, hash_value)
         if downloaded:
             url = scrape_item if isinstance(scrape_item, URL) else scrape_item.url
-            log(f"Skipping {url} as its hash ({hash_type}:{hash_value}) has already been downloaded", 10)
+            self.logger.info(f"Skipping {url} as its hash ({hash_type}:{hash_value}) has already been downloaded", 10)
             self.manager.progress.files.add_previously_completed()
         return downloaded
 
@@ -565,7 +569,7 @@ class Crawler(ABC):
             return False
         url_path = self.create_db_path(url)
         if url_path in album_results and album_results[url_path] != 0:
-            log(f"Skipping {url} as it has already been downloaded")
+            self.logger.info(f"Skipping {url} as it has already been downloaded")
             self.manager.progress.files.add_previously_completed()
             return True
         return False
@@ -781,14 +785,13 @@ class Crawler(ABC):
             return dates.to_timestamp(parsed_date)
 
     @final
-    @classmethod
     def _parse_date(
-        cls, date_or_datetime: str, format: str | None = None, /, *, iso: bool = False
+        self, date_or_datetime: str, format: str | None = None, /, *, iso: bool = False
     ) -> datetime.datetime | None:
         try:
             return dates.parse(date_or_datetime, format, iso=iso)
         except ValueError as e:
-            log(f"Date parsing for {cls.DOMAIN} seems to be broken: {e}", bug=True)
+            self.logger.error(f"Date parsing for {self.DOMAIN} seems to be broken: {e}")
 
     async def _get_redirect_url(self, url: AbsoluteHttpURL) -> AbsoluteHttpURL:
         async with self.request(url) as resp:
@@ -884,7 +887,7 @@ class Crawler(ABC):
                 f"Important information was removed while creating a filename. "
                 f"\n{calling_args}"
             )
-            log(msg, bug=True)
+            self.logger.info(msg)
         return filename
 
     @final

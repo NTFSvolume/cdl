@@ -87,7 +87,10 @@ class FlareSolverr:
             self.url = self.url.origin() / "v1"
 
     async def close(self) -> None:
-        await self._destroy_session()
+        try:
+            await self._destroy_session()
+        except Exception as e:
+            logger.error(f"Unable to destroy flaresolver session ({e})")
 
     async def request(self, url: AbsoluteHttpURL, data: Any = None) -> FlareSolverrSolution:
         invalid_response_error = DDOSGuardError("Invalid response from flaresolverr")
@@ -154,7 +157,7 @@ class FlareSolverr:
         ):
             async with (
                 self._request_lock,
-                self.http_client._session.post(
+                self.http_client._aiohttp_session.post(
                     self.url,
                     json=playload,
                     timeout=timeout,

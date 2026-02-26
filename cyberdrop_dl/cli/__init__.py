@@ -4,14 +4,15 @@ import cyclopts
 import pydantic
 from cyclopts import Parameter
 
-from cyberdrop_dl import __version__, annotations
+from cyberdrop_dl import __version__
+from cyberdrop_dl.annotations import copy_signature
 from cyberdrop_dl.cli.model import CLIargs, ParsedArgs, RetryArgs
 from cyberdrop_dl.models.types import HttpURL
 from cyberdrop_dl.utils.yaml import format_validation_error
 
 
 class App(cyclopts.App):
-    @annotations.copy(cyclopts.App._parse_known_args)
+    @copy_signature(cyclopts.App._parse_known_args)
     def _parse_known_args(self, *args, **kwargs):
         try:
             return super()._parse_known_args(*args, **kwargs)

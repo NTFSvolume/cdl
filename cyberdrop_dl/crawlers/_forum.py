@@ -348,7 +348,7 @@ class MessageBoardCrawler(Crawler, is_abc=True):
             raise LoginError(message=msg)
 
         msg += " Scraping without an account"
-        self.log(msg, 30)
+        self.logger(msg, 30)
 
     async def check_login_with_request(self, login_url: AbsoluteHttpURL) -> tuple[str, bool]:
         text = await self.request_text(login_url, cache_disabled=True)
@@ -493,10 +493,10 @@ class HTMLMessageBoardCrawler(MessageBoardCrawler, is_abc=True):
             max_children_error = e
 
         if seen:
-            self.log(f"[{self.FOLDER_DOMAIN}] post #{post.id} {stats = }")
+            self.logger(f"[{self.FOLDER_DOMAIN}] post #{post.id} {stats = }")
         if duplicates:
             msg = f"Found duplicate links in post {scrape_item.parent}. Selectors are too generic: {duplicates}"
-            self.log(msg, bug=True)
+            self.logger(msg, bug=True)
         await asyncio.gather(*tasks)
         if max_children_error is not None:
             raise max_children_error
@@ -554,7 +554,7 @@ class HTMLMessageBoardCrawler(MessageBoardCrawler, is_abc=True):
         if self.is_thumbnail(link):
             link = self.thumbnail_to_img(link)
             if not link:
-                return self.log(f"Skipping thumbnail: {link}")
+                return self.logger(f"Skipping thumbnail: {link}")
         await self.handle_link(scrape_item, link)
 
     async def get_absolute_link(self, link: str | AbsoluteHttpURL) -> AbsoluteHttpURL | None:

@@ -7,18 +7,18 @@ import logging
 import ssl
 import time
 from base64 import b64encode
-from collections import defaultdict
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any, Literal, Self
+from typing import TYPE_CHECKING, Any, Literal, Self, cast
 
 import aiohttp
 import certifi
 import truststore
-from aiohttp import ClientResponse, ClientSession
+from aiohttp.client import ClientResponse, ClientSession
+from aiohttp.resolver import AsyncResolver, ThreadedResolver
 from aiolimiter import AsyncLimiter
-from curl_cffi.requests.session import AsyncSession
+from multidict import CIMultiDict
 
-from cyberdrop_dl import appdata, config, constants, ddos_guard, env
+from cyberdrop_dl import appdata, constants, ddos_guard, env
 from cyberdrop_dl.clients.flaresolverr import FlareSolverr
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.cookies import get_cookies_from_browser, make_simple_cookie, read_netscape_files
@@ -27,22 +27,22 @@ from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, ScrapeError
 from cyberdrop_dl.logger import spacer
 from cyberdrop_dl.utils import aio, ffmpeg
 
+_curl_import_error = None
+try:
+    from curl_cffi.requests import AsyncSession
+except ImportError as e:
+    _curl_import_error = e
+
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable, Iterable, Mapping
     from http.cookies import BaseCookie
 
-    from aiohttp.resolver import AsyncResolver, ThreadedResolver
     from curl_cffi.requests import AsyncSession
     from curl_cffi.requests.impersonate import BrowserTypeLiteral
-    from curl_cffi.requests.models import Response
     from curl_cffi.requests.models import Response as CurlResponse
 
+    from cyberdrop_dl.config import Config
 
-_curl_import_error = None
-try:
-    from curl_cffi.requests import AsyncSession  # noqa: TC002
-except ImportError as e:
-    _curl_import_error = e
 
 _DOWNLOAD_ERROR_ETAGS = {
     "d835884373f4d6c8f24742ceabe74946": "Imgur image has been removed",
@@ -53,7 +53,6 @@ _DOWNLOAD_ERROR_ETAGS = {
     "5a56b09d-1485eb": "eFukt Video removed",
 }
 
-_crawler_errors: dict[str, int] = defaultdict(int)
 Domain = str
 _HttpMethod = Literal["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "TRACE", "PATCH", "QUERY"]
 _MAX_REDIRECTS = 8
@@ -62,7 +61,7 @@ _dns_resolver: type[AsyncResolver] | type[ThreadedResolver] | None = None
 logger = logging.getLogger(__name__)
 
 
-def _create_ssl(config: config.Config) -> ssl.SSLContext | Literal[False]:
+def _create_ssl_ctx(config: Config) -> ssl.SSLContext | Literal[False]:
     ssl_context = config.general.ssl_context
     if not ssl_context:
         return False
@@ -85,26 +84,26 @@ class DownloadLimiter:
     config_global_max_slots: int
 
     _server_locked_domains: set[Domain] = dataclasses.field(init=False, default_factory=set)
-    _hardcoded_per_domain_slots: dict[Domain, int] = dataclasses.field(init=False, default_factory=dict)
+    _hardcoded_per_domain_max_slots: dict[Domain, int] = dataclasses.field(init=False, default_factory=dict)
     _server_locks: aio.WeakAsyncLocks[Domain] = dataclasses.field(init=False, default_factory=aio.WeakAsyncLocks)
-    _per_domain_slots: dict[Domain, asyncio.Semaphore] = dataclasses.field(init=False, default_factory=dict)
-    _global_slots: asyncio.Semaphore = dataclasses.field(init=False)
+    _per_domain: dict[Domain, asyncio.Semaphore] = dataclasses.field(init=False, default_factory=dict)
+    _global: asyncio.Semaphore = dataclasses.field(init=False)
 
     def __post_init__(self) -> None:
-        self._global_slots = asyncio.Semaphore(self.config_global_max_slots)
+        self._global = asyncio.Semaphore(self.config_global_max_slots)
 
     def __setitem__(self, domain: Domain, limit: int) -> None:
-        self._hardcoded_per_domain_slots[domain] = limit
+        self._hardcoded_per_domain_max_slots[domain] = limit
 
     def _get_limiter(self, domain: Domain) -> asyncio.Semaphore:
-        if sem := self._per_domain_slots.get(domain):
+        if sem := self._per_domain.get(domain):
             return sem
 
         limit = self.config_per_domain_max_slots
-        if hardcoded_limit := self._hardcoded_per_domain_slots.get(domain):
+        if hardcoded_limit := self._hardcoded_per_domain_max_slots.get(domain):
             limit = min(limit, hardcoded_limit)
 
-        self._per_domain_slots[domain] = sem = asyncio.Semaphore(limit)
+        self._per_domain[domain] = sem = asyncio.Semaphore(limit)
         return sem
 
     def register_server_lock(self, domain: Domain) -> None:
@@ -113,7 +112,7 @@ class DownloadLimiter:
     @contextlib.asynccontextmanager
     async def acquire(self, domain: Domain, server: Domain) -> AsyncGenerator[None]:
         server_lock = _NULL_CONTEXT if domain not in self._server_locked_domains else self._server_locks[server]
-        async with server_lock, self._get_limiter(domain), self._global_slots:
+        async with server_lock, self._get_limiter(domain), self._global:
             yield
 
 
@@ -135,39 +134,99 @@ class RateLimiter:
             yield
 
 
+@dataclasses.dataclass(slots=True, kw_only=True)
 class HttpClient:
     """
     Wrapper around aiohttp.ClientSession / curl.AsyncSession
 
-    It does:
-    - Setup session based on config values (proxies, ssl, etc..)
-    - A rate limit on request
-    - A concurrent downloads limit
-    - A per server locks if required
+    - Setup sessions based on config values (proxies, ssl, etc..)
+    - Rate limits requests
+    - Limits concurrent downloads
+    - Keep cookies in sync bewteen curl and aiohtttp
 
     """
 
-    def __init__(self, config: config.Config) -> None:
-        self.config: config.Config = config
-        self.ssl_context: ssl.SSLContext | Literal[False] = _create_ssl(config)
-        self._cookies: aiohttp.CookieJar | None = None
-        self.download_limiter: DownloadLimiter = DownloadLimiter(
-            config.rate_limits.max_simultaneous_downloads_per_domain,
-            config.rate_limits.max_simultaneous_downloads,
+    config: Config
+    download_limiter: DownloadLimiter
+    rate_limiter: RateLimiter
+    ssl_context: ssl.SSLContext | Literal[False]
+
+    _cookies: aiohttp.CookieJar | None = None
+    _json_resp_checks: dict[Domain, Callable[[Any], None]] = dataclasses.field(default_factory=dict)
+    _aiohttp_session: aiohttp.ClientSession | None = None
+    _curl_session: AsyncSession[CurlResponse] | None = None
+
+    _flaresolverr: FlareSolverr = dataclasses.field(init=False)
+    _in_context: bool = dataclasses.field(init=False, default=False)
+
+    def __post_init__(self) -> None:
+        self._flaresolverr = FlareSolverr(self)
+
+    @classmethod
+    def from_config(cls, config: Config) -> Self:
+        return cls(
+            config=config,
+            ssl_context=_create_ssl_ctx(config),
+            download_limiter=DownloadLimiter(
+                config.rate_limits.max_simultaneous_downloads_per_domain,
+                config.rate_limits.max_simultaneous_downloads,
+            ),
+            rate_limiter=RateLimiter(config.rate_limits.rate_limit),
         )
-        self.rate_limiter: RateLimiter = RateLimiter(config.rate_limits.rate_limit)
-        self._flaresolverr: FlareSolverr = FlareSolverr(self)
-        self._session: aiohttp.ClientSession
-        self._json_response_checks: dict[Domain, Callable[[Any], None]] = {}
-        self._curl_session: AsyncSession[Response] | None = None
+
+    @property
+    def default_headers(self) -> dict[str, str]:
+        return {}
+
+    @property
+    def cookies(self) -> aiohttp.CookieJar:
+        # Create it lazyly cause it is loop bound
+        if self._cookies is None:
+            self._cookies = aiohttp.CookieJar(quote_cookie=False)
+        return self._cookies
+
+    @property
+    def curl_session(self) -> AsyncSession[CurlResponse]:
+        if self._curl_session is None:
+            self._check_in_ctx()
+            _check_curl_cffi_is_available()
+            self._curl_session = self._create_curl_session()
+        return self._curl_session
+
+    @property
+    def aiohttp_session(self) -> ClientSession:
+        if self._aiohttp_session is None:
+            self._check_in_ctx()
+            self._aiohttp_session = self._create_aiohttp_session()
+        return self._aiohttp_session
+
+    def _check_in_ctx(self) -> None:
+        if not self._in_context:
+            raise RuntimeError(f"Only use {type(self).__name__} within a context manager.")
+
+    async def __aenter__(self) -> Self:
+        global _dns_resolver
+        if _dns_resolver is None:
+            _dns_resolver = await _get_dns_resolver()
+        if self._in_context:
+            raise RuntimeError(f"{type(self).__name__} does not allow re-entrance")
+        self._in_context = True
+        return self
+
+    async def __aexit__(self, *_) -> None:
+        sessions = filter(None, (self._aiohttp_session, self._curl_session, self._flaresolverr))
+        _ = await asyncio.gather(*(f.close() for f in sessions), return_exceptions=True)
+        self._aiohttp_session = None
+        self._curl_session = None
+        self._in_context = False
 
     @contextlib.asynccontextmanager
     async def _request(
-        self,
+        self: object,
         url: AbsoluteHttpURL,
         /,
         method: _HttpMethod = "GET",
-        headers: dict[str, str] | None = None,
+        headers: Mapping[str, str] | None = None,
         impersonate: BrowserTypeLiteral | bool | None = None,
         data: Any = None,
         json: Any = None,
@@ -176,25 +235,59 @@ class HttpClient:
         """
         Asynchronous context manager for HTTP requests.
 
-        - If 'impersonate' is specified, uses curl_cffi for the request and updates cookies.
-        - Otherwise, uses aiohttp with optional cache control.
+        - If 'impersonate' is specified, uses curl for the request and updates cookies. Uses aiohttp otherwise
         - Yield an AbstractResponse that wraps the underlying response with common methods.
         - On DDOSGuardError, retries the request using FlareSolverr.
-        - Saves the HTML content to disk if the config option is enabled.
         - Closes underliying response on exit.
         """
 
-        request_params["headers"] = headers = headers or {}
+        self = cast("HttpClient", self)
+        headers = self._prepare_headers(headers)
         request_params["data"] = data
         request_params["json"] = json
+        if (data or json) and method == "GET":
+            method = "POST"
 
         if not impersonate:
             _ = headers.setdefault("user-agent", self.config.general.user_agent)
+        elif impersonate is True:
+            impersonate = "chrome"
 
-        async with self.__request_context(url, method, request_params, impersonate) as resp:
-            yield await self._check_response(resp, url)
+        async with self.__request(url, method, headers, request_params, impersonate) as resp:
+            yield await self._check_response(resp, url, data)
 
-    def __sync_session_cookies(self, url: AbsoluteHttpURL) -> None:
+    @contextlib.asynccontextmanager
+    async def __request(
+        self,
+        url: AbsoluteHttpURL,
+        method: _HttpMethod,
+        /,
+        headers: CIMultiDict[str],
+        request_params: dict[str, Any],
+        impersonate: BrowserTypeLiteral | Literal[False] | None,
+    ) -> AsyncGenerator[AbstractResponse]:
+        logger.debug(f"Starting {method} request to {url}")
+
+        if impersonate:
+            curl_resp = await self.curl_session.request(
+                method, str(url), stream=True, headers=headers, impersonate=impersonate, **request_params
+            )
+            try:
+                yield AbstractResponse.from_resp(curl_resp)
+                self.__sync_cookies(url)
+            finally:
+                logger.debug(f"Finishing {method} request to {url} [{curl_resp.status_code}]")
+                await curl_resp.aclose()
+            return
+
+        _ = request_params.setdefault("max_redirects", _MAX_REDIRECTS)
+        async with (
+            self.aiohttp_session.request(method, url, headers=headers, **request_params) as aio_resp,
+        ):
+            logger.debug(f"Finishing {method} request to {url} [{aio_resp.status}]")
+            yield AbstractResponse.from_resp(aio_resp)
+
+    def __sync_cookies(self, url: AbsoluteHttpURL) -> None:
         """
         Apply to the cookies from the `curl` session into the `aiohttp` session, filtering them by the URL
 
@@ -207,117 +300,28 @@ class HttpClient:
             simple_cookie = make_simple_cookie(cookie, now)
             self.cookies.update_cookies(simple_cookie, url)
 
-    @contextlib.asynccontextmanager
-    async def __request_context(
-        self,
-        url: AbsoluteHttpURL,
-        method: _HttpMethod,
-        request_params: dict[str, Any],
-        impersonate: BrowserTypeLiteral | bool | None,
-    ) -> AsyncGenerator[AbstractResponse]:
-        logger.debug(f"Starting {method} request to {url}")
-
-        if impersonate:
-            if impersonate is True:
-                impersonate = "chrome"
-
-            request_params["impersonate"] = impersonate
-            curl_resp = await self.curl_session.request(method, str(url), stream=True, **request_params)
-            try:
-                yield AbstractResponse.from_resp(curl_resp)
-                self.__sync_session_cookies(url)
-            finally:
-                msg = f"Finishing {method} request to {url} [{curl_resp.status_code}]"
-                logger.debug(msg)
-                await curl_resp.aclose()
-            return
-
-        _ = request_params.setdefault("max_redirects", _MAX_REDIRECTS)
-        async with (
-            self._session.request(method, url, **request_params) as aio_resp,
-        ):
-            msg = f"Finishing {method} request to {url} [{aio_resp.status}]"
-            logger.debug(msg)
-            yield AbstractResponse.from_resp(aio_resp)
-
-    async def _check_response(self, abs_resp: AbstractResponse, url: AbsoluteHttpURL, data: Any | None = None):
+    async def _check_response(
+        self, abs_resp: AbstractResponse, url: AbsoluteHttpURL, data: Any | None = None
+    ) -> AbstractResponse:
         """Checks the HTTP response status and retries DDOS Guard errors with FlareSolverr.
 
         Returns an AbstractResponse confirmed to not be a DDOS Guard page."""
         try:
             await self.check_http_status(abs_resp)
-            return abs_resp
         except DDOSGuardError:
             flare_solution = await self._flaresolverr.request(url, data)
             return AbstractResponse.from_flaresolverr(flare_solution)
-
-    @property
-    def cookies(self) -> aiohttp.CookieJar:
-        if self._cookies is None:
-            self._cookies = aiohttp.CookieJar(quote_cookie=False)
-        return self._cookies
-
-    async def __aenter__(self) -> Self:
-        global _dns_resolver
-        if _dns_resolver is None:
-            _dns_resolver = await _get_dns_resolver()
-        self._session = self.create_aiohttp_session()
-        return self
-
-    async def __aexit__(self, *_) -> None:
-        await self._session.close()
-        if self._curl_session is None:
-            return
-        try:
-            await self._curl_session.close()
-        except Exception:
-            pass
-
-    @property
-    def curl_session(self) -> AsyncSession[Response]:
-        if self._curl_session is None:
-            _check_curl_cffi_is_available()
-            self._curl_session = self._create_curl_session()
-        return self._curl_session
+        else:
+            return abs_resp
 
     @staticmethod
     def basic_auth(username: str, password: str) -> str:
-        """Returns a basic auth token."""
         token = b64encode(f"{username}:{password}".encode()).decode("ascii")
         return f"Basic {token}"
 
-    def check_allowed_filetype(self, media_item: MediaItem) -> bool:
-        """Checks if the file type is allowed to download."""
-        ignore_options = self.config.ignore
-        ext = media_item.ext.lower()
-
-        if ignore_options.exclude_images and ext in constants.FileFormats.IMAGE:
-            return False
-        if ignore_options.exclude_videos and ext in constants.FileFormats.VIDEO:
-            return False
-        if ignore_options.exclude_audio and ext in constants.FileFormats.AUDIO:
-            return False
-
-        return ext in constants.FileFormats.MEDIA or not ignore_options.exclude_other
-
-    def check_allowed_date_range(self, media_item: MediaItem) -> bool:
-        """Checks if the file was uploaded within the config date range"""
-        datetime = media_item.datetime_obj()
-        if not datetime:
-            return True
-
-        item_date = datetime.date()
-        ignore_options = self.config.ignore
-
-        if ignore_options.exclude_before and item_date < ignore_options.exclude_before:
-            return False
-        if ignore_options.exclude_after and item_date > ignore_options.exclude_after:
-            return False
-        return True
-
     def filter_cookies_by_word_in_domain(self, word: str) -> Iterable[tuple[str, BaseCookie[str]]]:
         """Yields pairs of `[domain, BaseCookie]` for every cookie with a domain that has `word` in it"""
-        if not self.cookies:
+        if not self._cookies:
             return
         self.cookies._do_expiration()
         for domain, _ in self.cookies._cookies:
@@ -350,7 +354,7 @@ class HttpClient:
             cookies={cookie.key: cookie.value for cookie in self.cookies},
         )
 
-    def create_aiohttp_session(self) -> ClientSession:
+    def _create_aiohttp_session(self) -> ClientSession:
         assert _dns_resolver is not None
         tcp_conn = aiohttp.TCPConnector(
             ssl=self.ssl_context,
@@ -359,7 +363,7 @@ class HttpClient:
         )
         tcp_conn._resolver_owner = True
         return ClientSession(
-            headers={"user-agent": self.config.general.user_agent},
+            headers=self.default_headers,
             raise_for_status=False,
             cookie_jar=self.cookies,
             timeout=self.config.rate_limits.aiohttp_timeout,
@@ -402,7 +406,6 @@ class HttpClient:
             return
 
         await self._check_json(response)
-
         await ddos_guard.check(response)
         raise DownloadError(status=response.status)
 
@@ -410,18 +413,60 @@ class HttpClient:
         if "json" not in response.content_type:
             return
 
-        if check := self._json_response_checks.get(response.url.host):
+        if check := self._json_resp_checks.get(response.url.host):
             check(await response.json())
             return
 
-        for domain, check in self._json_response_checks.items():
+        for domain, check in self._json_resp_checks.items():
             if domain in response.url.host:
-                self._json_response_checks[response.url.host] = check
+                self._json_resp_checks[response.url.host] = check
                 check(await response.json())
                 return
 
-    async def close(self) -> None:
-        await self._flaresolverr.close()
+    def _prepare_headers(self, headers: Mapping[str, str] | None = None) -> CIMultiDict[str]:
+        """Add default headers and transform it to CIMultiDict"""
+        combined = CIMultiDict(self.default_headers)
+        if headers:
+            headers = CIMultiDict(headers)
+            new: set[str] = set()
+            for key, value in headers.items():
+                if key in new:
+                    combined.add(key, value)
+                else:
+                    combined[key] = value
+                    new.add(key)
+        return combined
+
+
+def check_allowed_filetype(media_item: MediaItem, config: Config) -> bool:
+    """Checks if the file type is allowed to download."""
+    ignore_options = config.ignore
+    ext = media_item.ext.lower()
+
+    if ignore_options.exclude_images and ext in constants.FileFormats.IMAGE:
+        return False
+    if ignore_options.exclude_videos and ext in constants.FileFormats.VIDEO:
+        return False
+    if ignore_options.exclude_audio and ext in constants.FileFormats.AUDIO:
+        return False
+
+    return ext in constants.FileFormats.MEDIA or not ignore_options.exclude_other
+
+
+def check_allowed_date_range(media_item: MediaItem, config: Config) -> bool:
+    """Checks if the file was uploaded within the config date range"""
+    datetime = media_item.datetime_obj()
+    if not datetime:
+        return True
+
+    item_date = datetime.date()
+    ignore_options = config.ignore
+
+    if ignore_options.exclude_before and item_date < ignore_options.exclude_before:
+        return False
+    if ignore_options.exclude_after and item_date > ignore_options.exclude_after:
+        return False
+    return True
 
 
 def check_content_length(headers: Mapping[str, Any]) -> None:
@@ -434,7 +479,7 @@ def check_content_length(headers: Mapping[str, Any]) -> None:
         raise DownloadError(410)  # Placeholder video with text "Video removed" (efukt)
 
 
-async def check_file_duration(media_item: MediaItem, config: config.Config) -> bool:
+async def check_file_duration(media_item: MediaItem, config: Config) -> bool:
     """Checks the file runtime against the config runtime limits."""
     if media_item.is_segment:
         return True
@@ -476,17 +521,17 @@ async def _get_dns_resolver(
 ) -> type[AsyncResolver] | type[ThreadedResolver]:
     """Test aiodns with a DNS lookup."""
 
-    # pycares (the underlying C extension library that aiodns uses) installs successfully in most cases,
+    # pycares (the underlying C extension that aiodns uses) installs successfully in most cases,
     # but it fails to actually connect to DNS servers on some platforms (e.g., Android).
     try:
         import aiodns
 
         async with aiodns.DNSResolver(loop=loop, timeout=5.0) as resolver:
             _ = await resolver.query_dns("github.com", "A")
-        return aiohttp.AsyncResolver
+        return AsyncResolver
     except Exception as e:
         logger.warning(f"Unable to setup asynchronous DNS resolver. Falling back to thread based resolver: {e}")
-        return aiohttp.ThreadedResolver
+        return ThreadedResolver
 
 
 def _check_curl_cffi_is_available() -> None:

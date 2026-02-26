@@ -163,7 +163,7 @@ class PixelDrainCrawler(Crawler):
                 files = [files[item_idx]]
             except (ValueError, IndexError):
                 msg = f"Unable to parse item index in folder {scrape_item.url}. Falling back to downloading the entire folder"
-                self.log(msg, 30)
+                self.logger(msg, 30)
 
         results = await self.get_album_results(list_id)
         for file in files:

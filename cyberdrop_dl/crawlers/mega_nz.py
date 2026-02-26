@@ -60,7 +60,7 @@ class MegaNzCrawler(Crawler):
         return self.manager.auth_config.meganz.password or None
 
     def _init_downloader(self) -> MegaDownloader:
-        self.core = MegaCore(MegaAPI(self.manager.http_client._session))
+        self.core = MegaCore(MegaAPI(self.manager.http_client._aiohttp_session))
         self.downloader = dl = MegaDownloader(self.manager, self.DOMAIN)  # type: ignore[reportIncompatibleVariableOverride]
         dl.startup()
         return dl

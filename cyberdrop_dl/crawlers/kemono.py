@@ -264,7 +264,7 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
         scrape_item.setup_as_profile("")
         if self.ignore_ads:
             user = scrape_item.url.parts[3]
-            self.log(f"[{self.FOLDER_DOMAIN}] filtering out all ad posts for {user}. This could take a while")
+            self.logger(f"[{self.FOLDER_DOMAIN}] filtering out all ad posts for {user}. This could take a while")
             await self.__iter_user_posts(scrape_item, api_url.update_query(q="#ad"))
         await self.__iter_user_posts(scrape_item, api_url)
 
@@ -375,7 +375,7 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
                         f"[{self.NAME}] {path} found with multiple "  #
                         f"different servers: {server = } {previous_server = } "
                     )
-                    self.log(msg, 30)
+                    self.logger(msg, 30)
                 continue
             self.__known_attachment_servers[path] = server
 
@@ -439,12 +439,12 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
     def __has_ads(self, post: Post) -> bool:
         msg = f"[{self.FOLDER_DOMAIN}] skipping post #{post.id} (contains #advertisements)"
         if "#ad" in post.content or post.id in self.__ad_posts:
-            self.log(msg)
+            self.logger(msg)
             return True
 
         ci_tags = {tag.casefold() for tag in post.tags}
         if ci_tags.intersection({"ad", "#ad", "ads", "#ads"}):
-            self.log(msg)
+            self.logger(msg)
             return True
 
         return False

@@ -24,7 +24,7 @@ class TransferItCrawler(Crawler):
     core: TransferItClient
 
     async def async_startup(self) -> None:
-        self.core = TransferItClient(self.manager.http_client._session)
+        self.core = TransferItClient(self.manager.http_client._aiohttp_session)
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
