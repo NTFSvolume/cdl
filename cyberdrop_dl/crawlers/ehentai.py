@@ -52,7 +52,7 @@ class EHentaiCrawler(Crawler):
 
     @error_handling_wrapper
     async def album(self, scrape_item: ScrapeItem) -> None:
-        async with self.startup_lock:
+        async with self._startup_lock:
             if not self._warnings_set:
                 await self.set_no_warnings(scrape_item)
 

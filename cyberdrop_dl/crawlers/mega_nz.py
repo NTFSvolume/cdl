@@ -65,7 +65,7 @@ class MegaNzCrawler(Crawler):
         dl.startup()
         return dl
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         await self.login(self.PRIMARY_URL)
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:

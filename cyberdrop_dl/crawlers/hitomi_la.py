@@ -166,7 +166,7 @@ class HitomiLaCrawler(Crawler):
         return json.loads(js_text.split("=", 1)[-1])
 
     async def get_servers(self) -> Servers:
-        async with self.startup_lock:
+        async with self._startup_lock:
             if self._servers is None or (datetime.now() - self._servers.fetch_datetime > SERVERS_EXPIRE_AFTER):
                 self._servers = await self._get_servers()
         return self._servers

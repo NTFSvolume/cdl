@@ -105,7 +105,7 @@ class GoFileCrawler(Crawler):
         if "notFound" in json_resp["status"]:
             raise ScrapeError(404)
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         await self._get_credentials(_API_ENTRYPOINT)
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:

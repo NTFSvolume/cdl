@@ -65,7 +65,7 @@ class vBulletinCrawler(XenforoCrawler, is_abc=True):  # noqa: N801
         cls.XF_PAGE_URL_PART_NAME = "page"
         cls.XF_POST_URL_PART_NAME = "post"
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         if not self.logged_in:
             login_url = self.PRIMARY_URL / "login.php"
             await self._login(login_url)

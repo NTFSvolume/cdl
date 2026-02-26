@@ -38,7 +38,7 @@ class Rule34VideoCrawler(KernelVideoSharingCrawler):
     DOMAIN: ClassVar[str] = "rule34video"
     FOLDER_DOMAIN: ClassVar[str] = "Rule34Video"
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         self.update_cookies({"kt_rt_popAccess": 1, "kt_tcookie": 1})
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:

@@ -77,7 +77,7 @@ class RealDebridCrawler(Crawler):
         self.disabled = not bool(token)
         self.api = RealDebridAPI(self, token)
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         await self._get_regexes(_API_ENTRYPOINT)
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:

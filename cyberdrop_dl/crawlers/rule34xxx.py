@@ -31,7 +31,7 @@ class Rule34XXXCrawler(Crawler):
     DOMAIN: ClassVar[str] = "rule34.xxx"
     FOLDER_DOMAIN: ClassVar[str] = "Rule34XXX"
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         self.update_cookies({"resize-original": "1"})
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:

@@ -34,7 +34,7 @@ class XXXBunkerCrawler(Crawler):
     _DOWNLOAD_SLOTS: ClassVar[int | None] = 2
     _RATE_LIMIT = 1, 6
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         self.update_cookies({"ageconfirm": "True"})
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:

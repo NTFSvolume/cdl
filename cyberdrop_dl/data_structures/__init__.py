@@ -1,12 +1,12 @@
 from .mediaprops import Codecs, Resolution
-from .url_objects import AbsoluteHttpURL, HlsSegment, MediaItem, QueryDatetimeRange, ScrapeItem, ScrapeItemType
+from .url_objects import AbsoluteHttpURL, DatetimeRange, HlsSegment, MediaItem, ScrapeItem, ScrapeItemType
 
 __all__ = [
     "AbsoluteHttpURL",
     "Codecs",
+    "DatetimeRange",
     "HlsSegment",
     "MediaItem",
-    "QueryDatetimeRange",
     "Resolution",
     "ScrapeItem",
     "ScrapeItemType",

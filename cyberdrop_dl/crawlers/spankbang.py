@@ -63,7 +63,7 @@ class SpankBangCrawler(Crawler):
     _IMPERSONATE: ClassVar[str | bool | None] = True
     _RATE_LIMIT: ClassVar[RateLimit] = 2, 5
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         self.update_cookies({"country": "US", "age_pass": 1})
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:

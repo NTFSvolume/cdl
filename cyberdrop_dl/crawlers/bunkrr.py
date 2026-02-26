@@ -178,7 +178,7 @@ class BunkrrCrawler(Crawler):
             not src
             or src.suffix.lower() not in constants.FileFormats.VIDEO_OR_IMAGE
             or "no-image" in src.name
-            or self.deep_scrape
+            or self.config.runtime.deep_scrape
             or any(cdn in src.host for cdn in DEEP_SCRAPE_CDNS)
         )
         if deep_scrape:
@@ -204,7 +204,7 @@ class BunkrrCrawler(Crawler):
             if len(src.parts) > 2:
                 src = None
 
-        if not src or self.deep_scrape:
+        if not src or self.config.runtime.deep_scrape:
             dl_link = css.select(soup, Selector.DOWNLOAD_BUTTON, "href")
             file_id = self.parse_url(dl_link).name
             src = await self._request_download(file_id)

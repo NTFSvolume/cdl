@@ -87,7 +87,7 @@ class ScrapeMapper:
     async def start_real_debrid(self) -> None:
         """Starts RealDebrid."""
         self.existing_crawlers["real-debrid"] = self.real_debrid = real = RealDebridCrawler(self.manager)
-        await real.startup()
+        await real.ready()
 
     @classmethod
     @contextlib.asynccontextmanager
@@ -194,15 +194,14 @@ class ScrapeMapper:
     async def send_to_crawler(self, scrape_item: ScrapeItem) -> None:
         """Maps URLs to their respective handlers."""
         scrape_item.url = remove_trailing_slash(scrape_item.url)
-        crawler_match = match_url_to_crawler(self.existing_crawlers, scrape_item.url)
+        crawler = match_url_to_crawler(self.existing_crawlers, scrape_item.url)
         jdownloader_whitelisted = True
         if self.jdownloader_whitelist:
             jdownloader_whitelisted = any(domain in scrape_item.url.host for domain in self.jdownloader_whitelist)
 
-        if crawler_match:
-            if not crawler_match.ready:
-                await crawler_match.startup()
-            self.manager.task_group.create_task(crawler_match.run(scrape_item))
+        if crawler:
+            await crawler.ready()
+            self.manager.task_group.create_task(crawler.run(scrape_item))
             return
 
         if not self.real_debrid.disabled and self.real_debrid.api.is_supported(scrape_item.url):

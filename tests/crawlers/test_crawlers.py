@@ -106,7 +106,7 @@ async def test_crawler(running_manager: Manager, crawler_test_case: CrawlerTestC
                 None,
             )
             assert crawler, f"{test_case.domain} is not a valid crawler domain. Test case is invalid"
-            await crawler.startup()
+            await crawler._async_init_()
             item = ScrapeItem(url=crawler.parse_url(test_case.input_url))
             await crawler.run(item)
 

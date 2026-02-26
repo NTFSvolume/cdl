@@ -25,7 +25,7 @@ class CloudMailRuCrawler(Crawler):
             case _:
                 raise ValueError
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         await self._get_dispacher_server(self.PRIMARY_URL)
 
     @classmethod

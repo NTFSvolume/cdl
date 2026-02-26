@@ -101,7 +101,7 @@ class TikTokCrawler(Crawler):
     def __post_init__(self) -> None:
         self._headers: dict[str, Any] = {"X-Requested-With": "XMLHttpRequest"}
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         cookie_name = "sessionid"
         if value := self.get_cookie_value(cookie_name):
             self._headers["x-proxy-cookie"] = f"{cookie_name}={value}"

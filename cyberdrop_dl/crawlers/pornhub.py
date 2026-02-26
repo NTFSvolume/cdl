@@ -129,7 +129,7 @@ class PornHubCrawler(Crawler):
     def __post_init__(self) -> None:
         self.seen_profiles: set[Profile] = set()
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         keys = ("age_verified", "accessPH", "accessAgeDisclaimerPH", "accessAgeDisclaimerUK", "expiredEnterModalShown")
         self.update_cookies(dict.fromkeys(keys, 1))
 

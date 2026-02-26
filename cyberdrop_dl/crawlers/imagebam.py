@@ -41,7 +41,7 @@ class ImageBamCrawler(Crawler):
     FOLDER_DOMAIN: ClassVar[str] = "ImageBam"
     NEXT_PAGE_SELECTOR: ClassVar[str] = Selectors.NEXT_PAGE
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         # This skips the "Continue to image" pages.
         self.update_cookies({"nsfw_inter": "1", "sfw_inter": "1"})
 

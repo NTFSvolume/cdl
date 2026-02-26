@@ -53,7 +53,7 @@ class RedGifsCrawler(Crawler):
     def __post_init__(self) -> None:
         self.headers = {}
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         await self.get_auth_token(API_ENTRYPOINT / "auth/temporary")
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:

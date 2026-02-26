@@ -1,8 +1,10 @@
 # pyright: ignore[reportIncompatibleVariableOverride]
 from __future__ import annotations
 
+import contextlib
 import copy
 import datetime
+import logging
 from dataclasses import asdict, dataclass, field
 from enum import IntEnum
 from pathlib import Path
@@ -11,6 +13,8 @@ from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Self, overload
 import yarl
 
 if TYPE_CHECKING:
+    from collections.abc import Generator, Iterator, Mapping
+
     from propcache.api import under_cached_property as cached_property
 
     from cyberdrop_dl.annotations import copy_signature
@@ -94,6 +98,9 @@ if TYPE_CHECKING:
 
 else:
     AbsoluteHttpURL = yarl.URL
+
+
+logger = logging.getLogger(__name__)
 
 
 class ScrapeItemType(IntEnum):
@@ -378,31 +385,51 @@ class ScrapeItem:
         """Returns a deep copy of this scrape_item"""
         return copy.deepcopy(self)
 
+    @contextlib.contextmanager
+    def track_changes(self) -> Generator[None]:
+        og_url = self.url
+        try:
+            yield
+        finally:
+            if og_url != self.url:
+                logger.info(f"URL transformation applied : \n  old_url: {og_url}\n  new_url: {self.url}")
 
-class QueryDatetimeRange(NamedTuple):
-    before: datetime.datetime | None = None
-    after: datetime.datetime | None = None
+
+@dataclass(slots=True, order=True)
+class DatetimeRange:
+    before: datetime.datetime
+    after: datetime.datetime
+
+    def __post_init__(self) -> None:
+        if self.before <= self.after:
+            raise ValueError
+
+    def __iter__(self) -> Iterator[datetime.datetime]:
+        return iter((self.before, self.after))
+
+    @classmethod
+    def from_url(cls, url: AbsoluteHttpURL) -> DatetimeRange | None:
+        return cls(
+            cls._extract(url.query, "before") or datetime.datetime.max,
+            cls._extract(url.query, "after") or datetime.datetime.min,
+        )
+
+    def __contains__(self, other: object) -> bool:
+        if not isinstance(other, datetime.datetime):
+            return False
+        return self.before <= other <= self.after
+
+    def as_query(self) -> dict[str, str]:
+        query: dict[str, str] = {}
+        if self.before != datetime.datetime.max:
+            query["before"] = self.before.isoformat()
+        if self.after != datetime.datetime.min:
+            query["after"] = self.after.isoformat()
+        return query
 
     @staticmethod
-    def from_url(url: AbsoluteHttpURL) -> QueryDatetimeRange | None:
-        self = QueryDatetimeRange(_date_from_query_param(url, "before"), _date_from_query_param(url, "after"))
-        if self == (None, None):
-            return None
-        if (self.before and self.after) and (self.before <= self.after):
-            raise ValueError
-        return self
+    def _extract(query: Mapping[str, str], name: str) -> datetime.datetime | None:
+        from cyberdrop_dl.utils.dates import parse_aware_iso_datetime
 
-    def is_in_range(self, other: datetime.datetime) -> bool:
-        if (self.before and other >= self.before) or (self.after and other <= self.after):
-            return False
-        return True
-
-    def as_query(self) -> dict[str, Any]:
-        return {name: value.isoformat() for name, value in self._asdict().items() if value}
-
-
-def _date_from_query_param(url: AbsoluteHttpURL, query_param: str) -> datetime.datetime | None:
-    from cyberdrop_dl.utils.dates import parse_aware_iso_datetime
-
-    if value := url.query.get(query_param):
-        return parse_aware_iso_datetime(value)
+        if value := query.get(name):
+            return parse_aware_iso_datetime(value)

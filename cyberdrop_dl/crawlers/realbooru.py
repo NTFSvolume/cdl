@@ -30,7 +30,7 @@ class RealBooruCrawler(Crawler):
     DOMAIN: ClassVar[str] = "realbooru"
     FOLDER_DOMAIN: ClassVar[str] = "RealBooru"
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         cookies = {"resize-original": "1"}
         self.update_cookies(cookies)
 

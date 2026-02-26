@@ -222,7 +222,7 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
     def ignore_ads(self) -> bool:
         return config.get().ignore.ignore_coomer_ads
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         if getattr(self, "API_ENTRYPOINT", None):
             await self._get_usernames(self.API_ENTRYPOINT / "creators")
 

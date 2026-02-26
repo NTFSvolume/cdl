@@ -33,7 +33,7 @@ class FlickrCrawler(Crawler):
             case _:
                 raise ValueError
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         self.api: FlickrAPI = FlickrAPI(self)
         await self.api.get_site_key()
 

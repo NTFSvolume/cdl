@@ -152,7 +152,7 @@ class HttpClient:
     ssl_context: ssl.SSLContext | Literal[False]
 
     _cookies: aiohttp.CookieJar | None = None
-    _json_resp_checks: dict[Domain, Callable[[Any], None]] = dataclasses.field(default_factory=dict)
+    json_resp_checkers: dict[Domain, Callable[[Any], None]] = dataclasses.field(default_factory=dict)
     _aiohttp_session: aiohttp.ClientSession | None = None
     _curl_session: AsyncSession[CurlResponse] | None = None
 
@@ -413,13 +413,13 @@ class HttpClient:
         if "json" not in response.content_type:
             return
 
-        if check := self._json_resp_checks.get(response.url.host):
+        if check := self.json_resp_checkers.get(response.url.host):
             check(await response.json())
             return
 
-        for domain, check in self._json_resp_checks.items():
+        for domain, check in self.json_resp_checkers.items():
             if domain in response.url.host:
-                self._json_resp_checks[response.url.host] = check
+                self.json_resp_checkers[response.url.host] = check
                 check(await response.json())
                 return
 
