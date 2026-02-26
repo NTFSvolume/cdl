@@ -66,7 +66,7 @@ async def _run_manager(manager: Manager) -> None:
 
         await check_latest_pypi()
         logger.info(spacer())
-        logger.info("Closing Program...")
+        logger.info("Closing program...")
         logger.info("Finished downloading. Enjoy :)", extra={"color": "green"})
 
         await send_webhook_message(manager)

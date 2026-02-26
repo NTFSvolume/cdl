@@ -1,24 +1,24 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any, cast
+import logging
+from typing import TYPE_CHECKING, Any
 
-import aiofiles
-import rich
-from aiohttp import FormData
+from aiohttp.formdata import FormData
 
 from cyberdrop_dl import config, constants
-from cyberdrop_dl.logger import log, log_debug, log_spacer
+from cyberdrop_dl.logger import spacer
 from cyberdrop_dl.utils import aio
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-    from cyberdrop_dl.managers import Manager
+    import aiohttp
+
     from cyberdrop_dl.models._base import AppriseURLModel
 
 
+logger = logging.getLogger(__name__)
 _DEFAULT_DIFF_LINE_FORMAT: str = "{}"
 _STYLE_TO_DIFF_MAP = {
     "green": "+   {}",
@@ -49,8 +49,7 @@ async def _prepare_form(webhook: AppriseURLModel, main_log: Path) -> FormData:
 
     if "attach_logs" in webhook.tags and (size := await aio.get_size(main_log)):
         if size <= 25 * 1024 * 1024:  # 25MB
-            async with aiofiles.open(main_log, "rb") as f:
-                form.add_field("file", await f.read(), filename=main_log.name)
+            form.add_field("file", await aio.read_bytes(main_log), filename=main_log.name)
 
         else:
             diff_text += "\n\nWARNING: log file too large to send as attachment\n"
@@ -62,37 +61,30 @@ async def _prepare_form(webhook: AppriseURLModel, main_log: Path) -> FormData:
     return form
 
 
-async def send_webhook_message(manager: Manager) -> None:
+async def send_webhook_message(session: aiohttp.ClientSession, webhook: AppriseURLModel | None = None) -> None:
     """Outputs the stats to a code block for webhook messages."""
     webhook = config.get().logs.webhook
 
     if not webhook:
         return
 
-    rich.print("\nSending Webhook Notifications.. ")
-    url = cast("AbsoluteHttpURL", webhook.url.get_secret_value())
+    logger.info("Sending webhook notifications.. ")
+    url = webhook.url.get_secret_value()
     form = await _prepare_form(webhook, config.get().logs.main_log)
-    logger = log
-    result = constants.NotificationResult.FAILED.value
 
     try:
-        async with manager.client_manager._new_session() as session, session.post(url, data=form) as response:
+        async with session.post(url, data=form) as response:
             if response.ok:
-                result = constants.NotificationResult.SUCCESS.value
-                result_to_log = [result]
-                logger = log_debug
+                result = "success"
 
             else:
                 json_resp: dict[str, Any] = await response.json()
                 json_resp.pop("content", None)
                 resp_text = json.dumps(json_resp, indent=4, ensure_ascii=False)
-                result_to_log = constants.NotificationResult.FAILED.value, resp_text
+                result = f"Failed \n{resp_text}"
 
-    except Exception as e:
-        logger("Unable to send webhook notification", 40, exc_info=e)
-        result_to_log = result, str(e)
-
-    log_spacer(10, log_to_console=False)
-    rich.print("Webhook Notifications Results:", result)
-    result_to_log = "\n".join(map(str, result_to_log))
-    logger(f"Webhook Notifications Results: {result_to_log}")
+    except Exception:
+        logger.exception("Unable to send webhook notification")
+    else:
+        logger.info(spacer())
+        logger.info(f"Webhook notifications results: {result}")
