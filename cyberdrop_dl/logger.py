@@ -5,6 +5,7 @@ import json
 import logging
 import queue
 import sys
+from collections.abc import Generator
 from logging.handlers import QueueHandler, QueueListener
 from pathlib import Path
 from typing import TYPE_CHECKING, ParamSpec
@@ -78,7 +79,7 @@ logging.setLogRecordFactory(JsonLogRecord)
 
 
 class LogHandler(RichHandler):
-    """Rich Handler with default settings, custom log render to remove padding in files and color extra"""
+    """Rich Handler with default settings, custom log render to remove padding in files and `color` extra"""
 
     def __init__(self, level: int = logging.DEBUG, console: Console | None = None) -> None:
         is_file = bool(console)
@@ -130,40 +131,37 @@ class BareQueueHandler(QueueHandler):
         return record
 
 
-class QueuedLogger:
-    """Context-manager that starts a QueueListener and returns the QueueHandler."""
+@contextlib.contextmanager
+def enqueue_logger(log_handler: LogHandler) -> Generator[BareQueueHandler]:
+    """Context-manager to process logs from this handler in another thread.
 
-    __slots__ = ("_handler", "_listener")
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}(_listener={self._listener!r},_handler={self._handler!r})"
-
-    def __init__(self, handler: LogHandler) -> None:
-        q: queue.Queue[logging.LogRecord] = queue.Queue()
-        self._handler: BareQueueHandler = BareQueueHandler(q)
-        self._listener: QueueListener = QueueListener(q, handler, respect_handler_level=True)
-
-    def __enter__(self) -> BareQueueHandler:
-        self._listener.start()
-        return self._handler
-
-    def __exit__(self, *_) -> None:
-        """This asks the thread to terminate, and waits until all pending messages are processed."""
+    It starts a QueueListener and yields the QueueHandler."""
+    q: queue.Queue[logging.LogRecord] = queue.Queue()
+    queue_handler: BareQueueHandler = BareQueueHandler(q)
+    listener: QueueListener = QueueListener(q, log_handler, respect_handler_level=True)
+    listener.start()
+    try:
+        yield queue_handler
+    finally:
         try:
-            self._handler.close()
+            queue_handler.close()
         finally:
-            self._listener.stop()
-            for handler in self._listener.handlers:
-                handler.close()
+            listener.stop()
+            for handl in listener.handlers:
+                handl.close()
 
 
 @contextlib.contextmanager
-def setup_logging(logs_file: Path, log_level: int = logging.DEBUG, console_log_level: int = 100) -> Generator[None]:
+def setup_logging(
+    logs_file: Path,
+    log_level: int = logging.DEBUG,
+    console_log_level: int = logging.CRITICAL + 10,
+) -> Generator[None]:
     logger.setLevel(log_level)
     with (
         logs_file.open("w", encoding="utf8") as file_io,
-        QueuedLogger(LogHandler(level=console_log_level)) as console_handler,
-        QueuedLogger(
+        enqueue_logger(LogHandler(level=console_log_level)) as console_handler,
+        enqueue_logger(
             LogHandler(
                 level=log_level,
                 console=RedactedConsole(file=file_io, width=_DEFAULT_CONSOLE_WIDTH * 2),
@@ -199,43 +197,46 @@ def startup_context() -> Generator[None]:
         handlers.append(console_handler)
 
     path = Path.cwd() / "startup.log"
-    try:
-        with _try_open(path) as file_io:
-            if file_io is not None:
-                file_handler = LogHandler(
-                    level=logging.DEBUG,
-                    console=Console(file=file_io, width=_DEFAULT_CONSOLE_WIDTH),
-                )
-                logger.addHandler(file_handler)
-                handlers.append(file_handler)
+    delete = False
+    with _try_open(path) as file_io:
+        if file_io is not None:
+            file_handler = LogHandler(
+                level=logging.DEBUG,
+                console=Console(file=file_io, width=_DEFAULT_CONSOLE_WIDTH),
+            )
+            logger.addHandler(file_handler)
+            handlers.append(file_handler)
+        try:
             yield
 
-    except InvalidYamlError as e:
-        logger.error(e.message)
+        except InvalidYamlError as e:
+            logger.error(e.message)
 
-    except browser_cookie3.BrowserCookieError:
-        logger.exception("")
+        except browser_cookie3.BrowserCookieError:
+            logger.exception("")
 
-    except OSError as e:
-        logger.exception(str(e))
+        except OSError as e:
+            logger.exception(str(e))
 
-    except KeyboardInterrupt:
-        logger.info("Exiting...")
-        return
+        except KeyboardInterrupt:
+            logger.info("Exiting...")
 
-    except Exception:
-        msg = "An error occurred, please report this to the developer with your logs file:"
-        logger.exception(msg)
-    else:
+        except Exception:
+            msg = "An error occurred, please report this to the developer with your logs file:"
+            logger.exception(msg)
+        else:
+            delete = True
+
+        finally:
+            logger.setLevel(old_level)
+            for handler in handlers:
+                logger.removeHandler(handler)
+
+    if delete and file_io is not None:
         try:
             path.unlink(missing_ok=True)
         except OSError:
             pass
-
-    finally:
-        logger.setLevel(old_level)
-        for handler in handlers:
-            logger.removeHandler(handler)
 
 
 class NoPaddingLogRender(LogRender):
@@ -307,8 +308,7 @@ def _indent_text(text: Text, console: Console, indent: int = 30) -> Text:
     """Indents each line of a Text object except the first one."""
     padding = Text("\n" + (" " * indent))
     new_text = Text()
-    lines = text.wrap(console, width=console.width - indent)
-    first_line, *rest = lines
+    first_line, *rest = text.wrap(console, width=console.width - indent)
     for line in rest:
         line.rstrip()
         new_text.append(padding + line)

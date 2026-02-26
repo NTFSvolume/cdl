@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import time
 from functools import wraps
@@ -9,20 +10,16 @@ from http.cookies import SimpleCookie
 from textwrap import dedent
 from typing import TYPE_CHECKING, NamedTuple, ParamSpec, TypeVar
 
-from cyberdrop_dl import appdata
 from cyberdrop_dl.dependencies import browser_cookie3
-from cyberdrop_dl.logger import log
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterable, Callable
     from pathlib import Path
 
     from cyberdrop_dl.constants import BROWSERS
-    from cyberdrop_dl.managers import Manager
 
-
-P = ParamSpec("P")
-R = TypeVar("R")
+    _P = ParamSpec("_P")
+    _R = TypeVar("_R")
 
 
 class CookieExtractor(NamedTuple):
@@ -30,19 +27,34 @@ class CookieExtractor(NamedTuple):
     extract: Callable[..., CookieJar]
 
 
+logger = logging.getLogger(__name__)
+
+
 class UnsupportedBrowserError(browser_cookie3.BrowserCookieError): ...
 
 
-COOKIE_EXTRACTORS = [CookieExtractor(func.__name__, func) for func in browser_cookie3.all_browsers]
-COOKIE_ERROR_FOOTER = "\n\nNothing has been saved."
-CHROMIUM_BROWSERS = ["chrome", "chromium", "opera", "opera_gx", "brave", "edge", "vivaldi", "arc"]
+_COOKIE_EXTRACTORS = {
+    c.name: c for c in (CookieExtractor(func.__name__, func) for func in browser_cookie3.all_browsers)
+}
+_CHROMIUM_BROWSERS = frozenset(
+    (
+        "chrome",
+        "chromium",
+        "opera",
+        "opera_gx",
+        "brave",
+        "edge",
+        "vivaldi",
+        "arc",
+    )
+)
 
 
-def cookie_wrapper(func: Callable[P, R]) -> Callable[P, R]:
+def cookie_wrapper(func: Callable[_P, _R]) -> Callable[_P, _R]:
     """Wrapper handles errors for cookie extraction."""
 
     @wraps(func)
-    def wrapper(*args, **kwargs) -> R:
+    def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
         try:
             return func(*args, **kwargs)
         except PermissionError as e:
@@ -58,55 +70,36 @@ def cookie_wrapper(func: Callable[P, R]) -> Callable[P, R]:
                      If you are still having issues, make sure all browsers processes are closed in Task Manager."""
             msg = f"{dedent(msg)}\nERROR: {e!s}"
 
-        raise browser_cookie3.BrowserCookieError(f"{msg}{COOKIE_ERROR_FOOTER}")
+        raise browser_cookie3.BrowserCookieError(f"{msg}\n\nNothing has been saved.")
 
     return wrapper
 
 
 @cookie_wrapper
-def get_cookies_from_browsers(manager: Manager, *, browser: BROWSERS, domains: list[str]) -> set[str]:
-    if domains == []:
-        msg = "No domains selected"
-        raise ValueError(msg)
-
+def get_cookies_from_browser(browser: BROWSERS, domain: str, *domains: str) -> MozillaCookieJar:
     extractor_name = browser.lower()
-    domains_to_extract: list[str] = domains
-
+    domains_to_extract: set[str] = set(domain, *domains)
     extracted_cookies = extract_cookies(extractor_name)
-    if not extracted_cookies:
-        msg = "None of the provided browsers is supported for extraction"
-        raise ValueError(msg)
-
-    appdata.get().cookies_dir.mkdir(parents=True, exist_ok=True)
-    domains_with_cookies: set[str] = set()
-    for domain in domains_to_extract:
-        cookie_file_path = appdata.get().cookies_dir / f"{domain}.txt"
-        cdl_cookie_jar = MozillaCookieJar(cookie_file_path)
-        for cookie in extracted_cookies:
+    cookie_jar = MozillaCookieJar()
+    for cookie in extracted_cookies:
+        for domain in domains_to_extract:
             if domain in cookie.domain:
-                domains_with_cookies.add(domain)
-                cdl_cookie_jar.set_cookie(cookie)
+                cookie_jar.set_cookie(cookie)
 
-        if domain in domains_with_cookies:
-            cdl_cookie_jar.save(ignore_discard=True, ignore_expires=True)
-
-    return domains_with_cookies
-
-
-def clear_cookies(*domains: str) -> None:
-    appdata.get().cookies_dir.mkdir(parents=True, exist_ok=True)
-    for domain in domains:
-        cookie_file_path = appdata.get().cookies_dir / f"{domain}.txt"
-        cookie_file_path.unlink(missing_ok=True)
+    return cookie_jar
 
 
 def extract_cookies(extractor_name: str) -> CookieJar:
-    extractor = next(extractor for extractor in COOKIE_EXTRACTORS if extractor.name == extractor_name)
+    extractor = _COOKIE_EXTRACTORS[extractor_name]
     try:
         return extractor.extract()
     except browser_cookie3.BrowserCookieError as e:
         msg = str(e)
-        if "Unable to get key for cookie decryption" in msg and extractor.name in CHROMIUM_BROWSERS and os.name == "nt":
+        if (
+            "Unable to get key for cookie decryption" in msg
+            and extractor.name in _CHROMIUM_BROWSERS
+            and os.name == "nt"
+        ):
             msg = f"Cookie extraction from {extractor.name.capitalize()} is not supported on Windows - {msg}"
             raise UnsupportedBrowserError(msg) from None
         raise
@@ -126,14 +119,16 @@ async def read_netscape_files(cookie_files: list[Path]) -> AsyncIterable[tuple[s
                 continue
             simplified_domain = cookie.domain.removeprefix(".")
             if simplified_domain not in current_cookie_file_domains:
-                log(f"Found cookies for {simplified_domain} in file '{file.name}'", 20)
+                logger.info(f"Found cookies for {simplified_domain} in file '{file.name}'")
                 current_cookie_file_domains.add(simplified_domain)
                 if simplified_domain in domains_seen:
-                    log(f"Previous cookies for domain {simplified_domain} detected. They will be overwritten", 30)
+                    logger.warning(
+                        f"Previous cookies for domain {simplified_domain} detected. They will be overwritten"
+                    )
 
             if (simplified_domain not in expired_cookies_domains) and cookie.is_expired(now):
                 expired_cookies_domains.add(simplified_domain)
-                log(f"Cookies for {simplified_domain} are expired", 30)
+                logger.info(f"Cookies for {simplified_domain} are expired")
 
             domains_seen.add(simplified_domain)
             simple_cookie = make_simple_cookie(cookie, now)
@@ -147,7 +142,7 @@ async def _read_netscape_file(file: Path) -> MozillaCookieJar | None:
             cookie_jar.load(ignore_discard=True)
             return cookie_jar
         except OSError as e:
-            log(f"Unable to load cookies from '{file.name}':\n  {e!s}", 40)
+            logger.error(f"Unable to load cookies from '{file.name}':\n  {e!s}")
 
     return await asyncio.to_thread(read)
 

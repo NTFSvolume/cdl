@@ -4,7 +4,7 @@ import re
 from datetime import UTC, datetime
 from enum import auto
 from pathlib import Path
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING
 
 from rich.text import Text
 
@@ -22,7 +22,6 @@ LOGS_DATETIME_FORMAT = "%Y%m%d_%H%M%S"
 LOGS_DATE_FORMAT = "%Y_%m_%d"
 STARTUP_TIME_STR = STARTUP_TIME.strftime(LOGS_DATETIME_FORMAT)
 DNS_RESOLVER: type[AsyncResolver] | type[ThreadedResolver] | None = None
-MAX_REDIRECTS: Final[int] = 8
 
 
 # logging

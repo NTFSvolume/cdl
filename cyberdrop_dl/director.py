@@ -16,7 +16,7 @@ from cyberdrop_dl.updates import check_latest_pypi
 from cyberdrop_dl.utils.apprise import send_notifications
 from cyberdrop_dl.utils.sorting import Sorter
 from cyberdrop_dl.utils.utilities import check_partials_and_empty_folders
-from cyberdrop_dl.utils.webhook import send_webhook_message
+from cyberdrop_dl.webhook import send_notification
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Sequence
@@ -60,7 +60,7 @@ async def _run_manager(manager: Manager) -> None:
 
         logger.info("Starting CDL...\n")
         await _scheduler(manager)
-        manager.progress_manager.print_stats(1)
+        manager.progress.print_stats(1)
 
         logger.info(spacer())
 
@@ -69,7 +69,7 @@ async def _run_manager(manager: Manager) -> None:
         logger.info("Closing program...")
         logger.info("Finished downloading. Enjoy :)", extra={"color": "green"})
 
-        await send_webhook_message(manager)
+        await send_notification(manager)
         await send_notifications("", attachment=config_.logs.main_log)
 
 
@@ -89,7 +89,7 @@ async def _runtime(manager: Manager) -> None:
     """Main runtime loop for the program, this will run until all scraping and downloading is complete."""
 
     manager.states.RUNNING.set()
-    with manager.live_manager.get_main_live(stop=True):
+    with manager.progress.get_main_live(stop=True):
         async with ScrapeMapper.managed(manager) as scrape_mapper:
             await scrape_mapper.run()
 

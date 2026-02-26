@@ -76,7 +76,7 @@ class Sorter:
 
         files_to_sort: dict[str, list[Path]] = {}
 
-        with self.manager.live_manager.get_sort_live(stop=True):
+        with self.manager.progress.get_sort_live(stop=True):
             for subfolder in await asyncio.to_thread(_subfolders, self.download_folder):
                 files_to_sort[subfolder.name] = await asyncio.to_thread(_get_files, subfolder)
 
@@ -87,7 +87,7 @@ class Sorter:
 
     async def _sort_files(self, files_to_sort: dict[str, list[Path]]) -> None:
         for folder_name, files in files_to_sort.items():
-            task_id = self.manager.progress_manager.sorting.new_task(folder_name, len(files))
+            task_id = self.manager.progress.sorting.new_task(folder_name, len(files))
 
             for file in files:
                 ext = file.suffix.lower()
@@ -104,9 +104,9 @@ class Sorter:
                 else:
                     await self.sort_other(file, folder_name)
 
-                self.manager.progress_manager.sorting.advance_folder(task_id)
+                self.manager.progress.sorting.advance_folder(task_id)
 
-            self.manager.progress_manager.sorting.remove_task(task_id)
+            self.manager.progress.sorting.remove_task(task_id)
 
     async def sort_audio(self, file: Path, base_name: str) -> None:
         """Sorts an audio file into the sorted audio folder."""
@@ -133,7 +133,7 @@ class Sorter:
             length=duration,
             sample_rate=sample_rate,
         ):
-            self.manager.progress_manager.sorting.increment_audio()
+            self.manager.progress.sorting.increment_audio()
 
     async def sort_image(self, file: Path, base_name: str) -> None:
         """Sorts an image file into the sorted image folder."""
@@ -159,7 +159,7 @@ class Sorter:
             resolution=resolution,
             width=width,
         ):
-            self.manager.progress_manager.sorting.increment_image()
+            self.manager.progress.sorting.increment_image()
 
     async def sort_video(self, file: Path, base_name: str) -> None:
         """Sorts a video file into the sorted video folder."""
@@ -192,7 +192,7 @@ class Sorter:
             resolution=resolution,
             width=width,
         ):
-            self.manager.progress_manager.sorting.increment_video()
+            self.manager.progress.sorting.increment_video()
 
     async def sort_other(self, file: Path, base_name: str) -> None:
         """Sorts an other file into the sorted other folder."""
@@ -200,7 +200,7 @@ class Sorter:
             return
 
         if await self._process_file_move(file, base_name, self.other_format):
-            self.manager.progress_manager.sorting.increment_other()
+            self.manager.progress.sorting.increment_other()
 
     async def _process_file_move(self, file: Path, base_name: str, format_str: str, **kwargs: Any) -> bool:
         file_date = await _get_modified_date(file)

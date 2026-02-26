@@ -1,19 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 import logging
 from dataclasses import field
-from time import perf_counter
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING
 
 from cyberdrop_dl import __version__, appdata, config, constants
+from cyberdrop_dl.clients.http import HttpClient
 from cyberdrop_dl.database import Database
 from cyberdrop_dl.managers.hash_manager import HashManager
-from cyberdrop_dl.managers.http import HttpClient
-from cyberdrop_dl.managers.live_manager import LiveManager
 from cyberdrop_dl.managers.logs import LogManager
-from cyberdrop_dl.progress import ProgressManager
+from cyberdrop_dl.progress import TUI
 from cyberdrop_dl.storage import StorageChecker
 from cyberdrop_dl.utils import ffmpeg
 from cyberdrop_dl.utils.utilities import close_if_defined, get_system_information
@@ -23,13 +22,13 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from cyberdrop_dl.data_structures.url_objects import MediaItem
-    from cyberdrop_dl.logger import QueuedLogger
     from cyberdrop_dl.scrape_mapper import ScrapeMapper
 
 
-class AsyncioEvents(NamedTuple):
-    SHUTTING_DOWN: asyncio.Event
-    RUNNING: asyncio.Event
+@dataclasses.dataclass(slots=True)
+class AsyncioEvents:
+    SHUTTING_DOWN: asyncio.Event = dataclasses.field(init=False, default_factory=asyncio.Event)
+    RUNNING: asyncio.Event = dataclasses.field(init=False, default_factory=asyncio.Event)
 
 
 logger = logging.getLogger(__name__)
@@ -39,17 +38,14 @@ class Manager:
     def __init__(self) -> None:
         self.hash_manager: HashManager = field(init=False)
         self.db_manager: Database = field(init=False)
-        self.client_manager: HttpClient = field(init=False)
+        self.http_client: HttpClient = field(init=False)
         self.storage_manager: StorageChecker = field(init=False)
 
-        self.progress_manager: ProgressManager = ProgressManager(self, portrait=False)
-        self.live_manager: LiveManager = field(init=False)
+        self.progress: TUI = TUI(refresh_rate=10)
 
         self.task_group: TaskGroup = asyncio.TaskGroup()
         self.scrape_mapper: ScrapeMapper = field(init=False)
 
-        self.start_time: float = perf_counter()
-        self.loggers: dict[str, QueuedLogger] = {}
         self.states: AsyncioEvents
 
         self.logs: LogManager = LogManager(config.get(), self.task_group)
@@ -77,13 +73,10 @@ class Manager:
     def prev_downloads(self) -> set[MediaItem]:
         return self._prev_downloads
 
-    """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
-
     async def async_startup(self) -> None:
         """Async startup process for the manager."""
-        self.states = AsyncioEvents(asyncio.Event(), asyncio.Event())
-        self.client_manager = HttpClient(self)
-        await self.client_manager.startup()
+        self.states = AsyncioEvents()
+        self.http_client = HttpClient(self.config)
         self.storage_manager = StorageChecker(self)
 
         await self.async_db_hash_startup()
@@ -98,7 +91,6 @@ class Manager:
         )
         await self.db_manager.startup()
         self.hash_manager = HashManager(self)
-        self.live_manager = LiveManager(self)
 
     async def async_db_close(self) -> None:
         "Partial shutdown for managers used for hash directory scanner"
@@ -111,12 +103,8 @@ class Manager:
 
         await self.async_db_close()
 
-        self.client_manager = await close_if_defined(self.client_manager)
+        self.http_client = await close_if_defined(self.http_client)
         self.storage_manager = await close_if_defined(self.storage_manager)
-
-        while self.loggers:
-            _, queued_logger = self.loggers.popitem()
-            queued_logger.stop()
 
 
 def log_app_state() -> None:

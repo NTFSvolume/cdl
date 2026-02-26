@@ -146,11 +146,11 @@ class Downloader:
         if media_item.is_segment:
             return
 
-        if not self.manager.client_manager.check_allowed_filetype(media_item):
+        if not self.manager.http_client.check_allowed_filetype(media_item):
             raise RestrictedFiletypeError(origin=media_item)
-        if not await self.manager.client_manager.check_file_duration(media_item):
+        if not await self.manager.http_client.check_file_duration(media_item):
             raise DurationError(origin=media_item)
-        if not self.manager.client_manager.check_allowed_date_range(media_item):
+        if not self.manager.http_client.check_allowed_date_range(media_item):
             raise RestrictedDateRangeError(origin=media_item)
 
     @error_handling_wrapper
@@ -168,7 +168,7 @@ class Downloader:
         except SkipDownloadError as e:
             if not media_item.is_segment:
                 logger.info(f"Download skipped {media_item.url}: {e}")
-                self.manager.progress_manager.files.add_skipped()
+                self.manager.progress.files.add_skipped()
 
         except (DownloadError, ClientResponseError, InvalidContentTypeError):
             raise
@@ -194,5 +194,5 @@ class Downloader:
         msg = f"Download failed: {media_item.url} ({error_log_msg.main_log_msg}) \n -> Referer: {media_item.referer}"
         logger.error(msg, exc_info=exc_info)
         self.manager.logs.write_download_error(media_item, error_log_msg.csv_log_msg)
-        self.manager.progress_manager.download_errors.add_failure(error_log_msg.ui_failure)
-        self.manager.progress_manager.files.add_failed()
+        self.manager.progress.download_errors.add_failure(error_log_msg.ui_failure)
+        self.manager.progress.files.add_failed()

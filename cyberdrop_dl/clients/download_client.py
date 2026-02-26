@@ -71,7 +71,7 @@ class StreamDownloader:
         """Starts a file."""
         if self.config.download.skip_download_mark_completed and not media_item.is_segment:
             logger.info(f"Download skipped {media_item.url} due to mark completed option", 10)
-            self.manager.progress_manager.files.add_skipped()
+            self.manager.progress.files.add_skipped()
             await self.mark_completed(media_item.domain, media_item)
             return False
 
@@ -86,7 +86,7 @@ class StreamDownloader:
                     await asyncio.to_thread(media_item.complete_file.unlink)
                     logger.warning(f"Download deleted {media_item.url} due to runtime restrictions")
                     await self.mark_incomplete(media_item)
-                    self.manager.progress_manager.files.add_skipped()
+                    self.manager.progress.files.add_skipped()
                     return False
 
             await self._finalize_download(media_item)
@@ -132,7 +132,7 @@ class StreamDownloader:
             )
             media_item.timestamp = last_modified
 
-        hook = self.manager.progress_manager.downloads.new_hook(media_item.filename, media_item.filesize)
+        hook = self.manager.progress.downloads.new_hook(media_item.filename, media_item.filesize)
         if resume_point:
             hook.advance(resume_point)
 
@@ -239,7 +239,7 @@ class StreamDownloader:
         await self.manager.db_manager.history_table.insert_incompleted(media_item.domain, media_item)
 
     async def mark_completed(self, domain: str, media_item: MediaItem) -> None:
-        self.manager.progress_manager.files.add_completed()
+        self.manager.progress.files.add_completed()
         await self.manager.db_manager.history_table.mark_complete(domain, media_item)
 
 

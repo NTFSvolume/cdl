@@ -95,9 +95,9 @@ class ScrapeMapper:
         """Creates a new scrape mapper that auto closses http session on exit"""
 
         self = cls(manager)
-        await self.manager.client_manager.load_cookie_files()
+        await self.manager.http_client.load_cookie_files()
 
-        async with self.manager.client_manager, asyncio.TaskGroup() as tg:
+        async with self.manager.http_client, asyncio.TaskGroup() as tg:
             self.manager.scrape_mapper = self
             self.manager.task_group = tg
             yield self
@@ -232,12 +232,12 @@ class ScrapeMapper:
             except JDownloaderError as e:
                 log(f"Failed to send {scrape_item.url} to JDownloader\n{e.message}", 40)
                 self.manager.logs.write_unsupported(scrape_item.url, scrape_item)
-            self.manager.progress_manager.scrape_errors.add_unsupported(sent_to_jdownloader=success)
+            self.manager.progress.scrape_errors.add_unsupported(sent_to_jdownloader=success)
             return
 
         log(f"Unsupported URL: {scrape_item.url}", 30)
         self.manager.logs.write_unsupported(scrape_item.url, scrape_item)
-        self.manager.progress_manager.scrape_errors.add_unsupported()
+        self.manager.progress.scrape_errors.add_unsupported()
 
     def should_scrape(self, scrape_item: ScrapeItem) -> bool:
         """Pre-filter scrape items base on URL."""

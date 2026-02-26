@@ -410,7 +410,7 @@ class RateLimiting(SettingsGroup):
         return falsy_as_none(value)
 
     @property
-    def _curl_timeout(self) -> tuple[float, float]:
+    def curl_timeout(self) -> tuple[float, float]:
         return self.connection_timeout, self.read_timeout or 0
 
     @property

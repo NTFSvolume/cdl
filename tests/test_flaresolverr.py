@@ -17,7 +17,7 @@ pytestmark = pytest.mark.skipif(not FLARESOLVER_URL, reason=f"{ENV_NAME} environ
 async def flaresolverr(running_manager: Manager):
     async with ScrapeMapper.managed(running_manager) as scrape_mapper:
         await scrape_mapper.run()
-        flare = running_manager.client_manager.flaresolverr
+        flare = running_manager.http_client._flaresolverr
         flare.url = AbsoluteHttpURL(FLARESOLVER_URL) / "v1"
         yield flare
 

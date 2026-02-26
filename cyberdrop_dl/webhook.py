@@ -43,11 +43,11 @@ def _prepare_diff_text() -> str:
     return "\n".join(prepare_lines())
 
 
-async def _prepare_form(webhook: AppriseURLModel, main_log: Path) -> FormData:
+async def _prepare_form(main_log: Path | None = None) -> FormData:
     diff_text = _prepare_diff_text()
     form = FormData()
 
-    if "attach_logs" in webhook.tags and (size := await aio.get_size(main_log)):
+    if main_log and (size := await aio.get_size(main_log)):
         if size <= 25 * 1024 * 1024:  # 25MB
             form.add_field("file", await aio.read_bytes(main_log), filename=main_log.name)
 
@@ -61,21 +61,20 @@ async def _prepare_form(webhook: AppriseURLModel, main_log: Path) -> FormData:
     return form
 
 
-async def send_webhook_message(session: aiohttp.ClientSession, webhook: AppriseURLModel | None = None) -> None:
+async def send_notification(session: aiohttp.ClientSession, webhook: AppriseURLModel | None = None) -> None:
     """Outputs the stats to a code block for webhook messages."""
-    webhook = config.get().logs.webhook
 
     if not webhook:
         return
 
     logger.info("Sending webhook notifications.. ")
     url = webhook.url.get_secret_value()
-    form = await _prepare_form(webhook, config.get().logs.main_log)
+    form = await _prepare_form(config.get().logs.main_log if "attach_logs" in webhook.tags else None)
 
     try:
         async with session.post(url, data=form) as response:
             if response.ok:
-                result = "success"
+                result = "Success"
 
             else:
                 json_resp: dict[str, Any] = await response.json()

@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 class MegaDownloadClient(StreamDownloader):
     def __init__(self, manager: Manager) -> None:
-        super().__init__(manager, manager.client_manager)
+        super().__init__(manager, manager.http_client)
         self._decrypt_mapping: dict[URL, tuple[Crypto, int]] = {}
         self._supports_ranges = False
 
@@ -47,7 +47,7 @@ class MegaDownloadClient(StreamDownloader):
 
                 await self.http_client.speed_limiter.acquire(chunk_size)
                 await f.write(chunk)
-                self.manager.progress_manager.downloads.advance_file(media_item.task_id, chunk_size)
+                self.manager.progress.downloads.advance_file(media_item.task_id, chunk_size)
                 check_download_speed()
 
         await self._post_download_check(media_item)
@@ -72,7 +72,7 @@ class MegaDownloader(Downloader):
     def startup(self) -> None:
         """Starts the downloader."""
         self.client = MegaDownloadClient(self.manager)  # type: ignore[reportIncompatibleVariableOverride]
-        self._semaphore = asyncio.Semaphore(self.manager.client_manager.get_download_slots(self.domain))
+        self._semaphore = asyncio.Semaphore(self.manager.http_client.get_download_slots(self.domain))
 
     def register(self, url: URL, crypto: Crypto, file_size: int) -> None:
         self.client._decrypt_mapping[url] = crypto, file_size

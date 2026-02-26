@@ -166,7 +166,6 @@ class Crawler(ABC):
         self.disabled: bool = False
         self.logged_in: bool = False
         self.scraped_items: set[str] = set()
-        self.RATE_LIMIT = AsyncLimiter(*self._RATE_LIMIT)
         self.waiting_items = 0
         self.log = log
         self.log_debug = log_debug
@@ -280,12 +279,12 @@ class Crawler(ABC):
         async with self.startup_lock:
             if self.ready:
                 return
-            self.client = self.manager.client_manager.scraper_client
-            self.manager.client_manager.rate_limits[self.DOMAIN] = self.RATE_LIMIT
+            self.client = self.manager.http_client.scraper_client
+            self.manager.http_client.rate_limiter[self.DOMAIN] = AsyncLimiter(*self._RATE_LIMIT)
             if self._DOWNLOAD_SLOTS:
-                self.manager.client_manager.download_slots[self.DOMAIN] = self._DOWNLOAD_SLOTS
+                self.manager.http_client.download_limiter[self.DOMAIN] = self._DOWNLOAD_SLOTS
             if self._USE_DOWNLOAD_SERVERS_LOCKS:
-                self.manager.client_manager.download_client.server_locked_domains.add(self.DOMAIN)
+                self.manager.http_client.download_limiter.register_server_lock(self.DOMAIN)
             self.downloader = self._init_downloader()
             self._register_response_checks()
             await self.async_startup()
@@ -365,11 +364,11 @@ class Crawler(ABC):
     def new_task_id(self, url: AbsoluteHttpURL) -> Generator[TaskID]:
         """Creates a new task_id (shows the URL in the UI and logs)"""
         log(f"Scraping [{self.FOLDER_DOMAIN}]: {url}", 20)
-        task_id = self.manager.progress_manager.scrape.new_task(url)
+        task_id = self.manager.progress.scrape.new_task(url)
         try:
             yield task_id
         finally:
-            self.manager.progress_manager.scrape.remove_task(task_id)
+            self.manager.progress.scrape.remove_task(task_id)
 
     @staticmethod
     def is_subdomain(url: AbsoluteHttpURL) -> bool:
@@ -467,7 +466,7 @@ class Crawler(ABC):
         check_complete = await self.manager.db_manager.history_table.check_complete(self.DOMAIN, url, referer, db_path)
         if check_complete:
             log(f"Skipping {url} as it has already been downloaded", 10)
-            self.manager.progress_manager.files.add_previously_completed()
+            self.manager.progress.files.add_previously_completed()
         return check_complete
 
     async def handle_media_item(self, media_item: MediaItem, m3u8: m3u8.RenditionGroup | None = None) -> None:
@@ -482,7 +481,7 @@ class Crawler(ABC):
             return
 
         if await self.check_skip_by_config(media_item):
-            self.manager.progress_manager.files.add_skipped()
+            self.manager.progress.files.add_skipped()
             return
 
         self.create_task(self._download(media_item, m3u8))
@@ -518,7 +517,7 @@ class Crawler(ABC):
         downloaded = await self.manager.db_manager.history_table.check_complete_by_referer(domain, url)
         if downloaded:
             log(f"Skipping {url} as it has already been downloaded", 10)
-            self.manager.progress_manager.files.add_previously_completed()
+            self.manager.progress.files.add_previously_completed()
             return True
         return False
 
@@ -531,7 +530,7 @@ class Crawler(ABC):
         if downloaded:
             url = scrape_item if isinstance(scrape_item, URL) else scrape_item.url
             log(f"Skipping {url} as its hash ({hash_type}:{hash_value}) has already been downloaded", 10)
-            self.manager.progress_manager.files.add_previously_completed()
+            self.manager.progress.files.add_previously_completed()
         return downloaded
 
     async def get_album_results(self, album_id: str) -> dict[str, int]:
@@ -567,7 +566,7 @@ class Crawler(ABC):
         url_path = self.create_db_path(url)
         if url_path in album_results and album_results[url_path] != 0:
             log(f"Skipping {url} as it has already been downloaded")
-            self.manager.progress_manager.files.add_previously_completed()
+            self.manager.progress.files.add_previously_completed()
             return True
         return False
 

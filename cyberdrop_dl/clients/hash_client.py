@@ -27,7 +27,7 @@ def hash_directory_scanner(manager: Manager, path: Path) -> None:
 async def _hash_directory_scanner_helper(manager: Manager, path: Path) -> None:
     await manager.async_db_hash_startup()
     await manager.hash_manager.hash_client.hash_directory(path)
-    manager.progress_manager.print_dedupe_stats()
+    manager.progress.print_dedupe_stats()
     await manager.async_db_close()
 
 
@@ -58,8 +58,8 @@ class HashClient:
     async def hash_directory(self, path: Path) -> None:
         path = Path(path)
         with (
-            self.manager.live_manager.get_hash_live(stop=True),
-            self.manager.progress_manager.hashing.currently_hashing_dir(path),
+            self.manager.progress.get_hash_live(stop=True),
+            self.manager.progress.hashing.currently_hashing_dir(path),
         ):
             if not await asyncio.to_thread(path.is_dir):
                 raise NotADirectoryError
@@ -115,7 +115,7 @@ class HashClient:
         hash_type: str,
     ) -> str | None:
         """Generates hash of a file."""
-        await self.manager.progress_manager.hashing.update_currently_hashing(file)
+        await self.manager.progress.hashing.update_currently_hashing(file)
         hash = await self.manager.db_manager.hash_table.get_file_hash_exists(file, hash_type)
         try:
             if not hash:
@@ -127,9 +127,9 @@ class HashClient:
                     original_filename,
                     referer,
                 )
-                self.manager.progress_manager.hashing.add_new_completed_hash(hash_type)
+                self.manager.progress.hashing.add_new_completed_hash(hash_type)
             else:
-                self.manager.progress_manager.hashing.add_prev_hash()
+                self.manager.progress.hashing.add_prev_hash()
                 await self.manager.db_manager.hash_table.insert_or_update_hash_db(
                     hash,
                     hash_type,
@@ -160,9 +160,9 @@ class HashClient:
             return
         if config.get().runtime.ignore_history:
             return
-        with self.manager.live_manager.get_hash_live(stop=True):
+        with self.manager.progress.get_hash_live(stop=True):
             file_hashes_dict = await self.get_file_hashes_dict()
-        with self.manager.live_manager.get_remove_file_via_hash_live(stop=True):
+        with self.manager.progress.get_remove_file_via_hash_live(stop=True):
             await self.final_dupe_cleanup(file_hashes_dict)
 
     async def final_dupe_cleanup(self, final_dict: dict[str, dict]) -> None:
@@ -197,7 +197,7 @@ class HashClient:
                 f"File hash matches with a previous download ({hash_string})"
             )
             log(msg, 10)
-            self.manager.progress_manager.hashing.add_removed_file()
+            self.manager.progress.hashing.add_removed_file()
         finally:
             self._sem.release()
 
