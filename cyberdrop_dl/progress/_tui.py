@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
+import itertools
 import logging
 import time
 from datetime import timedelta
@@ -106,10 +107,7 @@ class TUI:
         logger.info(f"  Videos: {self.sorting.video_count:,}")
         logger.info(f"  Other Files: {self.sorting.other_count:,}")
 
-        logger.info("Scrape Failures:")
-        last_padding = _log_errors(self.scrape_errors.results())
-        logger.info("Download Failures:")
-        _ = _log_errors(self.download_errors.results(), padding=last_padding)
+        _log_errors(self.scrape_errors.results(), self.download_errors.results())
 
     def print_dedupe_stats(self) -> None:
         logger.info("Dupe Stats:")
@@ -147,19 +145,25 @@ def _create_screens(tui: TUI) -> AppScreens:
     )
 
 
-def _log_errors(errors: list[UIFailure], *, padding: int = 0) -> int:
-    if not errors:
-        logger.info("  None")
-        return 0
+def _log_errors(scrape_errors: list[UIFailure], download_errors: list[UIFailure]) -> None:
+    error_codes = (f.code for f in itertools.chain(scrape_errors, download_errors) if f.code is not None)
+    try:
+        padding = len(str(max(error_codes)))
+    except ValueError:
+        padding = 0
 
-    error_codes = [f.error_code for f in errors if f.error_code is not None]
-    if error_codes:
-        padding = max(len(str(max(error_codes))), padding)
-    for f in errors:
-        error = f.error_code if f.error_code is not None else ""
-        logger.info(f"  {error:>{padding}}{' ' if padding else ''}{f.msg}: {f.count:,}")
+    def log(name: str, errors: list[UIFailure]) -> None:
+        logger.info(name)
+        if not errors:
+            logger.info(f"  {'None':>{padding}}")
+            return
 
-    return padding
+        for error in scrape_errors:
+            error_code = error.code if error.code is not None else ""
+            logger.info(f"  {error_code:>{padding}}{' ' if padding else ''}{error.msg}: {error.count:,}")
+
+    log("Scrape Failures:", scrape_errors)
+    log("Download Failures:", download_errors)
 
 
 def _get_console_hyperlink(file_path: Path, text: str = "") -> Text:

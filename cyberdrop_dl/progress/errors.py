@@ -14,13 +14,13 @@ from cyberdrop_dl.progress.common import ColumnsType, ProgressProxy
 class UIFailure:
     msg: str
     count: int
-    error_code: int | None = None
+    code: int | None = None
 
     def __post_init__(self) -> None:
         parts = self.msg.split(" ", 1)
         if len(parts) > 1 and parts[0].isdigit():
             error_code, self.msg = parts
-            self.error_code = int(error_code)
+            self.code = int(error_code)
         else:
             self.msg = self.msg
 
