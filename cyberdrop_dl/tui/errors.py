@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import functools
-from typing import ClassVar
+from typing import ClassVar, Self
 
 from rich.panel import Panel
 from rich.progress import BarColumn, TaskID
@@ -16,13 +16,16 @@ class UIFailure:
     count: int
     code: int | None = None
 
-    def __post_init__(self) -> None:
-        parts = self.msg.split(" ", 1)
-        if len(parts) > 1 and parts[0].isdigit():
-            error_code, self.msg = parts
-            self.code = int(error_code)
-        else:
-            self.msg = self.msg
+    @classmethod
+    def parse(cls, msg: str, count: int) -> Self:
+        if len(parts := msg.split(" ", 1)) == 2:
+            error_code, msg = parts
+            try:
+                return cls(msg, count, int(error_code))
+            except ValueError:
+                pass
+
+        return cls(msg, count)
 
 
 class _ErrorsPanel(ProgressProxy):
@@ -61,15 +64,15 @@ class _ErrorsPanel(ProgressProxy):
 
     def add(self, error: str) -> None:
         self.error_count += 1
-        key = _get_pretty_error(error)
-        if (task_id := self.errors.get(key)) is not None:
+        name = _get_pretty_error(error)
+        if (task_id := self.errors.get(name)) is not None:
             self._progress.advance(task_id)
         else:
-            self.errors[key] = self._progress.add_task(key, total=self.error_count, completed=1)
+            self.errors[name] = self._progress.add_task(name, total=self.error_count, completed=1)
 
-        self.__redraw()
+        self._redraw()
 
-    def __redraw(self) -> None:
+    def _redraw(self) -> None:
         self._panel.subtitle = self._subtitle
         for task_id in self.errors.values():
             self._progress.update(task_id, total=self.error_count)
@@ -88,9 +91,7 @@ class _ErrorsPanel(ProgressProxy):
             )
 
     def results(self) -> list[UIFailure]:
-        """Returns the total number of failed sites and reasons."""
-
-        return sorted(UIFailure(msg, int(self._tasks[task_id].completed)) for msg, task_id in self.errors.items())
+        return sorted(UIFailure.parse(msg, int(self._tasks[task_id].completed)) for msg, task_id in self.errors.items())
 
 
 class DownloadErrors(_ErrorsPanel):

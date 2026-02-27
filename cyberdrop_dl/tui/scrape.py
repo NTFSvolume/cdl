@@ -16,31 +16,28 @@ from rich.progress import (
 )
 
 from cyberdrop_dl import __version__
-from cyberdrop_dl.tui.common import OverflowingPanel, ProgressHook, ProgressProxy
+from cyberdrop_dl.tui.common import ColumnsType, OverflowingPanel, ProgressHook, ProgressProxy
 
 if TYPE_CHECKING:
     from collections.abc import Generator
 
-    from yarl import URL
+    from rich.console import RenderableType
 
 
-_downloads: ContextVar[ProgressHook] = ContextVar("_downloads")
+_current_hook: ContextVar[ProgressHook] = ContextVar("_downloads")
 
 
 class ScrapingPanel(OverflowingPanel):
     unit: ClassVar[str] = "URLs"
-    _columns = SpinnerColumn(), "[progress.description]{task.description}"
+    _columns: ClassVar[ColumnsType] = SpinnerColumn(), "[progress.description]{task.description}"
 
     def __init__(self) -> None:
         super().__init__(visible_tasks_limit=5)
 
-    def new_task(self, url: URL) -> TaskID:  # type: ignore[reportIncompatibleMethodOverride]
-        return self._add_task(str(url))
-
 
 class DownloadsPanel(OverflowingPanel):
     unit: ClassVar[str] = "files"
-    _columns = (
+    _columns: ClassVar[ColumnsType] = (
         SpinnerColumn(),
         "[progress.description]{task.description}",
         BarColumn(bar_width=None),
@@ -59,12 +56,12 @@ class DownloadsPanel(OverflowingPanel):
 
     @property
     def current_hook(self) -> ProgressHook:
-        return _downloads.get()
+        return _current_hook.get()
 
-    def new(self, filename: str, size: float | None = None) -> ProgressHook:
-        description = self._clean_task_desc(str(filename).rsplit("/", 1)[-1])
-        hook = self(description, size)
-        _ = _downloads.set(hook)
+    def __call__(self, filename: object, /, total: float | None = None) -> ProgressHook:
+        filename = self._clean_task_desc(str(filename).rsplit("/", 1)[-1])
+        hook = super()(filename, total)
+        _ = _current_hook.set(hook)
         return hook
 
     def _advance(self, task_id: TaskID, amount: int = 1) -> None:
@@ -73,20 +70,27 @@ class DownloadsPanel(OverflowingPanel):
 
 
 class StatusMessage(ProgressProxy):
-    _columns = (
-        SpinnerColumn(style="green", spinner_name="dots"),
+    _columns: ClassVar[ColumnsType] = (
+        SpinnerColumn(),
         "[progress.description]{task.description}",
     )
 
     def __init__(self) -> None:
         super().__init__()
-        self.activity = Progress(*self.columns)
+        self.activity: Progress = Progress(*self.columns)
         _ = self.activity.add_task(f"Running Cyberdrop-DL: v{__version__}", total=100, completed=0)
-        self._task_id = self._progress.add_task("", total=100, completed=0, visible=False)
-        self._renderable = Columns([self.activity, self._progress])
+        self._task_id: TaskID = self._progress.add_task("", total=100, completed=0, visible=False)
+        self._renderable: Columns = Columns([self.activity, self._progress])
 
-    def __call__(self, description: str | None = None) -> None:
-        self._progress.update(self._task_id, description=description, visible=bool(description))
+    def __rich__(self) -> RenderableType:
+        return self._renderable
+
+    def __call__(self, description: object = None) -> None:
+        self._progress.update(
+            self._task_id,
+            description=str(description) if description is not None else None,
+            visible=bool(description),
+        )
 
     def __str__(self) -> str:
         return self._tasks[self._task_id].description

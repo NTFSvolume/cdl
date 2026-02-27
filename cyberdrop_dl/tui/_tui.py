@@ -61,15 +61,17 @@ class TUI:
 
     @contextlib.contextmanager
     def __call__(self, *, screen: Literal["scraping", "sorting", "hashing"]) -> Generator[None]:
+        if self.disabled:
+            yield
+            return
+
         self._current_screen = self._screens[screen]
-        if not self.disabled:
-            self._live.start()
+        self._live.start()
         try:
             yield
         finally:
             self._current_screen = ""
-            if not self.disabled:
-                self._live.stop()
+            self._live.stop()
 
     def print_stats(self, start_time: float) -> None:
         """Prints the stats of the program."""
@@ -146,7 +148,7 @@ def _create_screens(tui: TUI) -> AppScreens:
 
 
 def _log_errors(scrape_errors: list[UIFailure], download_errors: list[UIFailure]) -> None:
-    error_codes = (f.code for f in itertools.chain(scrape_errors, download_errors) if f.code is not None)
+    error_codes = (error.code for error in itertools.chain(scrape_errors, download_errors) if error.code is not None)
     try:
         padding = len(str(max(error_codes)))
     except ValueError:
@@ -166,7 +168,5 @@ def _log_errors(scrape_errors: list[UIFailure], download_errors: list[UIFailure]
     log("Download Failures:", download_errors)
 
 
-def _get_console_hyperlink(file_path: Path, text: str = "") -> Text:
-    full_path = file_path
-    show_text = text or full_path
-    return Text(str(show_text), style=f"link {full_path.as_uri()}")
+def _create_hyperlink(file_path: Path, text: str | None = None) -> Text:
+    return Text(text or str(file_path), style=f"link {file_path.as_uri()}")

@@ -50,7 +50,7 @@ class FileStats(CounterPanel):
     def _subtitle(self) -> str:
         return f"Total Files: [white]{self._total:,}"
 
-    def __redraw(self, increase_total: bool = True) -> None:
+    def _redraw(self, increase_total: bool = True) -> None:
         self._panel.subtitle = self._subtitle
         self._total += 1
         for name, task in self._tasks_map.items():
@@ -63,9 +63,8 @@ class FileStats(CounterPanel):
             progress.update(task.id, total=self._total, completed=completed)
 
     def _advance(self, task_name: str) -> None:
-        self._progress.advance(self._tasks_map[task_name].id)
-        self._tasks_map[task_name].count += 1
-        self.__redraw()
+        super()._advance(task_name)
+        self._redraw()
 
     def add_completed(self) -> None:
         self._advance("completed")

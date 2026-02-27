@@ -23,13 +23,13 @@ def _truncate(s: str, length: int = 40, placeholder: str = "...") -> str:
     return f"{s[: length - len(placeholder)]}{placeholder}" if len(s) >= length else s.ljust(length)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass(slots=True, order=True)
 class TaskCounter:
     id: TaskID
     count: int = 0
 
 
-@dataclasses.dataclass(slots=True, frozen=True)
+@dataclasses.dataclass(slots=True)
 class ProgressHook:
     advance: Callable[[int], None]
     done: Callable[[], None]
@@ -167,7 +167,7 @@ class OverflowingPanel(PanelProxy):
 
         self._update_overflow()
 
-    def __call__(self, description: object, total: float | None = None) -> ProgressHook:
+    def __call__(self, description: object, /, total: float | None = None) -> ProgressHook:
         task_id = self._add_task(str(description), total)
 
         def advance(amount: int = 1) -> None:
