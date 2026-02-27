@@ -3,12 +3,21 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import sys
 import time
 from functools import wraps
-from http.cookiejar import Cookie, CookieJar, MozillaCookieJar
-from http.cookies import SimpleCookie
 from textwrap import dedent
 from typing import TYPE_CHECKING, NamedTuple, ParamSpec, TypeVar
+
+if sys.version_info < (3, 14):
+    from http import cookies
+
+    # https://github.com/python/cpython/issues/112713
+    cookies.Morsel._reserved["partitioned"] = "partitioned"  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
+    cookies.Morsel._flags.add("partitioned")  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
+
+from http.cookiejar import Cookie, CookieJar, MozillaCookieJar
+from http.cookies import SimpleCookie
 
 from cyberdrop_dl.dependencies import browser_cookie3
 

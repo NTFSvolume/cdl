@@ -142,7 +142,7 @@ class HttpClient:
     - Setup sessions based on config values (proxies, ssl, etc..)
     - Rate limits requests
     - Limits concurrent downloads
-    - Keep cookies in sync bewteen curl and aiohtttp
+    - Keep cookies in sync between curl and aiohtttp
 
     """
 
@@ -151,8 +151,8 @@ class HttpClient:
     rate_limiter: RateLimiter
     ssl_context: ssl.SSLContext | Literal[False]
 
-    _cookies: aiohttp.CookieJar | None = None
     json_resp_checkers: dict[Domain, Callable[[Any], None]] = dataclasses.field(default_factory=dict)
+    _cookies: aiohttp.CookieJar | None = None
     _aiohttp_session: aiohttp.ClientSession | None = None
     _curl_session: AsyncSession[CurlResponse] | None = None
 

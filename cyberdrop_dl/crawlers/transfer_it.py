@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 from mega.transfer_it import TransferItClient
 
-from cyberdrop_dl.crawlers.crawler import Crawler, DBPathBuilder, SupportedPaths
+from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, _DBPathBuilder
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils.utilities import error_handling_wrapper
 
@@ -19,7 +19,7 @@ class TransferItCrawler(Crawler):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {"Transfer": "/t/<transfer_id>"}
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://transfer.it")
     DOMAIN: ClassVar[str] = "transfer.it"
-    create_db_path = staticmethod(DBPathBuilder.path_qs_frag)
+    create_db_path = staticmethod(_DBPathBuilder.path_qs_frag)
 
     core: TransferItClient
 

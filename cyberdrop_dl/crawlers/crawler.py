@@ -9,10 +9,22 @@ import logging
 import re
 from abc import ABC, abstractmethod
 from collections import Counter
+from collections.abc import Callable
 from functools import partial, wraps
 from pathlib import Path
 from re import Pattern
-from typing import TYPE_CHECKING, Any, ClassVar, Concatenate, Literal, ParamSpec, Self, TypeAlias, TypeVar, final
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Concatenate,
+    Literal,
+    ParamSpec,
+    Self,
+    TypeAlias,
+    TypeVar,
+    final,
+)
 
 from aiolimiter import AsyncLimiter
 
@@ -39,14 +51,8 @@ from cyberdrop_dl.utils.utilities import (
     truncate_str,
 )
 
-P = ParamSpec("P")
-R = TypeVar("R")
-T = TypeVar("T")
-_T_co = TypeVar("_T_co", covariant=True)
-
-
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Callable, Coroutine, Generator, Iterable
+    from collections.abc import AsyncGenerator, Coroutine, Generator, Iterable
     from http.cookies import BaseCookie
 
     from bs4 import BeautifulSoup, Tag
@@ -56,15 +62,28 @@ if TYPE_CHECKING:
     from cyberdrop_dl.clients.response import AbstractResponse
     from cyberdrop_dl.managers import Manager
 
-
-OneOrTuple: TypeAlias = T | tuple[T, ...]
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+_T = TypeVar("_T")
+_T_co = TypeVar("_T_co", covariant=True)
+OneOrTuple: TypeAlias = _T | tuple[_T, ...]
 SupportedPaths: TypeAlias = dict[str, OneOrTuple[str]]
 SupportedDomains: TypeAlias = OneOrTuple[str]
 RateLimit = tuple[float, float]
+_DBPathBuilder = Callable[[AbsoluteHttpURL], str]
+DBPathBuilder = _DBPathBuilder | Literal["url", "name", "path", "path_qs", "path_qs_frag", "path_frag"]
+_DB_PATH_BUILDERS: dict[str, _DBPathBuilder] = {
+    "url": lambda url: str(url),
+    "name": lambda url: url.name,
+    "path": lambda url: url.path,
+    "path_qs": lambda url: url.path_qs,
+    "path_qs_frag": lambda url: f"{url.path_qs}#{frag}" if (frag := url.fragment) else url.path_qs,
+    "path_frag": lambda url: f"{url.path}#{frag}" if (frag := url.fragment) else url.path,
+}
 
 
-HASH_PREFIXES = "md5:", "sha1:", "sha256:", "xxh128:"
-VALID_RESOLUTION_NAMES = "4K", "8K", "HQ", "Unknown"
+_HASH_PREFIXES = "md5:", "sha1:", "sha256:", "xxh128:"
+_VALID_RESOLUTION_NAMES = "4K", "8K", "HQ", "Unknown"
 
 
 @dataclasses.dataclass(slots=True, frozen=True)
@@ -77,32 +96,6 @@ class PlaceHolderConfig:
 
 
 _placeholder_config = PlaceHolderConfig()
-
-
-class DBPathBuilder:
-    @staticmethod
-    def url(url: AbsoluteHttpURL) -> str:
-        return str(url)
-
-    @staticmethod
-    def name(url: AbsoluteHttpURL) -> str:
-        return url.name
-
-    @staticmethod
-    def path(url: AbsoluteHttpURL) -> str:
-        return url.path
-
-    @staticmethod
-    def path_qs(url: AbsoluteHttpURL) -> str:
-        return url.path_qs
-
-    @staticmethod
-    def path_qs_frag(url: AbsoluteHttpURL) -> str:
-        return f"{url.path_qs}#{frag}" if (frag := url.fragment) else url.path_qs
-
-    @staticmethod
-    def path_frag(url: AbsoluteHttpURL) -> str:
-        return f"{url.path}#{frag}" if (frag := url.fragment) else url.path
 
 
 @dataclasses.dataclass(slots=True)
@@ -137,7 +130,9 @@ class Crawler(ABC):
     _USE_DOWNLOAD_SERVERS_LOCKS: ClassVar[bool] = False
     _IMPERSONATE: ClassVar[BrowserTypeLiteral | bool | None] = None
 
-    create_db_path = staticmethod(DBPathBuilder.path)
+    DB_PATH_BUILDER: ClassVar[DBPathBuilder] = "path"
+
+    create_db_path = staticmethod(_DBPathBuilder.path)
 
     @abstractmethod
     async def fetch(self, scrape_item: ScrapeItem) -> None: ...
@@ -909,7 +904,7 @@ class Crawler(ABC):
             extra_info.append(resolution.name)
 
         if _placeholder_config.include_hash and hash_string:
-            assert any(hash_string.startswith(x) for x in HASH_PREFIXES), f"Invalid: {hash_string = }"
+            assert any(hash_string.startswith(x) for x in _HASH_PREFIXES), f"Invalid: {hash_string = }"
             extra_info.append(hash_string)
 
         filename, extra_info_had_invalid_chars = _make_custom_filename(stem, ext, extra_info, only_truncate_stem)
@@ -919,7 +914,7 @@ class Crawler(ABC):
                 f"Important information was removed while creating a filename. "
                 f"\n{calling_args}"
             )
-            self.logger.info(msg)
+            self.logger.warning(msg)
         return filename
 
     @final
@@ -1067,12 +1062,12 @@ def _sort_supported_paths(supported_paths: SupportedPaths) -> dict[str, OneOrTup
 
 
 def auto_task_id(
-    func: Callable[Concatenate[_CrawlerT, ScrapeItem, P], R | Coroutine[None, None, R]],
-) -> Callable[Concatenate[_CrawlerT, ScrapeItem, P], Coroutine[None, None, R]]:
+    func: Callable[Concatenate[_CrawlerT, ScrapeItem, _P], _R | Coroutine[None, None, _R]],
+) -> Callable[Concatenate[_CrawlerT, ScrapeItem, _P], Coroutine[None, None, _R]]:
     """Autocreate a new `task_id` from the scrape_item of the method"""
 
     @wraps(func)
-    async def wrapper(self: _CrawlerT, scrape_item: ScrapeItem, *args: P.args, **kwargs: P.kwargs) -> R:
+    async def wrapper(self: _CrawlerT, scrape_item: ScrapeItem, *args: _P.args, **kwargs: _P.kwargs) -> _R:
         with self.new_task_id(scrape_item.url):
             result = func(self, scrape_item, *args, **kwargs)
             if inspect.isawaitable(result):
