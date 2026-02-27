@@ -13,9 +13,8 @@ from pydantic import BaseModel
 
 from cyberdrop_dl.crawlers._forum import MessageBoardCrawler
 from cyberdrop_dl.exceptions import MaxChildrenError
-from cyberdrop_dl.utils import css
+from cyberdrop_dl.utils import css, error_handling_wrapper, unique
 from cyberdrop_dl.utils.dates import to_timestamp
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, unique
 
 from .models import AvailablePost, PostStream, Topic
 
@@ -81,7 +80,7 @@ class DiscourseCrawler(MessageBoardCrawler, is_generic=True):
     async def topic(self, scrape_item: ScrapeItem, topic: Topic) -> None:
         title = self.create_title(topic.title, thread_id=topic.id)
         scrape_item.setup_as_forum(title)
-        scrape_item.possible_datetime = to_timestamp(topic.created_at)
+        scrape_item.timestamp = to_timestamp(topic.created_at)
         if topic.image_url:
             await self.handle_link(scrape_item, self.parse_url(topic.image_url))
         await self.process_posts(scrape_item, topic)

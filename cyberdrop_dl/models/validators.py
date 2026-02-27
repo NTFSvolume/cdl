@@ -28,7 +28,7 @@ def bytesize_to_str(value: _ConvertibleToInt) -> str:
 
 
 def to_yarl_url(value: object) -> yarl.URL:
-    from cyberdrop_dl.utils.utilities import parse_url
+    from cyberdrop_dl.utils import parse_url
 
     try:
         return parse_url(str(value))

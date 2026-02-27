@@ -17,8 +17,8 @@ from pydantic import Field
 
 from cyberdrop_dl.crawlers.crawler import Crawler
 from cyberdrop_dl.models import AliasModel
+from cyberdrop_dl.utils import error_handling_wrapper, type_adapter
 from cyberdrop_dl.utils.dates import to_timestamp
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, type_adapter
 
 if TYPE_CHECKING:
     from cyberdrop_dl.crawlers.crawler import SupportedPaths
@@ -85,8 +85,8 @@ class ChibiSafeCrawler(Crawler, is_abc=True):
 
     @error_handling_wrapper
     def _handle_file(self, scrape_item: ScrapeItem, file: File) -> None:
-        if scrape_item.possible_datetime is None and file.createdAt:
-            scrape_item.possible_datetime = to_timestamp(file.createdAt)
+        if scrape_item.timestamp is None and file.createdAt:
+            scrape_item.timestamp = to_timestamp(file.createdAt)
         name = file.original or file.name
         filename, ext = self.get_filename_and_ext(name)
         self.create_task(

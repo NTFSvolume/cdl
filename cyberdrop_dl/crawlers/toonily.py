@@ -4,8 +4,7 @@ from typing import ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import FILE_HOST_PROFILE, AbsoluteHttpURL, ScrapeItem
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import css, error_handling_wrapper
 
 
 class Selector:
@@ -57,7 +56,7 @@ class ToonilyCrawler(Crawler):
 
         scrape_item.setup_as_album(chapter_title)
         iso_date = css.get_json_ld(soup)["@graph"][0]["datePublished"]
-        scrape_item.possible_datetime = self.parse_iso_date(iso_date)
+        scrape_item.timestamp = self.parse_iso_date(iso_date)
 
         for _, link in self.iter_tags(soup, Selector.IMAGE, "src"):
             self.create_task(self.direct_file(scrape_item, link))

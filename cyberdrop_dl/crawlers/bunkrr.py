@@ -14,8 +14,7 @@ from cyberdrop_dl import constants
 from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths, auto_task_id
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError
-from cyberdrop_dl.utils import aio, css, open_graph
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, parse_url, xor_decrypt
+from cyberdrop_dl.utils import aio, css, error_handling_wrapper, open_graph, parse_url, xor_decrypt
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
@@ -168,7 +167,7 @@ class BunkrrCrawler(Crawler):
             return
 
         deep_scrape = False
-        scrape_item.possible_datetime = self.parse_date(file.date, "%H:%M:%S %d/%m/%Y")
+        scrape_item.timestamp = self.parse_date(file.date, "%H:%M:%S %d/%m/%Y")
         try:
             src = file.src()
         except ValueError:

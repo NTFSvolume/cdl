@@ -9,8 +9,7 @@ from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.mediaprops import Resolution, Subtitle
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DownloadError, ScrapeError
-from cyberdrop_dl.utils import aio, css, m3u8
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, parse_url
+from cyberdrop_dl.utils import aio, css, error_handling_wrapper, m3u8, parse_url
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
@@ -161,7 +160,7 @@ class RumbleCrawler(Crawler):
             _, ext = self.get_filename_and_ext(best_format.url.name)
 
         video_name = self.create_custom_filename(video.title, ext, file_id=embed_id, resolution=best_format.resolution)
-        scrape_item.possible_datetime = self.parse_iso_date(video.upload_date)
+        scrape_item.timestamp = self.parse_iso_date(video.upload_date)
         scrape_item.url = video.url
         self.create_task(
             self.handle_file(

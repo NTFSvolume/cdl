@@ -31,14 +31,14 @@ class SortingPanel(UIOverFlowPanel):
     def advance_folder(self, task_id: TaskID, amount: int = 1) -> None:
         self._advance(task_id, amount)
 
-    def increment_audio(self) -> None:
+    def add_audio(self) -> None:
         self.audio_count += 1
 
-    def increment_video(self) -> None:
+    def add_video(self) -> None:
         self.video_count += 1
 
-    def increment_image(self) -> None:
+    def add_image(self) -> None:
         self.image_count += 1
 
-    def increment_other(self) -> None:
+    def add_other(self) -> None:
         self.other_count += 1

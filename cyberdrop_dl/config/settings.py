@@ -135,7 +135,7 @@ class Logs(SettingsGroup):
         if not (now and self.logs_expire_after):
             return
 
-        from cyberdrop_dl.utils.utilities import purge_dir_tree
+        from cyberdrop_dl.utils import delete_empty_files_and_folders
 
         for file in self.log_folder.rglob("*"):
             if file.suffix not in (".log", ".csv"):
@@ -146,7 +146,7 @@ class Logs(SettingsGroup):
             if t_delta > self.logs_expire_after:
                 file.unlink(missing_ok=True)
 
-        _ = purge_dir_tree(self.log_folder)
+        _ = delete_empty_files_and_folders(self.log_folder)
 
 
 @dataclasses.dataclass(slots=True)
@@ -271,7 +271,6 @@ class Runtime(SettingsGroup):
     log_level: NonNegativeInt = logging.DEBUG
     send_unsupported_to_jdownloader: bool = False
     skip_check_for_empty_folders: bool = False
-    skip_check_for_partial_files: bool = False
     slow_download_speed: ByteSizeSerilized = ByteSize(0)
     update_last_forum_post: bool = True
 

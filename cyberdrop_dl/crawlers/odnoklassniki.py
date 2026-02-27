@@ -7,8 +7,7 @@ from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.mediaprops import Resolution
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import css, json
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_text_between
+from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, json
 
 if TYPE_CHECKING:
     from bs4 import BeautifulSoup
@@ -141,7 +140,7 @@ class OdnoklassnikiCrawler(Crawler):
         self.client.client_manager.cookies.clear_domain(cdn_url.host)
         json_ld = css.get_json_ld(soup)
         title: str = metadata["movie"].get("title") or json_ld["name"]
-        scrape_item.possible_datetime = self.parse_iso_date(json_ld["uploadDate"])
+        scrape_item.timestamp = self.parse_iso_date(json_ld["uploadDate"])
         filename = self.create_custom_filename(title, ".mp4", file_id=video_id, resolution=resolution)
         await self.handle_file(
             mobile_url, scrape_item, video_id + ".mp4", custom_filename=filename, debrid_link=cdn_url

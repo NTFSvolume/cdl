@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import error_handling_wrapper
 
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
@@ -92,7 +92,7 @@ class CloudMailRuCrawler(Crawler):
 
         dl_link = self.dispatcher_server / file["weblink"]
         filename, ext = self.get_filename_and_ext(file["name"])
-        scrape_item.possible_datetime = file["mtime"]
+        scrape_item.timestamp = file["mtime"]
         await self.handle_file(
             scrape_item.url, scrape_item, file["name"], ext, debrid_link=dl_link, custom_filename=filename
         )

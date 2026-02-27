@@ -9,8 +9,7 @@ from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures import Resolution
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_text_between
+from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between
 
 if TYPE_CHECKING:
     from bs4 import BeautifulSoup, Tag
@@ -191,7 +190,7 @@ class EpornerCrawler(Crawler):
         # TODO: Force utf8 for soup
         video = _parse_video(soup)
         link = self.parse_url(video.best_src.url)
-        scrape_item.possible_datetime = self.parse_iso_date(video.date)
+        scrape_item.timestamp = self.parse_iso_date(video.date)
         _, ext = self.get_filename_and_ext(link.name)
         filename = self.create_custom_filename(
             video.title,

@@ -5,8 +5,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_text_between
+from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between
 
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
@@ -106,7 +105,7 @@ class ImgurCrawler(Crawler):
 
     @error_handling_wrapper
     async def _image(self, scrape_item: ScrapeItem, image: dict[str, Any]) -> None:
-        scrape_item.possible_datetime = image["datetime"]
+        scrape_item.timestamp = image["datetime"]
         url = self.parse_url(image["link"])
         filename, ext = self.get_filename_and_ext(url.name)
         await self.handle_file(url, scrape_item, filename, ext, metadata=image)

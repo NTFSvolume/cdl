@@ -5,8 +5,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, open_graph
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import css, error_handling_wrapper, open_graph
 
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
@@ -51,7 +50,7 @@ class TransflixCrawler(Crawler):
         video = css.select(soup, _SELECTORS.VIDEO)
         link = self.parse_url(css.get_attr(video, "src"))
         filename, ext = self.get_filename_and_ext(link.name)
-        scrape_item.possible_datetime = _timestamp_from_filename(link.name)
+        scrape_item.timestamp = _timestamp_from_filename(link.name)
         custom_filename = self.create_custom_filename(title, ext, file_id=video_id)
 
         return await self.handle_file(link, scrape_item, filename, ext, custom_filename=custom_filename)

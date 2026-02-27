@@ -4,8 +4,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import css, error_handling_wrapper
 
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
@@ -78,7 +77,7 @@ class TurboVidCrawler(Crawler):
         if await self.check_complete_by_hash(scrape_item, "md5", checksum):
             return
 
-        scrape_item.possible_datetime = self.parse_iso_date(css.select_text(soup, Selector.UPLOAD_DATE))
+        scrape_item.timestamp = self.parse_iso_date(css.select_text(soup, Selector.UPLOAD_DATE))
         name, dl_link = await self._request_download(file_id)
         filename, ext = self.get_filename_and_ext(name)
         await self.handle_file(dl_link, scrape_item, name, ext, custom_filename=filename)

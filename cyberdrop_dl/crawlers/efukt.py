@@ -6,9 +6,8 @@ from typing import TYPE_CHECKING, ClassVar
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import css
+from cyberdrop_dl.utils import css, error_handling_wrapper
 from cyberdrop_dl.utils.dates import to_timestamp
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
 
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
@@ -71,7 +70,7 @@ class EfuktCrawler(Crawler):
         datetime = self._parse_date(date_str, "%m/%d/%y")
         if not datetime:
             raise ScrapeError(422)
-        scrape_item.possible_datetime = to_timestamp(datetime)
+        scrape_item.timestamp = to_timestamp(datetime)
 
         if is_image_or_gif(scrape_item.url):
             link = self.parse_url(css.select(soup, _SELECTORS.IMAGE, "src"))

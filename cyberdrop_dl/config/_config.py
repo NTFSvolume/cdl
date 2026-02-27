@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Annotated, ClassVar, Self
 from cyclopts.parameter import Parameter
 from pydantic import BaseModel
 
+from cyberdrop_dl import yaml
 from cyberdrop_dl.config.auth import AuthSettings
 from cyberdrop_dl.config.settings import ConfigSettings
 from cyberdrop_dl.models import get_model_fields, merge_models
@@ -42,8 +43,6 @@ class Config(ConfigSettings):
         _config.reset(self._token)
 
     def save(self, file: Path) -> None:
-        from cyberdrop_dl.utils import yaml
-
         yaml.save(file, self)
 
     def resolve_paths(self) -> None:
@@ -69,8 +68,6 @@ class Config(ConfigSettings):
 
 
 def load(file: Path) -> Config:
-    from cyberdrop_dl.utils import yaml
-
     default = Config()
     if not file.is_file():
         config = default

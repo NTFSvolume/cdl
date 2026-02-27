@@ -24,9 +24,8 @@ from cyberdrop_dl.constants import HTTP_REGEX_LINKS
 from cyberdrop_dl.crawlers.crawler import Crawler
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import LoginError, MaxChildrenError, ScrapeError
-from cyberdrop_dl.utils import css
+from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, is_blob_or_svg
 from cyberdrop_dl.utils.dates import TimeStamp, to_timestamp
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_text_between, is_blob_or_svg
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Iterable, Sequence

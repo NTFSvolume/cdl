@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, ClassVar, NamedTuple, Required, TypedDict
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_filename_and_ext
+from cyberdrop_dl.utils import error_handling_wrapper, get_filename_and_ext
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -157,7 +157,7 @@ class HitomiLaCrawler(Crawler):
         title = self.create_title(f"{gallery['title']} [{gallery['type']}]", gallery["id"])
         scrape_item.setup_as_album(title, album_id=gallery["id"])
         date_str = gallery.get("datepublished") or gallery["date"]
-        scrape_item.possible_datetime = self.parse_iso_date(date_str)
+        scrape_item.timestamp = self.parse_iso_date(date_str)
         await self.process_gallery(scrape_item, gallery)
 
     async def get_gallery(self, gallery_id: str) -> Gallery:

@@ -4,8 +4,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, auto_task_id
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, open_graph
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import css, error_handling_wrapper, open_graph
 
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
@@ -57,7 +56,7 @@ class FSIBlogCrawler(Crawler):
         soup = await self.request_soup(scrape_item.url)
         meta: dict[str, str] = css.get_json_ld(soup)["@graph"][0]
         name = meta["name"].rpartition("-")[0]
-        scrape_item.possible_datetime = date = self.parse_iso_date(meta["datePublished"])
+        scrape_item.timestamp = date = self.parse_iso_date(meta["datePublished"])
         title = self.create_separate_post_title(name, None, date)
         scrape_item.setup_as_album(self.create_title(title))
 

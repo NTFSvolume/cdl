@@ -11,8 +11,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, _DBPathBuilder, auto_task_id
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, is_blob_or_svg, type_adapter
+from cyberdrop_dl.utils import css, error_handling_wrapper, is_blob_or_svg, type_adapter
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -144,7 +143,7 @@ class MediaFireCrawler(Crawler):
             return
 
         soup = await self.request_soup(scrape_item.url, impersonate=True)
-        scrape_item.possible_datetime = self.parse_iso_date(file.created)
+        scrape_item.timestamp = self.parse_iso_date(file.created)
         link = self.parse_url(_extract_download_link(soup))
         filename, ext = self.get_filename_and_ext(file.filename)
         await self.handle_file(link, scrape_item, file.filename, ext, custom_filename=filename)

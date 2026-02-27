@@ -6,8 +6,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, final
 from cyberdrop_dl.crawlers.crawler import Crawler
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import PasswordProtectedError
-from cyberdrop_dl.utils import css, json, open_graph
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import css, error_handling_wrapper, json, open_graph
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator
@@ -201,7 +200,7 @@ class CheveretoCrawler(Crawler, is_generic=True):
             link_str = Selector.MAIN_IMAGE(soup)
 
         source = self.parse_url(link_str)
-        scrape_item.possible_datetime = self.parse_iso_date(Selector.DATE(soup))
+        scrape_item.timestamp = self.parse_iso_date(Selector.DATE(soup))
         await self.direct_file(scrape_item, source)
 
     def _get_album_files(self, soup: BeautifulSoup) -> Generator[tuple[AbsoluteHttpURL, AbsoluteHttpURL]]:

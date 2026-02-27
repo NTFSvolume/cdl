@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Required, TypedDict
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, parse_url
+from cyberdrop_dl.utils import error_handling_wrapper, parse_url
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterable
@@ -113,7 +113,7 @@ class RedGifsCrawler(Crawler):
         await self._handle_gif(scrape_item, gif)
 
     async def _handle_gif(self, scrape_item: ScrapeItem, gif: Gif) -> None:
-        scrape_item.possible_datetime = gif.date
+        scrape_item.timestamp = gif.date
         filename, ext = self.get_filename_and_ext(gif.url.name)
         await self.handle_file(gif.url, scrape_item, filename, ext)
 

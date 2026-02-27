@@ -19,9 +19,8 @@ from pydantic import BaseModel
 from cyberdrop_dl.crawlers.crawler import Crawler
 from cyberdrop_dl.data_structures.url_objects import DatetimeRange
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import css, open_graph
+from cyberdrop_dl.utils import css, error_handling_wrapper, open_graph, unique
 from cyberdrop_dl.utils.dates import to_timestamp
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, unique
 
 from .models import HTML, Category, CategorySequence, ColletionType, Post, PostSequence, Tag, TagSequence
 
@@ -148,7 +147,7 @@ class WordPressBaseCrawler(Crawler, is_abc=True):
         if is_single_post:
             title = self.create_title(title)
         scrape_item.setup_as_album(title, album_id=post_id)
-        scrape_item.possible_datetime = to_timestamp(post.date_gmt)
+        scrape_item.timestamp = to_timestamp(post.date_gmt)
         if post.thumbnail:
             await self.direct_file(scrape_item, self.parse_url(post.thumbnail))
         return await self.handle_post_content(scrape_item, post)

@@ -13,8 +13,8 @@ from cyberdrop_dl import cache
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
+from cyberdrop_dl.utils import error_handling_wrapper
 from cyberdrop_dl.utils.dates import to_timestamp
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
 
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
@@ -204,7 +204,7 @@ class OneDriveCrawler(Crawler):
         # file.url should be API URL, ex: https://api.onedrive.com/v1.0/drives/<container_id>/items/<resid>?authkey=<auth_key>
         # Auth key will be removed in database but a new one can be generated from scrape_item.url
         filename, ext = self.get_filename_and_ext(file.name)
-        scrape_item.possible_datetime = file.date
+        scrape_item.timestamp = file.date
         await self.handle_file(file.url, scrape_item, filename, ext, debrid_link=file.download_url)
 
     async def make_api_request(self, api_url: AbsoluteHttpURL) -> dict[str, Any]:

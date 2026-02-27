@@ -9,8 +9,7 @@ from typing import TYPE_CHECKING, ClassVar
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures import AbsoluteHttpURL, Resolution
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import css, open_graph
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_text_between, parse_url
+from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, open_graph, parse_url
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -130,10 +129,10 @@ class KernelVideoSharingCrawler(Crawler, is_abc=True):
         custom_filename = self.create_custom_filename(video.title, ext, file_id=video.id, resolution=video.resolution)
         try:
             date_str = css.get_json_ld_date(soup)
-            scrape_item.possible_datetime = self.parse_iso_date(date_str)
+            scrape_item.timestamp = self.parse_iso_date(date_str)
         except (LookupError, ValueError, css.SelectorError):
             date_str = css.select_text(soup, _SELECTORS.DATE).split(":", 1)[-1].strip()
-            scrape_item.possible_datetime = self.parse_date(date_str)
+            scrape_item.timestamp = self.parse_date(date_str)
 
         await self.handle_file(
             scrape_item.url, scrape_item, filename, ext, custom_filename=custom_filename, debrid_link=video.url

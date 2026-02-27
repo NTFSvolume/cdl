@@ -21,7 +21,7 @@ from cyberdrop_dl.crawlers.wordpress import WordPressHTMLCrawler, WordPressMedia
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.exceptions import JDownloaderError, NoExtensionError
 from cyberdrop_dl.logger import log, log_spacer
-from cyberdrop_dl.utils.utilities import get_download_path, remove_trailing_slash
+from cyberdrop_dl.utils import get_download_path, remove_trailing_slash
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator, Sequence

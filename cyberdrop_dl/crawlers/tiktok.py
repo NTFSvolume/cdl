@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, auto_task_id
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, type_adapter
+from cyberdrop_dl.utils import error_handling_wrapper, type_adapter
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -204,7 +204,7 @@ class TikTokCrawler(Crawler):
         scrape_item.add_to_parent_title(title)
         post_title = self.create_separate_post_title(post.title, post.id, post.create_time)
         scrape_item.setup_as_album(post_title, album_id=post.id)
-        scrape_item.possible_datetime = post.create_time
+        scrape_item.timestamp = post.create_time
         self._handle_images(scrape_item, post)
         self._handle_audio(scrape_item, post)
         self._handle_video(scrape_item, post)

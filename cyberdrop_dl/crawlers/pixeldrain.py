@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from cyberdrop_dl import config, env
 from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedDomains, SupportedPaths, auto_task_id
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import error_handling_wrapper
 
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
@@ -262,7 +262,7 @@ class PixelDrainCrawler(Crawler):
             return await self._text(scrape_item, file)
 
         filename, ext = self.get_filename_and_ext(file.name, mime_type=file.mime_type)
-        scrape_item.possible_datetime = self.parse_iso_date(file.date_upload)
+        scrape_item.timestamp = self.parse_iso_date(file.date_upload)
         await self.handle_file(link, scrape_item, file.name, ext, debrid_link=debrid_link, custom_filename=filename)
 
     @error_handling_wrapper

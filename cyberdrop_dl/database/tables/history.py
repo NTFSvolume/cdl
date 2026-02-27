@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlite3 import IntegrityError, Row
 from typing import TYPE_CHECKING, cast
 
-from cyberdrop_dl.utils.utilities import log
+from cyberdrop_dl.utils import log
 
 from .definitions import create_fixed_history, create_history
 

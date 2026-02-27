@@ -6,8 +6,7 @@ from typing import TYPE_CHECKING, ClassVar
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
 from cyberdrop_dl.data_structures.mediaprops import Resolution
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import css, error_handling_wrapper
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -53,7 +52,7 @@ class MyDesiCrawler(Crawler):
         _, ext = self.get_filename_and_ext(link.name)
         metadata: dict[str, str] = css.get_json_ld(soup)["subjectOf"]
         title = metadata["name"]
-        scrape_item.possible_datetime = self.parse_iso_date(metadata.get("uploadDate", ""))
+        scrape_item.timestamp = self.parse_iso_date(metadata.get("uploadDate", ""))
         custom_filename = self.create_custom_filename(title, ext, resolution=resolution)
         return await self.handle_file(link, scrape_item, title, ext, custom_filename=custom_filename)
 

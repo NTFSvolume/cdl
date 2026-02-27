@@ -6,7 +6,7 @@ from mega.transfer_it import TransferItClient
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, _DBPathBuilder
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import error_handling_wrapper
 
 if TYPE_CHECKING:
     from mega.data_structures import Node
@@ -60,5 +60,5 @@ class TransferItCrawler(Crawler):
     async def _file(self, scrape_item: ScrapeItem, file: Node, dl_link: str) -> None:
         link = self.parse_url(dl_link)
         filename, ext = self.get_filename_and_ext(file.attributes.name)
-        scrape_item.possible_datetime = file.created_at
+        scrape_item.timestamp = file.created_at
         await self.handle_file(link, scrape_item, file.attributes.name, ext, custom_filename=filename)

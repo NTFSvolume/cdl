@@ -15,7 +15,7 @@ from propcache import under_cached_property
 
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import InvalidContentTypeError, ScrapeError
-from cyberdrop_dl.utils.utilities import parse_url
+from cyberdrop_dl.utils import parse_url
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator

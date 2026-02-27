@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, ClassVar, Literal, NotRequired, TypedDict, Typ
 from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import FILE_HOST_ALBUM, AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.exceptions import PasswordProtectedError, ScrapeError
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import error_handling_wrapper
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Iterable
@@ -209,7 +209,7 @@ class GoFileCrawler(Crawler):
             self.logger(f"{link} is marked as frozen, download may fail", 30)
 
         filename, ext = self.get_filename_and_ext(file["name"], mime_type=file.get("mimetype"))
-        scrape_item.possible_datetime = file["createTime"]
+        scrape_item.timestamp = file["createTime"]
         await self.handle_file(link, scrape_item, file["name"], ext, custom_filename=filename, metadata=file)
 
     @error_handling_wrapper

@@ -18,9 +18,8 @@ from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import NoExtensionError, ScrapeError
 from cyberdrop_dl.models import AliasModel
 from cyberdrop_dl.models.validators import falsy_as, falsy_as_none
-from cyberdrop_dl.utils import css
+from cyberdrop_dl.utils import css, error_handling_wrapper, remove_parts
 from cyberdrop_dl.utils.dates import to_timestamp
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, remove_parts
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable, Coroutine, Generator
@@ -383,7 +382,7 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
         user_name = self._user_names[post.user]
         title = self.create_title(user_name, post.user_id)
         scrape_item.setup_as_album(title, album_id=post.user_id)
-        scrape_item.possible_datetime = post.timestamp
+        scrape_item.timestamp = post.timestamp
         post_title = self.create_separate_post_title(post.title, post.id, post.timestamp)
         scrape_item.add_to_parent_title(post_title)
         self.__handle_post(scrape_item, post)
@@ -393,7 +392,7 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
         title = self.create_title(f"{server.name} [discord]", server.id)
         channel_name = next(c.name for c in server.channels if c.id == post.channel_id)
         scrape_item.setup_as_album(title, album_id=server.id)
-        scrape_item.possible_datetime = post.timestamp
+        scrape_item.timestamp = post.timestamp
         scrape_item.add_to_parent_title(f"#{channel_name}")
         post_title = self.create_separate_post_title(None, post.id, post.timestamp)
         scrape_item.add_to_parent_title(post_title)

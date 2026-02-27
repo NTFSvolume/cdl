@@ -13,9 +13,9 @@ from cyberdrop_dl.logger import setup_logging, spacer
 from cyberdrop_dl.managers import Manager
 from cyberdrop_dl.scrape_mapper import ScrapeMapper
 from cyberdrop_dl.updates import check_latest_pypi
+from cyberdrop_dl.utils import check_partials_and_empty_folders
 from cyberdrop_dl.utils.apprise import send_notifications
 from cyberdrop_dl.utils.sorting import Sorter
-from cyberdrop_dl.utils.utilities import check_partials_and_empty_folders
 from cyberdrop_dl.webhook import send_notification
 
 if TYPE_CHECKING:

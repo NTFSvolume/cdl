@@ -5,8 +5,7 @@ from collections.abc import Iterator, MutableMapping
 from contextvars import ContextVar, Token
 from typing import TYPE_CHECKING, Any, Self
 
-from cyberdrop_dl import __version__
-from cyberdrop_dl.utils import yaml
+from cyberdrop_dl import __version__, yaml
 
 if TYPE_CHECKING:
     from pathlib import Path

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
+import datetime
 import itertools
-from datetime import datetime
+import logging
 from pathlib import Path
 from subprocess import CalledProcessError
 from typing import TYPE_CHECKING, Any
@@ -10,103 +12,82 @@ from typing import TYPE_CHECKING, Any
 import imagesize
 
 from cyberdrop_dl import config, constants
-from cyberdrop_dl.logger import log, log_with_color
-from cyberdrop_dl.utils import strings
+from cyberdrop_dl.utils import delete_empty_files_and_folders, strings
 from cyberdrop_dl.utils.ffmpeg import probe
-from cyberdrop_dl.utils.utilities import purge_dir_tree
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.managers import Manager
+    from collections.abc import Iterable
+
+    from cyberdrop_dl.progress import TUI
+
+logger = logging.getLogger(__name__)
 
 
-async def _get_modified_date(file: Path) -> datetime:
+async def _get_modified_date(file: Path) -> datetime.datetime:
     stat = await asyncio.to_thread(file.stat)
-    return datetime.fromtimestamp(stat.st_mtime).replace(microsecond=0)
+    return datetime.datetime.fromtimestamp(stat.st_mtime, datetime.UTC).replace(microsecond=0, tzinfo=None)
 
 
+@dataclasses.dataclass(slots=True, frozen=True)
 class Sorter:
-    def __init__(self, manager: Manager) -> None:
-        self.manager = manager
-        self.download_folder = config.get().sorting.scan_folder or config.get().files.download_folder
-        self.sorted_folder = config.get().sorting.sort_folder
-        self.incrementer_format: str = config.get().sorting.sort_incrementer_format
+    tui: TUI
+    input_dir: Path
+    output_dir: Path
 
-        settings = config.get().sorting
-        self.audio_format: str | None = settings.sorted_audio
-        self.image_format: str | None = settings.sorted_image
-        self.video_format: str | None = settings.sorted_video
-        self.other_format: str | None = settings.sorted_other
+    incrementer_format: str
+    audio_format: str | None
+    image_format: str | None
+    video_format: str | None
+    other_format: str | None
 
-    def _move_file(self, old_path: Path, new_path: Path) -> bool:
-        """Moves a file to a destination folder."""
-        if new_path.is_symlink():
-            new_path = new_path.resolve()
-        if old_path == new_path:
-            return True
-
-        new_path.parent.mkdir(parents=True, exist_ok=True)
-
-        try:
-            _ = old_path.rename(new_path)
-        except FileExistsError:
-            if old_path.stat().st_size == new_path.stat().st_size:
-                old_path.unlink()
-                return True
-            for auto_index in itertools.count(1):
-                new_filename = f"{new_path.stem}{self.incrementer_format.format(i=auto_index)}{new_path.suffix}"
-                possible_new_path = new_path.parent / new_filename
-                try:
-                    _ = old_path.rename(possible_new_path)
-                    break
-                except FileExistsError:
-                    continue
-        except OSError:
-            return False
-
-        return True
+    @classmethod
+    def from_config(cls, tui: TUI, config: config.Config) -> Sorter:
+        return cls(
+            tui=tui,
+            input_dir=config.sorting.scan_folder or config.files.download_folder,
+            output_dir=config.sorting.sort_folder,
+            incrementer_format=config.sorting.sort_incrementer_format,
+            audio_format=config.sorting.sorted_audio,
+            image_format=config.sorting.sorted_image,
+            video_format=config.sorting.sorted_video,
+            other_format=config.sorting.sorted_other,
+        )
 
     async def run(self) -> None:
         """Sorts the files in the download directory into their respective folders."""
-        if not await asyncio.to_thread(self.download_folder.is_dir):
-            log_with_color(f"Download directory ({self.download_folder}) does not exist", "red", 40)
+        if not await asyncio.to_thread(self.input_dir.is_dir):
+            logger.error(f"Sort directory ('{self.input_dir}' does not exist", extra={"color": "red"})
             return
 
-        log_with_color("\nSorting downloads, please wait", "cyan", 20)
-        await asyncio.to_thread(self.sorted_folder.mkdir, parents=True, exist_ok=True)
+        logger.info("Sorting downloads...", extra={"color": "cyan"})
+        await asyncio.to_thread(self.output_dir.mkdir, parents=True, exist_ok=True)
 
-        files_to_sort: dict[str, list[Path]] = {}
+        with self.tui.get_live("sorting"):
+            subfolders = await asyncio.to_thread(_subfolders, self.input_dir)
+            await self._sort_files(subfolders)
+            logger.info("DONE!", extra={"color": "green"})
+            _ = delete_empty_files_and_folders(self.input_dir)
 
-        with self.manager.progress.get_sort_live(stop=True):
-            for subfolder in await asyncio.to_thread(_subfolders, self.download_folder):
-                files_to_sort[subfolder.name] = await asyncio.to_thread(_get_files, subfolder)
+    async def _sort_files(self, folders: Iterable[Path]) -> None:
+        for fut in asyncio.as_completed(asyncio.to_thread(_get_files, f) for f in folders):
+            folder, files = await fut
+            folder_name = folder.name
+            with self.tui.sorting(folder_name, total=len(files)) as progress:
+                for file in files:
+                    ext = file.suffix.lower()
+                    if ext in constants.TempExt:
+                        continue
 
-            await self._sort_files(files_to_sort)
-            log_with_color("DONE!", "green", 20)
+                    if ext in constants.FileFormats.AUDIO:
+                        await self.sort_audio(file, folder_name)
+                    elif ext in constants.FileFormats.IMAGE:
+                        await self.sort_image(file, folder_name)
+                    elif ext in constants.FileFormats.VIDEO:
+                        await self.sort_video(file, folder_name)
+                    else:
+                        await self.sort_other(file, folder_name)
 
-        _ = purge_dir_tree(self.download_folder)
-
-    async def _sort_files(self, files_to_sort: dict[str, list[Path]]) -> None:
-        for folder_name, files in files_to_sort.items():
-            task_id = self.manager.progress.sorting.new_task(folder_name, len(files))
-
-            for file in files:
-                ext = file.suffix.lower()
-
-                if ext in constants.TempExt:
-                    continue
-
-                if ext in constants.FileFormats.AUDIO:
-                    await self.sort_audio(file, folder_name)
-                elif ext in constants.FileFormats.IMAGE:
-                    await self.sort_image(file, folder_name)
-                elif ext in constants.FileFormats.VIDEO:
-                    await self.sort_video(file, folder_name)
-                else:
-                    await self.sort_other(file, folder_name)
-
-                self.manager.progress.sorting.advance_folder(task_id)
-
-            self.manager.progress.sorting.remove_task(task_id)
+                    progress.advance(1)
 
     async def sort_audio(self, file: Path, base_name: str) -> None:
         """Sorts an audio file into the sorted audio folder."""
@@ -121,10 +102,10 @@ class Sorter:
                 bitrate = audio.bitrate
                 sample_rate = audio.sample_rate
 
-        except (RuntimeError, CalledProcessError, OSError) as e:
-            log(f"Unable to get audio properties of '{file}'", 40, exc_info=e)
+        except (RuntimeError, CalledProcessError, OSError):
+            logger.exception(f"Unable to get audio properties of '{file}'")
 
-        if await self._process_file_move(
+        if await self._move_file(
             file,
             base_name,
             self.audio_format,
@@ -133,12 +114,13 @@ class Sorter:
             length=duration,
             sample_rate=sample_rate,
         ):
-            self.manager.progress.sorting.increment_audio()
+            self.tui.sorting.add_audio()
 
     async def sort_image(self, file: Path, base_name: str) -> None:
         """Sorts an image file into the sorted image folder."""
         if not self.image_format:
             return
+
         height = resolution = width = None
         try:
             width, height = await asyncio.to_thread(imagesize.get, file)
@@ -149,9 +131,9 @@ class Sorter:
                 width = height = resolution = None
 
         except (OSError, ValueError):
-            log(f"Unable to get some image properties of '{file}'")
+            logger.exception(f"Unable to get some image properties of '{file}'")
 
-        if await self._process_file_move(
+        if await self._move_file(
             file,
             base_name,
             self.image_format,
@@ -159,7 +141,7 @@ class Sorter:
             resolution=resolution,
             width=width,
         ):
-            self.manager.progress.sorting.increment_image()
+            self.tui.sorting.add_image()
 
     async def sort_video(self, file: Path, base_name: str) -> None:
         """Sorts a video file into the sorted video folder."""
@@ -178,10 +160,10 @@ class Sorter:
                 duration = video.duration or probe_output.format.duration
                 framerate = video.fps
 
-        except (RuntimeError, CalledProcessError, OSError) as e:
-            log(f"Unable to get some video properties of '{file}'", 40, exc_info=e)
+        except (RuntimeError, CalledProcessError, OSError):
+            logger.exception(f"Unable to get some video properties of '{file}'")
 
-        if await self._process_file_move(
+        if await self._move_file(
             file,
             base_name,
             self.video_format,
@@ -192,17 +174,17 @@ class Sorter:
             resolution=resolution,
             width=width,
         ):
-            self.manager.progress.sorting.increment_video()
+            self.tui.sorting.add_video()
 
     async def sort_other(self, file: Path, base_name: str) -> None:
         """Sorts an other file into the sorted other folder."""
         if not self.other_format:
             return
 
-        if await self._process_file_move(file, base_name, self.other_format):
-            self.manager.progress.sorting.increment_other()
+        if await self._move_file(file, base_name, self.other_format):
+            self.tui.sorting.add_other()
 
-    async def _process_file_move(self, file: Path, base_name: str, format_str: str, **kwargs: Any) -> bool:
+    async def _move_file(self, file: Path, base_name: str, format_str: str, /, **kwargs: Any) -> bool:
         file_date = await _get_modified_date(file)
         file_date_us = file_date.strftime("%Y-%d-%m")
         file_date_iso = file_date.strftime("%Y-%m-%d")
@@ -211,7 +193,7 @@ class Sorter:
         if duration is not None:
             kwargs["duration"] = kwargs["length"] = duration
 
-        file_path, _ = strings.safe_format(
+        dest, _ = strings.safe_format(
             format_str,
             base_dir=base_name,
             ext=file.suffix,
@@ -220,24 +202,24 @@ class Sorter:
             file_date_us=file_date_us,
             filename=file.stem,
             parent_dir=file.parent.name,
-            sort_dir=self.sorted_folder,
+            sort_dir=self.output_dir,
             **kwargs,
         )
 
-        new_file = Path(file_path)
-        return await asyncio.to_thread(self._move_file, file, new_file)
+        dest = Path(dest)
+        return await asyncio.to_thread(_move_file, file, dest, self.incrementer_format)
 
 
-def _subfolders(directory: Path) -> list[Path]:
+def _subfolders(directory: Path) -> tuple[Path, ...]:
     def walk():
         for subfolder in directory.resolve().iterdir():
             if subfolder.is_dir():
                 yield subfolder
 
-    return list(walk())
+    return tuple(walk())
 
 
-def _get_files(directory: Path) -> list[Path]:
+def _get_files(directory: Path) -> tuple[Path, tuple[Path, ...]]:
     """Finds all files in a directory and returns them in a list."""
 
     def walk():
@@ -245,4 +227,33 @@ def _get_files(directory: Path) -> list[Path]:
             if file.is_file():
                 yield file
 
-    return list(walk())
+    return directory, tuple(walk())
+
+
+def _move_file(old_path: Path, new_path: Path, incrementer_format: str) -> bool:
+    """Moves a file to a destination folder."""
+
+    new_path = new_path.resolve()
+    if old_path == new_path:
+        return True
+
+    new_path.parent.mkdir(parents=True, exist_ok=True)
+
+    try:
+        _ = old_path.rename(new_path)
+    except FileExistsError:
+        if old_path.stat().st_size == new_path.stat().st_size:
+            old_path.unlink()
+            return True
+        for auto_index in itertools.count(1):
+            new_filename = f"{new_path.stem}{incrementer_format.format(i=auto_index)}{new_path.suffix}"
+            possible_new_path = new_path.parent / new_filename
+            try:
+                _ = old_path.rename(possible_new_path)
+                break
+            except FileExistsError:
+                continue
+    except OSError:
+        return False
+
+    return True

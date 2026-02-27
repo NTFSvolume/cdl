@@ -5,8 +5,7 @@ from typing import TYPE_CHECKING, ClassVar
 from cyberdrop_dl.crawlers.mixdrop import MixDropCrawler
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import css, open_graph
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_text_between
+from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, open_graph
 
 if TYPE_CHECKING:
     from cyberdrop_dl.crawlers.crawler import SupportedDomains, SupportedPaths
@@ -75,7 +74,7 @@ class ArchiveBateCrawler(MixDropCrawler):
         video_src = css.select(soup, _SELECTORS.VIDEO, "src")
         title = self.create_title(f"{user_name} [{site_name}]")
         scrape_item.setup_as_profile(title)
-        scrape_item.possible_datetime = self.parse_date(date_str)
+        scrape_item.timestamp = self.parse_date(date_str)
         mixdrop_url = self.get_embed_url(self.parse_url(video_src))  # Override domain
 
         if await self.check_complete_from_referer(mixdrop_url):

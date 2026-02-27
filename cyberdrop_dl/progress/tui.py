@@ -15,6 +15,7 @@ from rich.live import Live
 from rich.text import Text
 
 from cyberdrop_dl import config
+from cyberdrop_dl.logger import spacer
 from cyberdrop_dl.progress.errors import DownloadErrors, ScrapeErrors
 from cyberdrop_dl.progress.files import FileStats
 from cyberdrop_dl.progress.hashing import HashingPanel
@@ -36,7 +37,8 @@ _tui: ContextVar[TUI] = ContextVar("_tui")
 
 @dataclasses.dataclass(slots=True)
 class TUI:
-    refresh_rate: dataclasses.InitVar[int]
+    refresh_rate: int = 10
+    disabled: bool = False
 
     status: StatusMessage = dataclasses.field(init=False, default_factory=StatusMessage)
     downloads: DownloadsPanel = dataclasses.field(init=False, default_factory=DownloadsPanel)
@@ -53,10 +55,10 @@ class TUI:
     _current_screen: Screen | Literal[""] = dataclasses.field(init=False, default="")
     _token: Token[TUI] | None = dataclasses.field(init=False, default=None)
 
-    def __post_init__(self, refresh_rate: int) -> None:
+    def __post_init__(self) -> None:
         self._screens = _create_screens(self)
         self._live = Live(
-            refresh_per_second=refresh_rate,
+            refresh_per_second=self.refresh_rate,
             transient=True,
             screen=True,
             auto_refresh=True,
@@ -75,25 +77,26 @@ class TUI:
     @contextlib.contextmanager
     def get_live(self, name: Literal["scraping", "sorting", "hashing"]) -> Generator[None]:
         self._current_screen = self._screens[name]
-        self._live.start()
+        if not self.disabled:
+            self._live.start()
         try:
             with self:
                 yield
         finally:
             self._current_screen = ""
-            self._live.stop()
+            if not self.disabled:
+                self._live.stop()
 
     def print_stats(self, start_time: float) -> None:
         """Prints the stats of the program."""
         # if not self.manager.parsed_args.cli_only_args.print_stats:
         #    return
-        from cyberdrop_dl.logger import log_spacer
 
         end_time = time.perf_counter()
         runtime = timedelta(seconds=int(end_time - start_time))
         total_data_written = ByteSize(self.downloads.total_data_written).human_readable(decimal=True)
 
-        log_spacer(20)
+        logger.info(spacer())
         logger.info("Printing Stats...\n")
         logger.info("Run Stats")
         logger.info(f"  Input File: {config.get().source}")

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import error_handling_wrapper
 
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
@@ -49,7 +49,7 @@ class StreamableCrawler(Crawler):
             raise ScrapeError(404, VIDEO_STATUS.get(status))
 
         title = json_resp.get("reddit_title") or json_resp["title"]
-        scrape_item.possible_datetime = json_resp["date_added"]
+        scrape_item.timestamp = json_resp["date_added"]
 
         self.log_debug(json.dumps(json_resp, indent=4))
         link_str = get_best_quality(json_resp["files"])

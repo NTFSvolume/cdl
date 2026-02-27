@@ -5,8 +5,7 @@ from typing import TYPE_CHECKING, ClassVar, NamedTuple
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.mediaprops import Resolution
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, open_graph
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import css, error_handling_wrapper, open_graph
 
 if TYPE_CHECKING:
     from bs4 import BeautifulSoup
@@ -63,7 +62,7 @@ class TNAFlixCrawler(Crawler):
         link = self.parse_url(best_format.link_str)
         filename, ext = self.get_filename_and_ext(link.name)
         title = open_graph.title(soup)
-        scrape_item.possible_datetime = self.parse_iso_date(css.get_json_ld_date(soup))
+        scrape_item.timestamp = self.parse_iso_date(css.get_json_ld_date(soup))
         custom_filename = self.create_custom_filename(title, ext, file_id=video_id, resolution=best_format.resolution)
         return await self.handle_file(link, scrape_item, filename, ext, custom_filename=custom_filename)
 

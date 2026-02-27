@@ -1,4 +1,3 @@
-# pyright: ignore[reportIncompatibleVariableOverride]
 from __future__ import annotations
 
 import contextlib
@@ -13,12 +12,9 @@ from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Self, overload
 import yarl
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterator, Mapping
-
-    from propcache.api import under_cached_property as cached_property
+    from collections.abc import Generator, Mapping
 
     from cyberdrop_dl.annotations import copy_signature
-    from cyberdrop_dl.managers import Manager
 
     class AbsoluteHttpURL(yarl.URL):
         @copy_signature(yarl.URL.__new__)
@@ -30,17 +26,17 @@ if TYPE_CHECKING:
         @copy_signature(yarl.URL.__mod__)
         def __mod__(self) -> AbsoluteHttpURL: ...
 
-        @cached_property
-        def host(self) -> str: ...
+        @property
+        def host(self) -> str: ...  # pyright: ignore[reportIncompatibleVariableOverride]
 
-        @cached_property
-        def scheme(self) -> Literal["http", "https"]: ...
+        @property
+        def scheme(self) -> Literal["http", "https"]: ...  # pyright: ignore[reportIncompatibleVariableOverride]
 
-        @cached_property
-        def absolute(self) -> Literal[True]: ...
+        @property
+        def absolute(self) -> Literal[True]: ...  # pyright: ignore[reportIncompatibleVariableOverride]
 
-        @cached_property
-        def parent(self) -> AbsoluteHttpURL: ...
+        @property
+        def parent(self) -> AbsoluteHttpURL: ...  # pyright: ignore[reportIncompatibleVariableOverride]
 
         @copy_signature(yarl.URL.with_path)
         def with_path(self) -> AbsoluteHttpURL: ...
@@ -196,7 +192,7 @@ class MediaItem:
             ext=ext or Path(filename).suffix,
             original_filename=original_filename or filename,
             parents=origin.parents.copy(),
-            timestamp=origin.possible_datetime if isinstance(origin, ScrapeItem) else origin.timestamp,
+            timestamp=origin.timestamp,
             parent_threads=origin.parent_threads.copy(),
         )
 
@@ -219,7 +215,7 @@ class ScrapeItem:
     parent_title: str = ""
     part_of_album: bool = False
     album_id: str | None = None
-    possible_datetime: int | None = None
+    timestamp: int | None = None
     retry_path: Path | None = None
 
     parents: list[AbsoluteHttpURL] = field(default_factory=list, init=False)
@@ -233,14 +229,14 @@ class ScrapeItem:
     password: str | None = field(default=None, init=False)
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}(url={self.url!r}, parent_title={self.parent_title!r}, possible_datetime={self.possible_datetime!r}"
+        return f"{type(self).__name__}(url={self.url!r}, parent_title={self.parent_title!r}, possible_datetime={self.timestamp!r}"
 
     def __post_init__(self) -> None:
         self.password = self.url.query.get("password")
 
     def add_to_parent_title(self, title: str) -> None:
         """Adds a title to the parent title."""
-        from cyberdrop_dl.utils.utilities import sanitize_folder
+        from cyberdrop_dl.utils import sanitize_folder
 
         if not title or self.retry_path:
             return
@@ -261,7 +257,7 @@ class ScrapeItem:
 
         self.parent_title = (self.parent_title + "/" + title) if self.parent_title else title
 
-    def set_type(self, scrape_item_type: ScrapeItemType | None, _: Manager | None = None) -> None:
+    def set_type(self, scrape_item_type: ScrapeItemType | None, *_) -> None:
         self.type = scrape_item_type
         self.reset_childen()
 
@@ -286,7 +282,7 @@ class ScrapeItem:
 
         Reset `part_of_album` back to `False`
         """
-        self.album_id = self.possible_datetime = self.type = None
+        self.album_id = self.timestamp = self.type = None
         self.part_of_album = False
         self.reset_childen()
         if reset_parents:
@@ -314,7 +310,7 @@ class ScrapeItem:
         add_parent: AbsoluteHttpURL | bool | None = None,
     ) -> Self:
         """Creates a scrape item."""
-        from cyberdrop_dl.utils.utilities import is_absolute_http_url
+        from cyberdrop_dl.utils import is_absolute_http_url
 
         scrape_item = self.copy()
         assert is_absolute_http_url(url)
@@ -329,7 +325,7 @@ class ScrapeItem:
 
         scrape_item.url = url
         scrape_item.part_of_album = part_of_album or scrape_item.part_of_album
-        scrape_item.possible_datetime = possible_datetime or scrape_item.possible_datetime
+        scrape_item.timestamp = possible_datetime or scrape_item.timestamp
         scrape_item.album_id = album_id or scrape_item.album_id
         return scrape_item
 
@@ -403,9 +399,6 @@ class DatetimeRange:
     def __post_init__(self) -> None:
         if self.before <= self.after:
             raise ValueError
-
-    def __iter__(self) -> Iterator[datetime.datetime]:
-        return iter((self.before, self.after))
 
     @classmethod
     def from_url(cls, url: AbsoluteHttpURL) -> DatetimeRange | None:

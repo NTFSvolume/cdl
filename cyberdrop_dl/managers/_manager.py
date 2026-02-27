@@ -14,8 +14,7 @@ from cyberdrop_dl.managers.hash_manager import HashManager
 from cyberdrop_dl.managers.logs import LogManager
 from cyberdrop_dl.progress import TUI
 from cyberdrop_dl.storage import StorageChecker
-from cyberdrop_dl.utils import ffmpeg
-from cyberdrop_dl.utils.utilities import close_if_defined, get_system_information
+from cyberdrop_dl.utils import close_if_defined, ffmpeg, get_system_information
 
 if TYPE_CHECKING:
     from asyncio import TaskGroup

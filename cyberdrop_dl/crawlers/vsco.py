@@ -7,8 +7,7 @@ from pydantic.alias_generators import to_snake
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import css, error_handling_wrapper
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -72,7 +71,7 @@ class VSCOCrawler(Crawler):
     async def _file(self, scrape_item: ScrapeItem, file: dict[str, Any]) -> None:
         file = {to_snake(key): value for key, value in file.items()}
         file["id"] = file.get("id") or file["_id"]
-        scrape_item.possible_datetime = (file.get("upload_date") or file["created_date"]) // 1000
+        scrape_item.timestamp = (file.get("upload_date") or file["created_date"]) // 1000
         if file["type"] == "image":
             return await self._image(scrape_item, file)
         await self._video(scrape_item, file)

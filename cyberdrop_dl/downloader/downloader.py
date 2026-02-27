@@ -17,8 +17,7 @@ from cyberdrop_dl.exceptions import (
     RestrictedFiletypeError,
     SkipDownloadError,
 )
-from cyberdrop_dl.utils import aio
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import aio, error_handling_wrapper
 
 _VIDEO_HLS_BATCH_SIZE = 10
 _AUDIO_HLS_BATCH_SIZE = 50

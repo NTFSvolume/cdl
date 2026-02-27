@@ -144,6 +144,9 @@ class UIOverFlowPanel(UIPanel):
 
         return ProgressHook(advance, done, speed)
 
+    def __call__(self, description: object, total: float | None = None) -> ProgressHook:
+        return self.new_hook(description, total)
+
     def _advance(self, task_id: TaskID, amount: int) -> None:
         self._progress.advance(task_id, amount)
 

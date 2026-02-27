@@ -9,8 +9,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, NamedTuple, TypedDict
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_text_between
+from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between
 
 if TYPE_CHECKING:
     from bs4 import BeautifulSoup
@@ -260,7 +259,7 @@ class PornHubCrawler(Crawler):
         formats = [Format.new(media) for media in get_media_list(soup)]
         best_hls = max(f for f in formats if f.format == "hls")
         debrid_link = m3u8 = best_format = None
-        scrape_item.possible_datetime = date = self.parse_iso_date(get_upload_date_str(soup))
+        scrape_item.timestamp = date = self.parse_iso_date(get_upload_date_str(soup))
         assert date
         use_hls = date >= MP4_NOT_AVAILABLE_SINCE
 
