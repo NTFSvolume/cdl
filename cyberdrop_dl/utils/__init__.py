@@ -35,7 +35,6 @@ from pydantic import ValidationError
 from yarl import URL
 
 from cyberdrop_dl import config, constants
-from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import (
     CDLBaseError,
     ErrorLogMessage,

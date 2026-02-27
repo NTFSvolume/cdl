@@ -3,7 +3,7 @@ from __future__ import annotations
 import dataclasses
 from collections import deque
 from types import MappingProxyType
-from typing import TYPE_CHECKING, ClassVar, Self
+from typing import TYPE_CHECKING, ClassVar, Final, Self
 
 from rich.console import Group
 from rich.markup import escape
@@ -69,51 +69,51 @@ class OverFlow:
         self._progress.update(self._task_id, description=str(self), visible=count > 0)
 
 
-class ProgressProxy:
+class ProgressProxy2(Progress):
+    """A progress that exposes their tasks"""
+
+    def __init__(self, *columns: ProgressColumn | str) -> None:
+        super().__init__(*columns, disable=True)
+        self.task_counters: dict[str, TaskCounter] = {}
+        self.tasks_proxy: MappingProxyType[TaskID, Task] = MappingProxyType(self._tasks)
+
+
+class UIPanel:
+    """A section of the TUI.
+
+    The panel could potencially fill the entire terminal or share it with other panels"""
+
     columns: ClassVar[ColumnsType]
-    _progress: Progress
-    _tasks_map: dict[str, TaskCounter]
-    _tasks: MappingProxyType[TaskID, Task]
+
+    def __init__(self) -> None:
+        self._progress: Final[ProgressProxy2] = ProgressProxy2(*self.columns)
+        self._renderable: RenderableType = ""
 
     def __rich__(self) -> RenderableType:
-        return self._progress
+        return self._renderable
+
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__}(panel={self._renderable!r})>"
+
+    @property
+    def _tasks(self) -> MappingProxyType[TaskID, Task]:
+        return self._progress.tasks_proxy
+
+    @property
+    def _counters(self) -> dict[str, TaskCounter]:
+        return self._progress.task_counters
 
     @classmethod
     def _clean_task_desc(cls, desc: str) -> str:
         return escape(_truncate(desc.encode("ascii", "ignore").decode().strip()))
 
-    def __init__(self) -> None:
-        self._progress = Progress(*self.columns)
-        self._tasks_map = {}
-        self._tasks = MappingProxyType(self._progress._tasks)
-
-    def __repr__(self) -> str:
-        return f"<{type(self).__name__}(progress={self._progress!r})>"
+    def _increase_counter(self, task_name: str) -> None:
+        task_counter = self._progress.task_counters[task_name]
+        task_counter.count += 1
+        self._progress.advance(task_counter.id)
 
 
-class PanelProxy(ProgressProxy):
-    def __init__(self) -> None:
-        super().__init__()
-        self._panel: Panel = Panel("")
-
-    def __rich__(self) -> Panel:
-        return self._panel
-
-    def __repr__(self) -> str:
-        return f"<{type(self).__name__}(panel={self._panel!r})>"
-
-
-class CounterPanel(PanelProxy):
-    def __init__(self) -> None:
-        super().__init__()
-        self._tasks_map: dict[str, TaskCounter] = {}
-
-    def _advance(self, task_name: str) -> None:
-        self._progress.advance(self._tasks_map[task_name].id)
-        self._tasks_map[task_name].count += 1
-
-
-class OverflowingPanel(PanelProxy):
+class OverflowingPanel(UIPanel):
     unit: ClassVar[str]
 
     def __init__(self, visible_tasks_limit: int) -> None:
@@ -124,7 +124,7 @@ class OverflowingPanel(PanelProxy):
         self._invisible_queue: deque[TaskID] = deque()
         self._visible_tasks: int = 0
         self._orphan_tasks: set[TaskID] = set()
-        self._panel: Panel = Panel(
+        self._renderable: RenderableType = Panel(
             Group(self._progress, self._overflow),
             title=self._title,
             border_style="green",

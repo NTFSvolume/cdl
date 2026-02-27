@@ -13,7 +13,7 @@ from rich.panel import Panel
 from rich.progress import BarColumn, Progress
 
 from cyberdrop_dl import config
-from cyberdrop_dl.tui.common import ColumnsType, CounterPanel, TaskCounter
+from cyberdrop_dl.tui.common import ColumnsType, TaskCounter, UIPanel
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -30,25 +30,25 @@ def _get_enabled_hashes():
 _base_dir: ContextVar[Path] = ContextVar("_base_dir")
 
 
-class HashingPanel(CounterPanel):
+class HashingPanel(UIPanel):
     """Class that keeps track of hashed files."""
 
-    _columns: ClassVar[ColumnsType] = ("{task.description}",)
+    columns: ClassVar[ColumnsType] = ("{task.description}",)
 
-    def __init__(self) -> None:
+    def __init__(self, *additional_hashes: str) -> None:
         super().__init__()
         self._hash_progress: Progress = Progress(
             "[progress.description]{task.description}", BarColumn(bar_width=None), "{task.completed:,}"
         )
-        self._enabled_hashes: tuple[str, ...] = tuple(_get_enabled_hashes())
+        self._enabled_hashes: tuple[str, ...] = tuple(dict.fromkeys("xxh128", *additional_hashes))
         self._computed_hashes: int = 0
         self._prev_hashed: int = 0
 
         for hash_type in self._enabled_hashes:
             desc = "[green]Hashed " + escape(f"[{hash_type}]")
-            self._tasks_map[hash_type] = TaskCounter(self._hash_progress.add_task(desc, total=None))
+            self._counters[hash_type] = TaskCounter(self._hash_progress.add_task(desc, total=None))
 
-        self._tasks_map.update(
+        self._counters.update(
             prev_hashed=TaskCounter(self._hash_progress.add_task("[green]Previously Hashed", total=None)),
             removed=TaskCounter(self._progress.add_task("", visible=False)),
             base_dir=TaskCounter(self._progress.add_task("")),
@@ -72,18 +72,18 @@ class HashingPanel(CounterPanel):
 
     @property
     def removed_files(self) -> int:
-        return self._tasks_map["removed"].count
+        return self._counters["removed"].count
 
     @contextlib.contextmanager
     def __call__(self, path: Path) -> Generator[None]:
         token = _base_dir.set(path)
         desc = "[green]Base dir: [blue]" + escape(str(path))
-        self._progress.update(self._tasks_map["base_dir"].id, description=desc)
+        self._progress.update(self._counters["base_dir"].id, description=desc)
         try:
             yield
         finally:
             _base_dir.reset(token)
-            self._progress.update(self._tasks_map["base_dir"].id, description="")
+            self._progress.update(self._counters["base_dir"].id, description="")
 
     async def update_currently_hashing(self, file: Path | str) -> None:
         file = Path(file)
@@ -91,15 +91,15 @@ class HashingPanel(CounterPanel):
         size_text = ByteSize(size).human_readable(decimal=True)
         path = file.relative_to(_base_dir.get())
         self._progress.update(
-            self._tasks_map["file"].id,
+            self._counters["file"].id,
             description="[green]Current file: [blue]" + escape(f"{path}") + f" [green]({size_text})",
         )
 
     def add_hashed(self, hash_type: str) -> None:
-        self._advance(hash_type)
+        self._increase_counter(hash_type)
 
     def add_prev_hashed(self) -> None:
-        self._advance("prev_hashed")
+        self._increase_counter("prev_hashed")
 
     def add_removed(self) -> None:
-        self._advance("removed")
+        self._increase_counter("removed")

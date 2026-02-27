@@ -7,7 +7,7 @@ from typing import ClassVar, Self
 from rich.panel import Panel
 from rich.progress import BarColumn, TaskID
 
-from cyberdrop_dl.tui.common import ColumnsType, ProgressProxy
+from cyberdrop_dl.tui.common import ColumnsType, UIPanel
 
 
 @dataclasses.dataclass(slots=True, order=True)
@@ -28,10 +28,10 @@ class UIFailure:
         return cls(msg, count)
 
 
-class _ErrorsPanel(ProgressProxy):
+class _ErrorsPanel(UIPanel):
     """Base class that keeps track of errors and reasons."""
 
-    _columns: ClassVar[ColumnsType] = (
+    columns: ClassVar[ColumnsType] = (
         "[progress.description]{task.description}",
         BarColumn(bar_width=None),
         "[progress.percentage]{task.percentage:>6.2f}%",
@@ -54,9 +54,6 @@ class _ErrorsPanel(ProgressProxy):
             padding=(1, 1),
             subtitle=self._subtitle,
         )
-
-    def __rich__(self) -> Panel:
-        return self._panel
 
     @property
     def _subtitle(self) -> str:

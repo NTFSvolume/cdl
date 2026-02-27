@@ -11,7 +11,7 @@ class SortingPanel(OverflowingPanel):
     """Class that keeps track of sorted files."""
 
     unit: ClassVar[str] = "Folders"
-    _columns = (
+    columns = (
         SpinnerColumn(),
         "[progress.description]{task.description}",
         BarColumn(bar_width=None),

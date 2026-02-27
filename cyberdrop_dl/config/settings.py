@@ -350,6 +350,17 @@ class Dedupe(SettingsGroup):
     hashing: Hashing = Hashing.IN_PLACE
     send_deleted_to_trash: bool = True
 
+    @property
+    def enables_hashes(self):
+        def gen():
+            yield "xxh128"
+            if self.add_md5_hash:
+                yield "md5"
+            if self.add_sha256_hash:
+                yield "sha256"
+
+        return tuple(gen())
+
 
 # ruff: noqa: RUF012
 
