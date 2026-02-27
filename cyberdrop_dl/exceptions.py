@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from yaml import YAMLError
     from yarl import URL
 
     from cyberdrop_dl.data_structures.url_objects import MediaItem, ScrapeItem
@@ -206,21 +207,17 @@ class JDownloaderError(CDLBaseError):
 
 
 class InvalidYamlError(CDLBaseError):
-    def __init__(self, file: Path, e: Exception) -> None:
+    def __init__(self, file: Path, e: YAMLError) -> None:
         """This error will be thrown when a yaml config file has invalid values."""
-        from yaml import YAMLError
-
-        file_path = file.resolve()
+        file = file.resolve()
         ui_failure = "Invalid YAML"
-        msg = f"Unable to read file '{file_path}'"
-        if isinstance(e, YAMLError):
-            msg = f"File '{file_path}' is not a valid YAML file"
-        mark = getattr(e, "problem_mark", None)
-        if mark:
+        msg = f"File '{file}' is not a valid YAML file"
+
+        if mark := getattr(e, "problem_mark", None):
             msg += f"\n\nThe error was found in this line: \n {mark}"
 
-        problem = getattr(e, "problem", str(e))
-        msg += f"\n\n{problem.capitalize()}\n\nPlease delete the file or fix the errors"
+        problem = getattr(e, "problem", str(e)).capitalize()
+        msg += f"\n\n{problem}\n\nPlease delete the file or fix the errors"
         super().__init__(ui_failure, message=msg, origin=file)
 
 

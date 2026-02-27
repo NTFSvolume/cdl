@@ -19,8 +19,7 @@ from pydantic import ValidationError
 
 from cyberdrop_dl import constants
 from cyberdrop_dl.logger import enable_3p_logger, log, log_debug, log_spacer
-from cyberdrop_dl.models import AppriseURLModel
-from cyberdrop_dl.utils.yaml import format_validation_error
+from cyberdrop_dl.models import AppriseURLModel, format_validation_error
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator, Iterable
@@ -100,7 +99,7 @@ def read(*, file: Path | None = None, urls: list[str] | None = None) -> tuple[Ap
         return tuple(_simplify(AppriseURLModel.model_validate({"url": url}) for url in set(urls)))
 
     except ValidationError as e:
-        logger.error(format_validation_error(e, title="Apprise", file=file))
+        logger.error(format_validation_error(e, file))
         sys.exit(1)
 
 

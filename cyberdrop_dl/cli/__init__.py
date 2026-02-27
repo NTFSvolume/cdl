@@ -7,8 +7,8 @@ from cyclopts import Parameter
 from cyberdrop_dl import __version__
 from cyberdrop_dl.annotations import copy_signature
 from cyberdrop_dl.cli.model import CLIargs, ParsedArgs, RetryArgs
+from cyberdrop_dl.models import format_validation_error
 from cyberdrop_dl.models.types import HttpURL
-from cyberdrop_dl.utils.yaml import format_validation_error
 
 
 class App(cyclopts.App):
