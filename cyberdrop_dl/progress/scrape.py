@@ -63,16 +63,13 @@ class DownloadsPanel(UIOverFlowPanel):
 
     def new(self, filename: str, size: float | None = None) -> ProgressHook:
         description = self._clean_task_desc(str(filename).rsplit("/", 1)[-1])
-        hook = self.new_hook(description, size)
+        hook = self(description, size)
         _ = _downloads.set(hook)
         return hook
 
     def _advance(self, task_id: TaskID, amount: int) -> None:
         self.total_data_written += amount
         super()._advance(task_id, amount)
-
-    def advance_file(self, task_id: TaskID, amount: int) -> None:
-        self._advance(task_id, amount)
 
 
 class StatusMessage(ProgressProxy):

@@ -4,7 +4,6 @@ import asyncio
 import contextlib
 import dataclasses
 import datetime
-import inspect
 import logging
 import re
 from abc import ABC, abstractmethod
@@ -59,10 +58,10 @@ if TYPE_CHECKING:
 
     from bs4 import BeautifulSoup, Tag
     from curl_cffi.requests.impersonate import BrowserTypeLiteral
-    from rich.progress import TaskID
 
     from cyberdrop_dl.clients.response import AbstractResponse
     from cyberdrop_dl.managers import Manager
+    from cyberdrop_dl.progress.common import ProgressHook
 
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
@@ -351,9 +350,14 @@ class Crawler(ABC):
                 return
 
             self.scraped_items.add(url.path_qs)
-            async with self._fetch_context(scrape_item):
-                self.pre_check_scrape_item(scrape_item)
-                await self.fetch(scrape_item)
+            with self.new_task_id(scrape_item.url):
+                try:
+                    self.pre_check_scrape_item(scrape_item)
+                    await self.fetch(scrape_item)
+                except ValueError:
+                    self.handle_error(scrape_item, ScrapeError("Unknown URL path"))
+                except MaxChildrenError as e:
+                    self.handle_error(scrape_item, e)
 
     def pre_check_scrape_item(self, scrape_item: ScrapeItem) -> None:
         if not self.SKIP_PRE_CHECK and scrape_item.url.path == "/":
@@ -370,34 +374,17 @@ class Crawler(ABC):
         return url
 
     @final
-    @contextlib.asynccontextmanager
-    async def _fetch_context(self, scrape_item: ScrapeItem) -> AsyncGenerator[TaskID]:
-        with self.new_task_id(scrape_item.url) as task_id:
-            try:
-                yield task_id
-            except ValueError:
-                self.raise_exc(scrape_item, ScrapeError("Unknown URL path"))
-            except MaxChildrenError as e:
-                self.raise_exc(scrape_item, e)
-            finally:
-                pass
-
     @error_handling_wrapper
-    def raise_exc(self, scrape_item: ScrapeItem, exc: type[Exception] | Exception | str) -> None:
+    def handle_error(self, scrape_item: ScrapeItem, exc: type[Exception] | Exception | str) -> None:
         if isinstance(exc, str):
             exc = ScrapeError(exc)
         raise exc
 
     @final
-    @contextlib.contextmanager
-    def new_task_id(self, url: AbsoluteHttpURL) -> Generator[TaskID]:
+    def new_task_id(self, url: AbsoluteHttpURL) -> ProgressHook:
         """Creates a new task_id (shows the URL in the UI and logs)"""
         self.logger.info(f"Scraping [{self.FOLDER_DOMAIN}]: {url}")
-        task_id = self.manager.progress.scrape.new_task(url)
-        try:
-            yield task_id
-        finally:
-            self.manager.progress.scrape.remove_task(task_id)
+        return self.manager.progress.scrape(url)
 
     @staticmethod
     def is_subdomain(url: AbsoluteHttpURL) -> bool:
@@ -1064,7 +1051,7 @@ def _sort_supported_paths(supported_paths: SupportedPaths) -> dict[str, OneOrTup
 
 
 def auto_task_id(
-    func: Callable[Concatenate[_CrawlerT, ScrapeItem, _P], _R | Coroutine[None, None, _R]],
+    func: Callable[Concatenate[_CrawlerT, ScrapeItem, _P], Coroutine[None, None, _R]],
 ) -> Callable[Concatenate[_CrawlerT, ScrapeItem, _P], Coroutine[None, None, _R]]:
     """Autocreate a new `task_id` from the scrape_item of the method"""
 
@@ -1072,8 +1059,6 @@ def auto_task_id(
     async def wrapper(self: _CrawlerT, scrape_item: ScrapeItem, *args: _P.args, **kwargs: _P.kwargs) -> _R:
         with self.new_task_id(scrape_item.url):
             result = func(self, scrape_item, *args, **kwargs)
-            if inspect.isawaitable(result):
-                return await result
-            return result
+            return await result
 
     return wrapper

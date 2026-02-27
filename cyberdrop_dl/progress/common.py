@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
+from collections import deque
 from types import MappingProxyType
 from typing import TYPE_CHECKING, ClassVar, Self
 
@@ -8,6 +9,8 @@ from rich.console import Group
 from rich.markup import escape
 from rich.panel import Panel
 from rich.progress import Progress, TaskID
+
+from cyberdrop_dl.annotations import auto_repr
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -95,18 +98,19 @@ class OverFlow(ProgressProxy):
         self._progress.update(self._task_id, description=str(self), visible=count > 0)
 
 
+@auto_repr()
 class UIOverFlowPanel(UIPanel):
     unit: ClassVar[str]
     _desc_fmt: ClassVar[str] = "[{color}]{description}"
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}(progress={self._progress!r})"
 
     def __init__(self, visible_tasks_limit: int) -> None:
         super().__init__()
         self.title = type(self).__name__.removesuffix("Panel")
         self._overflow = OverFlow(self.unit)
         self._limit = visible_tasks_limit
+        self._invisible_queue: deque[TaskID] = deque()
+        self._visible_tasks: int = 0
+        self._orphan_tasks: set[TaskID] = set()
         self._renderable = Panel(
             Group(self._progress, self._overflow),
             title=self.title,
@@ -114,42 +118,64 @@ class UIOverFlowPanel(UIPanel):
             padding=(1, 1),
         )
 
-    def _redraw(self) -> None:
-        self._overflow.update(count=len(self._tasks) - self._limit)
+    def _update_overflow(self) -> None:
+        self._overflow.update(count=len(self._tasks) - self._visible_tasks)
 
-    def _add_task(self, description: str, total: float | None = None) -> TaskID:
+    def _add_task(self, description: str, total: float | None = None, /, *, completed: int = 0) -> TaskID:
+        visible = self._visible_tasks < self._limit
         task_id = self._progress.add_task(
             self._desc_fmt.format(color=_COLOR, description=description),
             total=total,
-            visible=len(self._tasks) < self._limit,
+            visible=visible,
+            completed=completed,
         )
-        self._redraw()
+        if visible:
+            self._visible_tasks += 1
+        else:
+            self._invisible_queue.append(task_id)
+            self._update_overflow()
+
         return task_id
 
-    def remove_task(self, task_id: TaskID) -> None:
+    def _remove_task(self, task_id: TaskID) -> None:
+        was_visible = self._tasks[task_id].visible
         self._progress.remove_task(task_id)
-        self._redraw()
+        if was_visible:
+            while True:
+                try:
+                    invisible_task_id = self._invisible_queue.popleft()
+                except IndexError:
+                    self._visible_tasks -= 1
+                    break
+                else:
+                    try:
+                        self._orphan_tasks.remove(task_id)
+                    except KeyError:
+                        self._progress.update(invisible_task_id, visible=True)
+                        break
 
-    def new_hook(self, description: object, total: float | None = None) -> ProgressHook:
+        else:
+            self._orphan_tasks.add(task_id)
+
+        self._update_overflow()
+
+    def __call__(self, description: object, total: float | None = None) -> ProgressHook:
         task_id = self._add_task(str(description), total)
 
         def advance(amount: int) -> None:
             self._advance(task_id, amount)
 
         def done() -> None:
-            self.remove_task(task_id)
+            self._remove_task(task_id)
 
         def speed() -> float:
-            return self.get_speed(task_id)
+            return self._get_speed(task_id)
 
         return ProgressHook(advance, done, speed)
-
-    def __call__(self, description: object, total: float | None = None) -> ProgressHook:
-        return self.new_hook(description, total)
 
     def _advance(self, task_id: TaskID, amount: int) -> None:
         self._progress.advance(task_id, amount)
 
-    def get_speed(self, task_id: TaskID) -> float:
+    def _get_speed(self, task_id: TaskID) -> float:
         task = self._tasks[task_id]
         return task.finished_speed or task.speed or 0

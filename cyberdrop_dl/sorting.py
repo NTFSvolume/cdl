@@ -28,7 +28,7 @@ async def _get_modified_date(file: Path) -> datetime.datetime:
     return datetime.datetime.fromtimestamp(stat.st_mtime, datetime.UTC).replace(microsecond=0, tzinfo=None)
 
 
-@dataclasses.dataclass(slots=True, frozen=True)
+@dataclasses.dataclass(slots=True)
 class Sorter:
     tui: TUI
     input_dir: Path
@@ -73,21 +73,28 @@ class Sorter:
             folder, files = await fut
             folder_name = folder.name
             with self.tui.sorting(folder_name, total=len(files)) as progress:
-                for file in files:
-                    ext = file.suffix.lower()
-                    if ext in constants.TempExt:
-                        continue
 
-                    if ext in constants.FileFormats.AUDIO:
-                        await self.sort_audio(file, folder_name)
-                    elif ext in constants.FileFormats.IMAGE:
-                        await self.sort_image(file, folder_name)
-                    elif ext in constants.FileFormats.VIDEO:
-                        await self.sort_video(file, folder_name)
-                    else:
-                        await self.sort_other(file, folder_name)
+                async def sort(file: Path, name: str = folder_name) -> None:
+                    try:
+                        await self.__sort(name, file)
+                    finally:
+                        progress.advance(1)
 
-                    progress.advance(1)
+                _ = await asyncio.gather(*map(sort, files))
+
+    async def __sort(self, folder_name: str, file: Path) -> None:
+        ext = file.suffix.lower()
+        if ext in constants.TempExt:
+            return
+
+        if ext in constants.FileFormats.AUDIO:
+            await self.sort_audio(file, folder_name)
+        elif ext in constants.FileFormats.IMAGE:
+            await self.sort_image(file, folder_name)
+        elif ext in constants.FileFormats.VIDEO:
+            await self.sort_video(file, folder_name)
+        else:
+            await self.sort_other(file, folder_name)
 
     async def sort_audio(self, file: Path, base_name: str) -> None:
         """Sorts an audio file into the sorted audio folder."""

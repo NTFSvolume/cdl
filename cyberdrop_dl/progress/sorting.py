@@ -24,12 +24,9 @@ class SortingPanel(UIOverFlowPanel):
         super().__init__(visible_tasks_limit=1)
         self.audio_count = self.video_count = self.image_count = self.other_count = 0
 
-    def new_task(self, folder: str, expected_size: int | None) -> TaskID:
-        description = self._clean_task_desc(folder)
-        return super()._add_task(description, expected_size)
-
-    def advance_folder(self, task_id: TaskID, amount: int = 1) -> None:
-        self._advance(task_id, amount)
+    def _add_task(self, description: str, total: float | None = None, /, *, completed: int = 0) -> TaskID:
+        description = self._clean_task_desc(description)
+        return super()._add_task(description, total)
 
     def add_audio(self) -> None:
         self.audio_count += 1

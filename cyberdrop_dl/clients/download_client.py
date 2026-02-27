@@ -132,7 +132,7 @@ class StreamDownloader:
             )
             media_item.timestamp = last_modified
 
-        hook = self.manager.progress.downloads.new_hook(media_item.filename, media_item.filesize)
+        hook = self.manager.progress.downloads(media_item.filename, media_item.filesize)
         if resume_point:
             hook.advance(resume_point)
 

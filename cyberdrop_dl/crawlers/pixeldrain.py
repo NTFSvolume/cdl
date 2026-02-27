@@ -204,7 +204,7 @@ class PixelDrainCrawler(Crawler):
                 scrape_item.add_children(0)
                 await walk_filesystem(fs)
             except Exception as e:
-                self.raise_exc(new_scrape_item, e)
+                self.handle_error(new_scrape_item, e)
 
         async def walk_filesystem(fs: FileSystem) -> None:
             for node in fs.children:
@@ -227,7 +227,7 @@ class PixelDrainCrawler(Crawler):
                     self.create_task(walk_task(new_scrape_item, node.path))
 
                 else:
-                    self.raise_exc(new_scrape_item, f"Unknown node type: {node.type}")
+                    self.handle_error(new_scrape_item, f"Unknown node type: {node.type}")
 
                 scrape_item.add_children()
 
