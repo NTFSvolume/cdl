@@ -4,8 +4,11 @@ import asyncio
 import contextlib
 import dataclasses
 import datetime
+import importlib
 import logging
+import pkgutil
 import re
+import weakref
 from abc import ABC, abstractmethod
 from collections import Counter
 from collections.abc import Callable
@@ -109,6 +112,30 @@ class CrawlerInfo:
     @classmethod
     def generic(cls, name: str, paths: SupportedPaths) -> Self:
         return cls(name, "::GENERIC CRAWLER::", (), paths)  # pyright: ignore[reportArgumentType]
+
+
+class Registry:
+    concrete: weakref.WeakSet[type[Crawler]] = weakref.WeakSet()
+    generic: weakref.WeakSet[type[Crawler]] = weakref.WeakSet()
+    abc: weakref.WeakSet[type[Crawler]] = weakref.WeakSet()
+
+    @classmethod
+    def all(cls) -> weakref.WeakSet[type[Crawler]]:
+        return cls.concrete | cls.generic | cls.abc
+
+    @classmethod
+    def import_all(cls) -> None:
+        cls._import(__package__ or __name__)
+
+    @classmethod
+    def _import(cls, pkg_name: str) -> None:
+        """Import every module (and sub-package) inside *pkg_name*."""
+        pkg_name = __package__ or __name__
+        module = importlib.import_module(pkg_name)
+        for module_info in pkgutil.iter_modules(module.__path__, pkg_name + "."):
+            _ = importlib.import_module(module_info.name)
+            if module_info.ispkg:
+                cls._import(module_info.name)
 
 
 class Crawler(ABC):
@@ -228,9 +255,11 @@ class Crawler(ABC):
             cls.GENERIC_NAME: str = generic_name or cls.NAME
             cls.SCRAPE_MAPPER_KEYS = ()
             cls.INFO: CrawlerInfo = CrawlerInfo.generic(cls.GENERIC_NAME, cls.SUPPORTED_PATHS)
+            Registry.generic.add(cls)
             return
 
         if is_abc:
+            Registry.abc.add(cls)
             return
 
         if not cls.IS_REAL_DEBRID:
@@ -255,6 +284,7 @@ class Crawler(ABC):
             supported_domains=_make_wiki_supported_domains(cls.SCRAPE_MAPPER_KEYS),
             supported_paths=cls.SUPPORTED_PATHS,
         )
+        Registry.concrete.add(cls)
 
     def _register_rate_limits(self) -> None:
         self.client.rate_limiter[self.DOMAIN] = AsyncLimiter(*self._RATE_LIMIT)

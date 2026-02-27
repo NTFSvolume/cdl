@@ -108,11 +108,11 @@ class TUI:
         logger.info(f"  Downloaded: {self.files.completed_files:,} files")
         logger.info(f"  Skipped (By Config): {self.files.skipped_files:,} files")
         logger.info(f"  Skipped (Previously Downloaded): {self.files.previously_completed:,} files")
-        logger.info(f"  Failed: {self.download_errors.error_count:,} files")
+        logger.info(f"  Failed: {self.download_errors._error_count:,} files")
 
         logger.info("Unsupported URLs Stats:")
-        logger.info(f"  Sent to Jdownloader: {self.scrape_errors.sent_to_jdownloader:,}")
-        logger.info(f"  Skipped: {self.scrape_errors.skipped:,}")
+        logger.info(f"  Sent to Jdownloader: {self.scrape_errors._sent_to_jdownloader:,}")
+        logger.info(f"  Skipped: {self.scrape_errors._skipped:,}")
 
         self.print_dedupe_stats()
 

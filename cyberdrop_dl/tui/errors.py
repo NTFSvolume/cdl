@@ -40,16 +40,16 @@ class _ErrorsPanel(UIPanel):
     )
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}(error_count={self.error_count!r}, errors={tuple(self.errors.keys())!r})"
+        return f"{type(self).__name__}(error_count={self._error_count!r}, errors={tuple(self._errors.keys())!r})"
 
     def __init__(self) -> None:
         super().__init__()
-        self.title: str = type(self).__name__.removesuffix("Errors") + " Failures"
-        self.errors: dict[str, TaskID] = {}
-        self.error_count: int = 0
+        self._title: str = type(self).__name__.removesuffix("Errors") + " Failures"
+        self._errors: dict[str, TaskID] = {}
+        self._error_count: int = 0
         self._panel: Panel = Panel(
             self._progress,
-            title=self.title,
+            title=self._title,
             border_style="green",
             padding=(1, 1),
             subtitle=self._subtitle,
@@ -57,22 +57,22 @@ class _ErrorsPanel(UIPanel):
 
     @property
     def _subtitle(self) -> str:
-        return f"Total {self.title}: [white]{self.error_count:,}"
+        return f"Total {self._title}: [white]{self._error_count:,}"
 
     def add(self, error: str) -> None:
-        self.error_count += 1
+        self._error_count += 1
         name = _get_pretty_error(error)
-        if (task_id := self.errors.get(name)) is not None:
+        if (task_id := self._errors.get(name)) is not None:
             self._progress.advance(task_id)
         else:
-            self.errors[name] = self._progress.add_task(name, total=self.error_count, completed=1)
+            self._errors[name] = self._progress.add_task(name, total=self._error_count, completed=1)
 
         self._redraw()
 
     def _redraw(self) -> None:
         self._panel.subtitle = self._subtitle
-        for task_id in self.errors.values():
-            self._progress.update(task_id, total=self.error_count)
+        for task_id in self._errors.values():
+            self._progress.update(task_id, total=self._error_count)
 
         tasks = list(self._tasks.values())
         tasks_sorted = sorted(tasks, key=lambda x: x.completed, reverse=True)
@@ -81,14 +81,16 @@ class _ErrorsPanel(UIPanel):
 
         for task in tasks_sorted:
             self._progress.remove_task(task.id)
-            self.errors[task.description] = self._progress.add_task(
+            self._errors[task.description] = self._progress.add_task(
                 task.description,
                 total=task.total,
                 completed=int(task.completed),
             )
 
     def results(self) -> list[UIFailure]:
-        return sorted(UIFailure.parse(msg, int(self._tasks[task_id].completed)) for msg, task_id in self.errors.items())
+        return sorted(
+            UIFailure.parse(msg, int(self._tasks[task_id].completed)) for msg, task_id in self._errors.items()
+        )
 
 
 class DownloadErrors(_ErrorsPanel):
@@ -100,16 +102,16 @@ class ScrapeErrors(_ErrorsPanel):
 
     def __init__(self) -> None:
         super().__init__()
-        self.unsupported: int = 0
-        self.sent_to_jdownloader: int = 0
-        self.skipped: int = 0
+        self._unsupported: int = 0
+        self._sent_to_jdownloader: int = 0
+        self._skipped: int = 0
 
     def add_unsupported(self, *, sent_to_jdownloader: bool = False) -> None:
-        self.unsupported += 1
+        self._unsupported += 1
         if sent_to_jdownloader:
-            self.sent_to_jdownloader += 1
+            self._sent_to_jdownloader += 1
         else:
-            self.skipped += 1
+            self._skipped += 1
 
 
 @functools.cache
