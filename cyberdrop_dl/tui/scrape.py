@@ -16,7 +16,7 @@ from rich.progress import (
 )
 
 from cyberdrop_dl import __version__
-from cyberdrop_dl.progress.common import OverflowingPanel, ProgressHook, ProgressProxy
+from cyberdrop_dl.tui.common import OverflowingPanel, ProgressHook, ProgressProxy
 
 if TYPE_CHECKING:
     from collections.abc import Generator

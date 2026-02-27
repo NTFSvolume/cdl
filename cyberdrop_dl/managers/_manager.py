@@ -12,8 +12,8 @@ from cyberdrop_dl.clients.http import HttpClient
 from cyberdrop_dl.database import Database
 from cyberdrop_dl.managers.hash_manager import HashManager
 from cyberdrop_dl.managers.logs import LogManager
-from cyberdrop_dl.progress import TUI
 from cyberdrop_dl.storage import StorageChecker
+from cyberdrop_dl.tui import TUI
 from cyberdrop_dl.utils import close_if_defined, ffmpeg, get_system_information
 
 if TYPE_CHECKING:

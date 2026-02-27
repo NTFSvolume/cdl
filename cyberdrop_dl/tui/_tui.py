@@ -15,12 +15,12 @@ from rich.live import Live
 from rich.text import Text
 
 from cyberdrop_dl.logger import spacer
-from cyberdrop_dl.progress.errors import DownloadErrors, ScrapeErrors, UIFailure
-from cyberdrop_dl.progress.files import FileStats
-from cyberdrop_dl.progress.hashing import HashingPanel
-from cyberdrop_dl.progress.scrape import DownloadsPanel, ScrapingPanel, StatusMessage
-from cyberdrop_dl.progress.screens import AppScreens, Screen
-from cyberdrop_dl.progress.sorting import SortingPanel
+from cyberdrop_dl.tui.errors import DownloadErrors, ScrapeErrors, UIFailure
+from cyberdrop_dl.tui.files import FileStats
+from cyberdrop_dl.tui.hashing import HashingPanel
+from cyberdrop_dl.tui.scrape import DownloadsPanel, ScrapingPanel, StatusMessage
+from cyberdrop_dl.tui.screens import AppScreens, Screen
+from cyberdrop_dl.tui.sorting import SortingPanel
 
 if TYPE_CHECKING:
     from collections.abc import Generator

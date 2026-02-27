@@ -5,7 +5,7 @@ from typing import ClassVar
 from rich.panel import Panel
 from rich.progress import BarColumn, Progress
 
-from cyberdrop_dl.progress.common import ColumnsType, CounterPanel, TaskCounter
+from cyberdrop_dl.tui.common import ColumnsType, CounterPanel, TaskCounter
 
 
 class FileStats(CounterPanel):

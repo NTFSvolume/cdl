@@ -7,7 +7,7 @@ from typing import ClassVar
 from rich.panel import Panel
 from rich.progress import BarColumn, TaskID
 
-from cyberdrop_dl.progress.common import ColumnsType, ProgressProxy
+from cyberdrop_dl.tui.common import ColumnsType, ProgressProxy
 
 
 @dataclasses.dataclass(slots=True, order=True)

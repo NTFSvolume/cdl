@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
     from cyberdrop_dl.managers import Manager
     from cyberdrop_dl.managers.http import HttpClient
-    from cyberdrop_dl.progress.common import ProgressHook
+    from cyberdrop_dl.tui.common import ProgressHook
 
 
 class DownloadSpeedLimiter(AsyncLimiter):

@@ -18,7 +18,7 @@ from cyberdrop_dl.utils.ffmpeg import probe
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from cyberdrop_dl.progress import TUI
+    from cyberdrop_dl.tui import TUI
 
 logger = logging.getLogger(__name__)
 

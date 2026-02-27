@@ -61,7 +61,7 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.clients.response import AbstractResponse
     from cyberdrop_dl.managers import Manager
-    from cyberdrop_dl.progress.common import ProgressHook
+    from cyberdrop_dl.tui.common import ProgressHook
 
 _P = ParamSpec("_P")
 _R = TypeVar("_R")

@@ -4,7 +4,7 @@ from typing import ClassVar
 
 from rich.progress import BarColumn, SpinnerColumn, TaskID
 
-from cyberdrop_dl.progress.common import OverflowingPanel
+from cyberdrop_dl.tui.common import OverflowingPanel
 
 
 class SortingPanel(OverflowingPanel):
