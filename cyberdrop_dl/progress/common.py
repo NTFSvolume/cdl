@@ -8,15 +8,13 @@ from typing import TYPE_CHECKING, ClassVar, Self
 from rich.console import Group
 from rich.markup import escape
 from rich.panel import Panel
-from rich.progress import Progress, TaskID
-
-from cyberdrop_dl.annotations import auto_repr
+from rich.progress import Progress, ProgressColumn, Task, TaskID
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from rich.console import RenderableType
-    from rich.progress import ProgressColumn, Task, TaskID
+    from rich.progress import Task, TaskID
 
 _COLOR: str = "plum3"
 
@@ -47,73 +45,88 @@ class ProgressHook:
         return ProgressHook(self.advance, lambda: None, self.speed)
 
 
-@dataclasses.dataclass(slots=True)
-class RichProxy:
-    _renderable: RenderableType
+ColumnsType = tuple[ProgressColumn | str, ...]
+
+
+class OverFlow:
+    def __init__(self, unit: str) -> None:
+        self._progress: Progress = Progress("[progress.description]{task.description}")
+        self.unit: str = unit
+        self.total: int = 0
+        self._task_id: TaskID = self._progress.add_task(str(self), visible=False)
 
     def __rich__(self) -> RenderableType:
-        return self._renderable
+        return self._progress
+
+    def __str__(self) -> str:
+        return f"[{_COLOR}]... and {self.total:,} other {self.unit}"
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}(unit={self.unit!r}, total={self.total!r}, desc={self!s})"
+
+    def update(self, count: int) -> None:
+        self.total = count
+        self._progress.update(self._task_id, description=str(self), visible=count > 0)
 
 
-@dataclasses.dataclass(slots=True)
-class ProgressProxy(RichProxy):
-    _columns: ClassVar[tuple[ProgressColumn | str, ...]]
+class ProgressProxy:
+    columns: ClassVar[ColumnsType]
     _progress: Progress
-    _tasks: MappingProxyType[TaskID, Task]
     _tasks_map: dict[str, TaskCounter]
+    _tasks: MappingProxyType[TaskID, Task]
+
+    def __rich__(self) -> RenderableType:
+        return self._progress
 
     @classmethod
     def _clean_task_desc(cls, desc: str) -> str:
         return escape(_truncate(desc.encode("ascii", "ignore").decode().strip()))
 
     def __init__(self) -> None:
-        self._progress = Progress(*self._columns)
-        self._tasks = MappingProxyType(self._progress._tasks)
+        self._progress = Progress(*self.columns)
         self._tasks_map = {}
-        super().__init__(self._progress)
-
-
-class UIPanel(ProgressProxy):
-    _renderable: Panel  # pyright: ignore[reportIncompatibleVariableOverride]
-
-
-class OverFlow(ProgressProxy):
-    _desc: ClassVar[str] = "[{color}]... and {number:,} other {name}"
-    _columns = ("[progress.description]{task.description}",)
-
-    def __init__(self, name: str) -> None:
-        super().__init__()
-        self.name: str = name
-        self._count: int = 0
-        self._task_id: TaskID = self._progress.add_task(str(self), visible=False)
-
-    def __str__(self) -> str:
-        return self._desc.format(color=_COLOR, number=self._count, name=self.name)
+        self._tasks = MappingProxyType(self._progress._tasks)
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}(desc={self!s})"
-
-    def update(self, count: int) -> None:
-        self._count = count
-        self._progress.update(self._task_id, description=str(self), visible=count > 0)
+        return f"<{type(self).__name__}(progress={self._progress!r})>"
 
 
-@auto_repr()
-class UIOverFlowPanel(UIPanel):
+class PanelProxy(ProgressProxy):
+    def __init__(self) -> None:
+        super().__init__()
+        self._panel: Panel = Panel("")
+
+    def __rich__(self) -> Panel:
+        return self._panel
+
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__}(panel={self._panel!r})>"
+
+
+class CounterPanel(PanelProxy):
+    def __init__(self) -> None:
+        super().__init__()
+        self._tasks_map: dict[str, TaskCounter] = {}
+
+    def _advance(self, task_name: str) -> None:
+        self._progress.advance(self._tasks_map[task_name].id)
+        self._tasks_map[task_name].count += 1
+
+
+class OverflowingPanel(PanelProxy):
     unit: ClassVar[str]
-    _desc_fmt: ClassVar[str] = "[{color}]{description}"
 
     def __init__(self, visible_tasks_limit: int) -> None:
         super().__init__()
-        self.title = type(self).__name__.removesuffix("Panel")
-        self._overflow = OverFlow(self.unit)
-        self._limit = visible_tasks_limit
+        self._title: str = type(self).__name__.removesuffix("Panel")
+        self._overflow: OverFlow = OverFlow(self.unit)
+        self._limit: int = visible_tasks_limit
         self._invisible_queue: deque[TaskID] = deque()
         self._visible_tasks: int = 0
         self._orphan_tasks: set[TaskID] = set()
-        self._renderable = Panel(
+        self._panel: Panel = Panel(
             Group(self._progress, self._overflow),
-            title=self.title,
+            title=self._title,
             border_style="green",
             padding=(1, 1),
         )
@@ -123,12 +136,7 @@ class UIOverFlowPanel(UIPanel):
 
     def _add_task(self, description: str, total: float | None = None, /, *, completed: int = 0) -> TaskID:
         visible = self._visible_tasks < self._limit
-        task_id = self._progress.add_task(
-            self._desc_fmt.format(color=_COLOR, description=description),
-            total=total,
-            visible=visible,
-            completed=completed,
-        )
+        task_id = self._progress.add_task(f"[{_COLOR}]{description}", total=total, visible=visible, completed=completed)
         if visible:
             self._visible_tasks += 1
         else:
@@ -162,7 +170,7 @@ class UIOverFlowPanel(UIPanel):
     def __call__(self, description: object, total: float | None = None) -> ProgressHook:
         task_id = self._add_task(str(description), total)
 
-        def advance(amount: int) -> None:
+        def advance(amount: int = 1) -> None:
             self._advance(task_id, amount)
 
         def done() -> None:
@@ -173,7 +181,7 @@ class UIOverFlowPanel(UIPanel):
 
         return ProgressHook(advance, done, speed)
 
-    def _advance(self, task_id: TaskID, amount: int) -> None:
+    def _advance(self, task_id: TaskID, amount: int = 1) -> None:
         self._progress.advance(task_id, amount)
 
     def _get_speed(self, task_id: TaskID) -> float:

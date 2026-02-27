@@ -4,7 +4,7 @@ import asyncio
 import contextlib
 from contextvars import ContextVar
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from pydantic import ByteSize
 from rich.console import Group
@@ -13,7 +13,7 @@ from rich.panel import Panel
 from rich.progress import BarColumn, Progress
 
 from cyberdrop_dl import config
-from cyberdrop_dl.progress.common import TaskCounter, UIPanel
+from cyberdrop_dl.progress.common import ColumnsType, CounterPanel, TaskCounter
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -30,14 +30,14 @@ def _get_enabled_hashes():
 _base_dir: ContextVar[Path] = ContextVar("_base_dir")
 
 
-class HashingPanel(UIPanel):
+class HashingPanel(CounterPanel):
     """Class that keeps track of hashed files."""
 
-    _columns = ("{task.description}",)
+    _columns: ClassVar[ColumnsType] = ("{task.description}",)
 
     def __init__(self) -> None:
         super().__init__()
-        self._hash_progress = Progress(
+        self._hash_progress: Progress = Progress(
             "[progress.description]{task.description}", BarColumn(bar_width=None), "{task.completed:,}"
         )
         self._enabled_hashes: tuple[str, ...] = tuple(_get_enabled_hashes())
@@ -55,7 +55,7 @@ class HashingPanel(UIPanel):
             file=TaskCounter(self._progress.add_task("")),
         )
 
-        self._renderable = Panel(
+        self._panel: Panel = Panel(
             Group(self._progress, self._hash_progress),
             title="Hashing",
             border_style="green",
@@ -75,7 +75,7 @@ class HashingPanel(UIPanel):
         return self._tasks_map["removed"].count
 
     @contextlib.contextmanager
-    def currently_hashing_dir(self, path: Path) -> Generator[None]:
+    def __call__(self, path: Path) -> Generator[None]:
         token = _base_dir.set(path)
         desc = "[green]Base dir: [blue]" + escape(str(path))
         self._progress.update(self._tasks_map["base_dir"].id, description=desc)
@@ -95,14 +95,11 @@ class HashingPanel(UIPanel):
             description="[green]Current file: [blue]" + escape(f"{path}") + f" [green]({size_text})",
         )
 
-    def add_new_completed_hash(self, hash_type: str) -> None:
-        self._hash_progress.advance(self._tasks_map[hash_type].id)
-        self._tasks_map[hash_type].count += 1
+    def add_hashed(self, hash_type: str) -> None:
+        self._advance(hash_type)
 
-    def add_prev_hash(self) -> None:
-        self._hash_progress.advance(self._tasks_map["prev_hashed"].id)
-        self._tasks_map["prev_hashed"].count += 1
+    def add_prev_hashed(self) -> None:
+        self._advance("prev_hashed")
 
-    def add_removed_file(self) -> None:
-        self._hash_progress.advance(self._tasks_map["removed"].id)
-        self._tasks_map["removed"].count += 1
+    def add_removed(self) -> None:
+        self._advance("removed")

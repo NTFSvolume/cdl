@@ -4,8 +4,6 @@ import dataclasses
 import shutil
 from typing import TYPE_CHECKING, Literal
 
-from cyberdrop_dl.progress.common import RichProxy
-
 if TYPE_CHECKING:
     from rich.console import RenderableType
 
@@ -36,13 +34,14 @@ def is_terminal_in_portrait() -> bool:
 
 
 @dataclasses.dataclass(slots=True)
-class Screen(RichProxy):
-    _renderable_vertical: RenderableType = ""
+class Screen:
+    horizontal: RenderableType
+    vertical: RenderableType = ""
 
     def __rich__(self) -> RenderableType:
-        return (
-            self._renderable_vertical if (self._renderable_vertical and is_terminal_in_portrait()) else self._renderable
-        )
+        if not self.vertical:
+            return self.horizontal
+        return self.vertical if is_terminal_in_portrait() else self.horizontal
 
 
 @dataclasses.dataclass(slots=True, frozen=True, kw_only=True)

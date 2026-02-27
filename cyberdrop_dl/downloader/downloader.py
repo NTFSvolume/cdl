@@ -193,5 +193,5 @@ class Downloader:
         msg = f"Download failed: {media_item.url} ({error_log_msg.main_log_msg}) \n -> Referer: {media_item.referer}"
         logger.error(msg, exc_info=exc_info)
         self.manager.logs.write_download_error(media_item, error_log_msg.csv_log_msg)
-        self.manager.progress.download_errors.add_failure(error_log_msg.ui_failure)
+        self.manager.progress.download_errors.add(error_log_msg.ui_failure)
         self.manager.progress.files.add_failed()

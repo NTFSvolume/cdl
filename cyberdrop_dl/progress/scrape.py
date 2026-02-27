@@ -16,7 +16,7 @@ from rich.progress import (
 )
 
 from cyberdrop_dl import __version__
-from cyberdrop_dl.progress.common import ProgressHook, ProgressProxy, UIOverFlowPanel
+from cyberdrop_dl.progress.common import OverflowingPanel, ProgressHook, ProgressProxy
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 _downloads: ContextVar[ProgressHook] = ContextVar("_downloads")
 
 
-class ScrapingPanel(UIOverFlowPanel):
+class ScrapingPanel(OverflowingPanel):
     unit: ClassVar[str] = "URLs"
     _columns = SpinnerColumn(), "[progress.description]{task.description}"
 
@@ -38,7 +38,7 @@ class ScrapingPanel(UIOverFlowPanel):
         return self._add_task(str(url))
 
 
-class DownloadsPanel(UIOverFlowPanel):
+class DownloadsPanel(OverflowingPanel):
     unit: ClassVar[str] = "files"
     _columns = (
         SpinnerColumn(),
@@ -67,7 +67,7 @@ class DownloadsPanel(UIOverFlowPanel):
         _ = _downloads.set(hook)
         return hook
 
-    def _advance(self, task_id: TaskID, amount: int) -> None:
+    def _advance(self, task_id: TaskID, amount: int = 1) -> None:
         self.total_data_written += amount
         super()._advance(task_id, amount)
 
@@ -80,12 +80,12 @@ class StatusMessage(ProgressProxy):
 
     def __init__(self) -> None:
         super().__init__()
-        self.activity = Progress(*self._columns)
+        self.activity = Progress(*self.columns)
         _ = self.activity.add_task(f"Running Cyberdrop-DL: v{__version__}", total=100, completed=0)
         self._task_id = self._progress.add_task("", total=100, completed=0, visible=False)
         self._renderable = Columns([self.activity, self._progress])
 
-    def _update(self, description: str | None = None) -> None:
+    def __call__(self, description: str | None = None) -> None:
         self._progress.update(self._task_id, description=description, visible=bool(description))
 
     def __str__(self) -> str:
@@ -97,7 +97,7 @@ class StatusMessage(ProgressProxy):
     @contextlib.contextmanager
     def show(self, msg: str | None) -> Generator[None]:
         try:
-            self._update(msg)
+            self(msg)
             yield
         finally:
-            self._update()
+            self()

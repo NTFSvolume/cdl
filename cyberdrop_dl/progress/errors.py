@@ -2,33 +2,33 @@ from __future__ import annotations
 
 import dataclasses
 import functools
+from typing import ClassVar
 
 from rich.panel import Panel
 from rich.progress import BarColumn, TaskID
 
-from cyberdrop_dl.progress.common import ProgressProxy
+from cyberdrop_dl.progress.common import ColumnsType, ProgressProxy
 
 
 @dataclasses.dataclass(slots=True, order=True)
 class UIFailure:
-    full_msg: str
-    total: int
+    msg: str
+    count: int
     error_code: int | None = None
-    msg: str = dataclasses.field(init=False)
 
     def __post_init__(self) -> None:
-        parts = self.full_msg.split(" ", 1)
+        parts = self.msg.split(" ", 1)
         if len(parts) > 1 and parts[0].isdigit():
             error_code, self.msg = parts
             self.error_code = int(error_code)
         else:
-            self.msg = self.full_msg
+            self.msg = self.msg
 
 
 class _ErrorsPanel(ProgressProxy):
     """Base class that keeps track of errors and reasons."""
 
-    _columns = (
+    _columns: ClassVar[ColumnsType] = (
         "[progress.description]{task.description}",
         BarColumn(bar_width=None),
         "[progress.percentage]{task.percentage:>6.2f}%",
@@ -37,14 +37,14 @@ class _ErrorsPanel(ProgressProxy):
     )
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}(failed_files={self.failed_files!r}, failures={self._failures.keys()!r})"
+        return f"{type(self).__name__}(error_count={self.error_count!r}, errors={tuple(self.errors.keys())!r})"
 
     def __init__(self) -> None:
         super().__init__()
-        self.title = type(self).__name__.removesuffix("Errors") + " Failures"
-        self._failures: dict[str, TaskID] = {}
-        self.failed_files: int = 0
-        self._renderable: Panel = Panel(  # pyright: ignore[reportIncompatibleVariableOverride]
+        self.title: str = type(self).__name__.removesuffix("Errors") + " Failures"
+        self.errors: dict[str, TaskID] = {}
+        self.error_count: int = 0
+        self._panel: Panel = Panel(
             self._progress,
             title=self.title,
             border_style="green",
@@ -52,24 +52,27 @@ class _ErrorsPanel(ProgressProxy):
             subtitle=self._subtitle,
         )
 
+    def __rich__(self) -> Panel:
+        return self._panel
+
     @property
     def _subtitle(self) -> str:
-        return f"Total {self.title}: [white]{self.failed_files:,}"
+        return f"Total {self.title}: [white]{self.error_count:,}"
 
-    def add_failure(self, failure: str) -> None:
-        self.failed_files += 1
-        key = _get_pretty_error(failure)
-        if (task_id := self._failures.get(key)) is not None:
+    def add(self, error: str) -> None:
+        self.error_count += 1
+        key = _get_pretty_error(error)
+        if (task_id := self.errors.get(key)) is not None:
             self._progress.advance(task_id)
         else:
-            self._failures[key] = self._progress.add_task(key, total=self.failed_files, completed=1)
+            self.errors[key] = self._progress.add_task(key, total=self.error_count, completed=1)
 
-        self._redraw()
+        self.__redraw()
 
-    def _redraw(self) -> None:
-        self._renderable.subtitle = self._subtitle
-        for task_id in self._failures.values():
-            self._progress.update(task_id, total=self.failed_files)
+    def __redraw(self) -> None:
+        self._panel.subtitle = self._subtitle
+        for task_id in self.errors.values():
+            self._progress.update(task_id, total=self.error_count)
 
         tasks = list(self._tasks.values())
         tasks_sorted = sorted(tasks, key=lambda x: x.completed, reverse=True)
@@ -78,16 +81,16 @@ class _ErrorsPanel(ProgressProxy):
 
         for task in tasks_sorted:
             self._progress.remove_task(task.id)
-            self._failures[task.description] = self._progress.add_task(
+            self.errors[task.description] = self._progress.add_task(
                 task.description,
                 total=task.total,
                 completed=int(task.completed),
             )
 
-    def return_totals(self) -> list[UIFailure]:
+    def results(self) -> list[UIFailure]:
         """Returns the total number of failed sites and reasons."""
 
-        return sorted(UIFailure(msg, int(self._tasks[task_id].completed)) for msg, task_id in self._failures.items())
+        return sorted(UIFailure(msg, int(self._tasks[task_id].completed)) for msg, task_id in self.errors.items())
 
 
 class DownloadErrors(_ErrorsPanel):
@@ -99,16 +102,16 @@ class ScrapeErrors(_ErrorsPanel):
 
     def __init__(self) -> None:
         super().__init__()
-        self.unsupported_urls: int = 0
+        self.unsupported: int = 0
         self.sent_to_jdownloader: int = 0
-        self.unsupported_urls_skipped: int = 0
+        self.skipped: int = 0
 
     def add_unsupported(self, *, sent_to_jdownloader: bool = False) -> None:
-        self.unsupported_urls += 1
+        self.unsupported += 1
         if sent_to_jdownloader:
             self.sent_to_jdownloader += 1
         else:
-            self.unsupported_urls_skipped += 1
+            self.skipped += 1
 
 
 @functools.cache

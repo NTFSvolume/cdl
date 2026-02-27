@@ -62,7 +62,7 @@ class Sorter:
         logger.info("Sorting downloads...", extra={"color": "cyan"})
         await asyncio.to_thread(self.output_dir.mkdir, parents=True, exist_ok=True)
 
-        with self.tui.get_live("sorting"):
+        with self.tui(screen="sorting"):
             subfolders = await asyncio.to_thread(_subfolders, self.input_dir)
             await self._sort_files(subfolders)
             logger.info("DONE!", extra={"color": "green"})

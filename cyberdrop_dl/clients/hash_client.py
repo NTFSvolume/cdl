@@ -57,10 +57,7 @@ class HashClient:
 
     async def hash_directory(self, path: Path) -> None:
         path = Path(path)
-        with (
-            self.manager.progress.get_hash_live(stop=True),
-            self.manager.progress.hashing.currently_hashing_dir(path),
-        ):
+        with self.manager.progress(screen="hashing"), self.manager.progress.hashing(path):
             if not await asyncio.to_thread(path.is_dir):
                 raise NotADirectoryError
             for file in path.rglob("*"):
@@ -127,9 +124,9 @@ class HashClient:
                     original_filename,
                     referer,
                 )
-                self.manager.progress.hashing.add_new_completed_hash(hash_type)
+                self.manager.progress.hashing.add_hashed(hash_type)
             else:
-                self.manager.progress.hashing.add_prev_hash()
+                self.manager.progress.hashing.add_prev_hashed()
                 await self.manager.db_manager.hash_table.insert_or_update_hash_db(
                     hash,
                     hash_type,
@@ -197,7 +194,7 @@ class HashClient:
                 f"File hash matches with a previous download ({hash_string})"
             )
             log(msg, 10)
-            self.manager.progress.hashing.add_removed_file()
+            self.manager.progress.hashing.add_removed()
         finally:
             self._sem.release()
 

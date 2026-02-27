@@ -4,9 +4,8 @@ import contextlib
 import dataclasses
 import logging
 import time
-from contextvars import ContextVar, Token
 from datetime import timedelta
-from typing import TYPE_CHECKING, Literal, Self
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import ByteSize
 from rich.console import Group
@@ -14,9 +13,8 @@ from rich.layout import Layout
 from rich.live import Live
 from rich.text import Text
 
-from cyberdrop_dl import config
 from cyberdrop_dl.logger import spacer
-from cyberdrop_dl.progress.errors import DownloadErrors, ScrapeErrors
+from cyberdrop_dl.progress.errors import DownloadErrors, ScrapeErrors, UIFailure
 from cyberdrop_dl.progress.files import FileStats
 from cyberdrop_dl.progress.hashing import HashingPanel
 from cyberdrop_dl.progress.scrape import DownloadsPanel, ScrapingPanel, StatusMessage
@@ -27,12 +25,8 @@ if TYPE_CHECKING:
     from collections.abc import Generator
     from pathlib import Path
 
-    from cyberdrop_dl.progress.errors import UIFailure
-
 
 logger = logging.getLogger(__name__)
-
-_tui: ContextVar[TUI] = ContextVar("_tui")
 
 
 @dataclasses.dataclass(slots=True)
@@ -53,7 +47,6 @@ class TUI:
     _screens: AppScreens = dataclasses.field(init=False)
     _live: Live = dataclasses.field(init=False)
     _current_screen: Screen | Literal[""] = dataclasses.field(init=False, default="")
-    _token: Token[TUI] | None = dataclasses.field(init=False, default=None)
 
     def __post_init__(self) -> None:
         self._screens = _create_screens(self)
@@ -65,23 +58,13 @@ class TUI:
             get_renderable=lambda: self._current_screen,
         )
 
-    def __enter__(self) -> Self:
-        assert self._token is None
-        self._token = _tui.set(self)
-        return self
-
-    def __exit__(self, *_) -> None:
-        assert self._token is not None
-        _tui.reset(self._token)
-
     @contextlib.contextmanager
-    def get_live(self, name: Literal["scraping", "sorting", "hashing"]) -> Generator[None]:
-        self._current_screen = self._screens[name]
+    def __call__(self, *, screen: Literal["scraping", "sorting", "hashing"]) -> Generator[None]:
+        self._current_screen = self._screens[screen]
         if not self.disabled:
             self._live.start()
         try:
-            with self:
-                yield
+            yield
         finally:
             self._current_screen = ""
             if not self.disabled:
@@ -92,14 +75,13 @@ class TUI:
         # if not self.manager.parsed_args.cli_only_args.print_stats:
         #    return
 
-        end_time = time.perf_counter()
-        runtime = timedelta(seconds=int(end_time - start_time))
+        runtime = timedelta(seconds=int(time.monotonic() - start_time))
         total_data_written = ByteSize(self.downloads.total_data_written).human_readable(decimal=True)
 
         logger.info(spacer())
         logger.info("Printing Stats...\n")
         logger.info("Run Stats")
-        logger.info(f"  Input File: {config.get().source}")
+        # logger.info(f"  Input File: {config.get().source}")
         # logger.info(f"  Input URLs: {self.manager.scrape_mapper.count:,}")
         # logger.info(f"  Input URL Groups: {self.manager.scrape_mapper.group_count:,}")
         # logger.info(f"  Log Folder: {log_folder_text}")
@@ -110,11 +92,11 @@ class TUI:
         logger.info(f"  Downloaded: {self.files.completed_files:,} files")
         logger.info(f"  Skipped (By Config): {self.files.skipped_files:,} files")
         logger.info(f"  Skipped (Previously Downloaded): {self.files.previously_completed:,} files")
-        logger.info(f"  Failed: {self.download_errors.failed_files:,} files")
+        logger.info(f"  Failed: {self.download_errors.error_count:,} files")
 
         logger.info("Unsupported URLs Stats:")
         logger.info(f"  Sent to Jdownloader: {self.scrape_errors.sent_to_jdownloader:,}")
-        logger.info(f"  Skipped: {self.scrape_errors.unsupported_urls_skipped:,}")
+        logger.info(f"  Skipped: {self.scrape_errors.skipped:,}")
 
         self.print_dedupe_stats()
 
@@ -124,8 +106,10 @@ class TUI:
         logger.info(f"  Videos: {self.sorting.video_count:,}")
         logger.info(f"  Other Files: {self.sorting.other_count:,}")
 
-        last_padding = _log_failures(self.scrape_errors.return_totals(), "Scrape Failures:")
-        _log_failures(self.download_errors.return_totals(), "Download Failures:", last_padding)
+        logger.info("Scrape Failures:")
+        last_padding = _log_errors(self.scrape_errors.results())
+        logger.info("Download Failures:")
+        _ = _log_errors(self.download_errors.results(), padding=last_padding)
 
     def print_dedupe_stats(self) -> None:
         logger.info("Dupe Stats:")
@@ -163,19 +147,19 @@ def _create_screens(tui: TUI) -> AppScreens:
     )
 
 
-def _log_failures(failures: list[UIFailure], title: str = "Failures:", last_padding: int = 0) -> int:
-    logger.info(title)
-    if not failures:
+def _log_errors(errors: list[UIFailure], *, padding: int = 0) -> int:
+    if not errors:
         logger.info("  None")
         return 0
-    error_padding = last_padding
-    error_codes = [f.error_code for f in failures if f.error_code is not None]
+
+    error_codes = [f.error_code for f in errors if f.error_code is not None]
     if error_codes:
-        error_padding = max(len(str(max(error_codes))), error_padding)
-    for f in failures:
+        padding = max(len(str(max(error_codes))), padding)
+    for f in errors:
         error = f.error_code if f.error_code is not None else ""
-        logger.info(f"  {error:>{error_padding}}{' ' if error_padding else ''}{f.msg}: {f.total:,}")
-    return error_padding
+        logger.info(f"  {error:>{padding}}{' ' if padding else ''}{f.msg}: {f.count:,}")
+
+    return padding
 
 
 def _get_console_hyperlink(file_path: Path, text: str = "") -> Text:
