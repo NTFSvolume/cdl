@@ -117,7 +117,7 @@ class ScrapeMapper:
         children_limits = config.get().download.max_children
 
         async for item in items_generator:
-            item.children_limits = children_limits
+            item._children_limits = children_limits
             if self.should_scrape(item):
                 yield item
                 self.count += 1

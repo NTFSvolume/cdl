@@ -452,7 +452,7 @@ class HTMLMessageBoardCrawler(MessageBoardCrawler, is_abc=True):
                 post_url = self.make_post_url(thread, current_post.id)
                 new_scrape_item = scrape_item.create_new(
                     thread.url,
-                    possible_datetime=current_post.timestamp,
+                    timestamp=current_post.timestamp,
                     add_parent=post_url,
                 )
                 self.create_task(self.post(new_scrape_item, current_post))

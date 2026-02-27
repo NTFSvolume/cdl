@@ -34,7 +34,7 @@ yaml.add_representer(timedelta, _str)
 yaml.add_representer(URL, _str)
 
 
-def save(file: Path, /, data: BaseModel | dict[str, Any]) -> None:
+def dump(file: Path, /, data: BaseModel | dict[str, Any]) -> None:
     """Saves a dict to a yaml file."""
     if not isinstance(data, dict):
         data = data.model_dump()

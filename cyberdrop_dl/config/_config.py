@@ -43,7 +43,7 @@ class Config(ConfigSettings):
         _config.reset(self._token)
 
     def save(self, file: Path) -> None:
-        yaml.save(file, self)
+        yaml.dump(file, self)
 
     def resolve_paths(self) -> None:
         if self._resolved:

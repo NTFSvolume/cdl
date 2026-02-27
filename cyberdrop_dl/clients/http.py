@@ -455,7 +455,7 @@ def check_allowed_filetype(media_item: MediaItem, config: Config) -> bool:
 
 def check_allowed_date_range(media_item: MediaItem, config: Config) -> bool:
     """Checks if the file was uploaded within the config date range"""
-    datetime = media_item.datetime_obj()
+    datetime = media_item.datetime
     if not datetime:
         return True
 

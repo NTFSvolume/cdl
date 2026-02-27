@@ -80,7 +80,7 @@ class OneManagerCrawler(Crawler, is_abc=True):
 
     async def _process_file(self, scrape_item: ScrapeItem, link: AbsoluteHttpURL, datetime: int | None = None) -> None:
         preview_url = link.with_query("preview")  # The query param needs to be `?preview` exactly, with no value or `=`
-        new_scrape_item = scrape_item.create_child(preview_url, possible_datetime=datetime)
+        new_scrape_item = scrape_item.create_child(preview_url, timestamp=datetime)
         filename, ext = self.get_filename_and_ext(link.name)
         await self.handle_file(link, new_scrape_item, filename, ext)
 

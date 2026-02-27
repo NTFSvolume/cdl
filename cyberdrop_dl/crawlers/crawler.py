@@ -470,7 +470,7 @@ class Crawler(ABC):
         if not self.config.files.dump_json:
             return
 
-        data = [media_item.as_jsonable_dict()]
+        data = [media_item.as_dict()]
         await self.manager.logs.write_jsonl(data)
 
     async def check_complete(self, url: AbsoluteHttpURL, referer: AbsoluteHttpURL) -> bool:

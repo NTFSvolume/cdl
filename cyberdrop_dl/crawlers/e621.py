@@ -67,7 +67,7 @@ class E621Crawler(Crawler):
                     continue
                 timestamp = self.parse_date(post["created_at"])
                 link = self.parse_url(file_url)
-                new_scrape_item = scrape_item.create_child(link, possible_datetime=timestamp)
+                new_scrape_item = scrape_item.create_child(link, timestamp=timestamp)
                 filename, ext = self.get_filename_and_ext(link.name)
                 await self.handle_file(link, new_scrape_item, filename, ext)
                 scrape_item.add_children()

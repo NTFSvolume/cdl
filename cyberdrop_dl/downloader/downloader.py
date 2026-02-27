@@ -51,12 +51,12 @@ def retry(
                 if not e.retry:
                     raise
 
-                media_item.current_attempt += 1
+                media_item.attempts += 1
                 logger.error(f"Download failed: {media_item.url} with error: {e!s}")
-                if media_item.current_attempt >= self.config.rate_limits.download_attempts:
+                if media_item.attempts >= self.config.rate_limits.download_attempts:
                     raise
 
-                retry_msg = f"Retrying download: {media_item.url}, attempt: {media_item.current_attempt + 1}"
+                retry_msg = f"Retrying download: {media_item.url}, attempt: {media_item.attempts + 1}"
                 logger.info(retry_msg)
 
     return wrapper
