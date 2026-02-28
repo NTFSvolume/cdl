@@ -89,8 +89,6 @@ class AsyncIO(Generic[AnyStr]):
         return await asyncio.to_thread(self._io.close)
 
     async def __aiter__(self) -> AsyncIterator[AnyStr]:
-        if not hasattr(self, "_io"):
-            self._io = await self._coro
         while True:
             line = await self.readline()
             if line:
@@ -190,5 +188,6 @@ async def get_size(path: Path) -> int | None:
     except (OSError, ValueError):
         return
     else:
-        if S_ISREG(stat_result.st_mode):
-            return stat_result.st_size
+        if not S_ISREG(stat_result.st_mode):
+            raise IsADirectoryError(path)
+        return stat_result.st_size

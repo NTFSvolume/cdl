@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from reprlib import recursive_repr
 from typing import TYPE_CHECKING, ParamSpec, TypeVar
 
 if TYPE_CHECKING:
@@ -32,40 +31,3 @@ else:
             return y
 
         return call
-
-
-_repr_templs: dict[type, str] = {}
-
-
-def _make_repr_templ(*fields: str) -> str:
-    return "{self.__class__.__qualname__}(" + ", ".join(f"{f}={{self.{f}!r}}" for f in fields) + ")"
-
-
-def _get_templ(self: object) -> str:
-    if templ := _repr_templs.get(type(self)):
-        return templ
-
-    elif hasattr(self, "__dict__"):
-        names = tuple(vars(self))
-    else:
-        names: tuple[str, ...] = tuple(self.__slots__)
-
-    templ = _repr_templs[type(self)] = _make_repr_templ(*names)
-    return templ
-
-
-def auto_repr(*fields: str) -> Callable[[type[_T]], type[_T]]:
-    """Add a dataclass-style __repr__ to a slotted or normal class."""
-
-    def _decorator(cls_: type[_T]) -> type[_T]:
-        if fields:
-            _repr_templs[cls_] = _make_repr_templ(*fields)
-
-        @recursive_repr()
-        def repr(self: _T) -> str:
-            return _get_templ(self).format(self)
-
-        cls_.__repr__ = repr  # pyright: ignore[reportAttributeAccessIssue]
-        return cls_
-
-    return _decorator

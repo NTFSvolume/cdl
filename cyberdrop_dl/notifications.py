@@ -7,19 +7,21 @@ import logging
 import shutil
 import sys
 import tempfile
-from collections.abc import Generator
 from pathlib import Path
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Any, Final
 
+from aiohttp.formdata import FormData
 from pydantic import ValidationError
 
+from cyberdrop_dl import aio, constants
 from cyberdrop_dl.dependencies import apprise
-from cyberdrop_dl.logger import copy_main_log_buffer, enable_3p_logger
+from cyberdrop_dl.logger import copy_main_log_buffer, enable_3p_logger, spacer
 from cyberdrop_dl.models import AppriseURLModel, format_validation_error
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator, Iterable
 
+    import aiohttp
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +29,13 @@ _DEFAULT_MSG: Final = {
     "body": "Finished downloading. Enjoy :)",
     "title": "Cyberdrop-DL",
     "body_format": "text",
+}
+
+_DEFAULT_DIFF_LINE_FORMAT: str = "{}"
+_STYLE_TO_DIFF_MAP = {
+    "green": "+   {}",
+    "red": "-   {}",
+    "yellow": "*** {}",
 }
 
 
@@ -44,7 +53,7 @@ class AppriseURL:
 _OS_URLS = "windows://", "macosx://", "dbus://", "qt://", "glib://", "kde://"
 
 
-def read(*, file: Path | None = None, urls: list[str] | None = None) -> tuple[AppriseURL, ...]:
+def read_apprise_urls(*, file: Path | None = None, urls: list[str] | None = None) -> tuple[AppriseURL, ...]:
     """
     Get Apprise URLs from the specified file or directly from a provided URL.
 
@@ -74,14 +83,14 @@ def read(*, file: Path | None = None, urls: list[str] | None = None) -> tuple[Ap
         logger.warning("Found apprise URLs for notifications but apprise is not installed. Ignoring")
         return ()
     try:
-        return tuple(_simplify(AppriseURLModel.model_validate({"url": url}) for url in set(urls)))
+        return tuple(_simplify_apprise_urls(AppriseURLModel.model_validate({"url": url}) for url in set(urls)))
 
     except ValidationError as e:
         logger.error(format_validation_error(e, file))
         sys.exit(1)
 
 
-def _simplify(apprise_urls: Iterable[AppriseURLModel]) -> Generator[AppriseURL]:
+def _simplify_apprise_urls(apprise_urls: Iterable[AppriseURLModel]) -> Generator[AppriseURL]:
     valid_tags = {"no_logs", "attach_logs", "simplified"}
 
     def is_os_url(url: str) -> bool:
@@ -134,8 +143,8 @@ async def send_apprise_notifications(content: str, *urls: AppriseURL, main_log: 
 
 @contextlib.asynccontextmanager
 async def _temp_copy_of_main_log(main_log: Path) -> AsyncGenerator[Path | None]:
-    temp = await asyncio.to_thread(tempfile.TemporaryDirectory, prefix="cdl_", ignore_cleanup_errors=True)
-    temp_file = Path(temp.name) / main_log.name
+    temp_dir = await asyncio.to_thread(tempfile.TemporaryDirectory, prefix="cdl_", ignore_cleanup_errors=True)
+    temp_file = Path(temp_dir.name) / main_log.name
     try:
         try:
             _ = await asyncio.to_thread(shutil.copy, main_log, temp_file)
@@ -147,4 +156,62 @@ async def _temp_copy_of_main_log(main_log: Path) -> AsyncGenerator[Path | None]:
     else:
         yield temp_file
     finally:
-        await asyncio.to_thread(temp.cleanup)
+        await asyncio.to_thread(temp_dir.cleanup)
+
+
+def _prepare_diff_text() -> str:
+    """Returns the `rich.text` in the current log buffer as a plain str with diff syntax."""
+
+    def prepare_lines():
+        for text_line in constants.LOG_OUTPUT_TEXT.split(allow_blank=True):
+            line_str = text_line.plain.rstrip("\n")
+            first_span = text_line.spans[0] if text_line.spans else None
+            style: str = str(first_span.style) if first_span else ""
+
+            color = style.split(" ")[0] or "black"  # remove console hyperlink markup (if any)
+            line_format: str = _STYLE_TO_DIFF_MAP.get(color) or _DEFAULT_DIFF_LINE_FORMAT
+            yield line_format.format(line_str)
+
+    return "\n".join(prepare_lines())
+
+
+async def _prepare_form(main_log: Path | None = None) -> FormData:
+    diff_text = _prepare_diff_text()
+    form = FormData()
+
+    if main_log and (size := await aio.get_size(main_log)):
+        if size <= 25 * 1024 * 1024:  # 25MB
+            form.add_field("file", await aio.read_bytes(main_log), filename=main_log.name)
+
+        else:
+            diff_text += "\n\nWARNING: log file too large to send as attachment\n"
+
+    form.add_fields(
+        ("content", f"```diff\n{diff_text}```"),
+        ("username", "CyberDrop-DL"),
+    )
+    return form
+
+
+async def send_webhook_notification(session: aiohttp.ClientSession, webhook: AppriseURLModel, main_log: Path) -> None:
+    """Outputs the stats to a code block for webhook messages."""
+
+    logger.info("Sending webhook notifications.. ")
+    url = webhook.url.get_secret_value()
+    form = await _prepare_form(main_log if "attach_logs" in webhook.tags else None)
+
+    try:
+        async with session.post(url, data=form) as response:
+            if response.ok:
+                result = "Success"
+
+            else:
+                json_resp: dict[str, Any] = await response.json()
+                json_resp.pop("content", None)
+                result = f"Failed \n{json_resp!s}"
+
+    except Exception:
+        logger.exception("Unable to send webhook notification")
+    else:
+        logger.info(spacer())
+        logger.info(f"Webhook notifications results: {result}")
