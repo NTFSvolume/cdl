@@ -1,30 +1,31 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import functools
 import itertools
 import json
+import logging
 import shutil
 import subprocess
-from dataclasses import asdict, dataclass
 from fractions import Fraction
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Required, Self, TypeAlias, TypedDict, overload
+from typing import TYPE_CHECKING, Any, Literal, Self, TypeAlias, TypedDict, overload
 
-import aiofiles
-import aiofiles.os
 from multidict import CIMultiDict, CIMultiDictProxy
-from yarl import URL
 
-from cyberdrop_dl.logger import log_debug
-from cyberdrop_dl.utils import get_valid_dict, is_absolute_http_url
+from cyberdrop_dl import aio
+from cyberdrop_dl.utils import get_valid_dict
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Mapping, Sequence
+    from collections.abc import Generator, Iterator, Mapping, Sequence
 
     from cyberdrop_dl.data_structures import AbsoluteHttpURL
 
     _CMD: TypeAlias = Sequence[str | Path]
+
+
+logger = logging.getLogger(__name__)
 
 
 class Args:
@@ -46,7 +47,6 @@ _FFPROBE_CALL_PREFIX = (
     "-print_format",
     "json",
 )
-_EMPTY_FFPROBE_OUTPUT: FFprobeOutput = {"streams": []}
 
 
 def check_is_available() -> None:
@@ -55,7 +55,7 @@ def check_is_available() -> None:
     _check_ffprobe()
 
 
-def _check_ffprobe():
+def _check_ffprobe() -> None:
     if not get_ffprobe_version():
         raise RuntimeError("ffprobe is not available")
 
@@ -82,65 +82,49 @@ def get_ffprobe_version() -> str | None:
         return _get_bin_version(bin_path)
 
 
-async def concat(input_files: Sequence[Path], output_file: Path, *, same_folder: bool = True) -> SubProcessResult:
-    concat_file_path = output_file.with_suffix(output_file.suffix + ".ffmpeg_concat.txt")
-    await _create_concat_input_file(input_files, output_file=concat_file_path)
-    result = await _concat(concat_file_path, output_file)
-    if result.success:
-        if same_folder:
-            folder = input_files[0].parent
-            await asyncio.to_thread(shutil.rmtree, folder, ignore_errors=True)
-        else:
-            await _async_delete_files(input_files)
-
-    await asyncio.to_thread(concat_file_path.unlink)
-    return result
-
-
-async def merge(input_files: Sequence[Path], output_file: Path) -> SubProcessResult:
+async def merge(input_files: Sequence[Path], output_file: Path, *, same_folder: bool = True) -> SubProcessResult:
     result = await _merge(input_files, output_file=output_file)
     if result.success:
-        await _async_delete_files(input_files)
+        await _delete_files(input_files, same_folder=same_folder)
     return result
 
 
-@overload
-async def probe(input: Path, /) -> FFprobeResult: ...
+async def _merge(input_files: Sequence[Path], output_file: Path) -> SubProcessResult:
+    inputs = itertools.chain.from_iterable(("-i", path) for path in input_files)
+    command = *_FFMPEG_CALL_PREFIX, *inputs, *Args.MAP_ALL_STREAMS, *Args.CODEC_COPY, output_file
+    return await _run_command(command)
 
 
-@overload
-async def probe(input: AbsoluteHttpURL, /, *, headers: Mapping[str, str] | None = None) -> FFprobeResult: ...
+async def concat(input_files: Sequence[Path], output_file: Path, *, same_folder: bool = True) -> SubProcessResult:
+    concat_file = output_file.with_suffix(output_file.suffix + ".ffmpeg_concat.txt")
+    await _create_concat_file(input_files, output_file=concat_file)
+    try:
+        result = await _concat(concat_file, output_file)
+        if result.success:
+            await _delete_files(input_files, same_folder=same_folder)
+    finally:
+        await asyncio.to_thread(concat_file.unlink)
+
+    return result
 
 
-async def probe(input: Path | AbsoluteHttpURL, /, *, headers: Mapping[str, str] | None = None) -> FFprobeResult:
-    _check_ffprobe()
-    if isinstance(input, URL):
-        assert is_absolute_http_url(input)
-
-    elif isinstance(input, Path):
-        assert input.is_absolute()
-        assert not headers
-
-    else:
-        raise ValueError("Can only probe a Path or a yarl.URL")
-
-    command = *_FFPROBE_CALL_PREFIX, str(input)
-    if headers:
-        headers_cmd = itertools.chain.from_iterable(("-headers", f"{name}: {value}") for name, value in headers.items())
-        command = *command, *headers_cmd
+async def _concat(input: Path, output: Path) -> SubProcessResult:
+    concatenated_file = output.with_suffix(".concat" + output.suffix)
+    command = *_FFMPEG_CALL_PREFIX, *Args.CONCAT, input, *Args.CODEC_COPY, concatenated_file
     result = await _run_command(command)
-    output = json.loads(result.stdout) if result.success else _EMPTY_FFPROBE_OUTPUT
-    return FFprobeResult.from_output(output)
+    if not result.success:
+        return result
+    return await _fixup_concatenated_video_file(concatenated_file, output)
 
 
-async def _async_delete_files(files: Sequence[Path]) -> None:
-    await asyncio.gather(*[aiofiles.os.unlink(file) for file in files])
-
-
-async def _create_concat_input_file(input_files: Sequence[Path], output_file: Path) -> None:
+async def _create_concat_file(input_files: Sequence[Path], output_file: Path) -> None:
     """Input paths MUST be absolute!!."""
-    async with aiofiles.open(output_file, "w", encoding="utf8") as f:
-        await f.writelines(f"file '{file}'\n" for file in input_files)
+
+    def write() -> None:
+        with output_file.open("w", encoding="utf8") as f:
+            f.writelines(f"file '{file}'\n" for file in input_files)
+
+    return await asyncio.to_thread(write)
 
 
 async def _fixup_concatenated_video_file(input_file: Path, output_file: Path) -> SubProcessResult:
@@ -155,29 +139,53 @@ async def _fixup_concatenated_video_file(input_file: Path, output_file: Path) ->
     return result
 
 
-async def _concat(concat_input_file: Path, output_file: Path) -> SubProcessResult:
-    concatenated_file = output_file.with_suffix(".concat" + output_file.suffix)
-    command = *_FFMPEG_CALL_PREFIX, *Args.CONCAT, concat_input_file, *Args.CODEC_COPY, concatenated_file
+async def _delete_files(files: Sequence[Path], *, same_folder: bool) -> None:
+    if same_folder:
+        folder = files[0].parent
+        await asyncio.to_thread(shutil.rmtree, folder, ignore_errors=True)
+    else:
+        _ = await asyncio.gather(*map(aio.unlink, files))
+
+
+@overload
+async def probe(input: Path, /) -> FFprobeResult: ...
+
+
+@overload
+async def probe(input: AbsoluteHttpURL, /, *, headers: Mapping[str, str] | None = None) -> FFprobeResult: ...
+
+
+async def probe(input: Path | AbsoluteHttpURL, /, *, headers: Mapping[str, str] | None = None) -> FFprobeResult:
+    _check_ffprobe()
+
+    if isinstance(input, Path):
+        assert input.is_absolute()
+        assert not headers
+
+    command = *_FFPROBE_CALL_PREFIX, str(input)
+    if headers:
+        command = (
+            *command,
+            *itertools.chain.from_iterable(("-headers", f"{name}: {value}") for name, value in headers.items()),
+        )
     result = await _run_command(command)
     if not result.success:
-        return result
-    return await _fixup_concatenated_video_file(concatenated_file, output_file)
-
-
-async def _merge(input_files: Sequence[Path], output_file: Path) -> SubProcessResult:
-    inputs = itertools.chain.from_iterable(("-i", path) for path in input_files)
-    command = *_FFMPEG_CALL_PREFIX, *inputs, *Args.MAP_ALL_STREAMS, *Args.CODEC_COPY, output_file
-    return await _run_command(command)
+        return _EMPTY_FFPROBE_RESULT
+    return FFprobeResult.from_output(json.loads(result.stdout))
 
 
 def _get_bin_version(bin_path: str) -> str | None:
     try:
-        cmd = bin_path, "-version"
-        p = subprocess.run(
-            cmd, timeout=5, check=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL
-        )
-        stdout = p.stdout.decode("utf-8", errors="ignore")
-    except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired, OSError, ValueError):
+        stdout = subprocess.run(
+            (bin_path, "-version"),
+            timeout=5,
+            check=True,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        ).stdout.decode("utf-8", errors="ignore")
+
+    except Exception:
         return
     else:
         return stdout.partition("version")[-1].partition("Copyright")[0].strip()
@@ -191,15 +199,16 @@ def _parse_duration(duration: str | float | None) -> TruncatedFloat | None:
         return None
 
     if isinstance(duration, (float, int)):
-        seconds = duration
+        seconds: float | int = duration
 
     else:
         try:
-            *rest, seconds = duration.strip().split(":")
+            *rest, seconds_str = duration.strip().split(":")
 
-            seconds = float(seconds)
+            seconds = float(seconds_str)
             for idx, value in enumerate(reversed(rest), 1):
                 seconds += int(value) * 60**idx
+
         except Exception:
             return None
 
@@ -207,13 +216,13 @@ def _parse_duration(duration: str | float | None) -> TruncatedFloat | None:
         return TruncatedFloat(seconds)
 
 
-class StreamDict(TypedDict, total=False):
-    index: Required[int]
-    codec_type: Required[Literal["video", "audio", "subtitle"]]
+class StreamDict(TypedDict):
+    index: int
+    codec_type: Literal["video", "audio", "subtitle"]
 
 
-class FFprobeOutput(TypedDict, total=False):
-    streams: Required[list[StreamDict]]
+class FFprobeOutput(TypedDict):
+    streams: list[StreamDict]
 
 
 class Tags(CIMultiDictProxy[Any]): ...
@@ -224,7 +233,7 @@ class TruncatedFloat(float):
         return str(int(self)) if self.is_integer() else f"{self:.2f}"
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+@dataclasses.dataclass(slots=True, kw_only=True)
 class Stream:
     index: int
     codec: str
@@ -248,14 +257,11 @@ class Stream:
     def from_dict(cls, stream_info: StreamDict) -> Self:
         return cls(**cls.validate(stream_info))
 
-    def as_jsonable_dict(self) -> dict[str, Any]:
-        return asdict(self) | {"tags": dict(self.tags)}
 
-
-@dataclass(frozen=True, slots=True, kw_only=True)
+@dataclasses.dataclass(slots=True, kw_only=True)
 class AudioStream(Stream):
     sample_rate: int | None
-    codec_type: Literal["audio"] = "audio"
+    codec_type: Literal["audio"] = "audio"  # pyright: ignore[reportIncompatibleVariableOverride]
 
     @classmethod
     def validate(cls, stream_info: StreamDict) -> dict[str, Any]:
@@ -264,13 +270,13 @@ class AudioStream(Stream):
         return defaults | {"sample_rate": sample_rate}
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+@dataclasses.dataclass(slots=True, kw_only=True)
 class VideoStream(Stream):
     width: int | None
     height: int | None
     fps: TruncatedFloat | None
     resolution: str | None
-    codec_type: Literal["video"] = "video"
+    codec_type: Literal["video"] = "video"  # pyright: ignore[reportIncompatibleVariableOverride]
 
     @classmethod
     def validate(cls, stream_info: StreamDict) -> dict[str, Any]:
@@ -280,14 +286,14 @@ class VideoStream(Stream):
         if width and height:
             resolution: str | None = f"{width}x{height}"
 
-        if (avg_fps := stream_info.get("avg_frame_rate")) and str(avg_fps) not in {"0/0", "0", "0.0"}:
+        if (avg_fps := stream_info.get("avg_frame_rate")) and str(avg_fps) not in ("0/0", "0", "0.0"):
             fps: TruncatedFloat | None = TruncatedFloat(Fraction(avg_fps))
 
         defaults = super(VideoStream, cls).validate(stream_info)
         return defaults | {"width": width, "height": height, "fps": fps, "resolution": resolution}
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+@dataclasses.dataclass(slots=True)
 class Format:
     size: int | None
     bitrate: int | None
@@ -306,20 +312,38 @@ class Format:
         )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclasses.dataclass(slots=True)
 class FFprobeResult:
     ffprobe_output: FFprobeOutput
-    streams: tuple[Stream, ...]
+    streams: tuple[VideoStream | AudioStream, ...]
     format: Format
+
+    audio: AudioStream | None = dataclasses.field(init=False)
+    """First audio stream"""
+    video: VideoStream | None = dataclasses.field(init=False)
+    """First video stream"""
+
+    def __post_init__(self) -> None:
+        self.audio = next(self.audio_streams(), None)
+        self.video = next(self.video_streams(), None)
+
+    def __bool__(self) -> bool:
+        return bool(self.streams)
+
+    def __iter__(self) -> Iterator[Stream]:
+        return iter(self.streams)
 
     @staticmethod
     def from_output(ffprobe_output: FFprobeOutput) -> FFprobeResult:
         def streams():
-            for stream in ffprobe_output.get("streams", []):
-                if stream["codec_type"] == "video":
-                    yield VideoStream.from_dict(stream)
-                elif stream["codec_type"] == "audio":
-                    yield AudioStream.from_dict(stream)
+            for stream in ffprobe_output.get("streams", ()):
+                match stream["codec_type"]:
+                    case "video":
+                        yield VideoStream.from_dict(stream)
+                    case "audio":
+                        yield AudioStream.from_dict(stream)
+                    case _:
+                        pass
 
         return FFprobeResult(
             ffprobe_output,
@@ -329,58 +353,56 @@ class FFprobeResult:
 
     def video_streams(self) -> Generator[VideoStream]:
         for stream in self.streams:
-            if isinstance(stream, VideoStream):
+            if stream.codec_type == "video":
                 yield stream
 
     def audio_streams(self) -> Generator[AudioStream]:
         for stream in self.streams:
-            if isinstance(stream, AudioStream):
+            if stream.codec_type == "audio":
                 yield stream
 
-    @property
-    def audio(self) -> AudioStream | None:
-        """First audio stream"""
-        return next(self.audio_streams(), None)
 
-    @property
-    def video(self) -> VideoStream | None:
-        """First video stream"""
-        return next(self.video_streams(), None)
-
-    def __bool__(self) -> bool:
-        return bool(self.ffprobe_output.get("streams"))
-
+_EMPTY_FFPROBE_RESULT: FFprobeResult = FFprobeResult.from_output({"streams": []})
 
 # ~~~~~~~~~~~~~~~~~~~~~~ Subprocess ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
-class SubProcessResult(NamedTuple):
+@dataclasses.dataclass(slots=True)
+class SubProcessResult:
     return_code: int | None
     stdout: str
     stderr: str
     success: bool
     command: _CMD
 
-    def as_jsonable_dict(self) -> dict[str, Any]:
+    def as_dict(self) -> dict[str, Any]:
         joined_command = " ".join(map(str, self.command))
-        return self._asdict() | {"command": joined_command}
+        return dataclasses.asdict(self) | {"command": joined_command}
+
+    __json__ = as_dict
+
+    def __str__(self) -> str:
+        return str(self.as_dict())
 
 
 async def _run_command(command: _CMD) -> SubProcessResult:
     assert not isinstance(command, str)
-    bin_path, cmd = command[0], command[1:]
-    if bin_path == "ffmpeg":
-        bin_path = which_ffmpeg()
-    elif bin_path == "ffprobe":
-        bin_path = which_ffprobe()
-    assert bin_path
-    command_ = bin_path, *cmd
-    log_debug(f"Running command: {command_}")
-    process = await asyncio.create_subprocess_exec(*command_, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    program, *cmd = command
+    if program == "ffmpeg":
+        program = which_ffmpeg()
+    elif program == "ffprobe":
+        program = which_ffprobe()
+
+    assert program
+    logger.debug(f"Running command: {program, *cmd}")
+    process = await asyncio.create_subprocess_exec(program, *cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = await process.communicate()
-    return_code = process.returncode
-    stdout_str = stdout.decode("utf-8", errors="ignore")
-    stderr_str = stderr.decode("utf-8", errors="ignore")
-    results = SubProcessResult(return_code, stdout_str, stderr_str, return_code == 0, command_)
-    log_debug(results.as_jsonable_dict())
-    return results
+    result = SubProcessResult(
+        process.returncode,
+        stdout=stdout.decode("utf-8", errors="ignore"),
+        stderr=stderr.decode("utf-8", errors="ignore"),
+        success=process.returncode == 0,
+        command=cmd,
+    )
+    logger.debug(result)
+    return result

@@ -382,7 +382,7 @@ def _check_for_partial_files(path: Path) -> None:
 
 def get_valid_dict(dataclass: Dataclass | type[Dataclass], info: Mapping[str, Any]) -> dict[str, Any]:
     """Remove all keys that are not fields in the dataclass"""
-    fields_names = [f.name for f in dataclasses.fields(dataclass)]
+    fields_names = tuple(f.name for f in dataclasses.fields(dataclass))
     return {name: info[name] for name in fields_names if name in info}
 
 

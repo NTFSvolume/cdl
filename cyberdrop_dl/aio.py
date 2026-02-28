@@ -4,15 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
-import weakref
-from collections.abc import AsyncIterator, Callable, Coroutine, Iterable, Iterator
+from collections.abc import AsyncIterator, Awaitable, Callable, Coroutine, Iterable, Iterator
 from pathlib import Path
 from stat import S_ISREG
 from typing import IO, TYPE_CHECKING, Any, AnyStr, Generic, ParamSpec, Self, TypeVar, cast, overload
-
-if TYPE_CHECKING:
-    from collections.abc import Awaitable, Sequence
-
+from weakref import WeakValueDictionary
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Sequence
@@ -25,6 +21,7 @@ _P = ParamSpec("_P")
 _R = TypeVar("_R")
 
 
+@dataclasses.dataclass(slots=True, eq=False)
 class WeakAsyncLocks(Generic[_T]):
     """A WeakValueDictionary wrapper for asyncio.Locks.
 
@@ -32,15 +29,12 @@ class WeakAsyncLocks(Generic[_T]):
     lock that does not exists, a new lock will be created.
     """
 
-    __slots__ = ("__locks",)
-
-    def __init__(self) -> None:
-        self.__locks: weakref.WeakValueDictionary[_T, asyncio.Lock] = weakref.WeakValueDictionary()
+    _locks: WeakValueDictionary[_T, asyncio.Lock] = dataclasses.field(init=False, default_factory=WeakValueDictionary)
 
     def __getitem__(self, key: _T, /) -> asyncio.Lock:
-        lock = self.__locks.get(key)
+        lock = self._locks.get(key)
         if lock is None:
-            self.__locks[key] = lock = asyncio.Lock()
+            self._locks[key] = lock = asyncio.Lock()
         return lock
 
 
@@ -80,19 +74,23 @@ def to_thread(fn: Callable[_P, _R]) -> Callable[_P, Coroutine[None, None, _R]]:
     return call
 
 
+@dataclasses.dataclass(slots=True, eq=False)
 class AsyncIO(Generic[AnyStr]):
-    """An asynchronous file object."""
+    """An asynchronous context manager wrapper for a file object."""
 
-    def __init__(self, fp: IO[AnyStr]) -> None:
-        self._io: IO[AnyStr] = fp
+    _coro: Awaitable[IO[AnyStr]]
+    _io: IO[AnyStr] = dataclasses.field(init=False)
 
     async def __aenter__(self) -> Self:
+        self._io = await self._coro
         return self
 
     async def __aexit__(self, *_) -> None:
         return await asyncio.to_thread(self._io.close)
 
     async def __aiter__(self) -> AsyncIterator[AnyStr]:
+        if not hasattr(self, "_io"):
+            self._io = await self._coro
         while True:
             line = await self.readline()
             if line:
@@ -149,7 +147,7 @@ def rglob(path: Path, pattern: str) -> _AsyncPathIterator:
 
 
 @overload
-async def open(
+def open(
     path: Path,
     mode: OpenBinaryMode,
     buffering: int = ...,
@@ -160,7 +158,7 @@ async def open(
 
 
 @overload
-async def open(
+def open(
     path: Path,
     mode: OpenTextMode = ...,
     buffering: int = ...,
@@ -170,7 +168,7 @@ async def open(
 ) -> AsyncIO[str]: ...
 
 
-async def open(
+def open(
     path: Path,
     mode: str = "r",
     buffering: int = -1,
@@ -178,8 +176,8 @@ async def open(
     errors: str | None = None,
     newline: str | None = None,
 ) -> AsyncIO[Any]:
-    fp = await asyncio.to_thread(path.open, mode, buffering, encoding, errors, newline)
-    return AsyncIO(fp)
+    coro = asyncio.to_thread(path.open, mode, buffering, encoding, errors, newline)
+    return AsyncIO(coro)
 
 
 async def get_size(path: Path) -> int | None:
