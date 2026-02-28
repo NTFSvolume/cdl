@@ -41,7 +41,7 @@ class ProgressHook:
     def __exit__(self, *_) -> None:
         self.done()
 
-    def as_segment(self) -> ProgressHook:
+    def remove_done_callback(self) -> ProgressHook:
         return ProgressHook(self.advance, lambda: None, self.speed)
 
 
@@ -167,7 +167,7 @@ class OverflowingPanel(UIPanel):
 
         self._update_overflow()
 
-    def __call__(self, description: object, /, total: float | None = None) -> ProgressHook:
+    def new_hook(self, description: object, /, total: float | None = None) -> ProgressHook:
         task_id = self._add_task(str(description), total)
 
         def advance(amount: int = 1) -> None:

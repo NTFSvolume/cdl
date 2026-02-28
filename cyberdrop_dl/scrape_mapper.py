@@ -108,7 +108,7 @@ class ScrapeMapper:
         await self.manager.db_manager.history_table.update_previously_unsupported(self.existing_crawlers)
         await self.jdownloader.connect()
         await self.start_real_debrid()
-        self.direct_crawler._init_downloader()
+        self.direct_crawler._init_downloader_()
         async for item in self.get_input_items():
             self.manager.task_group.create_task(self.send_to_crawler(item))
 
@@ -231,12 +231,12 @@ class ScrapeMapper:
             except JDownloaderError as e:
                 log(f"Failed to send {scrape_item.url} to JDownloader\n{e.message}", 40)
                 self.manager.logs.write_unsupported(scrape_item.url, scrape_item)
-            self.manager.progress.scrape_errors.add_unsupported(sent_to_jdownloader=success)
+            self.manager.tui.scrape_errors.add_unsupported(sent_to_jdownloader=success)
             return
 
         log(f"Unsupported URL: {scrape_item.url}", 30)
         self.manager.logs.write_unsupported(scrape_item.url, scrape_item)
-        self.manager.progress.scrape_errors.add_unsupported()
+        self.manager.tui.scrape_errors.add_unsupported()
 
     def should_scrape(self, scrape_item: ScrapeItem) -> bool:
         """Pre-filter scrape items base on URL."""

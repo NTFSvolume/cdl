@@ -8,16 +8,16 @@ from typing import TYPE_CHECKING, ParamSpec, TypeVar
 
 from aiohttp import ClientConnectorError, ClientError, ClientResponseError
 
+from cyberdrop_dl import aio
 from cyberdrop_dl.exceptions import (
     DownloadError,
     DurationError,
-    ErrorLogMessage,
     InvalidContentTypeError,
     RestrictedDateRangeError,
     RestrictedFiletypeError,
     SkipDownloadError,
 )
-from cyberdrop_dl.utils import aio, error_handling_wrapper
+from cyberdrop_dl.utils import error_handling_wrapper
 
 _VIDEO_HLS_BATCH_SIZE = 10
 _AUDIO_HLS_BATCH_SIZE = 50
@@ -106,6 +106,12 @@ class Downloader:
 
         return self._server_locks[server]
 
+    async def mark_incomplete(self, media_item: MediaItem) -> None:
+        """Marks the media item as incomplete in the database."""
+        if media_item.is_segment:
+            return
+        await self.manager.db_manager.history_table.insert_incompleted(media_item.domain, media_item)
+
     @contextlib.asynccontextmanager
     async def _limiter(self, media_item: MediaItem):
         if media_item.is_segment:
@@ -113,9 +119,9 @@ class Downloader:
             return
 
         self.waiting_items += 1
-        await self.client.mark_incomplete(media_item)
+        await self.mark_incomplete(media_item)
 
-        server = (media_item.debrid_url or media_item.url).host
+        server = media_item.real_url.host
 
         async with (
             self._server_lock(media_item.domain, server),
@@ -167,7 +173,7 @@ class Downloader:
         except SkipDownloadError as e:
             if not media_item.is_segment:
                 logger.info(f"Download skipped {media_item.url}: {e}")
-                self.manager.progress.files.add_skipped()
+                self.manager.tui.files.add_skipped()
 
         except (DownloadError, ClientResponseError, InvalidContentTypeError):
             raise
@@ -183,15 +189,3 @@ class Downloader:
             ui_message = getattr(e, "status", type(e).__name__)
             message = str(e)
             raise DownloadError(ui_message, message, retry=True) from e
-
-    def write_download_error(
-        self,
-        media_item: MediaItem,
-        error_log_msg: ErrorLogMessage,
-        exc_info: Exception | None = None,
-    ) -> None:
-        msg = f"Download failed: {media_item.url} ({error_log_msg.main_log_msg}) \n -> Referer: {media_item.referer}"
-        logger.error(msg, exc_info=exc_info)
-        self.manager.logs.write_download_error(media_item, error_log_msg.csv_log_msg)
-        self.manager.progress.download_errors.add(error_log_msg.ui_failure)
-        self.manager.progress.files.add_failed()

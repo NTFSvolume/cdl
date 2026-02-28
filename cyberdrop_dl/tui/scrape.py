@@ -58,9 +58,9 @@ class DownloadsPanel(OverflowingPanel):
     def current_hook(self) -> ProgressHook:
         return _current_hook.get()
 
-    def __call__(self, filename: object, /, total: float | None = None) -> ProgressHook:
+    def new_hook(self, filename: object, /, total: float | None = None) -> ProgressHook:
         filename = self._clean_task_desc(str(filename).rsplit("/", 1)[-1])
-        hook = super()(filename, total)
+        hook = super().new_hook(filename, total)
         _ = _current_hook.set(hook)
         return hook
 

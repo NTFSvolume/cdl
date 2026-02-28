@@ -14,7 +14,6 @@ from collections import Counter
 from collections.abc import Callable
 from functools import partial, wraps
 from pathlib import Path
-from re import Pattern
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -30,7 +29,7 @@ from typing import (
 
 from aiolimiter import AsyncLimiter
 
-from cyberdrop_dl import config, constants
+from cyberdrop_dl import constants
 from cyberdrop_dl.annotations import copy_signature
 from cyberdrop_dl.clients.http import HttpClient
 from cyberdrop_dl.data_structures.mediaprops import ISO639Subtitle, Resolution
@@ -115,22 +114,31 @@ class CrawlerInfo:
 
 
 class Registry:
+    abc: weakref.WeakSet[type[Crawler]] = weakref.WeakSet()
     concrete: weakref.WeakSet[type[Crawler]] = weakref.WeakSet()
     generic: weakref.WeakSet[type[Crawler]] = weakref.WeakSet()
-    abc: weakref.WeakSet[type[Crawler]] = weakref.WeakSet()
+    # generics are concrete crawlers that are not bound to any specific site
+    # They can be mapped to a site by just subclassing and setting a PRIMARY URL. ex: Chevereto
+
+    _loaded: bool = False
+    _all: weakref.WeakSet[type[Crawler]] = weakref.WeakSet()
 
     @classmethod
     def all(cls) -> weakref.WeakSet[type[Crawler]]:
-        return cls.concrete | cls.generic | cls.abc
+        cls.import_all()
+        return cls._all
 
     @classmethod
     def import_all(cls) -> None:
+        if cls._loaded:
+            return
         cls._import(__package__ or __name__)
+        cls._all.update(cls.concrete | cls.generic | cls.abc)
+        cls._loaded = True
 
     @classmethod
     def _import(cls, pkg_name: str) -> None:
         """Import every module (and sub-package) inside *pkg_name*."""
-        pkg_name = __package__ or __name__
         module = importlib.import_module(pkg_name)
         for module_info in pkgutil.iter_modules(module.__path__, pkg_name + "."):
             _ = importlib.import_module(module_info.name)
@@ -145,7 +153,7 @@ class Crawler(ABC):
     DEFAULT_POST_TITLE_FORMAT: ClassVar[str] = "{date} - {id} - {title}"
 
     UPDATE_UNSUPPORTED: ClassVar[bool] = False
-    SKIP_PRE_CHECK: ClassVar[bool] = False
+    ALLOW_EMPTY_PATH: ClassVar[bool] = False
     NEXT_PAGE_SELECTOR: ClassVar[str] = ""
 
     DEFAULT_TRIM_URLS: ClassVar[bool] = True
@@ -160,8 +168,6 @@ class Crawler(ABC):
 
     DB_PATH_BUILDER: ClassVar[DBPathBuilder] = "path"
 
-    create_db_path = staticmethod(_DBPathBuilder.path)
-
     @abstractmethod
     async def fetch(self, scrape_item: ScrapeItem) -> None: ...
 
@@ -174,14 +180,14 @@ class Crawler(ABC):
     @final
     def __init__(self, manager: Manager) -> None:
         self.manager = manager
-        self.config = config.get()
+        self.config = manager.config
         self.downloader: Downloader
         self.client: HttpClient = manager.http_client
         self._startup_lock: asyncio.Lock = asyncio.Lock()
         self._ready: bool = False
         self.disabled: bool = False
         self.logged_in: bool = False
-        self.scraped_items: set[str] = set()
+        self._scraped_items: set[str] = set()
         self.logger = logging.getLogger(type(self).__qualname__)
         self._semaphore = asyncio.Semaphore(20)
         self.__post_init__()
@@ -204,8 +210,8 @@ class Crawler(ABC):
             if self._ready:
                 return
 
-            self.downloader = self._init_downloader()
-            self._register_rate_limits()
+            self.downloader = self._init_downloader_()
+            self.__register_rate_limits()
             self.__register_json_checks()
             try:
                 await self._async_post_init_()
@@ -213,7 +219,7 @@ class Crawler(ABC):
                 self._ready = True
 
     @classmethod
-    def _json_resp_check_(cls, json_resp: Any) -> None:
+    def _json_resp_check_(cls, json: Any, resp: AbstractResponse, /) -> None:
         """Custom check for JSON responses.
 
         This method is called automatically by the `HttpClient` when a JSON response is received from `cls.DOMAIN`
@@ -232,6 +238,10 @@ class Crawler(ABC):
             should be handled by the crawler itself
         """
         raise NotImplementedError
+
+    @staticmethod
+    def _create_db_path_(url: AbsoluteHttpURL) -> str:
+        return url.path
 
     def __init_subclass__(
         cls, is_abc: bool = False, is_generic: bool = False, generic_name: str = "", **kwargs
@@ -265,9 +275,7 @@ class Crawler(ABC):
         if not cls.IS_REAL_DEBRID:
             Crawler._assert_fields_overrides(cls, "PRIMARY_URL", "DOMAIN", "SUPPORTED_PATHS")
 
-        cls.REPLACE_OLD_DOMAINS_REGEX: Pattern[str] | None = (
-            re.compile("|".join(cls.OLD_DOMAINS)) if cls.OLD_DOMAINS else None
-        )
+        cls.REPLACE_OLD_DOMAINS_REGEX: str | None = "|".join(cls.OLD_DOMAINS) if cls.OLD_DOMAINS else None
         if cls.OLD_DOMAINS:
             if not cls.SUPPORTED_DOMAINS:
                 cls.SUPPORTED_DOMAINS = ()  # pyright: ignore[reportConstantRedefinition]
@@ -286,7 +294,7 @@ class Crawler(ABC):
         )
         Registry.concrete.add(cls)
 
-    def _register_rate_limits(self) -> None:
+    def __register_rate_limits(self) -> None:
         self.client.rate_limiter[self.DOMAIN] = AsyncLimiter(*self._RATE_LIMIT)
         if self._DOWNLOAD_SLOTS:
             self.client.download_limiter[self.DOMAIN] = self._DOWNLOAD_SLOTS
@@ -351,7 +359,7 @@ class Crawler(ABC):
             "Referer": str(referer),
         }
 
-    def _init_downloader(self) -> Downloader:
+    def _init_downloader_(self) -> Downloader:
         self.downloader = dl = Downloader(self.manager, self.DOMAIN)
         return dl
 
@@ -375,31 +383,28 @@ class Crawler(ABC):
             with scrape_item.track_changes():
                 scrape_item.url = url = self.transform_url(scrape_item.url)
 
-            if url.path_qs in self.scraped_items:
+            if url.path_qs in self._scraped_items:
                 self.logger.info(f"Skipping {url} as it has already been scraped")
                 return
 
-            self.scraped_items.add(url.path_qs)
+            self._scraped_items.add(url.path_qs)
             with self.new_task_id(scrape_item.url):
                 try:
-                    self.pre_check_scrape_item(scrape_item)
+                    if not self.ALLOW_EMPTY_PATH and scrape_item.url.path == "/":
+                        raise ValueError
                     await self.fetch(scrape_item)
                 except ValueError:
                     self.handle_error(scrape_item, ScrapeError("Unknown URL path"))
                 except MaxChildrenError as e:
                     self.handle_error(scrape_item, e)
 
-    def pre_check_scrape_item(self, scrape_item: ScrapeItem) -> None:
-        if not self.SKIP_PRE_CHECK and scrape_item.url.path == "/":
-            raise ValueError
-
     @classmethod
     def transform_url(cls, url: AbsoluteHttpURL) -> AbsoluteHttpURL:
         """Transforms an URL before it reaches the fetch method
 
         Override it to transform thumbnail URLs into full res URLs or URLs in an old unsupported format into a new one"""
-        if cls.REPLACE_OLD_DOMAINS_REGEX is not None:
-            new_host = cls.REPLACE_OLD_DOMAINS_REGEX.sub(cls.PRIMARY_URL.host, url.host)
+        if cls.REPLACE_OLD_DOMAINS_REGEX:
+            new_host = re.sub(cls.REPLACE_OLD_DOMAINS_REGEX, cls.PRIMARY_URL.host, url.host)
             return url.with_host(new_host)
         return url
 
@@ -414,19 +419,11 @@ class Crawler(ABC):
     def new_task_id(self, url: AbsoluteHttpURL) -> ProgressHook:
         """Creates a new task_id (shows the URL in the UI and logs)"""
         self.logger.info(f"Scraping [{self.FOLDER_DOMAIN}]: {url}")
-        return self.manager.progress.scrape(url)
+        return self.manager.tui.scrape(url)
 
     @staticmethod
     def is_subdomain(url: AbsoluteHttpURL) -> bool:
         return url.host.removeprefix("www.").count(".") > 1
-
-    @classmethod
-    def is_self_subdomain(cls, url: AbsoluteHttpURL) -> bool:
-        primary_domain = cls.PRIMARY_URL.host.removeprefix("www.")
-        other_domain = url.host.removeprefix("www.")
-        if primary_domain == other_domain:
-            return False
-        return primary_domain in other_domain and other_domain.count(".") > primary_domain.count(".")
 
     @final
     async def write_metadata(self, scrape_item: ScrapeItem, name: str, metadata: object) -> None:
@@ -475,7 +472,7 @@ class Crawler(ABC):
             self.DOMAIN,
             filename=filename,
             download_folder=download_folder,
-            db_path=self.create_db_path(url),
+            db_path=self._create_db_path_(url),
             original_filename=original_filename,
             ext=ext,
         )
@@ -508,11 +505,11 @@ class Crawler(ABC):
 
         This method is called automatically on a created media item,
         but Crawler code can use it to skip unnecessary requests"""
-        db_path = self.create_db_path(url)
+        db_path = self._create_db_path_(url)
         check_complete = await self.manager.db_manager.history_table.check_complete(self.DOMAIN, url, referer, db_path)
         if check_complete:
             self.logger.info(f"Skipping {url} as it has already been downloaded")
-            self.manager.progress.files.add_previously_completed()
+            self.manager.tui.files.add_previously_completed()
         return check_complete
 
     async def handle_media_item(self, media_item: MediaItem, m3u8: m3u8.RenditionGroup | None = None) -> None:
@@ -527,7 +524,7 @@ class Crawler(ABC):
             return
 
         if await self.check_skip_by_config(media_item):
-            self.manager.progress.files.add_skipped()
+            self.manager.tui.files.add_skipped()
             return
 
         self.create_task(self._download(media_item, m3u8))
@@ -563,7 +560,7 @@ class Crawler(ABC):
         downloaded = await self.manager.db_manager.history_table.check_complete_by_referer(domain, url)
         if downloaded:
             self.logger.info(f"Skipping {url} as it has already been downloaded")
-            self.manager.progress.files.add_previously_completed()
+            self.manager.tui.files.add_previously_completed()
             return True
         return False
 
@@ -576,7 +573,7 @@ class Crawler(ABC):
         if downloaded:
             url = scrape_item if isinstance(scrape_item, AbsoluteHttpURL) else scrape_item.url
             self.logger.info(f"Skipping {url} as its hash ({hash_type}:{hash_value}) has already been downloaded")
-            self.manager.progress.files.add_previously_completed()
+            self.manager.tui.files.add_previously_completed()
         return downloaded
 
     async def get_album_results(self, album_id: str) -> dict[str, int]:
@@ -609,10 +606,10 @@ class Crawler(ABC):
         """Checks whether an album has completed given its domain and album id."""
         if not album_results:
             return False
-        url_path = self.create_db_path(url)
+        url_path = self._create_db_path_(url)
         if url_path in album_results and album_results[url_path] != 0:
             self.logger.info(f"Skipping {url} as it has already been downloaded")
-            self.manager.progress.files.add_previously_completed()
+            self.manager.tui.files.add_previously_completed()
             return True
         return False
 

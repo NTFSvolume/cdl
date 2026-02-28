@@ -73,7 +73,7 @@ class LogManager:
             )
         )
 
-    def write_scrape_error_log(self, url: URL | str, error_message: str, origin: URL | Path | None = None) -> None:
+    def write_scrape_error(self, url: URL | str, error_message: str, origin: URL | Path | None = None) -> None:
         _ = self.task_group.create_task(
             self._write_to_csv(
                 self.config.logs.scrape_error_urls,

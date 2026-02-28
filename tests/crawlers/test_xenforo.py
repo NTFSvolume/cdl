@@ -28,7 +28,7 @@ class MockProgress:
 
 manager = Manager()
 scrape_item = _item("https://xenforo.com/community")
-manager.progress = MockProgress()  # type: ignore
+manager.tui = MockProgress()  # type: ignore
 crawler_instances = {crawler: crawler(manager) for crawler in crawlers.XF_CRAWLERS}
 TEST_CRAWLER = crawler_instances[crawlers.CelebForumCrawler]
 

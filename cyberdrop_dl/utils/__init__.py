@@ -5,7 +5,6 @@ import dataclasses
 import functools
 import inspect
 import itertools
-import json
 import logging
 import mimetypes
 import os
@@ -46,16 +45,13 @@ from cyberdrop_dl.exceptions import (
     get_origin,
 )
 
+from . import json
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Generator, Mapping
 
-    from cyberdrop_dl.crawlers import Crawler
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
-    from cyberdrop_dl.downloader.downloader import Downloader
     from cyberdrop_dl.managers import Manager
-
-    CrawerOrDownloader = TypeVar("CrawerOrDownloader", bound=Crawler | Downloader)
-    Origin = TypeVar("Origin", bound=ScrapeItem | MediaItem | URL)
 
     _P = ParamSpec("_P")
     _T = TypeVar("_T")
@@ -64,18 +60,24 @@ if TYPE_CHECKING:
     class Dataclass(Protocol):
         __dataclass_fields__: ClassVar[dict[str, Any]]
 
+    class _HasManager(Protocol):
+        manager: Manager
+
+    _HasManagerT = TypeVar("_HasManagerT", bound=_HasManager)
+    Origin = TypeVar("Origin", bound=ScrapeItem | MediaItem | URL)
+
 
 logger = logging.getLogger(__name__)
 _ALLOWED_FILEPATH_PUNCTUATION = " .-_!#$%'()+,;=@[]^{}~"
 
 
 @contextlib.contextmanager
-def error_handling_context(self: Crawler | Downloader, item: ScrapeItem | MediaItem | URL) -> Generator[None]:
+def error_handling_context(self: _HasManager, item: ScrapeItem | MediaItem | URL) -> Generator[None]:
     link: URL = item if isinstance(item, URL) else item.url
     error_log_msg = origin = exc_info = None
     link_to_show: URL | str = ""
     is_segment: bool = getattr(item, "is_segment", False)
-    is_downloader: bool = bool(getattr(self, "log_prefix", False))
+    is_media_item: bool = hasattr(item, "is_segment")
     try:
         yield
     except TooManyCrawlerErrors:
@@ -116,16 +118,19 @@ def error_handling_context(self: Crawler | Downloader, item: ScrapeItem | MediaI
 
     except TimeoutError as e:
         error_log_msg = ErrorLogMessage("Timeout", repr(e))
+
     except ClientConnectorError as e:
         ui_failure = "Client Connector Error"
         suffix = "" if (link.host or "").startswith(e.host) else f" from {link}"
         log_msg = f"{e}{suffix}. If you're using a VPN, try turning it off"
         error_log_msg = ErrorLogMessage(ui_failure, log_msg)
+
     except ValidationError as e:
         exc_info = e
         ui_failure = create_error_msg(422)
         log_msg = str(e).partition("For further information")[0].strip()
         error_log_msg = ErrorLogMessage(ui_failure, log_msg)
+
     except Exception as e:
         exc_info = e
         error_log_msg = ErrorLogMessage.from_unknown_exc(e)
@@ -135,44 +140,48 @@ def error_handling_context(self: Crawler | Downloader, item: ScrapeItem | MediaI
 
     link_to_show = link_to_show or link
     origin = origin or get_origin(item)
-    if is_downloader:
-        self, item = cast("Downloader", self), cast("MediaItem", item)
-        self.write_download_error(item, error_log_msg, exc_info)
+    if is_media_item:
+        item = cast("MediaItem", item)
+        msg = f"Download Failed: {item.url} ({error_log_msg.main_log_msg}) \n -> Referer: {item.referer}"
+        logger.error(msg, exc_info=exc_info)
+        self.manager.logs.write_download_error(item, error_log_msg.csv_log_msg)
+        self.manager.tui.download_errors.add(error_log_msg.ui_failure)
+        self.manager.tui.files.add_failed()
         return
 
     logger.error(f"Scrape Failed: {link_to_show} ({error_log_msg.main_log_msg})", exc_info=exc_info)
-    self.manager.logs.write_scrape_error_log(link_to_show, error_log_msg.csv_log_msg, origin)
-    self.manager.progress.scrape_errors.add(error_log_msg.ui_failure)
+    self.manager.logs.write_scrape_error(link_to_show, error_log_msg.csv_log_msg, origin)
+    self.manager.tui.scrape_errors.add(error_log_msg.ui_failure)
 
 
 @overload
 def error_handling_wrapper(
-    func: Callable[Concatenate[CrawerOrDownloader, Origin, _P], _R],
-) -> Callable[Concatenate[CrawerOrDownloader, Origin, _P], _R]: ...
+    func: Callable[Concatenate[_HasManagerT, Origin, _P], _R],
+) -> Callable[Concatenate[_HasManagerT, Origin, _P], _R]: ...
 
 
 @overload
 def error_handling_wrapper(
-    func: Callable[Concatenate[CrawerOrDownloader, Origin, _P], Coroutine[None, None, _R]],
-) -> Callable[Concatenate[CrawerOrDownloader, Origin, _P], Coroutine[None, None, _R]]: ...
+    func: Callable[Concatenate[_HasManagerT, Origin, _P], Coroutine[None, None, _R]],
+) -> Callable[Concatenate[_HasManagerT, Origin, _P], Coroutine[None, None, _R]]: ...
 
 
 def error_handling_wrapper(
-    func: Callable[Concatenate[CrawerOrDownloader, Origin, _P], _R | Coroutine[None, None, _R]],
-) -> Callable[Concatenate[CrawerOrDownloader, Origin, _P], _R | Coroutine[None, None, _R]]:
+    func: Callable[Concatenate[_HasManagerT, Origin, _P], _R | Coroutine[None, None, _R]],
+) -> Callable[Concatenate[_HasManagerT, Origin, _P], _R | Coroutine[None, None, _R]]:
     """Wrapper handles errors for url scraping."""
 
     if inspect.iscoroutinefunction(func):
 
         @functools.wraps(func)
-        async def async_wrapper(self: CrawerOrDownloader, item: Origin, *args: _P.args, **kwargs: _P.kwargs) -> _R:
+        async def async_wrapper(self: _HasManagerT, item: Origin, *args: _P.args, **kwargs: _P.kwargs) -> _R:
             with error_handling_context(self, item):
                 return await func(self, item, *args, **kwargs)
 
         return async_wrapper
 
     @functools.wraps(func)
-    def wrapper(self: CrawerOrDownloader, item: Origin, *args: _P.args, **kwargs: _P.kwargs) -> _R:
+    def wrapper(self: _HasManagerT, item: Origin, *args: _P.args, **kwargs: _P.kwargs) -> _R:
         with error_handling_context(self, item):
             result = func(self, item, *args, **kwargs)
             assert not inspect.isawaitable(result)

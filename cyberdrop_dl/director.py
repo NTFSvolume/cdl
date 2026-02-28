@@ -60,7 +60,7 @@ async def _run_manager(manager: Manager) -> None:
 
         logger.info("Starting CDL...\n")
         await _scheduler(manager)
-        manager.progress.print_stats(1)
+        manager.tui.print_stats(1)
 
         logger.info(spacer())
 
@@ -89,7 +89,7 @@ async def _runtime(manager: Manager) -> None:
     """Main runtime loop for the program, this will run until all scraping and downloading is complete."""
 
     manager.states.RUNNING.set()
-    with manager.progress.get_main_live(stop=True):
+    with manager.tui.get_main_live(stop=True):
         async with ScrapeMapper.managed(manager) as scrape_mapper:
             await scrape_mapper.run()
 

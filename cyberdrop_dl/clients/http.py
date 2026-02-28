@@ -151,7 +151,7 @@ class HttpClient:
     rate_limiter: RateLimiter
     ssl_context: ssl.SSLContext | Literal[False]
 
-    json_resp_checkers: dict[Domain, Callable[[Any], None]] = dataclasses.field(default_factory=dict)
+    json_resp_checkers: dict[Domain, Callable[[Any, AbstractResponse], None]] = dataclasses.field(default_factory=dict)
     _cookies: aiohttp.CookieJar | None = None
     _aiohttp_session: aiohttp.ClientSession | None = None
     _curl_session: AsyncSession[CurlResponse] | None = None
@@ -390,7 +390,7 @@ class HttpClient:
         self,
         response: ClientResponse | CurlResponse | AbstractResponse,
         *,
-        download: bool = False,
+        is_download: bool = False,
     ) -> None:
         """Checks the HTTP status code and raises an exception if it's not acceptable.
 
@@ -399,7 +399,7 @@ class HttpClient:
         if not isinstance(response, AbstractResponse):
             response = AbstractResponse.from_resp(response)
 
-        if download and (e_tag := response.headers.get("ETag")) in _DOWNLOAD_ERROR_ETAGS:
+        if is_download and (e_tag := response.headers.get("ETag")) in _DOWNLOAD_ERROR_ETAGS:
             raise DownloadError(HTTPStatus.NOT_FOUND, message=_DOWNLOAD_ERROR_ETAGS[e_tag])
 
         if HTTPStatus.OK <= response.status < HTTPStatus.BAD_REQUEST:

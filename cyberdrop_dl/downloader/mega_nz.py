@@ -24,7 +24,7 @@ class MegaDownloadClient(StreamDownloader):
     def __init__(self, manager: Manager) -> None:
         super().__init__(manager, manager.http_client)
         self._decrypt_mapping: dict[URL, tuple[Crypto, int]] = {}
-        self._supports_ranges = False
+        self.SUPPORT_RANGES = False
 
     async def _append_content(self, media_item: MediaItem, content: aiohttp.StreamReader) -> None:
         """Appends content to a file."""
@@ -47,10 +47,10 @@ class MegaDownloadClient(StreamDownloader):
 
                 await self.http_client.speed_limiter.acquire(chunk_size)
                 await f.write(chunk)
-                self.manager.progress.downloads.advance_file(media_item.task_id, chunk_size)
+                self.manager.tui.downloads.advance_file(media_item.task_id, chunk_size)
                 check_download_speed()
 
-        await self._post_download_check(media_item)
+        await self._check_file_duration(media_item)
         chunk_decryptor.check_integrity()
 
     def _pre_download_check(self, media_item: MediaItem) -> Coroutine[Any, Any, None]:

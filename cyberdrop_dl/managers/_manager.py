@@ -14,18 +14,19 @@ from cyberdrop_dl.managers.hash_manager import HashManager
 from cyberdrop_dl.managers.logs import LogManager
 from cyberdrop_dl.storage import StorageChecker
 from cyberdrop_dl.tui import TUI
-from cyberdrop_dl.utils import close_if_defined, ffmpeg, get_system_information
+from cyberdrop_dl.utils import ffmpeg, get_system_information
 
 if TYPE_CHECKING:
     from asyncio import TaskGroup
     from pathlib import Path
 
+    from cyberdrop_dl.config import Config
     from cyberdrop_dl.data_structures.url_objects import MediaItem
     from cyberdrop_dl.scrape_mapper import ScrapeMapper
 
 
 @dataclasses.dataclass(slots=True)
-class AsyncioEvents:
+class Events:
     SHUTTING_DOWN: asyncio.Event = dataclasses.field(init=False, default_factory=asyncio.Event)
     RUNNING: asyncio.Event = dataclasses.field(init=False, default_factory=asyncio.Event)
 
@@ -34,20 +35,21 @@ logger = logging.getLogger(__name__)
 
 
 class Manager:
-    def __init__(self) -> None:
+    def __init__(self, config: Config) -> None:
+        self.config: Config = config
         self.hash_manager: HashManager = field(init=False)
         self.db_manager: Database = field(init=False)
         self.http_client: HttpClient = field(init=False)
         self.storage_manager: StorageChecker = field(init=False)
 
-        self.progress: TUI = TUI(refresh_rate=10)
+        self.tui: TUI = TUI(refresh_rate=10)
 
         self.task_group: TaskGroup = asyncio.TaskGroup()
         self.scrape_mapper: ScrapeMapper = field(init=False)
 
-        self.states: AsyncioEvents
+        self.states: Events
 
-        self.logs: LogManager = LogManager(config.get(), self.task_group)
+        self.logs: LogManager = LogManager(config, self.task_group)
         log_app_state()
         self._completed_downloads: set[MediaItem] = set()
         self._completed_downloads_paths: set[Path] = set()
@@ -74,7 +76,7 @@ class Manager:
 
     async def async_startup(self) -> None:
         """Async startup process for the manager."""
-        self.states = AsyncioEvents()
+        self.states = Events()
         self.http_client = HttpClient(self.config)
         self.storage_manager = StorageChecker(self)
 
@@ -93,8 +95,8 @@ class Manager:
 
     async def async_db_close(self) -> None:
         "Partial shutdown for managers used for hash directory scanner"
-        self.db_manager = await close_if_defined(self.db_manager)
-        self.hash_manager = constants.NOT_DEFINED
+        # self.db_manager = await close_if_defined(self.db_manager)
+        # self.hash_manager = constants.NOT_DEFINED
 
     async def close(self) -> None:
         """Closes the manager."""
@@ -102,8 +104,8 @@ class Manager:
 
         await self.async_db_close()
 
-        self.http_client = await close_if_defined(self.http_client)
-        self.storage_manager = await close_if_defined(self.storage_manager)
+        # self.http_client = await close_if_defined(self.http_client)
+        # self.storage_manager = await close_if_defined(self.storage_manager)
 
 
 def log_app_state() -> None:

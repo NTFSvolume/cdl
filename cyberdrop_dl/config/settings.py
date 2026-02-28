@@ -39,7 +39,7 @@ from cyberdrop_dl.models.validators import falsy_as, falsy_as_none, to_bytesize,
 
 MIN_REQUIRED_FREE_SPACE = to_bytesize("512MB")
 DEFAULT_REQUIRED_FREE_SPACE = to_bytesize("5GB")
-
+_DEFAULT_CHUNK_SIZE = to_bytesize("10MB")
 _SORTING_COMMON_FIELDS = {
     "base_dir",
     "ext",
@@ -432,7 +432,13 @@ class RateLimiting(SettingsGroup):
         )
 
     @property
-    def total_delay(self) -> NonNegativeFloat:
+    def chunk_size(self) -> int:
+        if not self.download_speed_limit:
+            return _DEFAULT_CHUNK_SIZE
+        return min(_DEFAULT_CHUNK_SIZE, self.download_speed_limit)
+
+    @property
+    def total_download_delay(self) -> NonNegativeFloat:
         """download_delay + jitter"""
         return self.download_delay + self.get_jitter()
 

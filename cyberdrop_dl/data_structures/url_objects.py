@@ -137,17 +137,17 @@ class MediaItem:
     is_segment: bool = False
     album_id: str | None = None
     timestamp: int | None = None
+    datetime: datetime.datetime | None = field(init=False, default=None)
+    hash: str | None = None
 
     parents: list[AbsoluteHttpURL] = field(default_factory=list)
     parent_threads: set[AbsoluteHttpURL] = field(default_factory=set)
     attempts: int = field(init=False, default=0)
     complete_file: Path = field(init=False)
-    hash: str | None = None
 
     headers: dict[str, str] = field(default_factory=dict, compare=False)
     downloaded: bool = False
     metadata: object = field(init=False, default_factory=dict, compare=False)
-    datetime: datetime.datetime | None = field(init=False, default=None)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(domain={self.domain!r}, url={self.url!r}, referer={self.referer!r}, filename={self.filename!r}"
@@ -216,14 +216,13 @@ class ScrapeItem:
     timestamp: int | None = None
     retry_path: Path | None = None
 
+    type: ScrapeItemType | None = field(default=None, init=False)
+    completed_at: int | None = None
+    created_at: int | None = None
+    password: str | None = None
+
     parents: list[AbsoluteHttpURL] = field(default_factory=list, init=False)
     parent_threads: set[AbsoluteHttpURL] = field(default_factory=set, init=False)
-
-    type: ScrapeItemType | None = field(default=None, init=False)
-    completed_at: int | None = field(default=None, init=False)
-    created_at: int | None = field(default=None, init=False)
-    password: str | None = field(default=None, init=False)
-
     _children: int = field(default=0, init=False)
     _children_limit: int = field(default=0, init=False)
     _children_limits: list[int] = field(default_factory=list, init=False)
@@ -234,7 +233,13 @@ class ScrapeItem:
         )
 
     def __post_init__(self) -> None:
-        self.password = self.url.query.get("password")
+        self.password = self.password or self.url.query.get("password")
+
+    @property
+    def datetime(self) -> datetime.datetime | None:
+        if self.timestamp:
+            assert isinstance(self.timestamp, int), f"Invalid {self.timestamp =!r} from {self.url}"
+            return datetime.datetime.fromtimestamp(self.timestamp, tz=datetime.UTC)
 
     def add_to_parent_title(self, title: str) -> None:
         """Adds a title to the parent title."""
@@ -271,9 +276,7 @@ class ScrapeItem:
     def add_children(self, number: int = 1) -> None:
         self._children += number
         if self._children_limit and self._children >= self._children_limit:
-            from cyberdrop_dl.exceptions import MaxChildrenError
-
-            raise MaxChildrenError(origin=self)
+            raise RecursionError("Max number of children reached", self)
 
     def reset(self, *, reset_parents: bool = False) -> None:
         """Resets `album_id`, `type` and `posible_datetime` back to `None`
@@ -345,9 +348,9 @@ class ScrapeItem:
     def create_download_path(self, domain: str) -> Path:
         if self.retry_path:
             return self.retry_path
-        if self.parent_title and self.part_of_album:
-            return Path(self.parent_title)
         if self.parent_title:
+            if self.part_of_album:
+                return Path(self.parent_title)
             return Path(self.parent_title) / f"Loose Files ({domain})"
         return Path(f"Loose Files ({domain})")
 
