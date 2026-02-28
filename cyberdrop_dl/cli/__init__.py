@@ -52,7 +52,7 @@ def download(
 @app.command()
 def show_supported_sites() -> None:
     """Show a list of all supported sites"""
-    from cyberdrop_dl.utils.markdown import get_crawlers_info_as_rich_table
+    from cyberdrop_dl.markdown import get_crawlers_info_as_rich_table
 
     table = get_crawlers_info_as_rich_table()
     app.console.print(table)
