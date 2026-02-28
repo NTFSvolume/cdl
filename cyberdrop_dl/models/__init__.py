@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, TypeVar
 
-from ._base import AliasModel, AppriseURLModel, Settings, SettingsGroup
+from ._base import AliasModel, AppriseURL, Settings, SettingsGroup
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -79,8 +79,8 @@ def format_validation_error(e: ValidationError, /, file: Path | None = None, tit
 
 __all__ = [
     "AliasModel",
-    "AppriseURLModel",
-    "AppriseURLModel",
+    "AppriseURL",
+    "AppriseURL",
     "Settings",
     "SettingsGroup",
     "format_validation_error",

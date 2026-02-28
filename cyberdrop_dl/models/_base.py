@@ -1,4 +1,4 @@
-from typing import Any, TypeVar
+from typing import Any, ClassVar, Final, TypeVar
 
 from cyclopts import Parameter
 from pydantic import BaseModel, Secret, SerializationInfo, model_serializer, model_validator
@@ -24,19 +24,40 @@ class SettingsGroup(Settings):
         return super().__init_subclass__(**kwargs)
 
 
-class AppriseURLModel(AliasModel):
+class AppriseURL(AliasModel):
     url: Secret[HttpURL]
     tags: set[str] = set()
+
+    _OS_URLS: ClassVar[Final] = "windows://", "macosx://", "dbus://", "qt://", "glib://", "kde://"
+    _VALID_TAGS: ClassVar[set[str]] = {"no_logs", "attach_logs", "simplified"}
+
+    def model_post_init(self, *_) -> None:
+        if not self.tags.intersection(self._VALID_TAGS):
+            self.tags = self.tags | {"no_logs"}
+
+        if self.is_os_url:
+            self.tags = (self.tags - self._VALID_TAGS) | {"simplified"}
+
+    def __str__(self) -> str:
+        return self._format(dump_secret=True)
+
+    @property
+    def is_os_url(self) -> bool:
+        return any(scheme in str(self).casefold() for scheme in self._OS_URLS)
+
+    @property
+    def attach_logs(self) -> bool:
+        return "attach_logs" in self.tags
 
     @model_serializer()
     def serialize(self, info: SerializationInfo) -> str:
         return self._format(dump_secret=info.mode != "json")
 
     def _format(self, dump_secret: bool) -> str:
-        url = self.url.get_secret_value() if dump_secret else self.url
-        tags = self.tags - set("no_logs")
-        tags = sorted(tags)
-        return f"{','.join(tags)}{'=' if tags else ''}{url}"
+        url = str(self.url.get_secret_value() if dump_secret else self.url)
+        if not self.tags:
+            return url
+        return f"{','.join(sorted(self.tags))}={url}"
 
     @model_validator(mode="before")
     @staticmethod

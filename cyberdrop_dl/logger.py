@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
+import os
 import queue
 import sys
 from collections.abc import Generator
@@ -25,6 +26,7 @@ _USER_NAME = Path.home().resolve().name
 _DEFAULT_CONSOLE_WIDTH = 240
 _SHOW_LOCALS = True
 _MAIN_LOGGER: ContextVar[LogHandler] = ContextVar("_MAIN_LOGGER")
+MAX_LOGS_SIZE = 25 * 1024 * 1024  # 25MB
 
 
 if TYPE_CHECKING:
@@ -162,39 +164,40 @@ def setup_logging(
 ) -> Generator[None]:
     logger.setLevel(log_level)
     with (
-        logs_file.open("w", encoding="utf8") as file_io,
-        enqueue_logger(LogHandler(level=console_log_level)) as console_handler,
+        logs_file.open("w+" if os.name == "nt" else "w", encoding="utf8") as fp,
+        enqueue_logger(LogHandler(level=console_log_level)) as console_out,
         enqueue_logger(
             main_logger := LogHandler(
                 level=log_level,
-                console=RedactedConsole(file=file_io, width=_DEFAULT_CONSOLE_WIDTH * 2),
+                console=RedactedConsole(file=fp, width=_DEFAULT_CONSOLE_WIDTH * 2),
             )
-        ) as file_handler,
+        ) as file_out,
     ):
         token = _MAIN_LOGGER.set(main_logger)
-        logger.addHandler(console_handler)
-        logger.addHandler(file_handler)
+        logger.addHandler(console_out)
+        logger.addHandler(file_out)
         try:
             yield
         finally:
             _MAIN_LOGGER.reset(token)
 
 
-def copy_main_log_buffer(dest: Path) -> None:
-    """Copy the content of the main log file to dest,
+def export_logs() -> str:
+    """Copy the current contents of the main log file to `dest` without reopening the file (safe on Windows)."""
 
-    A simple copy does not works because we already have the file opened for logs (trying to open the file again will fail on Windows)"""
     logger = _MAIN_LOGGER.get()
-    src = logger.console.file
+    fp = logger.console.file
     assert logger.lock is not None
     with logger.lock:
-        pos = src.tell()
+        pos = fp.tell()
         try:
-            _ = src.seek(0)
-            with dest.open("w") as out:
-                _ = out.write(src.read())
+            fp.seek(0, os.SEEK_END)
+            if fp.tell() > MAX_LOGS_SIZE:
+                raise RuntimeError("Logs file is too big (>=25MB)")
+            fp.seek(0)
+            return fp.read()
         finally:
-            _ = src.seek(pos)
+            fp.seek(pos)
 
 
 @contextlib.contextmanager
@@ -362,7 +365,8 @@ def catch_exceptions(func: Callable[_P, _ExitCode]) -> Callable[_P, _ExitCode]:
 
 
 @contextlib.contextmanager
-def enable_3p_logger(name: str, level: int | None = None) -> Generator[None]:
+def adopt_logger(name: str, level: int | None = None) -> Generator[logging.Logger]:
+    """Context manager to temporarily enable a third party logger"""
     logger = logging.getLogger(name)
     old_level = logger.level
     old_handlers = logger.handlers.copy()
@@ -377,7 +381,7 @@ def enable_3p_logger(name: str, level: int | None = None) -> Generator[None]:
         logger.setLevel(level)
 
     try:
-        yield
+        yield logger
     finally:
         logger.handlers.clear()
         logger.handlers.extend(old_handlers)

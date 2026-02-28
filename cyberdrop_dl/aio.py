@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import dataclasses
-from collections.abc import AsyncIterator, Awaitable, Callable, Coroutine, Iterable, Iterator
+import shutil
+import tempfile
+from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable, Coroutine, Iterable, Iterator
 from pathlib import Path
 from stat import S_ISREG
 from typing import IO, TYPE_CHECKING, Any, AnyStr, Generic, ParamSpec, Self, TypeVar, cast, overload
@@ -133,7 +136,10 @@ mkdir = to_thread(Path.mkdir)
 touch = to_thread(Path.touch)
 read_text = to_thread(Path.read_text)
 read_bytes = to_thread(Path.read_bytes)
+write_bytes = to_thread(Path.write_bytes)
+write_text = to_thread(Path.write_text)
 resolve = to_thread(Path.resolve)
+copy = to_thread(shutil.copy)
 
 
 def glob(path: Path, pattern: str) -> _AsyncPathIterator:
@@ -191,3 +197,12 @@ async def get_size(path: Path) -> int | None:
         if not S_ISREG(stat_result.st_mode):
             raise IsADirectoryError(path)
         return stat_result.st_size
+
+
+@contextlib.asynccontextmanager
+async def temp_dir() -> AsyncGenerator[Path]:
+    temp_dir = await asyncio.to_thread(tempfile.TemporaryDirectory, prefix="cdl_", ignore_cleanup_errors=True)
+    try:
+        yield Path(temp_dir.name)
+    finally:
+        await asyncio.to_thread(temp_dir.cleanup)

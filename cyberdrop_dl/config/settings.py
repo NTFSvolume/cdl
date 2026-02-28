@@ -22,7 +22,7 @@ from pydantic import (
 
 from cyberdrop_dl import constants
 from cyberdrop_dl.constants import BROWSERS, DEFAULT_APP_STORAGE, DEFAULT_DOWNLOAD_STORAGE, Hashing
-from cyberdrop_dl.models import AppriseURLModel, Settings, SettingsGroup
+from cyberdrop_dl.models import AppriseURL, Settings, SettingsGroup
 from cyberdrop_dl.models.types import (
     ByteSizeSerilized,
     HttpURL,
@@ -99,7 +99,7 @@ class Logs(SettingsGroup):
     rotate_logs: bool = False
     scrape_error_urls: LogPath = Path("Scrape_Error_URLs.csv")
     unsupported_urls: LogPath = Path("Unsupported_URLs.csv")
-    webhook: AppriseURLModel | None = None
+    webhook: AppriseURL | None = None
 
     @cached_property
     def jsonl_file(self):
