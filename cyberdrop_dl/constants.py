@@ -31,8 +31,6 @@ LOG_OUTPUT_TEXT = Text("")
 
 
 # regex
-RAR_MULTIPART_PATTERN = re.compile(r"^part\d+")
-SANITIZE_FILENAME_PATTERN = re.compile(r'[<>:"/\\|?*\']')
 REGEX_LINKS = re.compile(r"(?:http.*?)(?=($|\n|\r\n|\r|\s|\"|\[/URL]|']\[|]\[|\[/img]))")
 HTTP_REGEX_LINKS = re.compile(
     r"https?://(www\.)?[-a-zA-Z0-9@:%._+~#=]{2,256}\.[a-z]{2,12}\b([-a-zA-Z0-9@:%_+.~#?&/=]*)"
@@ -167,7 +165,7 @@ class FileFormats:
             ".sub",
         }
     )
-    _7Z = frozenset(
+    SEVEN_Z = frozenset(
         {
             ".7z",
             ".bz2",

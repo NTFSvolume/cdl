@@ -81,7 +81,7 @@ class XenforoCrawler(HTMLMessageBoardCrawler, is_abc=True):
     def get_filename_and_ext(self, filename: str) -> tuple[str, str]:
         # The `forum` keyword is misleading now. It only works for Xenforo sites, not every forum
         # TODO: Change `forum` parameter to `xenforo`
-        return super().get_filename_and_ext(filename, forum=True)
+        return super().get_filename_and_ext(filename, xenforo=True)
 
     @error_handling_wrapper
     async def xf_login(self, login_url: AbsoluteHttpURL, session_cookie: str, username: str, password: str) -> None:

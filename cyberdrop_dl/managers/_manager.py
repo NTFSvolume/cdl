@@ -7,7 +7,7 @@ import logging
 from dataclasses import field
 from typing import TYPE_CHECKING
 
-from cyberdrop_dl import __version__, appdata, config, constants
+from cyberdrop_dl import __version__, appdata, config
 from cyberdrop_dl.clients.http import HttpClient
 from cyberdrop_dl.database import Database
 from cyberdrop_dl.managers.hash_manager import HashManager
@@ -82,8 +82,10 @@ class Manager:
 
         await self.async_db_hash_startup()
 
-        constants.MAX_NAME_LENGTHS["FILE"] = config.get().general.max_file_name_length
-        constants.MAX_NAME_LENGTHS["FOLDER"] = config.get().general.max_folder_name_length
+        from cyberdrop_dl.utils import filepath
+
+        _ = filepath.MAX_FILE_LEN.set(self.config.general.max_file_name_length)
+        _ = filepath.MAX_FOLDER_LEN.set(self.config.general.max_folder_name_length)
 
     async def async_db_hash_startup(self) -> None:
         self.db_manager = Database(

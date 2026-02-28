@@ -243,7 +243,7 @@ class ScrapeItem:
 
     def add_to_parent_title(self, title: str) -> None:
         """Adds a title to the parent title."""
-        from cyberdrop_dl.utils import sanitize_folder
+        from cyberdrop_dl.utils.filepath import sanitize_folder
 
         if not title or self.retry_path:
             return

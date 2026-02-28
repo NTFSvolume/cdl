@@ -29,7 +29,6 @@ from typing import (
 
 from aiolimiter import AsyncLimiter
 
-from cyberdrop_dl import constants
 from cyberdrop_dl.annotations import copy_signature
 from cyberdrop_dl.clients.http import HttpClient
 from cyberdrop_dl.data_structures.mediaprops import ISO639Subtitle, Resolution
@@ -42,16 +41,13 @@ from cyberdrop_dl.utils import (
     error_handling_context,
     error_handling_wrapper,
     get_download_path,
-    get_filename_and_ext,
     is_absolute_http_url,
     is_blob_or_svg,
     m3u8,
     parse_url,
-    remove_file_id,
     remove_trailing_slash,
-    sanitize_filename,
-    truncate_str,
 )
+from cyberdrop_dl.utils.filepath import compose_custom_filename, get_filename_and_ext, sanitize_filename
 from cyberdrop_dl.utils.strings import safe_format
 
 if TYPE_CHECKING:
@@ -460,12 +456,9 @@ class Crawler(ABC):
         metadata: object = None,
     ) -> None:
         """Finishes handling the file and hands it off to the downloader."""
-        if not ext:
-            ext = Path(filename).suffix
+        ext = ext or Path(filename).suffix
         if custom_filename:
             original_filename, filename = filename, custom_filename
-        elif self.DOMAIN in ["cyberdrop"]:
-            original_filename, filename = remove_file_id(filename, ext)
         else:
             original_filename = filename
 
@@ -593,17 +586,17 @@ class Crawler(ABC):
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     def get_filename_and_ext(
-        self, filename: str, forum: bool = False, assume_ext: str | None = ".mp4", *, mime_type: str | None = None
+        self, filename: str, assume_ext: str | None = ".mp4", *, mime_type: str | None = None
     ) -> tuple[str, str]:
         """Wrapper around `utils.get_filename_and_ext`.
         Calls it as is.
         If that fails, appends `assume_ext` and tries again, but only if the user had exclude_files_with_no_extension = `False`
         """
         try:
-            return get_filename_and_ext(filename, forum, mime_type)
+            return get_filename_and_ext(filename, mime_type)
         except NoExtensionError:
             if self.config.ignore.exclude_files_with_no_extension and assume_ext:
-                return get_filename_and_ext(filename + assume_ext, forum, mime_type)
+                return get_filename_and_ext(filename + assume_ext, mime_type)
             raise
 
     def check_album_results(self, url: AbsoluteHttpURL, album_results: dict[str, Any]) -> bool:
@@ -905,29 +898,35 @@ class Crawler(ABC):
         calling_args = {name: value for name, value in locals().items() if value is not None and name not in ("self",)}
         # remove OS separators (if any)
         stem = sanitize_filename(Path(name).as_posix().replace("/", "-")).strip().removesuffix(ext).strip()
-        extra_info: list[str] = []
+        if resolution and not isinstance(resolution, Resolution):
+            resolution = Resolution.parse(resolution)
 
-        if _placeholder_config.include_file_id and file_id:
-            extra_info.append(file_id)
-        if _placeholder_config.include_video_codec and video_codec:
-            extra_info.append(video_codec)
-        if _placeholder_config.include_audio_codec and audio_codec:
-            extra_info.append(audio_codec)
+        def extra_info():
+            if _placeholder_config.include_file_id and file_id:
+                yield file_id
+            if _placeholder_config.include_video_codec and video_codec:
+                yield video_codec
+            if _placeholder_config.include_audio_codec and audio_codec:
+                yield audio_codec
 
-        if (
-            _placeholder_config.include_resolution
-            and resolution
-            and resolution not in [Resolution.highest(), Resolution.unknown()]
-        ):
-            if not isinstance(resolution, Resolution):
-                resolution = Resolution.parse(resolution)
-            extra_info.append(resolution.name)
+            if (
+                _placeholder_config.include_resolution
+                and resolution
+                and resolution not in [Resolution.highest(), Resolution.unknown()]
+            ):
+                yield resolution.name
 
-        if _placeholder_config.include_hash and hash_string:
-            assert any(hash_string.startswith(x) for x in _HASH_PREFIXES), f"Invalid: {hash_string = }"
-            extra_info.append(hash_string)
+            if _placeholder_config.include_hash and hash_string:
+                assert any(hash_string.startswith(x) for x in _HASH_PREFIXES), f"Invalid: {hash_string = }"
+                yield hash_string
 
-        filename, extra_info_had_invalid_chars = _make_custom_filename(stem, ext, extra_info, only_truncate_stem)
+        filename, extra_info_had_invalid_chars = compose_custom_filename(
+            stem,
+            ext,
+            self.config.general.max_file_name_length,
+            *extra_info(),
+            only_truncate_stem=only_truncate_stem,
+        )
         if extra_info_had_invalid_chars:
             msg = (
                 f"Custom filename creation for {self.FOLDER_DOMAIN} seems to be broken. "
@@ -987,24 +986,6 @@ def _make_scrape_mapper_keys(cls: type[Crawler] | Crawler) -> tuple[str, ...]:
     if isinstance(hosts, str):
         hosts = (hosts,)
     return tuple(sorted({host.removeprefix("www.") for host in hosts}))
-
-
-def _make_custom_filename(stem: str, ext: str, extra_info: list[str], only_truncate_stem: bool) -> tuple[str, bool]:
-    truncate_len = constants.MAX_NAME_LENGTHS["FILE"] - len(ext)
-    invalid_extra_info_chars = False
-    if extra_info:
-        extra_info_str = "".join(f"[{info}]" for info in extra_info)
-        clean_extra_info_str = sanitize_filename(extra_info_str)
-        invalid_extra_info_chars = clean_extra_info_str != extra_info_str
-        if only_truncate_stem and (new_truncate_len := truncate_len - len(clean_extra_info_str) - 1) > 0:
-            truncated_stem = f"{truncate_str(stem, new_truncate_len)} {clean_extra_info_str}"
-        else:
-            truncated_stem = truncate_str(f"{stem} {clean_extra_info_str}", truncate_len)
-
-    else:
-        truncated_stem = truncate_str(stem, truncate_len)
-
-    return f"{truncated_stem}{ext}", invalid_extra_info_chars
 
 
 @dataclasses.dataclass(slots=True)

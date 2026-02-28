@@ -114,7 +114,7 @@ async def read_netscape_files(files: Iterable[Path]) -> AsyncIterable[tuple[str,
     now = int(time.time())
 
     domains_seen: set[str] = set()
-    cookie_jars = await asyncio.gather(*(_read_netscape_file(file) for file in files))
+    cookie_jars = await asyncio.gather(*map(_read_netscape_file, files))
 
     for file, cookie_jar in zip(files, cookie_jars, strict=True):
         if not cookie_jar:
