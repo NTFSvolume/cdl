@@ -428,7 +428,7 @@ class HTMLMessageBoardCrawler(MessageBoardCrawler, is_abc=True):
                 try:
                     title = self.create_title(get_post_title(soup, self.SELECTORS), thread_id=thread.id)
                 except ScrapeError as e:
-                    self.log_debug("Got an unprocessable soup", 40, exc_info=e)
+                    self.logger.debug("Got an unprocessable soup", 40, exc_info=e)
                     raise
                 scrape_item.add_to_parent_title(title)
 

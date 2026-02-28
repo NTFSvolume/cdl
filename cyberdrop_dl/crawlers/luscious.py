@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.logger import log_debug
 from cyberdrop_dl.utils import error_handling_wrapper
 
 if TYPE_CHECKING:
@@ -62,7 +61,6 @@ class LusciousCrawler(Crawler):
             filters = [{"name": i, "value": v} for i, v in query.items() if i not in ("page", "display", "q")]
             data["variables"] = {"input": {"display": sorting, "filters": filters, "page": page}}
 
-        log_debug(data)
         return json.dumps(data)
 
     @error_handling_wrapper
@@ -118,5 +116,5 @@ class LusciousCrawler(Crawler):
             data=query,
             headers={"Content-Type": "application/json"},
         )
-        log_debug(json_resp)
+
         return json_resp

@@ -156,7 +156,7 @@ class YandexDiskCrawler(Crawler):
         if error:
             raise ScrapeError(422, message=json.dumps(json_resp)[:50])
 
-        self.log_debug(json_resp)
+        self.logger.debug(json_resp)
         scrape_item.timestamp = file.modified
         link_str: str = json_resp["data"]["url"]
         link = self.parse_url(link_str)

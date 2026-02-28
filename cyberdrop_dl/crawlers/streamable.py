@@ -51,7 +51,7 @@ class StreamableCrawler(Crawler):
         title = json_resp.get("reddit_title") or json_resp["title"]
         scrape_item.timestamp = json_resp["date_added"]
 
-        self.log_debug(json.dumps(json_resp, indent=4))
+        self.logger.debug(json.dumps(json_resp, indent=4))
         link_str = get_best_quality(json_resp["files"])
         if not link_str:
             raise ScrapeError(422)

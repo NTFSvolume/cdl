@@ -7,7 +7,7 @@ import time
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl import env
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, _DBPathBuilder, auto_task_id
+from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, auto_task_id
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import css, dates, error_handling_wrapper
@@ -40,7 +40,6 @@ class BandcampCrawler(Crawler):
     }
     DOMAIN: ClassVar[str] = "bandcamp"
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://bandcamp.com")
-    create_db_path = staticmethod(_DBPathBuilder.path_qs_frag)
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:

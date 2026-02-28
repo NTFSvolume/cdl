@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import functools
 import json
+import logging
 from typing import TYPE_CHECKING, Any, NamedTuple, ParamSpec, TypeVar, overload
 
 import bs4.css
 from bs4 import BeautifulSoup
 
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.logger import log_debug
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
@@ -17,6 +17,8 @@ if TYPE_CHECKING:
 
     _P = ParamSpec("_P")
     _R = TypeVar("_R")
+
+logger = logging.getLogger(__name__)
 
 
 class SelectorError(ScrapeError):
@@ -221,7 +223,7 @@ def _parse_nuxt_obj(nuxt_data: list[Any], index_map: dict[str, int]) -> dict[str
                 case ["ShallowRef" | "ShallowReactive" | "Ref" | "Reactive" | "NuxtError", idx]:
                     return hydrate(nuxt_data[idx])
                 case [str(name), *rest]:
-                    log_debug(f"Unable to parse custom object {name} {rest}", 30)
+                    logger.debug(f"Unable to parse custom object {name} {rest}", 30)
                     return None
                 case _:
                     return [hydrate(nuxt_data[idx]) for idx in value]

@@ -112,6 +112,10 @@ class CrawlerInfo:
     def generic(cls, name: str, paths: SupportedPaths) -> Self:
         return cls(name, "::GENERIC CRAWLER::", (), paths)  # pyright: ignore[reportArgumentType]
 
+    @property
+    def fields(self) -> tuple[str, ...]:
+        return tuple(f.name for f in dataclasses.fields(self))
+
 
 class Registry:
     abc: weakref.WeakSet[type[Crawler]] = weakref.WeakSet()

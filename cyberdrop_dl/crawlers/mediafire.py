@@ -8,7 +8,7 @@ import itertools
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, _DBPathBuilder, auto_task_id
+from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, auto_task_id
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import css, error_handling_wrapper, is_blob_or_svg, type_adapter
@@ -61,7 +61,6 @@ class MediaFireCrawler(Crawler):
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = _PRIMARY_URL
     DOMAIN: ClassVar[str] = "mediafire"
     SKIP_PRE_CHECK: ClassVar[bool] = True
-    create_db_path = staticmethod(_DBPathBuilder.name)
 
     def __post_init__(self) -> None:
         self.api = MediaFireAPI(self)

@@ -18,14 +18,13 @@ from aiohttp.resolver import AsyncResolver, ThreadedResolver
 from aiolimiter import AsyncLimiter
 from multidict import CIMultiDict
 
-from cyberdrop_dl import appdata, constants, ddos_guard, env
+from cyberdrop_dl import aio, appdata, constants, ddos_guard, env, ffmpeg
 from cyberdrop_dl.clients.flaresolverr import FlareSolverr
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.cookies import get_cookies_from_browser, make_simple_cookie, read_netscape_files
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
 from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, ScrapeError
 from cyberdrop_dl.logger import spacer
-from cyberdrop_dl.utils import aio, ffmpeg
 
 _curl_import_error = None
 try:

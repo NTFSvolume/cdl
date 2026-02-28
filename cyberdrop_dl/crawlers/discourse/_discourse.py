@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from cyberdrop_dl.crawlers._forum import MessageBoardCrawler
 from cyberdrop_dl.exceptions import MaxChildrenError
-from cyberdrop_dl.utils import css, error_handling_wrapper, unique
+from cyberdrop_dl.utils import css, error_handling_wrapper
 from cyberdrop_dl.utils.dates import to_timestamp
 
 from .models import AvailablePost, PostStream, Topic
@@ -137,14 +137,14 @@ class DiscourseCrawler(MessageBoardCrawler, is_generic=True):
             images = css.iselect(soup, *css.images)
             links = css.iselect(soup, *css.links)
             external_links = (ref.url for ref in post.link_counts)
-            for link_str in unique(itertools.chain(external_links, images, links)):
+            for link_str in itertools.chain(external_links, images, links):
                 try:
                     if link_str:
                         yield self.parse_url(link_str)
                 except Exception:
                     continue
 
-        return unique(iter_links())
+        return iter_links()
 
     def parse_url(
         self, link_str: str, relative_to: AbsoluteHttpURL | None = None, *, trim: bool | None = None
