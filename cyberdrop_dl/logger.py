@@ -6,6 +6,7 @@ import logging
 import queue
 import sys
 from collections.abc import Generator
+from contextvars import ContextVar
 from logging.handlers import QueueHandler, QueueListener
 from pathlib import Path
 from typing import TYPE_CHECKING, ParamSpec
@@ -23,6 +24,7 @@ logger = logging.getLogger("cyberdrop_dl")
 _USER_NAME = Path.home().resolve().name
 _DEFAULT_CONSOLE_WIDTH = 240
 _SHOW_LOCALS = True
+_MAIN_LOGGER: ContextVar[LogHandler] = ContextVar("_MAIN_LOGGER")
 
 
 if TYPE_CHECKING:
@@ -95,6 +97,7 @@ class LogHandler(RichHandler):
         )
         if is_file:
             self._log_render = NoPaddingLogRender(show_level=True)
+            _MAIN_LOGGER.set(self)
 
     def render_message(self, record: logging.LogRecord, message: str) -> ConsoleRenderable:
         """This is the same as the base class, just added the `color` parsing from the extras"""
@@ -162,15 +165,36 @@ def setup_logging(
         logs_file.open("w", encoding="utf8") as file_io,
         enqueue_logger(LogHandler(level=console_log_level)) as console_handler,
         enqueue_logger(
-            LogHandler(
+            main_logger := LogHandler(
                 level=log_level,
                 console=RedactedConsole(file=file_io, width=_DEFAULT_CONSOLE_WIDTH * 2),
             )
         ) as file_handler,
     ):
+        token = _MAIN_LOGGER.set(main_logger)
         logger.addHandler(console_handler)
         logger.addHandler(file_handler)
-        yield
+        try:
+            yield
+        finally:
+            _MAIN_LOGGER.reset(token)
+
+
+def copy_main_log_buffer(dest: Path) -> None:
+    """Copy the content of the main log file to dest,
+
+    A simple copy does not works because we already have the file opened for logs (trying to open the file again will fail on Windows)"""
+    logger = _MAIN_LOGGER.get()
+    src = logger.console.file
+    assert logger.lock is not None
+    with logger.lock:
+        pos = src.tell()
+        try:
+            _ = src.seek(0)
+            with dest.open("w") as out:
+                _ = out.write(src.read())
+        finally:
+            _ = src.seek(pos)
 
 
 @contextlib.contextmanager

@@ -81,7 +81,7 @@ def test_get_apprise_urls() -> None:
 
 async def send_notification(test_case: AppriseTestCase) -> None:
     constants.LOG_OUTPUT_TEXT = Text(test_case.name)
-    result, logs = await apprise.send_notifications(FAKE_MANAGER)
+    result, logs = await apprise.send_apprise_notifications(FAKE_MANAGER)
     assert result.value == test_case.result.value, f"Result for this case should be {test_case.result.value}"
     assert isinstance(logs, list), "Invalid return type for logs"
     assert logs, "Logs can't be empty"

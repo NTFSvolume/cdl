@@ -14,7 +14,7 @@ from cyberdrop_dl.managers import Manager
 from cyberdrop_dl.scrape_mapper import ScrapeMapper
 from cyberdrop_dl.updates import check_latest_pypi
 from cyberdrop_dl.utils import check_partials_and_empty_folders
-from cyberdrop_dl.utils.apprise import send_notifications
+from cyberdrop_dl.utils.apprise import send_apprise_notifications
 from cyberdrop_dl.utils.sorting import Sorter
 from cyberdrop_dl.webhook import send_notification
 
@@ -70,7 +70,7 @@ async def _run_manager(manager: Manager) -> None:
         logger.info("Finished downloading. Enjoy :)", extra={"color": "green"})
 
         await send_notification(manager)
-        await send_notifications("", attachment=config_.logs.main_log)
+        await send_apprise_notifications("", main_log=config_.logs.main_log)
 
 
 async def _scheduler(manager: Manager) -> None:
