@@ -1,16 +1,17 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from collections import defaultdict
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Final, Literal
 
+import xxhash
 from send2trash import send2trash
 
-from cyberdrop_dl import config, constants
+from cyberdrop_dl import aio, config, constants
 from cyberdrop_dl.constants import Hashing
 from cyberdrop_dl.logger import log
-from cyberdrop_dl.utils import aio
 
 if TYPE_CHECKING:
     from yarl import URL
@@ -19,6 +20,13 @@ if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import MediaItem
     from cyberdrop_dl.managers import Manager
 
+_HASHERS: Final = {
+    "md5": hashlib.md5,
+    "xxh128": xxhash.xxh128,
+    "sha256": hashlib.sha256,
+}
+_CHUNK_SIZE: Final = 1024 * 1024  # 1MB
+
 
 def hash_directory_scanner(manager: Manager, path: Path) -> None:
     asyncio.run(_hash_directory_scanner_helper(manager, path))
@@ -26,9 +34,20 @@ def hash_directory_scanner(manager: Manager, path: Path) -> None:
 
 async def _hash_directory_scanner_helper(manager: Manager, path: Path) -> None:
     await manager.async_db_hash_startup()
-    await manager.hash_manager.hash_client.hash_directory(path)
+    await HashClient(manager).hash_directory(path)
     manager.tui.print_dedupe_stats()
     await manager.async_db_close()
+
+
+def _compute_hash(file: Path, algorithm: Literal["xxh128", "md5", "sha256"]) -> str:
+    with file.open("rb") as file_io:
+        hash = _HASHERS[algorithm]()
+        buffer = bytearray(_CHUNK_SIZE)  # Reusable buffer to reduce allocations
+        mem_view = memoryview(buffer)
+        while size := file_io.readinto(buffer):
+            hash.update(mem_view[:size])
+
+    return hash.hexdigest()
 
 
 class HashClient:
@@ -42,6 +61,11 @@ class HashClient:
         self.hashed_media_items: set[MediaItem] = set()
         self.hashes_dict: defaultdict[str, defaultdict[int, set[Path]]] = defaultdict(lambda: defaultdict(set))
         self._sem = asyncio.BoundedSemaphore(20)
+        self._cwd: Path = Path.cwd()
+
+    async def hash_file(self, filename: Path | str, hash_type: Literal["xxh128", "md5", "sha256"]) -> str:
+        file_path = self._cwd / filename
+        return await asyncio.to_thread(_compute_hash, file_path, hash_type)
 
     @property
     def _to_trash(self) -> bool:
