@@ -68,22 +68,20 @@ if sys.platform == "win32":
         return await asyncio.to_thread(_set_win_time, file, timestamp)
 
 
-elif sys.platform == "darwin":
+elif sys.platform == "darwin" and (MAC_OS_SET_FILE := shutil.which("SetFile") or ""):
     # SetFile is non standard in macOS. Only users that have xcode installed will have SetFile
-    MAC_OS_SET_FILE = shutil.which("SetFile")
 
     async def set_creation_time(file: Path, timestamp: float) -> None:
-        if MAC_OS_SET_FILE:
-            time_string = datetime.datetime.fromtimestamp(timestamp).strftime("%m/%d/%Y %H:%M:%S")
-            process = await asyncio.subprocess.create_subprocess_exec(
-                MAC_OS_SET_FILE,
-                "-d",
-                time_string,
-                file,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            _ = await process.wait()
+        time_string = datetime.datetime.fromtimestamp(timestamp).strftime("%m/%d/%Y %H:%M:%S")
+        process = await asyncio.subprocess.create_subprocess_exec(
+            MAC_OS_SET_FILE,
+            "-d",
+            time_string,
+            file,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        _ = await process.wait()
 
 else:
 
@@ -94,12 +92,8 @@ TimeStamp = NewType("TimeStamp", int)
 UTCAwareDatetime = NewType("UTCAwareDatetime", datetime.datetime)
 
 
-def _as_utc(date_time: datetime.datetime) -> datetime.datetime:
-    return date_time.astimezone(datetime.UTC)
-
-
 def _normalize(date_time: datetime.datetime) -> UTCAwareDatetime:
-    date_time = _as_utc(date_time)
+    date_time = date_time.astimezone(datetime.UTC)
     if date_time.microsecond:
         date_time = date_time.replace(microsecond=0)
     return UTCAwareDatetime(date_time)
@@ -111,18 +105,6 @@ def parse_iso(date_or_datetime: str, /) -> UTCAwareDatetime:
 
 def parse_format(date_or_datetime: str, /, format: str) -> UTCAwareDatetime:
     return _normalize(datetime.datetime.strptime(date_or_datetime, format))
-
-
-def parse(date_or_datetime: str, format: str | None = None, /, *, iso: bool = False) -> UTCAwareDatetime:
-    if not date_or_datetime:
-        raise ValueError("Unable to extract date")
-
-    if iso:
-        return parse_iso(date_or_datetime)
-    if format:
-        return parse_format(date_or_datetime, format)
-
-    raise ValueError
 
 
 def parse_http(date: str, /) -> UTCAwareDatetime:

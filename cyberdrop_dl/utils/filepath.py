@@ -57,29 +57,31 @@ def get_filename_and_ext(
     *,
     xenforo: bool = False,
 ) -> tuple[str, str]:
-    max_len = max_len or MAX_FILE_LEN.get()
-    og_filename = filename
-    filename = Path(filename).as_posix().replace("/", "-")  # remove OS separators
-    filename_as_path = Path(filename)
-    ext = filename_as_path.suffix or (mimetypes.guess_extension(mime_type) if mime_type else None)
-    if not ext:
-        raise NoExtensionError(og_filename)
+    filename_as_path = Path(Path(filename).as_posix().replace("/", "-"))  # remove OS separators
+    if not filename_as_path.suffix:
+        if mime_type and (ext := mimetypes.guess_extension(mime_type)):
+            filename_as_path = filename_as_path.with_suffix(ext)
+        else:
+            raise NoExtensionError(filename)
 
-    filename_as_path = filename_as_path.with_suffix(ext)
-
-    if xenforo and "-" in og_filename and ext.lstrip(".").isdigit():
+    if xenforo and "-" in filename and filename_as_path.suffix.lstrip(".").isdigit():
         name, _, ext = filename_as_path.name.rpartition("-")
         ext = ext.rsplit(".")[0]
         filename = f"{name}.{ext}"
-        filename_as_path = Path(filename)
-        if filename_as_path.suffix.lower() not in constants.FileFormats.MEDIA:
+        if ext.lower() not in constants.FileFormats.MEDIA:
             raise InvalidExtensionError(filename)
 
+        filename_as_path = Path(filename)
+
+    return _get_filename_and_ext(filename_as_path, max_len or MAX_FILE_LEN.get())
+
+
+def _get_filename_and_ext(filename_as_path: Path, max_len: int) -> tuple[str, str]:
     if len(filename_as_path.suffix) > 5:
         raise InvalidExtensionError(str(filename_as_path))
 
     filename_as_path = filename_as_path.with_suffix(filename_as_path.suffix.lower())
-    filename = truncate_str(filename_as_path.stem, max_len) + filename_as_path.suffix
+    filename = truncate_str(filename_as_path.stem, max_len - len(filename_as_path.suffix)) + filename_as_path.suffix
     filename_as_path = Path(sanitize_filename(filename))
     return filename_as_path.stem.strip(), filename_as_path.suffix
 
