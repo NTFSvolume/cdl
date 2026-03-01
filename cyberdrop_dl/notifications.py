@@ -11,7 +11,7 @@ from pydantic import ValidationError
 
 from cyberdrop_dl import aio, constants
 from cyberdrop_dl.dependencies import apprise
-from cyberdrop_dl.logger import MAX_LOGS_SIZE, adopt_logger, export_logs, spacer
+from cyberdrop_dl.logger import adopt_logger, get_logs_content, spacer
 from cyberdrop_dl.models import AppriseURL, format_validation_error
 
 if TYPE_CHECKING:
@@ -62,11 +62,11 @@ async def send_apprise_notifications(content: str, *urls: AppriseURL, main_log: 
 
     logger.info("Sending Apprise notifications.. ")
     apprise_obj = apprise.Apprise()
-    send_logs: bool = False
-    for server in urls:
-        if not send_logs:
-            send_logs = "attach_logs" in server.tags
-        _ = apprise_obj.add(str(server.url.get_secret_value()), tag=sorted(server.tags))  # pyright: ignore[reportUnknownMemberType]
+    attach_logs: bool = False
+    for webhook in urls:
+        if not attach_logs:
+            attach_logs = webhook.attach_logs
+        _ = apprise_obj.add(str(webhook.url.get_secret_value()), tag=sorted(webhook.tags))  # pyright: ignore[reportUnknownMemberType]
 
     messages: dict[str, dict[str, str]] = {
         "no_logs": _DEFAULT_MSG | {"body": content},
@@ -78,7 +78,7 @@ async def send_apprise_notifications(content: str, *urls: AppriseURL, main_log: 
         with adopt_logger("apprise", level=logging.INFO):
             _ = await asyncio.gather(*(apprise_obj.async_notify(**msg, tag=tag) for tag, msg in messages.items()))
 
-    if not send_logs:
+    if not attach_logs:
         await notify()
         return
 
@@ -93,28 +93,16 @@ async def send_apprise_notifications(content: str, *urls: AppriseURL, main_log: 
 async def _temp_copy_of_main_log(main_log: Path) -> AsyncGenerator[Path | None]:
     async with aio.temp_dir() as temp_dir:
         temp_file = temp_dir / main_log.name
-        if content := await _get_logs_content(main_log):
+        if content := await get_logs_content(main_log):
             _ = await aio.write_bytes(temp_file, content)
             yield temp_file
         else:
             yield
 
 
-async def _get_logs_content(path: Path) -> bytes | None:
-    try:
-        try:
-            if (size := await aio.get_size(path)) and size > MAX_LOGS_SIZE:
-                raise RuntimeError("Logs file is too big (>=25MB)")
-            return await aio.read_bytes(path)
-        except OSError:
-            return (await asyncio.to_thread(export_logs)).encode("utf-8")
-    except Exception:
-        logger.exception("Unable to get copy of the main log file. 'attach_logs' URLs will be processed without it")
-
-
 async def _prepare_form(diff_text: str, main_log: Path | None = None) -> FormData:
     form = FormData()
-    if main_log and (content := await _get_logs_content(main_log)):
+    if main_log and (content := await get_logs_content(main_log)):
         form.add_field("file", content, filename=main_log.name)
 
     form.add_fields(
@@ -131,18 +119,24 @@ async def send_webhook_notification(session: aiohttp.ClientSession, webhook: App
     form = await _prepare_form(diff_text, main_log if webhook.attach_logs else None)
 
     logger.info(spacer())
+    error: dict[str, Any] | None = None
     try:
         async with session.post(url, data=form) as response:
-            if response.ok:
-                logger.info("Webhook notifications result: Success")
-
-            else:
-                json_resp: dict[str, Any] = await response.json()
-                json_resp.pop("content", None)
-                logger.error(f"Webhook notifications failed \n{json_resp!s}")
+            if not response.ok:
+                error = await response.json()
 
     except Exception:
         logger.exception("Unable to send webhook notification")
+    else:
+        if error:
+            error.pop("content", None)
+            result = f"Failed \n{error!s}"
+            level = logging.ERROR
+        else:
+            result = "Success"
+            level = logging.INFO
+
+        logger.log(level, f"Webhook notifications result: {result}")
 
 
 def _prepare_diff_text() -> str:

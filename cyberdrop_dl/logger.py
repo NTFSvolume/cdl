@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 import logging
@@ -10,7 +11,7 @@ from collections.abc import Generator
 from contextvars import ContextVar
 from logging.handlers import QueueHandler, QueueListener
 from pathlib import Path
-from typing import TYPE_CHECKING, ParamSpec
+from typing import TYPE_CHECKING, ParamSpec, cast
 
 from rich._log_render import LogRender
 from rich.console import Console, Group
@@ -18,6 +19,7 @@ from rich.logging import RichHandler
 from rich.padding import Padding
 from rich.text import Text, TextType
 
+from cyberdrop_dl import aio
 from cyberdrop_dl.dependencies import browser_cookie3
 from cyberdrop_dl.exceptions import InvalidYamlError
 
@@ -30,6 +32,7 @@ MAX_LOGS_SIZE = 25 * 1024 * 1024  # 25MB
 
 
 if TYPE_CHECKING:
+    import threading
     from collections.abc import Callable, Generator, Iterable
     from datetime import datetime
 
@@ -37,6 +40,14 @@ if TYPE_CHECKING:
 
     _P = ParamSpec("_P")
     _ExitCode = str | int | None
+
+
+_LOCK: threading.RLock = cast("threading.RLock", logging._lock)  # pyright: ignore[ reportAttributeAccessIssue]
+
+
+class LogsTooBigError(RuntimeError):
+    def __init__(self) -> None:
+        super().__init__("Logs file is too big")
 
 
 class RedactedConsole(Console):
@@ -62,10 +73,7 @@ class JsonLogRecord(logging.LogRecord):
         msg = str(self._proccess_msg(self.msg))
         if self.args:
             args = tuple(map(self._proccess_msg, self.args))
-            try:
-                return msg.format(*args)
-            except Exception:
-                return msg % args
+            return msg % args
 
         return msg
 
@@ -99,7 +107,6 @@ class LogHandler(RichHandler):
         )
         if is_file:
             self._log_render = NoPaddingLogRender(show_level=True)
-            _MAIN_LOGGER.set(self)
 
     def render_message(self, record: logging.LogRecord, message: str) -> ConsoleRenderable:
         """This is the same as the base class, just added the `color` parsing from the extras"""
@@ -129,7 +136,7 @@ class BareQueueHandler(QueueHandler):
     This made tracebacks render improperly because when the rich handler picks the log record from the queue, it has no traceback.
     The original traceback was being formatted as normal text and included as part of the message.
 
-    Having not pickleable objects is only an issue in multi-processing operations (multiprocessing.Queue)
+    We never log from other processes so we do not need that safety check
     """
 
     def prepare(self, record: logging.LogRecord) -> logging.LogRecord:
@@ -137,7 +144,7 @@ class BareQueueHandler(QueueHandler):
 
 
 @contextlib.contextmanager
-def enqueue_logger(log_handler: LogHandler) -> Generator[BareQueueHandler]:
+def _lazy_logger(log_handler: LogHandler) -> Generator[BareQueueHandler]:
     """Context-manager to process logs from this handler in another thread.
 
     It starts a QueueListener and yields the QueueHandler."""
@@ -152,7 +159,7 @@ def enqueue_logger(log_handler: LogHandler) -> Generator[BareQueueHandler]:
             queue_handler.close()
         finally:
             listener.stop()
-            for handl in listener.handlers:
+            for handl in listener.handlers[:]:
                 handl.close()
 
 
@@ -165,8 +172,8 @@ def setup_logging(
     logger.setLevel(log_level)
     with (
         logs_file.open("w+" if os.name == "nt" else "w", encoding="utf8") as fp,
-        enqueue_logger(LogHandler(level=console_log_level)) as console_out,
-        enqueue_logger(
+        _lazy_logger(LogHandler(level=console_log_level)) as console_out,
+        _lazy_logger(
             main_logger := LogHandler(
                 level=log_level,
                 console=RedactedConsole(file=fp, width=_DEFAULT_CONSOLE_WIDTH * 2),
@@ -180,24 +187,6 @@ def setup_logging(
             yield
         finally:
             _MAIN_LOGGER.reset(token)
-
-
-def export_logs() -> str:
-    """Copy the current contents of the main log file to `dest` without reopening the file (safe on Windows)."""
-
-    logger = _MAIN_LOGGER.get()
-    fp = logger.console.file
-    assert logger.lock is not None
-    with logger.lock:
-        pos = fp.tell()
-        try:
-            fp.seek(0, os.SEEK_END)
-            if fp.tell() > MAX_LOGS_SIZE:
-                raise RuntimeError("Logs file is too big (>=25MB)")
-            fp.seek(0)
-            return fp.read()
-        finally:
-            fp.seek(pos)
 
 
 @contextlib.contextmanager
@@ -214,52 +203,51 @@ def _try_open(path: Path):
 @contextlib.contextmanager
 def startup_context() -> Generator[None]:
     """Temporarily log everything to the console; on exception, dump it to a file."""
-    logger = logging.getLogger("cyberdrop_dl_startup")
-    old_level = logger.level
-    logger.setLevel(logging.DEBUG)
+    _startup_logger = logging.getLogger("cyberdrop_dl_startup")
+    _startup_logger.setLevel(logging.DEBUG)
     handlers: list[LogHandler] = []
     if "pytest" not in sys.modules:
         console_handler = LogHandler(level=logging.DEBUG)
-        logger.addHandler(console_handler)
+        _startup_logger.addHandler(console_handler)
         handlers.append(console_handler)
 
-    path = Path.cwd() / "startup.log"
+    path = Path.cwd().resolve() / "startup.log"
     delete = False
-    with _try_open(path) as file_io:
-        if file_io is not None:
+    with _try_open(path) as fp:
+        if fp is not None:
             file_handler = LogHandler(
                 level=logging.DEBUG,
-                console=Console(file=file_io, width=_DEFAULT_CONSOLE_WIDTH),
+                console=Console(file=fp, width=_DEFAULT_CONSOLE_WIDTH),
             )
-            logger.addHandler(file_handler)
+            _startup_logger.addHandler(file_handler)
             handlers.append(file_handler)
         try:
             yield
 
         except InvalidYamlError as e:
-            logger.error(e.message)
+            _startup_logger.error(e.message)
 
         except browser_cookie3.BrowserCookieError:
-            logger.exception("")
+            _startup_logger.exception("")
 
         except OSError as e:
-            logger.exception(str(e))
+            _startup_logger.exception(str(e))
 
         except KeyboardInterrupt:
-            logger.info("Exiting...")
+            _startup_logger.info("Exiting...")
 
         except Exception:
             msg = "An error occurred, please report this to the developer with your logs file:"
-            logger.exception(msg)
+            _startup_logger.exception(msg)
         else:
             delete = True
 
         finally:
-            logger.setLevel(old_level)
+            _startup_logger.setLevel(logging.NOTSET)
             for handler in handlers:
-                logger.removeHandler(handler)
+                _startup_logger.removeHandler(handler)
 
-    if delete and file_io is not None:
+    if delete and fp is not None:
         try:
             path.unlink(missing_ok=True)
         except OSError:
@@ -331,7 +319,7 @@ class NoPaddingLogRender(LogRender):
         return Group(output, *padded_lines)
 
 
-def _indent_text(text: Text, console: Console, indent: int = 30) -> Text:
+def _indent_text(text: Text, console: Console, indent: int) -> Text:
     """Indents each line of a Text object except the first one."""
     padding = Text("\n" + (" " * indent))
     new_text = Text()
@@ -367,23 +355,61 @@ def catch_exceptions(func: Callable[_P, _ExitCode]) -> Callable[_P, _ExitCode]:
 @contextlib.contextmanager
 def adopt_logger(name: str, level: int | None = None) -> Generator[logging.Logger]:
     """Context manager to temporarily enable a third party logger"""
-    logger = logging.getLogger(name)
-    old_level = logger.level
-    old_handlers = logger.handlers.copy()
-    old_propagate = logger.propagate
+    other_logger = logging.getLogger(name)
+    old_level = other_logger.level
 
-    logger.handlers.clear()
+    old_propagate = other_logger.propagate
+
+    with _LOCK:
+        old_handlers = other_logger.handlers.copy()
+        other_logger.handlers.clear()
+
     for handler in logging.getLogger("cyberdrop_dl").handlers:
-        logger.addHandler(handler)
+        other_logger.addHandler(handler)
 
-    logger.propagate = False
+    other_logger.propagate = False
     if level is not None:
-        logger.setLevel(level)
+        other_logger.setLevel(level)
 
     try:
-        yield logger
+        yield other_logger
     finally:
-        logger.handlers.clear()
-        logger.handlers.extend(old_handlers)
-        logger.propagate = old_propagate
-        logger.setLevel(old_level)
+        with _LOCK:
+            other_logger.handlers[:] = old_handlers
+
+        other_logger.propagate = old_propagate
+        other_logger.setLevel(old_level)
+
+
+def export_logs() -> str:
+    """Copy the contents of the main log file to `dest` without reopening the file
+
+    Required so Windows does not raise "FileAlredyOpen" error."""
+
+    logger = _MAIN_LOGGER.get()
+    assert logger.lock is not None
+    fp = logger.console.file
+    with logger.lock:
+        pos = fp.tell()
+        try:
+            fp.seek(0, os.SEEK_END)
+            if fp.tell() > MAX_LOGS_SIZE:
+                raise LogsTooBigError
+            fp.seek(0)
+            return fp.read()
+        finally:
+            fp.seek(pos)
+
+
+async def get_logs_content(path: Path) -> bytes | None:
+    """Try to read the content of this file from disk. Otherwise, get the content from the fp of the current logger"""
+    try:
+        try:
+            if size := await aio.get_size(path):
+                if size > MAX_LOGS_SIZE:
+                    raise LogsTooBigError
+                return await aio.read_bytes(path)
+        except OSError:
+            return (await asyncio.to_thread(export_logs)).encode("utf-8")
+    except Exception:
+        logger.exception("Unable to get copy of the main log file")
