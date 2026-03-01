@@ -49,20 +49,37 @@ class DiskPartitionStats:
 
     def __str__(self) -> str:
         free_space = self.free_space.human_readable(decimal=True)
-        stats_as_dict = dataclasses.asdict(self.partition) | {"free_space": free_space}
-        return ", ".join(f"'{k}': '{v}'" for k, v in stats_as_dict.items())
+        stats = dataclasses.asdict(self.partition) | {"free_space": free_space}
+        return ", ".join(f"'{k}': '{v}'" for k, v in stats.items())
 
 
-def partition_stats() -> Generator[DiskPartitionStats]:
-    for partition in partitions():
-        free_space = _free_space.get(partition.mountpoint)
-        if free_space is not None:
-            yield DiskPartitionStats(partition, ByteSize(free_space))
+class _Stats:
+    def __str__(self) -> str:
+        info = "\n".join(f"    {stats!s}" for stats in partition_stats())
+        return f"Storage status:\n {info}"
 
 
-def _stats() -> str:
-    info = "\n".join(f"    {stats!s}" for stats in partition_stats())
-    return f"Storage status:\n {info}"
+async def get_free_space(path: Path) -> int:
+    unsupported = None
+    free_space = 0
+
+    try:
+        usage = await asyncio.to_thread(psutil.disk_usage, str(path))
+        free_space = usage.free
+    except OSError as e:
+        if "operation not supported" not in str(e).casefold():
+            raise
+
+        unsupported = e
+
+    if unsupported or (free_space == 0 and is_fuse_fs(path)):
+        logger.error(
+            f"Unable to get free space from mount point ('{path}')'. Skipping free space check",
+            exc_info=unsupported,
+        )
+        return -1
+
+    return free_space
 
 
 async def has_sufficient_space(folder: Path) -> bool:
@@ -80,7 +97,7 @@ async def has_sufficient_space(folder: Path) -> bool:
 
                 free_space = _free_space[mount] = await get_free_space(mount)
                 logger.info(f"A new mountpoint ('{mount!s}') will be used for '{folder}'")
-                logger.info(_stats())
+                logger.info(_Stats())
                 global _loop
                 if _loop is None:
                     _loop = asyncio.create_task(_start_loop())
@@ -92,7 +109,76 @@ async def check(media_item: MediaItem) -> None:
     """Checks if there is enough free space to download this item."""
 
     if not await has_sufficient_space(media_item.download_folder):
-        raise InsufficientFreeSpaceError(origin=media_item)
+        raise InsufficientFreeSpaceError(media_item)
+
+
+def find_partition(path: Path) -> DiskPartition | None:
+    if not path.is_absolute():
+        raise ValueError(f"{path!r} is not absolute")
+
+    possible_partitions = (p for p in partitions() if path.is_relative_to(p.mountpoint))
+
+    # Get the closest mountpoint to `folder`
+    # mount_a = /home/user/  -> points to an internal SSD
+    # mount_b = /home/user/USB -> points to an external USB drive
+    # If `folder`` is `/home/user/USB/videos`, the correct mountpoint is mount_b
+    if partition := max(possible_partitions, key=lambda p: len(p.mountpoint.parts), default=None):
+        return partition
+
+
+def is_fuse_fs(path: Path) -> bool:
+    if partition := find_partition(path):
+        return "fuse" in partition.fstype
+    return False
+
+
+def create_free_space_checker(media_item: MediaItem, *, frecuency: int = 5) -> Callable[[], Awaitable[None]]:
+    current_chunk = 0
+
+    async def checker() -> None:
+        nonlocal current_chunk
+        if current_chunk % frecuency == 0:
+            await check(media_item)
+        current_chunk += 1
+
+    return checker
+
+
+def partitions() -> tuple[DiskPartition, ...]:
+    if not _PARTITIONS:
+        _PARTITIONS.extend(_get_disk_partitions())
+    return tuple(_PARTITIONS)
+
+
+def partition_stats() -> Generator[DiskPartitionStats]:
+    for partition in partitions():
+        free_space = _free_space.get(partition.mountpoint)
+        if free_space is not None:
+            yield DiskPartitionStats(partition, ByteSize(free_space))
+
+
+def clear_cache() -> None:
+    _PARTITIONS.clear()
+    _UNAVAILABLE.clear()
+    _LOCKS.clear()
+    _free_space.clear()
+    _get_mount_point.cache_clear()
+
+
+@contextlib.asynccontextmanager
+async def monitor(required_free_space: int) -> AsyncGenerator[None]:
+    token = _required_free_space.set(required_free_space)
+    try:
+        yield
+    finally:
+        _required_free_space.reset(token)
+        global _loop
+        if _loop is not None:
+            try:
+                _ = _loop.cancel()
+                await _loop
+            except asyncio.CancelledError:
+                pass
 
 
 async def _start_loop() -> None:
@@ -108,7 +194,7 @@ async def _start_loop() -> None:
             _free_space.update(zip(mountpoints, results, strict=True))
 
         if last_check % _LOG_PERIOD == 0:
-            logger.debug(_stats())
+            logger.debug(_Stats())
 
         await asyncio.sleep(_CHECK_PERIOD)
 
@@ -151,8 +237,10 @@ def _get_disk_partitions() -> Generator[DiskPartition]:
 
 
 async def _check_nt_network_drive(folder: Path) -> None:
-    """Checks is the drive of this folder is a Windows network drive (UNC or unknown mapped drive) and exists."""
-    # See: https://github.com/jbsparrow/CyberDropDownloader/issues/860
+    """Checks is the drive of this folder is a Windows network drive (UNC or unknown mapped drive) and exists.
+
+    See: https://github.com/jbsparrow/CyberDropDownloader/issues/860
+    """
     if not psutil.WINDOWS:
         return
 
@@ -190,88 +278,3 @@ async def _check_nt_network_drive(folder: Path) -> None:
 
         else:
             _UNAVAILABLE.add(folder_drive)
-
-
-def find_partition(path: Path) -> DiskPartition | None:
-    if not path.is_absolute():
-        raise ValueError(f"{path!r} is not absolute")
-
-    possible_partitions = (p for p in partitions() if path.is_relative_to(p.mountpoint))
-
-    # Get the closest mountpoint to `folder`
-    # mount_a = /home/user/  -> points to an internal SSD
-    # mount_b = /home/user/USB -> points to an external USB drive
-    # If `folder`` is `/home/user/USB/videos`, the correct mountpoint is mount_b
-    if partition := max(possible_partitions, key=lambda p: len(p.mountpoint.parts), default=None):
-        return partition
-
-
-def is_fuse_fs(path: Path) -> bool:
-    if partition := find_partition(path):
-        return "fuse" in partition.fstype
-    return False
-
-
-async def get_free_space(path: Path) -> int:
-    unsupported = None
-    free_space = 0
-
-    try:
-        result = await asyncio.to_thread(psutil.disk_usage, str(path))
-        free_space = result.free
-    except OSError as e:
-        if "operation not supported" not in str(e).casefold():
-            raise
-
-        unsupported = e
-
-    if unsupported or (free_space == 0 and is_fuse_fs(path)):
-        logger.error(
-            f"Unable to get free space from mount point ('{path!s}')'. Skipping free space check",
-            exc_info=unsupported,
-        )
-        free_space = -1
-
-    return free_space
-
-
-def create_free_space_checker(media_item: MediaItem, *, frecuency: int = 5) -> Callable[[], Awaitable[None]]:
-    current_chunk = 0
-
-    async def checker() -> None:
-        nonlocal current_chunk
-        if current_chunk % frecuency == 0:
-            await check(media_item)
-        current_chunk += 1
-
-    return checker
-
-
-def partitions() -> tuple[DiskPartition, ...]:
-    if not _PARTITIONS:
-        _PARTITIONS.extend(_get_disk_partitions())
-    return tuple(_PARTITIONS)
-
-
-def clear_cache() -> None:
-    _PARTITIONS.clear()
-    _UNAVAILABLE.clear()
-    _LOCKS.clear()
-    _free_space.clear()
-    _get_mount_point.cache_clear()
-
-
-@contextlib.asynccontextmanager
-async def monitor(required_free_space: int) -> AsyncGenerator[None]:
-    token = _required_free_space.set(required_free_space)
-    try:
-        yield
-    finally:
-        _required_free_space.reset(token)
-        global _loop
-        if _loop is not None:
-            try:
-                _ = _loop.cancel()
-                await _loop
-            except asyncio.CancelledError:
-                pass

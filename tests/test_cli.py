@@ -5,8 +5,8 @@ import pytest
 from pydantic import ValidationError
 
 from cyberdrop_dl import appdata, config
+from cyberdrop_dl.__main__ import _create_director, run
 from cyberdrop_dl.cli import parse_args
-from cyberdrop_dl.main import _create_director, run
 
 
 @pytest.mark.parametrize(
