@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, TypeVar
+from typing import Annotated
 
 import yarl
 from pydantic import (
@@ -23,7 +23,6 @@ from cyberdrop_dl.models.validators import (
     to_yarl_url,
 )
 
-T = TypeVar("T")
 # ~~~~~ Strings ~~~~~~~
 StrSerializer = PlainSerializer(str, return_type=str, when_used="json-unless-none")
 NonEmptyStr = Annotated[str, StringConstraints(min_length=1, strip_whitespace=True)]

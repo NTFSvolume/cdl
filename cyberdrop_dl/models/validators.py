@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from datetime import timedelta
-from typing import TYPE_CHECKING, SupportsIndex, SupportsInt, TypeAlias, TypeVar, overload
+from typing import TYPE_CHECKING, Literal, SupportsIndex, SupportsInt, TypeAlias, TypeVar
 
 from pydantic import ByteSize, TypeAdapter
 
@@ -47,7 +47,7 @@ def change_path_suffix(suffix: str) -> Callable[[Path], Path]:
     return with_suffix
 
 
-def str_to_timedelta(input_date: str) -> timedelta:
+def _str_to_timedelta(input_date: str) -> timedelta:
     time_str = input_date.casefold()
     matches: list[str] = re.findall(_DATE_PATTERN, time_str)
     seen_units: set[str] = set()
@@ -88,52 +88,27 @@ def to_timedelta(input_date: timedelta | str | int) -> timedelta | str:
 
     For `int`, `input_date` is assumed as `days`
     """
-    return falsy_as(input_date, timedelta(0), _parse_as_timedelta)
-
-
-def _parse_as_timedelta(input_date: timedelta | int | str) -> timedelta | str:
+    input_date = falsy_as(input_date, timedelta(0))
     if isinstance(input_date, timedelta):
         return input_date
     if isinstance(input_date, int):
         return timedelta(days=input_date)
     try:
-        return str_to_timedelta(input_date)
-    except ValueError:
+        return _str_to_timedelta(input_date)
+    except Exception:
         return input_date  # Let pydantic try to validate this
 
 
-@overload
-def falsy_as(value: _T, falsy_value: _T2, func: None = None) -> _T | _T2: ...
+def falsy_as(value: _T | Literal[""] | None, default: _T2) -> _T | _T2:
+    if isinstance(value, str) and value.casefold() in ("none", "null"):
+        return default
+
+    return value or default
 
 
-@overload
-def falsy_as(value: _T, falsy_value: _T2, func: Callable[[_T], _R]) -> _T2 | _R: ...
-
-
-def falsy_as(value: _T, falsy_value: _T2, func: Callable[[_T], _R] | None = None) -> _T | _T2 | _R:
-    """If `value` is falsy, returns `falsy_value`
-
-    If `value` is NOT falsy AND `func` is provided, returns `func(value, *args, **kwargs)`
-
-    Returns `value` otherwise
-    """
-    value_ = value
-    if isinstance(value_, str) and value_.casefold() in ("none", "null"):
-        value_ = None
-    if not value_:
-        return falsy_value
-    if not func:
-        return value_
-    return func(value_)
-
-
-def falsy_as_list(value: list[_T]) -> list[_T]:
+def falsy_as_list(value: list[_T] | Literal[""] | None) -> list[_T]:
     return falsy_as(value, [])
 
 
-def falsy_as_none(value: _T) -> _T | None:
+def falsy_as_none(value: _T | Literal[""] | None) -> _T | None:
     return falsy_as(value, None)
-
-
-def falsy_as_dict(value: dict[str, _T]) -> dict[str, _T]:
-    return falsy_as(value, {})
