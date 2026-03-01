@@ -67,9 +67,9 @@ class RedactedConsole(Console):
 
 
 class JsonLogRecord(logging.LogRecord):
-    def getMessage(self) -> str:  # noqa: N802
-        """`dicts` will be logged as json, lazily"""
+    """`dicts` will be logged as json, lazily"""
 
+    def getMessage(self) -> str:  # noqa: N802
         msg = str(self._proccess_msg(self.msg))
         if self.args:
             args = tuple(map(self._proccess_msg, self.args))
@@ -165,17 +165,18 @@ def _lazy_logger(log_handler: LogHandler) -> Generator[BareQueueHandler]:
 
 @contextlib.contextmanager
 def setup_logging(
-    logs_file: Path,
-    log_level: int = logging.DEBUG,
-    console_log_level: int = logging.CRITICAL + 10,
+    file: Path,
+    /,
+    level: int = logging.DEBUG,
+    console_level: int = logging.CRITICAL + 10,
 ) -> Generator[None]:
-    logger.setLevel(log_level)
+    logger.setLevel(level)
     with (
-        logs_file.open("w+" if os.name == "nt" else "w", encoding="utf8") as fp,
-        _lazy_logger(LogHandler(level=console_log_level)) as console_out,
+        file.open("w+" if os.name == "nt" else "w", encoding="utf8") as fp,
+        _lazy_logger(LogHandler(level=console_level)) as console_out,
         _lazy_logger(
             main_logger := LogHandler(
-                level=log_level,
+                level=level,
                 console=RedactedConsole(file=fp, width=_DEFAULT_CONSOLE_WIDTH * 2),
             )
         ) as file_out,
@@ -353,23 +354,18 @@ def catch_exceptions(func: Callable[_P, _ExitCode]) -> Callable[_P, _ExitCode]:
 
 
 @contextlib.contextmanager
-def adopt_logger(name: str, level: int | None = None) -> Generator[logging.Logger]:
+def adopt_logger(name: str, level: int = logging.INFO) -> Generator[logging.Logger]:
     """Context manager to temporarily enable a third party logger"""
     other_logger = logging.getLogger(name)
     old_level = other_logger.level
-
     old_propagate = other_logger.propagate
 
     with _LOCK:
         old_handlers = other_logger.handlers.copy()
-        other_logger.handlers.clear()
-
-    for handler in logging.getLogger("cyberdrop_dl").handlers:
-        other_logger.addHandler(handler)
+        other_logger.handlers[:] = logging.getLogger("cyberdrop_dl").handlers[:]
 
     other_logger.propagate = False
-    if level is not None:
-        other_logger.setLevel(level)
+    other_logger.setLevel(level)
 
     try:
         yield other_logger

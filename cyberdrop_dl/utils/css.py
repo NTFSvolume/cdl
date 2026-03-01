@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import functools
-import json
 import logging
 from typing import TYPE_CHECKING, Any, NamedTuple, ParamSpec, TypeVar, overload
 
@@ -9,6 +8,8 @@ import bs4.css
 from bs4 import BeautifulSoup
 
 from cyberdrop_dl.exceptions import ScrapeError
+
+from . import json
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
@@ -33,8 +34,11 @@ class CssAttributeSelector(NamedTuple):
     def __call__(self, soup: Tag) -> str:
         return select(soup, self.element, self.attribute)
 
+    def text(self, tag: Tag) -> str:
+        return select_text(tag, self.element)
 
-def not_none(func: Callable[_P, _R | None]) -> Callable[_P, _R]:
+
+def _not_none(func: Callable[_P, _R | None]) -> Callable[_P, _R]:
     @functools.wraps(func)
     def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
         result = func(*args, **kwargs)
@@ -45,7 +49,7 @@ def not_none(func: Callable[_P, _R | None]) -> Callable[_P, _R]:
     return wrapper
 
 
-@not_none
+@_not_none
 def _select_one(tag: Tag, selector: str) -> Tag | None:
     """Same as `tag.select_one` but asserts the result is not `None`"""
     return tag.select_one(selector)
@@ -60,7 +64,7 @@ def select_text(tag: Tag, selector: str, strip: bool = True, *, decompose: str |
     return get_text(inner_tag, strip)
 
 
-def get_attr_or_none(tag: Tag, attribute: str) -> str | None:
+def _get_attr(tag: Tag, attribute: str) -> str | None:
     """Same as `tag.get(attribute)` but asserts the result is a single str"""
     attribute_ = attribute
     if attribute_ == "srcset":
@@ -81,10 +85,10 @@ def get_text(tag: Tag, strip: bool = True) -> str:
     return tag.get_text(strip=strip)
 
 
-@not_none
+@_not_none
 def get_attr(tag: Tag, attribute: str) -> str | None:
     """Same as `tag.get(attribute)` but asserts the result is not `None` and is a single string"""
-    return get_attr_or_none(tag, attribute)
+    return _get_attr(tag, attribute)
 
 
 @overload
@@ -102,9 +106,9 @@ def select(tag: Tag, selector: str, attribute: str | None = None) -> Tag | str:
     return get_attr(inner_tag, attribute)
 
 
-def select_one_get_attr_or_none(tag: Tag, selector: str, attribute: str) -> str | None:
+def select_one_get_attr(tag: Tag, selector: str, attribute: str) -> str | None:
     if inner_tag := tag.select_one(selector):
-        return get_attr_or_none(inner_tag, attribute)
+        return _get_attr(inner_tag, attribute)
 
 
 @overload
@@ -123,7 +127,7 @@ def iselect(tag: Tag, selector: str, attribute: str | None = None) -> Generator[
 
     else:
         for inner_tag in tags:
-            if attr := get_attr_or_none(inner_tag, attribute):
+            if attr := _get_attr(inner_tag, attribute):
                 yield attr
 
 

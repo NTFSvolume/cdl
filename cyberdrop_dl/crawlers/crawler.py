@@ -690,7 +690,7 @@ class Crawler(ABC):
 
         seen: set[str] = set()
         for tag in css.iselect(soup, selector):
-            link_str: str | None = css.get_attr_or_none(tag, attribute)
+            link_str: str | None = css._get_attr(tag, attribute)
             if not link_str or link_str in seen:
                 continue
             seen.add(link_str)
@@ -698,7 +698,7 @@ class Crawler(ABC):
             if self.check_album_results(link, album_results):
                 continue
             if t_tag := tag.select_one("img"):
-                thumb_str: str | None = css.get_attr_or_none(t_tag, "src")
+                thumb_str: str | None = css._get_attr(t_tag, "src")
             else:
                 thumb_str = None
             thumb = self.parse_url(thumb_str) if thumb_str and not is_blob_or_svg(thumb_str) else None
@@ -784,7 +784,7 @@ class Crawler(ABC):
         else:
             selector = selector or self.NEXT_PAGE_SELECTOR
             assert selector, f"No selector was provided and {self.DOMAIN} does define a next_page_selector"
-            func = css.select_one_get_attr_or_none
+            func = css.select_one_get_attr
             get_next_page = partial(func, selector=selector, attribute="href")
 
         while True:
@@ -814,7 +814,7 @@ class Crawler(ABC):
     @final
     def parse_date(self, date_or_datetime: str, format: str | None = None, /) -> dates.TimeStamp | None:
         try:
-            parsed_date = dates.parse(date_or_datetime, format)
+            parsed_date = dates.parse_format(date_or_datetime)
         except ValueError as e:
             self.logger.error(
                 f"Date parsing for {self.DOMAIN} seems to be broken [{date_or_datetime=}, {format=}]: {e}"
@@ -826,7 +826,7 @@ class Crawler(ABC):
     @final
     def parse_iso_date(self, date_or_datetime: str, /) -> dates.TimeStamp | None:
         try:
-            parsed_date = dates.parse(date_or_datetime, iso=True)
+            parsed_date = dates.parse_iso(date_or_datetime)
         except ValueError as e:
             self.logger.error(f"Date parsing for {self.DOMAIN} seems to be broken [{date_or_datetime=} iso=True]: {e}")
         else:

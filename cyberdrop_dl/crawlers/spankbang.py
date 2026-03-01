@@ -172,7 +172,7 @@ def _parse_video(soup: BeautifulSoup, display_id: str) -> Video:
         url=url,
         stream_id=get_text_between(stream_js_text, "ana_video_id = ", ";").strip("'"),
         stream_key=css.select(soup, "[data-streamkey]", "data-streamkey"),
-        title=css.get_attr_or_none(title_tag, "title") or css.get_text(title_tag),
+        title=css._get_attr(title_tag, "title") or css.get_text(title_tag),
     )
 
 

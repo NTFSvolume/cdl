@@ -148,7 +148,7 @@ class DirtyShipCrawler(Crawler):
 
     def get_flowplayer_sources(self, soup: BeautifulSoup) -> set[Format]:
         flow_player = soup.select_one(_SELECTORS.FLOWPLAYER_VIDEO)
-        data_item: str | None = css.get_attr_or_none(flow_player, "data-item") if flow_player else None
+        data_item: str | None = css._get_attr(flow_player, "data-item") if flow_player else None
         if not data_item:
             return set()
         data_item = data_item.replace(r"\/", "/")

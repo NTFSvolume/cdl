@@ -75,7 +75,7 @@ class OdnoklassnikiCrawler(Crawler):
 
         channel_id = channel_str.removeprefix("c")
         gwt_hash = get_text_between(css.select_text(soup, Selector.CHANNEL_HASH), 'gwtHash:"', '",')
-        last_element_id = css.select_one_get_attr_or_none(soup, *Selector.CHANNEL_LAST_ELEMENT)
+        last_element_id = css.select_one_get_attr(soup, *Selector.CHANNEL_LAST_ELEMENT)
         name = css.select_text(soup, Selector.CHANNEL_NAME)
         scrape_item.setup_as_album(self.create_title(name, channel_id), album_id=channel_id)
 

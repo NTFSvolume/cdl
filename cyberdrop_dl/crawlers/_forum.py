@@ -539,7 +539,7 @@ class HTMLMessageBoardCrawler(MessageBoardCrawler, is_abc=True):
             yield soup
 
     def get_next_page(self, soup: BeautifulSoup) -> str | None:
-        return css.select_one_get_attr_or_none(soup, *self.SELECTORS.next_page)
+        return css.select_one_get_attr(soup, *self.SELECTORS.next_page)
 
     @final
     @error_handling_wrapper

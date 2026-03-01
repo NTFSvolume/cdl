@@ -216,7 +216,7 @@ class PornHubCrawler(Crawler):
         soup = await self.request_soup(scrape_item.url)
         attributes = "data-mp4", "data-fallback", "data-webm"
         gif_tag = css.select(soup, _SELECTORS.GIF)
-        link_str = next(value for attr in attributes if (value := css.get_attr_or_none(gif_tag, attr)))
+        link_str = next(value for attr in attributes if (value := css._get_attr(gif_tag, attr)))
         link = self.parse_url(link_str)
         await self._process_photo(scrape_item, link)
 
