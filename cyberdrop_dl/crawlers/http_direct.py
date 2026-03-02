@@ -19,7 +19,7 @@ class DirectHTTPFile(Crawler, is_generic=True):
     @override
     async def ready(self) -> bool:  # pyright: ignore[reportIncompatibleMethodOverride]
         if not self._ready:
-            _ = self._init_downloader_()
+            _ = self._downloader_()
         return self._ready
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:

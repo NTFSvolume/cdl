@@ -244,7 +244,7 @@ class GoFileCrawler(Crawler):
         raise ScrapeError(401, "Couldn't generate GoFile websiteToken", origin=_GLOBAL_JS_URL)
 
     def _get_download_headers(self, referer: AbsoluteHttpURL) -> dict[str, str]:
-        return super()._download_headers_(referer) | self.headers
+        return super()._headers_(referer) | self.headers
 
 
 def _check_node_is_accessible(node: Node) -> TypeGuard[File | Folder]:

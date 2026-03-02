@@ -285,4 +285,4 @@ class PixelDrainCrawler(Crawler):
     _file_task = auto_task_id(_file)
 
     def _get_download_headers(self, referer: AbsoluteHttpURL) -> dict[str, str]:
-        return super()._download_headers_(referer=referer) | self._headers
+        return super()._headers_(referer=referer) | self._headers

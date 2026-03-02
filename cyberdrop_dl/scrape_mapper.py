@@ -6,8 +6,9 @@ import datetime
 import logging
 import re
 from collections import defaultdict
+from collections.abc import Generator
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, Self, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 from cyberdrop_dl import aio, plugins
 from cyberdrop_dl.clients.jdownloader import JDownloader
@@ -24,7 +25,7 @@ from cyberdrop_dl.logger import spacer
 from cyberdrop_dl.utils import best_match, get_download_path, parse_url, remove_trailing_slash
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, AsyncIterable, AsyncIterator, Coroutine, Generator, Iterable
+    from collections.abc import AsyncGenerator, AsyncIterable, Coroutine, Generator, Iterable
 
     import aiosqlite
 
@@ -72,11 +73,8 @@ class CrawlerFactory:
         return self._instances.get(obj)  # pyright: ignore[reportReturnType]
 
 
-@dataclasses.dataclass(slots=True, eq=False)
-class AsyncStatsWrapper:
-    """Wraps an async ScrapeItem iterator and collects basic statistics while iterating."""
-
-    _source: AsyncIterator[ScrapeItem]
+@dataclasses.dataclass(slots=True)
+class ScrapeStats:
     count: int = dataclasses.field(init=False, default=0)
     groups: list[str] = dataclasses.field(init=False, default_factory=list)
     url_count: dict[str, int] = dataclasses.field(init=False, default_factory=lambda: defaultdict(int))
@@ -85,16 +83,16 @@ class AsyncStatsWrapper:
     def unique_groups(self) -> list[str]:
         return list(dict.fromkeys(self.groups))
 
-    def __aiter__(self) -> Self:
-        return self
-
-    async def __anext__(self) -> ScrapeItem:
-        item = await self._source.__anext__()
+    def update(self, item: ScrapeItem) -> None:
         self.count += 1
         if item.parent_title:
             self.groups.append(item.parent_title)
         self.url_count[item.url.host] += 1
-        return item
+
+    async def wrap(self, source: AsyncIterable[ScrapeItem]) -> AsyncGenerator[ScrapeItem]:
+        async for item in source:
+            self.update(item)
+            yield item
 
 
 async def from_urls(source: Iterable[AbsoluteHttpURL]) -> AsyncGenerator[ScrapeItem, None]:
@@ -180,12 +178,14 @@ class ScrapeMapper:
         _ = await asyncio.gather(self.jdownloader.ready(), self.real_debrid.ready(), self.direct_http.ready())
         self._ready = True
 
-    async def run(self, source: AsyncIterable[ScrapeItem]) -> None:
+    async def run(self, source: AsyncIterable[ScrapeItem]) -> ScrapeStats:
         """Starts the orchestra."""
         await self.ready()
-        async for item in source:
+        stats = ScrapeStats()
+        async for item in stats.wrap(source):
             item._children_limits = self.config.download.max_children
             self._create_task(self.send_to_crawler(item))
+        return stats
 
     async def filter_and_send_to_crawler(self, scrape_item: ScrapeItem) -> None:
         """Send scrape_item to a supported crawler."""

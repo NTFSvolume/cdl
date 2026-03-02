@@ -147,7 +147,7 @@ class OdnoklassnikiCrawler(Crawler):
         )
 
     def _get_download_headers(self, referer: AbsoluteHttpURL) -> dict[str, str]:
-        return super()._download_headers_(referer) | {
+        return super()._headers_(referer) | {
             "Accept-Language": "en-gb, en;q=0.8",
             "User-Agent": _CHROME_ANDROID_USER_AGENT,
             "Referer": "https://m.ok.ru/",

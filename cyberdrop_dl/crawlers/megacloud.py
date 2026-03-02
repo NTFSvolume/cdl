@@ -114,7 +114,7 @@ class MegaCloudCrawler(Crawler):
         )
 
     def _get_download_headers(self, referer: AbsoluteHttpURL) -> dict[str, str]:
-        return super()._download_headers_(referer) | {"referer": "https://megacloud.blog/"}
+        return super()._headers_(referer) | {"referer": "https://megacloud.blog/"}
 
 
 _ISO639_MAP = {
