@@ -28,14 +28,14 @@ _HASHERS: Final = {
     HashAlgorithm.xxh128: xxhash.xxh128,
     HashAlgorithm.sha256: hashlib.sha256,
 }
-_1MB: Final = 1024 * 1024  # 1MB
+_1MB: Final = 1024 * 1024
 _10MB: Final = _1MB * 10
 HashValue = NewType("HashValue", str)
 
 
 class HashResult(NamedTuple):
     hash: HashValue
-    size: int
+    file_size: int
     mtime: int
 
 
@@ -72,7 +72,8 @@ def compute_hash(file: Path, algorithm: HashAlgorithm) -> HashValue:
 class Hasher:
     """Manage hashes and db insertion.
 
-    The hasher will have a peak RAM consumtion of  (concurrency * 10MB) while hashing"""
+    The hasher will have a peak RAM consumption of (concurrency * 10MB) while hashing
+    and use a max of (concurrency) number of threads (if available)"""
 
     tui: TUI
     config: Config
@@ -101,19 +102,6 @@ class Hasher:
                     await self._sem.acquire()
                     tg.create_task(self._hash_file(file))
 
-    async def _hash_item(self, media_item: MediaItem) -> None:
-        if media_item.is_segment or media_item.complete_file.suffix in constants.TempExt:
-            return
-
-        results = await self._hash_file(media_item.complete_file)
-        if not results:
-            return
-
-        xxh128_result = XXH128Result(results[HashAlgorithm.xxh128])
-        media_item.hash = xxh128_result.hash
-        self._xxh128_hashes[media_item.complete_file] = xxh128_result
-        # TODO: save results to the database
-
     async def _hash_file(self, file: Path) -> HashResults | None:
         try:
             with self.tui.hashing.new_hook(file):
@@ -127,6 +115,19 @@ class Hasher:
         finally:
             self._sem.release()
 
+    async def _hash_item(self, media_item: MediaItem) -> None:
+        if media_item.is_segment or media_item.complete_file.suffix in constants.TempExt:
+            return
+
+        results = await self._hash_file(media_item.complete_file)
+        if not results:
+            return
+
+        xxh128_result = XXH128Result(results[HashAlgorithm.xxh128])
+        media_item.hash = xxh128_result.hash
+        self._xxh128_hashes[media_item.complete_file] = xxh128_result
+        # TODO: save results to the database
+
     async def _get_hash_or_compute(self, file: Path, hash_algo: HashAlgorithm) -> HashResult:
         """Generates hash of a file."""
         stat = await aio.stat(file)
@@ -139,13 +140,15 @@ class Hasher:
                 if db_mtime is None:
                     # TODO: pre v9 db row. We need to delete them
                     pass
-
-                self.tui.hashing.add_prev_hashed()
-                return HashResult(HashValue(hash), f_size, f_mtime)
+                else:
+                    self.tui.hashing.add_prev_hashed()
+                    return HashResult(HashValue(hash), f_size, f_mtime)
             case _:
-                hash = await asyncio.to_thread(compute_hash, file, hash_algo)
-                self.tui.hashing.add_hashed(hash_algo)
-                return HashResult(HashValue(hash), f_size, f_mtime)
+                pass
+
+        hash = await asyncio.to_thread(compute_hash, file, hash_algo)
+        self.tui.hashing.add_hashed(hash_algo)
+        return HashResult(HashValue(hash), f_size, f_mtime)
 
     async def in_place_hash(self, media_item: MediaItem) -> None:
         if self.config.dedupe.hashing is not Hashing.IN_PLACE:
@@ -179,6 +182,9 @@ class Hasher:
 class Czkawka:
     """Deletes dedupes based on hash results"""
 
+    # Why this name? Czkawka it's a popular dedupe sofware and this class works in a similar way to find matches
+    # https://github.com/qarmin/czkawka.
+
     send_to_trash_bin: bool
     concurrency: int = 20
     on_delete: Callable[[], Any] = lambda: None
@@ -190,7 +196,7 @@ class Czkawka:
         self._suffix = "Sent to trash" if self.send_to_trash_bin else "Permanently deleted"
 
     async def run(self, results: Mapping[Path, XXH128Result]) -> None:
-        """cleanup files based on dedupe setting"""
+        """delete duplicate files"""
         async with asyncio.TaskGroup() as tg:
             for file, result in results.items():
                 # TODO: We should query all files with a matching result from the db and only keep the oldest one
