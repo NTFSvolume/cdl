@@ -50,7 +50,7 @@ from cyberdrop_dl.utils.filepath import compose_custom_filename, get_filename_an
 from cyberdrop_dl.utils.strings import safe_format
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Callable, Coroutine, Generator, Iterable
+    from collections.abc import AsyncGenerator, Callable, Coroutine, Generator, Iterable, Mapping
     from http.cookies import BaseCookie
 
     import yarl
@@ -138,6 +138,18 @@ class Registry:
                 cls._import(module_info.name)
 
 
+class CrawlerLogger(logging.LoggerAdapter[logging.Logger]):
+    def __init__(self, cls: Crawler, logger: logging.Logger, extra: Mapping[str, object] | None = None) -> None:
+        self._domain = cls.FOLDER_DOMAIN
+        super().__init__(logger)
+
+    def process(self, msg: str, kwargs: Any) -> tuple[str, Any]:
+        return f"[{self._domain}] {msg}", kwargs
+
+    def bug_report(self, msg: object):
+        self.error(msg, bug=True)
+
+
 def _url(item: ScrapeItem | AbsoluteHttpURL) -> AbsoluteHttpURL:
     return item if isinstance(item, AbsoluteHttpURL) else item.url
 
@@ -184,7 +196,7 @@ class Crawler(ABC):
 
         self.logged_in: bool = False
         self._scraped_items: set[str] = set()
-        self.logger = logging.getLogger(type(self).__qualname__)
+        self.logger = CrawlerLogger(logging.getLogger(type(self).__qualname__))
         self._semaphore = asyncio.Semaphore(20)
         self.__post_init__()
 
