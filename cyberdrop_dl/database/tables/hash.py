@@ -30,7 +30,7 @@ class HashTable:
         await self.db_conn.execute(create_hash_index)
         await self.db_conn.commit()
 
-    async def get_file_hash_exists(self, path: Path | str, hash_type: str) -> str | None:
+    async def get_file_hash_exists(self, path: Path | str, hash_type: str) -> tuple[str, int, int | None] | None:
         """gets the hash from a complete file path
 
         Args:

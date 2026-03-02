@@ -214,7 +214,7 @@ def check_partials_and_empty_folders(config: config.Config) -> None:
         for file in _partial_files(download_folder):
             file.unlink(missing_ok=True)
 
-    if config.runtime.skip_check_for_empty_folders:
+    if not config.runtime.delete_empty_folders:
         return
 
     logger.info("Deleting empty files and folders...")

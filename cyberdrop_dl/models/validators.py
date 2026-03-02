@@ -78,7 +78,7 @@ def _str_to_timedelta(input_date: str) -> timedelta:
     return timedelta(**time_dict)
 
 
-def to_timedelta(input_date: timedelta | str | int) -> timedelta | str:
+def to_timedelta(input_date: timedelta | str | int | None) -> timedelta | str:
     """Parses `datetime.timedelta`, `str` or `int` into a timedelta format.
 
     For `str`, the expected format is `<value> <unit>`, ex: `5 days`, `10 minutes`, `1 year`

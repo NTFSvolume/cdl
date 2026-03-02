@@ -11,10 +11,11 @@ from typing import TYPE_CHECKING, Any
 import aiohttp
 from multidict import CIMultiDict, CIMultiDictProxy
 
-from cyberdrop_dl import config, ddos_guard
+from cyberdrop_dl import ddos_guard
 from cyberdrop_dl.compat import StrEnum
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError
+from cyberdrop_dl.tui import show_msg
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -33,7 +34,7 @@ class _Command(StrEnum):
     POST_REQUEST = "request.post"
 
 
-@dataclasses.dataclass(frozen=True, slots=True)
+@dataclasses.dataclass(slots=True)
 class FlareSolverrSolution:
     content: str
     cookies: SimpleCookie
@@ -54,7 +55,7 @@ class FlareSolverrSolution:
         )
 
 
-@dataclasses.dataclass(frozen=True, slots=True)
+@dataclasses.dataclass(slots=True)
 class _FlareSolverrResponse:
     status: str
     message: str
@@ -72,7 +73,7 @@ class _FlareSolverrResponse:
 class FlareSolverr:
     """Class that handles communication with flaresolverr."""
 
-    http_client: HttpClient
+    client: HttpClient
     url: AbsoluteHttpURL | None = None
 
     _session_id: str = dataclasses.field(init=False, default="")
@@ -116,12 +117,12 @@ class FlareSolverr:
         if not resp.solution:
             raise invalid_response_error
 
-        self.http_client.cookies.update_cookies(resp.solution.cookies)
-        await self._check_user_agent(resp.solution)
+        self.client.cookies.update_cookies(resp.solution.cookies)
+        await self._check_resp(resp.solution)
         return resp.solution
 
-    async def _check_user_agent(self, solution: FlareSolverrSolution) -> None:
-        cdl_user_agent = config.get().general.user_agent
+    async def _check_resp(self, solution: FlareSolverrSolution) -> None:
+        cdl_user_agent = self.client.config.general.user_agent
         mismatch_ua_msg = (
             "Config user_agent and flaresolverr user_agent do not match:"
             f"\n  Cyberdrop-DL: '{cdl_user_agent}'"
@@ -141,7 +142,7 @@ class FlareSolverr:
         if not self.url:
             raise DDOSGuardError("Found DDoS challenge, but FlareSolverr is not configured")
 
-        timeout = config.get().rate_limits.aiohttp_timeout
+        timeout = self.client.config.rate_limits.aiohttp_timeout
         if command is _Command.CREATE_SESSION:
             timeout = aiohttp.ClientTimeout(total=5 * 60, connect=60)  # 5 minutes to create session
 
@@ -152,12 +153,10 @@ class FlareSolverr:
             assert command is _Command.POST_REQUEST
             playload["postData"] = aiohttp.FormData(data)().decode()
 
-        with self.http_client.progress_manager.status.show(
-            f"Waiting For Flaresolverr Response [{self._next_request_id()}]"
-        ):
+        with show_msg(f"Waiting For Flaresolverr response [{self._next_request_id()}]"):
             async with (
                 self._request_lock,
-                self.http_client._aiohttp_session.post(
+                self.client.aiohttp_session.post(
                     self.url,
                     json=playload,
                     timeout=timeout,
@@ -168,7 +167,7 @@ class FlareSolverr:
     async def _create_session(self) -> None:
         session_id = "cyberdrop-dl"
         kwargs = {}
-        if proxy := config.get().general.proxy:
+        if proxy := self.client.config.general.proxy:
             kwargs["proxy"] = {"url": str(proxy)}
 
         resp = await self._request(_Command.CREATE_SESSION, session=session_id, **kwargs)

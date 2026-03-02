@@ -372,9 +372,9 @@ class HttpClient:
         )
 
     async def load_cookie_files(self) -> None:
-        if self.config.browser_cookies.auto_import:
-            assert self.config.browser_cookies.browser
-            get_cookies_from_browser(self.config.browser_cookies.browser, "")
+        if self.config.cookies.auto_import:
+            assert self.config.cookies.cookies_from
+            get_cookies_from_browser(self.config.cookies.cookies_from, "")
 
         cookie_files = sorted(appdata.get().cookies_dir.glob("*.txt"))
         if not cookie_files:
@@ -442,14 +442,14 @@ def check_allowed_filetype(media_item: MediaItem, config: Config) -> bool:
     ignore_options = config.ignore
     ext = media_item.ext.lower()
 
-    if ignore_options.exclude_images and ext in constants.FileFormats.IMAGE:
+    if ignore_options.exclude_images and ext in constants.FileExt.IMAGE:
         return False
-    if ignore_options.exclude_videos and ext in constants.FileFormats.VIDEO:
+    if ignore_options.exclude_videos and ext in constants.FileExt.VIDEO:
         return False
-    if ignore_options.exclude_audio and ext in constants.FileFormats.AUDIO:
+    if ignore_options.exclude_audio and ext in constants.FileExt.AUDIO:
         return False
 
-    return ext in constants.FileFormats.MEDIA or not ignore_options.exclude_other
+    return ext in constants.FileExt.MEDIA or not ignore_options.exclude_other
 
 
 def check_allowed_date_range(media_item: MediaItem, config: Config) -> bool:
@@ -483,8 +483,8 @@ async def check_file_duration(media_item: MediaItem, config: Config) -> bool:
     if media_item.is_segment:
         return True
 
-    is_video = media_item.ext.lower() in constants.FileFormats.VIDEO
-    is_audio = media_item.ext.lower() in constants.FileFormats.AUDIO
+    is_video = media_item.ext.lower() in constants.FileExt.VIDEO
+    is_audio = media_item.ext.lower() in constants.FileExt.AUDIO
     if not (is_video or is_audio):
         return True
 

@@ -20,7 +20,7 @@ class DirectHttpFile(Crawler, is_generic=True):
         except NoExtensionError:
             filename, ext = get_filename_and_ext(scrape_item.url.name, forum=True)
 
-        if ext not in constants.FileFormats.MEDIA:
+        if ext not in constants.FileExt.MEDIA:
             raise ValueError
 
         scrape_item.add_to_parent_title("Loose Files")

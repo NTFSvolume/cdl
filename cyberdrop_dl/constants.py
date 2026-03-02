@@ -3,30 +3,19 @@ from __future__ import annotations
 import re
 from datetime import UTC, datetime
 from enum import auto
-from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import Literal
 
 from rich.text import Text
 
 from cyberdrop_dl import env
-from cyberdrop_dl.compat import MayBeUpperStrEnum, StrEnum
-
-if TYPE_CHECKING:
-    from aiohttp.resolver import AsyncResolver, ThreadedResolver
-
+from cyberdrop_dl.compat import CIStrEnum, StrEnum
 
 # TIME
 STARTUP_TIME = datetime.now()
 STARTUP_TIME_UTC = STARTUP_TIME.astimezone(UTC)
-LOGS_DATETIME_FORMAT = "%Y%m%d_%H%M%S"
-LOGS_DATE_FORMAT = "%Y_%m_%d"
-STARTUP_TIME_STR = STARTUP_TIME.strftime(LOGS_DATETIME_FORMAT)
-DNS_RESOLVER: type[AsyncResolver] | type[ThreadedResolver] | None = None
 
 
 # logging
-CONSOLE_LEVEL = 100
-MAX_NAME_LENGTHS = {"FILE": 95, "FOLDER": 60}
 LOG_OUTPUT_TEXT = Text("")
 
 
@@ -37,68 +26,66 @@ HTTP_REGEX_LINKS = re.compile(
 )
 
 
+class BlockedDomains:
+    partial_match = frozenset(
+        (
+            "allmylinks.com",
+            "amazon.com",
+            "beacons.ai",
+            "beacons.page",
+            "facebook",
+            "fbcdn",
+            "gfycat",
+            "instagram",
+            "ko-fi.com",
+            "linktr.ee",
+            "paypal.me",
+            "throne.com",
+            "youtu.be",
+            "youtube.com",
+        )
+    )
+
+    exact_match = frozenset()
+
+    if not env.ENABLE_TWITTER:
+        partial_match = partial_match.union("twitter.com", ".x.com")
+        exact_match = exact_match.union("x.com")
+
+
+class Hashing(CIStrEnum):
+    OFF = auto()
+    IN_PLACE = auto()
+    POST_DOWNLOAD = auto()
+
+
+class HashAlgorithm(CIStrEnum):
+    md5 = auto()
+    xxh128 = auto()
+    sha256 = auto()
+
+
+Browser = Literal[
+    "chrome",
+    "firefox",
+    "safari",
+    "edge",
+    "opera",
+    "brave",
+    "librewolf",
+    "opera_gx",
+    "vivaldi",
+    "chromium",
+]
+
+
 class TempExt(StrEnum):
     HLS = ".cdl_hls"
     WRONG_CDL_HLS = ".cdl_hsl"  # used for a while in old versions, has a typo
     PART = ".part"
 
 
-class BlockedDomains:
-    partial_match = (
-        "facebook",
-        "instagram",
-        "fbcdn",
-        "gfycat",
-        "ko-fi.com",
-        "paypal.me",
-        "amazon.com",
-        "throne.com",
-        "youtu.be",
-        "youtube.com",
-        "linktr.ee",
-        "beacons.page",
-        "beacons.ai",
-        "allmylinks.com",
-    )
-
-    exact_match = ()
-
-    if not env.ENABLE_TWITTER:
-        partial_match = *partial_match, "twitter.com", ".x.com"
-        exact_match = *exact_match, "x.com"
-
-
-DEFAULT_APP_STORAGE = Path("./AppData")
-DEFAULT_DOWNLOAD_STORAGE = Path("./cdl_downloads")
-RESERVED_CONFIG_NAMES = ["all", "default"]
-
-
-class HashType(StrEnum):
-    md5 = "md5"
-    sha256 = "sha256"
-    xxh128 = "xxh128"
-
-
-class Hashing(MayBeUpperStrEnum):
-    OFF = auto()
-    IN_PLACE = auto()
-    POST_DOWNLOAD = auto()
-
-
-class BROWSERS(StrEnum):
-    chrome = auto()
-    firefox = auto()
-    safari = auto()
-    edge = auto()
-    opera = auto()
-    brave = auto()
-    librewolf = auto()
-    opera_gx = auto()
-    vivaldi = auto()
-    chromium = auto()
-
-
-class FileFormats:
+class FileExt:
     IMAGE = frozenset(
         {
             ".gif",

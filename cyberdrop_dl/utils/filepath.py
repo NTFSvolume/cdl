@@ -68,7 +68,7 @@ def get_filename_and_ext(
         name, _, ext = filename_as_path.name.rpartition("-")
         ext = ext.rsplit(".")[0]
         filename = f"{name}.{ext}"
-        if ext.lower() not in constants.FileFormats.MEDIA:
+        if ext.lower() not in constants.FileExt.MEDIA:
             raise InvalidExtensionError(filename)
 
         filename_as_path = Path(filename)
@@ -122,7 +122,7 @@ def remove_file_id(filename: str, ext: str) -> str:
     if re.match(_RAR_MULTIPART_PATTERN, tail_no_dot) and ext == ".rar" and "-" in filename:
         filename, part = filename.rsplit("-", 1)
         filename = f"{filename}.{part}"
-    elif ext_no_dot.isdigit() and tail in constants.FileFormats.SEVEN_Z and "-" in filename:
+    elif ext_no_dot.isdigit() and tail in constants.FileExt.SEVEN_Z and "-" in filename:
         filename, _7z_ext = filename.rsplit("-", 1)
         filename = f"{filename}.{_7z_ext}"
     if not filename.endswith(ext):

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import contextlib
 from contextvars import ContextVar
 from pathlib import Path
@@ -12,39 +11,32 @@ from rich.markup import escape
 from rich.panel import Panel
 from rich.progress import BarColumn, Progress
 
-from cyberdrop_dl import config
-from cyberdrop_dl.tui.common import ColumnsType, TaskCounter, UIPanel
+from cyberdrop_dl.tui.common import ColumnsType, OverflowingPanel, TaskCounter
 
 if TYPE_CHECKING:
     from collections.abc import Generator
 
-
-def _get_enabled_hashes():
-    yield "xxh128"
-    if config.get().dedupe.add_md5_hash:
-        yield "md5"
-    if config.get().dedupe.add_sha256_hash:
-        yield "sha256"
+    from cyberdrop_dl.constants import HashAlgorithm
 
 
 _base_dir: ContextVar[Path] = ContextVar("_base_dir")
 
 
-class HashingPanel(UIPanel):
+class HashingPanel(OverflowingPanel):
     """Class that keeps track of hashed files."""
 
     columns: ClassVar[ColumnsType] = ("{task.description}",)
 
-    def __init__(self, *additional_hashes: str) -> None:
-        super().__init__()
+    def __init__(self, *hashes: HashAlgorithm) -> None:
+        super().__init__(10)
         self._hash_progress: Progress = Progress(
             "[progress.description]{task.description}", BarColumn(bar_width=None), "{task.completed:,}"
         )
-        self._enabled_hashes: tuple[str, ...] = tuple(dict.fromkeys("xxh128", *additional_hashes))
+        self._hash_algos: tuple[HashAlgorithm, ...] = hashes
         self._computed_hashes: int = 0
         self._prev_hashed: int = 0
 
-        for hash_type in self._enabled_hashes:
+        for hash_type in self._hash_algos:
             desc = "[green]Hashed " + escape(f"[{hash_type}]")
             self._counters[hash_type] = TaskCounter(self._hash_progress.add_task(desc, total=None))
 
@@ -64,11 +56,11 @@ class HashingPanel(UIPanel):
 
     @property
     def hashed_files(self) -> int:
-        return int(self._computed_hashes / len(self._enabled_hashes))
+        return int(self._computed_hashes / len(self._hash_algos))
 
     @property
     def prev_hashed_files(self) -> int:
-        return int(self._prev_hashed / len(self._enabled_hashes))
+        return int(self._prev_hashed / len(self._hash_algos))
 
     @property
     def removed_files(self) -> int:
@@ -85,9 +77,8 @@ class HashingPanel(UIPanel):
             _base_dir.reset(token)
             self._progress.update(self._counters["base_dir"].id, description="")
 
-    async def update_currently_hashing(self, file: Path | str) -> None:
+    def update_currently_hashing(self, file: Path | str, size: int) -> None:
         file = Path(file)
-        size = await asyncio.to_thread(lambda *_: file.stat().st_size)
         size_text = ByteSize(size).human_readable(decimal=True)
         path = file.relative_to(_base_dir.get())
         self._progress.update(

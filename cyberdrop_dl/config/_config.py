@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import dataclasses
-import datetime
 from contextvars import ContextVar, Token
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, ClassVar, Self
@@ -49,9 +48,7 @@ class Config(ConfigSettings):
         if self._resolved:
             return
         self._resolve_paths(self)
-        now = datetime.datetime.now()
-        self.logs.set_output_filenames(now)
-        self.logs.delete_old_logs_and_folders(now)
+        self.logs.delete_old_logs_and_folders()
         self._resolved = True
 
     @classmethod

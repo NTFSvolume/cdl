@@ -12,8 +12,8 @@ from typing import TYPE_CHECKING, Any
 import imagesize
 
 from cyberdrop_dl import config, constants
+from cyberdrop_dl.ffmpeg import probe
 from cyberdrop_dl.utils import delete_empty_files_and_folders, strings
-from cyberdrop_dl.utils.ffmpeg import probe
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -87,11 +87,11 @@ class Sorter:
         if ext in constants.TempExt:
             return
 
-        if ext in constants.FileFormats.AUDIO:
+        if ext in constants.FileExt.AUDIO:
             await self.sort_audio(file, folder_name)
-        elif ext in constants.FileFormats.IMAGE:
+        elif ext in constants.FileExt.IMAGE:
             await self.sort_image(file, folder_name)
-        elif ext in constants.FileFormats.VIDEO:
+        elif ext in constants.FileExt.VIDEO:
             await self.sort_video(file, folder_name)
         else:
             await self.sort_other(file, folder_name)

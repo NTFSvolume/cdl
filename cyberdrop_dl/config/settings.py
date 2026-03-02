@@ -9,19 +9,9 @@ from pathlib import Path
 from typing import Literal
 
 import aiohttp
-from pydantic import (
-    ByteSize,
-    Field,
-    NonNegativeFloat,
-    NonNegativeInt,
-    PositiveFloat,
-    PositiveInt,
-    field_serializer,
-    field_validator,
-)
+from pydantic import ByteSize, Field, NonNegativeFloat, NonNegativeInt, PositiveFloat, PositiveInt, field_validator
 
-from cyberdrop_dl import constants
-from cyberdrop_dl.constants import BROWSERS, DEFAULT_APP_STORAGE, DEFAULT_DOWNLOAD_STORAGE, Hashing
+from cyberdrop_dl.constants import Browser, HashAlgorithm, Hashing
 from cyberdrop_dl.models import AppriseURL, Settings, SettingsGroup
 from cyberdrop_dl.models.types import (
     ByteSizeSerilized,
@@ -35,11 +25,16 @@ from cyberdrop_dl.models.types import (
     NonEmptyStrOrNone,
     PathOrNone,
 )
-from cyberdrop_dl.models.validators import falsy_as, falsy_as_none, to_bytesize, to_timedelta
+from cyberdrop_dl.models.validators import falsy_as_none, to_bytesize, to_timedelta
 
-MIN_REQUIRED_FREE_SPACE = to_bytesize("512MB")
-DEFAULT_REQUIRED_FREE_SPACE = to_bytesize("5GB")
+_DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:142.0) Gecko/20100101 Firefox/142.0"
+_DEFAULT_APP_STORAGE = Path("./AppData")
+_DEFAULT_DOWNLOAD_STORAGE = Path("./cdl_downloads")
+_DEFAULT_REQUIRED_FREE_SPACE = to_bytesize("5GB")
 _DEFAULT_CHUNK_SIZE = to_bytesize("10MB")
+_MIN_REQUIRED_FREE_SPACE = to_bytesize("512MB")
+_LOGS_DATETIME_FORMAT = "%Y%m%d_%H%M%S"
+_LOGS_DATE_FORMAT = "%Y_%m_%d"
 _SORTING_COMMON_FIELDS = {
     "base_dir",
     "ext",
@@ -84,69 +79,68 @@ class Downloads(FormatValidator, SettingsGroup):
 
 
 class Files(SettingsGroup):
-    download_folder: Path = Field(default=DEFAULT_DOWNLOAD_STORAGE, validation_alias="d")
+    download_folder: Path = Field(default=_DEFAULT_DOWNLOAD_STORAGE, validation_alias="d")
     dump_json: bool = Field(default=False, validation_alias="j")
-    input_file: Path = Field(default=DEFAULT_APP_STORAGE / "Configs/{config}/URLs.txt", validation_alias="i")
+    input_file: Path = Field(default=_DEFAULT_APP_STORAGE / "Configs/{config}/URLs.txt", validation_alias="i")
     save_pages_html: bool = False
 
 
 class Logs(SettingsGroup):
     download_error_urls: LogPath = Path("Download_Error_URLs.csv")
     last_forum_post: LogPath = Path("Last_Scraped_Forum_Posts.csv")
-    log_folder: Path = DEFAULT_APP_STORAGE / "Configs/{config}/Logs"
+    log_folder: Path = _DEFAULT_APP_STORAGE / "logs"
     logs_expire_after: timedelta | None = None
     main_log: MainLogPath = Path("downloader.log")
     rotate_logs: bool = False
     scrape_error_urls: LogPath = Path("Scrape_Error_URLs.csv")
     unsupported_urls: LogPath = Path("Unsupported_URLs.csv")
     webhook: AppriseURL | None = None
+    _created_at: datetime = Field(default_factory=datetime.now)
 
-    @cached_property
+    @property
     def jsonl_file(self):
         return self.main_log.with_suffix(".results.jsonl")
 
     @field_validator("webhook", mode="before")
     @classmethod
     def handle_falsy(cls, value: str) -> str | None:
-        return falsy_as(value, None)
+        return falsy_as_none(value)
 
     @field_validator("logs_expire_after", mode="before")
     @staticmethod
     def parse_logs_duration(input_date: timedelta | str | int | None) -> timedelta | str | None:
-        if value := falsy_as(input_date, None):
+        if value := falsy_as_none(input_date):
             return to_timedelta(value)
 
-    def set_output_filenames(self, now: datetime) -> None:
-        self.log_folder.mkdir(exist_ok=True, parents=True)
-        current_time_file_iso: str = now.strftime(constants.LOGS_DATETIME_FORMAT)
-        current_time_folder_iso: str = now.strftime(constants.LOGS_DATE_FORMAT)
-        for attr, log_file in vars(self).items():
-            if not isinstance(log_file, Path) or log_file.suffix not in (".csv", ".log"):
+    def model_post_init(self, *_) -> None:
+        self._resolve_filenames()
+
+    def _resolve_filenames(self) -> None:
+        object.__setattr__(self, "log_folder", self.log_folder.expanduser().resolve().absolute())
+        now_file_iso: str = self._created_at.strftime(_LOGS_DATETIME_FORMAT)
+        now_folder_iso: str = self._created_at.strftime(_LOGS_DATE_FORMAT)
+        for name, log_file in vars(self).items():
+            if name == "log_folder" or not isinstance(log_file, Path) or log_file.suffix not in (".csv", ".log"):
                 continue
+
+            log_file = self.log_folder / log_file
 
             if self.rotate_logs:
-                new_name = f"{log_file.stem}_{current_time_file_iso}{log_file.suffix}"
-                log_file = log_file.parent / current_time_folder_iso / new_name
-                setattr(self, attr, self.log_folder / log_file)
+                file_name = f"{log_file.stem}_{now_file_iso}{log_file.suffix}"
+                log_file = log_file.parent / now_folder_iso / file_name
 
-            log_file.parent.mkdir(exist_ok=True, parents=True)
+            object.__setattr__(self, name, log_file)
 
-    def delete_old_logs_and_folders(self, now: datetime | None = None) -> None:
-        if not (now and self.logs_expire_after):
+    def delete_old_logs_and_folders(self) -> None:
+        if not self.logs_expire_after:
             return
 
-        from cyberdrop_dl.utils import delete_empty_files_and_folders
-
         for file in self.log_folder.rglob("*"):
-            if file.suffix not in (".log", ".csv"):
+            if file.suffix.lower() not in (".log", ".csv"):
                 continue
 
-            file_date = file.stat().st_ctime
-            t_delta = now - datetime.fromtimestamp(file_date)
-            if t_delta > self.logs_expire_after:
-                file.unlink(missing_ok=True)
-
-        _ = delete_empty_files_and_folders(self.log_folder)
+            if (self._created_at - datetime.fromtimestamp(file.stat().st_ctime)) > self.logs_expire_after:
+                file.unlink()
 
 
 @dataclasses.dataclass(slots=True)
@@ -223,30 +217,24 @@ class MediaDurationLimits(SettingsGroup):
     @field_validator("*", mode="before")
     @staticmethod
     def parse_runtime_duration(input_date: timedelta | str | int | None) -> timedelta | str:
-        """Parses `datetime.timedelta`, `str` or `int` into a timedelta format.
-        for `str`, the expected format is `value unit`, ex: `5 days`, `10 minutes`, `1 year`
-        valid units:
-            year(s), week(s), day(s), hour(s), minute(s), second(s), millisecond(s), microsecond(s)
-        for `int`, value is assumed as `days`
-        """
-        if input_date is None:
-            return timedelta(seconds=0)
         return to_timedelta(input_date)
 
 
 class Ignore(SettingsGroup):
+    exclude_after: date | None = None
+    exclude_before: date | None = None
+
+    exclude_files_with_no_extension: bool = True
     exclude_audio: bool = False
     exclude_images: bool = False
     exclude_other: bool = False
     exclude_videos: bool = False
+
     filename_regex_filter: NonEmptyStrOrNone = None
     ignore_coomer_ads: bool = False
     ignore_coomer_post_content: bool = True
     only_hosts: ListNonEmptyStr = []
     skip_hosts: ListNonEmptyStr = []
-    exclude_files_with_no_extension: bool = True
-    exclude_before: date | None = None
-    exclude_after: date | None = None
 
     @field_validator("filename_regex_filter")
     @classmethod
@@ -260,17 +248,21 @@ class Ignore(SettingsGroup):
         return value
 
 
+class Jdownloader(Settings):
+    enabled: bool = False
+    autostart: bool = False
+    download_dir: PathOrNone = None
+    whitelist: ListNonEmptyStr = []
+
+
 class Runtime(SettingsGroup):
+    log_level: NonNegativeInt = logging.DEBUG
     console_log_level: NonNegativeInt = 100
     deep_scrape: bool = False
-    delete_partial_files: bool = False
     ignore_history: bool = False
-    jdownloader_autostart: bool = False
-    jdownloader_download_dir: PathOrNone = None
-    jdownloader_whitelist: ListNonEmptyStr = []
-    log_level: NonNegativeInt = logging.DEBUG
-    send_unsupported_to_jdownloader: bool = False
-    skip_check_for_empty_folders: bool = False
+    jdownloader: Jdownloader = Jdownloader()
+    delete_empty_folders: bool = True
+    delete_partial_files: bool = False
     slow_download_speed: ByteSizeSerilized = ByteSize(0)
     update_last_forum_post: bool = True
 
@@ -278,7 +270,7 @@ class Runtime(SettingsGroup):
 class Sorting(FormatValidator, SettingsGroup):
     scan_folder: PathOrNone = None
     sort_downloads: bool = False
-    sort_folder: Path = DEFAULT_DOWNLOAD_STORAGE / "Cyberdrop-DL Sorted Downloads"
+    sort_folder: Path = _DEFAULT_DOWNLOAD_STORAGE / "Cyberdrop-DL Sorted Downloads"
     sort_incrementer_format: NonEmptyStr = " ({i})"
     sorted_audio: NonEmptyStrOrNone = "{sort_dir}/{base_dir}/Audio/{filename}{ext}"
     sorted_image: NonEmptyStrOrNone = "{sort_dir}/{base_dir}/Images/{filename}{ext}"
@@ -335,12 +327,12 @@ class Sorting(FormatValidator, SettingsGroup):
 
 
 class Cookies(SettingsGroup):
-    auto_import: bool = False
-    browser: BROWSERS | None = BROWSERS.firefox
+    cookies: Path | None = None
+    cookies_from: Browser | None = None
 
-    def model_post_init(self, *_) -> None:
-        if self.auto_import and not self.browser:
-            raise ValueError("You need to provide a browser for auto_import to work")
+    @property
+    def auto_import(self) -> bool:
+        return bool(self.cookies_from)
 
 
 class Dedupe(SettingsGroup):
@@ -349,17 +341,16 @@ class Dedupe(SettingsGroup):
     auto_dedupe: bool = True
     hashing: Hashing = Hashing.IN_PLACE
     send_deleted_to_trash: bool = True
+    hashes: tuple[HashAlgorithm, ...] = (HashAlgorithm.xxh128,)
 
     @property
-    def enables_hashes(self):
-        def gen():
-            yield "xxh128"
-            if self.add_md5_hash:
-                yield "md5"
-            if self.add_sha256_hash:
-                yield "sha256"
+    def additional_hashes(self) -> tuple[HashAlgorithm, ...]:
+        return tuple(sorted(set(self.hashes).difference({HashAlgorithm.xxh128})))
 
-        return tuple(gen())
+    @field_validator("hashes", mode="after")
+    @classmethod
+    def unique_list(cls, value: list[HashAlgorithm]) -> tuple[HashAlgorithm, ...]:
+        return tuple(sorted(set(value) | {HashAlgorithm.xxh128}))
 
 
 # ruff: noqa: RUF012
@@ -372,34 +363,30 @@ class General(SettingsGroup):
     max_file_name_length: PositiveInt = 95
     max_folder_name_length: PositiveInt = 60
     proxy: HttpURL | None = None
-    required_free_space: ByteSizeSerilized = DEFAULT_REQUIRED_FREE_SPACE
-    user_agent: NonEmptyStr = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:142.0) Gecko/20100101 Firefox/142.0"
+    required_free_space: ByteSizeSerilized = _DEFAULT_REQUIRED_FREE_SPACE
+    user_agent: NonEmptyStr = _DEFAULT_USER_AGENT
 
     @field_validator("ssl_context", mode="before")
     @classmethod
     def ssl(cls, value: str | None) -> str | None:
         if isinstance(value, str):
             value = value.lower().strip()
-        return falsy_as(value, None)
+        return falsy_as_none(value)
 
     @field_validator("disable_crawlers", mode="after")
     @classmethod
     def unique_list(cls, value: list[str]) -> list[str]:
         return sorted(set(value))
 
-    @field_serializer("flaresolverr", "proxy")
-    def serialize(self, value: str) -> str | None:
-        return falsy_as(value, None, str)
-
     @field_validator("flaresolverr", "proxy", mode="before")
     @classmethod
-    def convert_to_str(cls, value: str) -> str | None:
-        return falsy_as(value, None, str)
+    def falsy_urls(cls, value: str) -> str | None:
+        return falsy_as_none(value)
 
     @field_validator("required_free_space", mode="after")
     @classmethod
     def override_min(cls, value: ByteSize) -> ByteSize:
-        return max(value, MIN_REQUIRED_FREE_SPACE)
+        return max(value, _MIN_REQUIRED_FREE_SPACE)
 
 
 class RateLimiting(SettingsGroup):
@@ -459,7 +446,7 @@ class GenericCrawlerInstances(SettingsGroup):
 
 
 class ConfigSettings(Settings):
-    browser_cookies: Cookies = Cookies()
+    cookies: Cookies = Cookies()
     download: Downloads = Downloads()
     dedupe: Dedupe = Dedupe()
     file_size_limits: FileSizeLimits = FileSizeLimits()

@@ -243,9 +243,9 @@ def _check_filesize_limits(item: MediaItem) -> bool:
     """Checks if the file size is within the limits."""
     limits = config.get().file_size_limits.ranges
     assert item.filesize is not None
-    if item.ext in constants.FileFormats.IMAGE:
+    if item.ext in constants.FileExt.IMAGE:
         return item.filesize in limits.image
-    if item.ext in constants.FileFormats.VIDEO:
+    if item.ext in constants.FileExt.VIDEO:
         return item.filesize in limits.video
     return item.filesize in limits.other
 
@@ -260,7 +260,7 @@ def _check_content_type(ext: str, headers: Mapping[str, str]) -> None:
     else:
         content_type = content_type.lower()
 
-    if ("html" in content_type or "text" in content_type) and ext.lower() not in constants.FileFormats.TEXT:
+    if ("html" in content_type or "text" in content_type) and ext.lower() not in constants.FileExt.TEXT:
         msg = f"Received '{content_type}', was expecting other"
         raise InvalidContentTypeError(message=msg)
 

@@ -98,7 +98,7 @@ class File:
         src_str = self.thumbnail.replace("/thumbs/", "/")
         ext = Path(self.name).suffix
         src = parse_url(src_str).with_suffix(ext).with_query(None)
-        if src.suffix.lower() not in constants.FileFormats.IMAGE:
+        if src.suffix.lower() not in constants.FileExt.IMAGE:
             src = src.with_host(src.host.replace("i-", ""))
         return _override_cdn(src)
 
@@ -175,7 +175,7 @@ class BunkrrCrawler(Crawler):
 
         deep_scrape = (
             not src
-            or src.suffix.lower() not in constants.FileFormats.VIDEO_OR_IMAGE
+            or src.suffix.lower() not in constants.FileExt.VIDEO_OR_IMAGE
             or "no-image" in src.name
             or self.config.runtime.deep_scrape
             or any(cdn in src.host for cdn in DEEP_SCRAPE_CDNS)

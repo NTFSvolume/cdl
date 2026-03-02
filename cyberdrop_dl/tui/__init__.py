@@ -5,6 +5,7 @@ import dataclasses
 import itertools
 import logging
 import time
+from contextvars import ContextVar
 from datetime import timedelta
 from typing import TYPE_CHECKING, Literal, Self
 
@@ -30,6 +31,8 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+
+_tui: ContextVar[TUI] = ContextVar("_tui")
 
 
 @dataclasses.dataclass(slots=True)
@@ -58,7 +61,7 @@ class TUI:
     def from_config(cls, config: Config) -> Self:
         return cls(
             refresh_rate=config.ui_options.refresh_rate,
-            enabled_hashes=config.dedupe.enables_hashes,
+            enabled_hashes=config.dedupe.hashes,
         )
 
     def __post_init__(self) -> None:
@@ -74,17 +77,17 @@ class TUI:
 
     @contextlib.contextmanager
     def __call__(self, *, screen: Literal["scraping", "sorting", "hashing"]) -> Generator[None]:
-        if self.disabled:
-            yield
-            return
-
-        self._current_screen = self._screens[screen]
-        self._live.start()
+        token = _tui.set(self)
+        if not self.disabled:
+            self._current_screen = self._screens[screen]
+            self._live.start()
         try:
             yield
         finally:
-            self._current_screen = ""
-            self._live.stop()
+            _tui.reset(token)
+            if not self.disabled:
+                self._current_screen = ""
+                self._live.stop()
 
     def print_stats(self, start_time: float) -> None:
         """Prints the stats of the program."""
@@ -183,3 +186,7 @@ def _log_errors(scrape_errors: list[UIFailure], download_errors: list[UIFailure]
 
 def _create_hyperlink(file_path: Path, text: str | None = None) -> Text:
     return Text(text or str(file_path), style=f"link {file_path.as_uri()}")
+
+
+def show_msg(msg: object):
+    return _tui.get().status(str(msg))

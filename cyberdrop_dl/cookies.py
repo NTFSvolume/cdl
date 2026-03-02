@@ -6,7 +6,8 @@ import logging
 import os
 import sys
 import time
-from typing import TYPE_CHECKING, ParamSpec, TypeVar
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Final, ParamSpec, TypeVar
 
 if sys.version_info < (3, 14):
     from http import cookies
@@ -24,7 +25,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterable, Awaitable, Callable, Iterable
     from pathlib import Path
 
-    from cyberdrop_dl.constants import BROWSERS
+    from cyberdrop_dl.constants import Browser
 
     _P = ParamSpec("_P")
     _R = TypeVar("_R")
@@ -36,7 +37,7 @@ logger = logging.getLogger(__name__)
 class UnsupportedBrowserError(browser_cookie3.BrowserCookieError): ...
 
 
-_COOKIE_EXTRACTORS = {func.__name__: func for func in browser_cookie3.all_browsers}
+_COOKIE_EXTRACTORS: Final = {func.__name__: func for func in browser_cookie3.all_browsers}
 _CHROMIUM_BROWSERS = frozenset(
     (
         "chrome",
@@ -81,7 +82,7 @@ def cookie_wrapper(func: Callable[_P, Awaitable[_R]]) -> Callable[_P, Awaitable[
 
 
 @cookie_wrapper
-async def get_cookies_from_browser(browser: BROWSERS, *domains_to_filter: str) -> MozillaCookieJar:
+async def get_cookies_from_browser(browser: Browser, *domains_to_filter: str) -> MozillaCookieJar:
     extracted_cookies = await _extract_cookies(browser)
     cookie_jar = MozillaCookieJar()
     for cookie in extracted_cookies:
@@ -95,7 +96,7 @@ async def get_cookies_from_browser(browser: BROWSERS, *domains_to_filter: str) -
     return cookie_jar
 
 
-async def _extract_cookies(browser: BROWSERS | str) -> CookieJar:
+async def _extract_cookies(browser: Browser) -> CookieJar:
     extract = _COOKIE_EXTRACTORS[str(browser)]
     try:
         return await asyncio.to_thread(extract)
