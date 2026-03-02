@@ -1,243 +1,223 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import hashlib
-from collections import defaultdict
-from pathlib import Path
-from typing import TYPE_CHECKING, Final, Literal
+import logging
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any, Final, NamedTuple, NewType
 
 import xxhash
 from send2trash import send2trash
 
-from cyberdrop_dl import aio, config, constants
-from cyberdrop_dl.constants import Hashing
-from cyberdrop_dl.logger import log
+from cyberdrop_dl import aio, constants
+from cyberdrop_dl.constants import HashAlgorithm, Hashing
 
 if TYPE_CHECKING:
-    from yarl import URL
+    from collections.abc import Callable, Iterable, Mapping
+    from pathlib import Path
 
-    from cyberdrop_dl.config.settings import Dedupe
+    from cyberdrop_dl.config import Config
     from cyberdrop_dl.data_structures.url_objects import MediaItem
+    from cyberdrop_dl.database import Database
     from cyberdrop_dl.managers import Manager
+    from cyberdrop_dl.tui import TUI
 
 _HASHERS: Final = {
-    "md5": hashlib.md5,
-    "xxh128": xxhash.xxh128,
-    "sha256": hashlib.sha256,
+    HashAlgorithm.md5: hashlib.md5,
+    HashAlgorithm.xxh128: xxhash.xxh128,
+    HashAlgorithm.sha256: hashlib.sha256,
 }
-_CHUNK_SIZE: Final = 1024 * 1024  # 1MB
+_DEFAULT_CHUNK_SIZE: Final = 1024 * 1024  # 1MB
+_VIDEO_CHUNK_SIZE: Final = _DEFAULT_CHUNK_SIZE * 10
+HashValue = NewType("HashValue", str)
 
 
-def hash_directory_scanner(manager: Manager, path: Path) -> None:
-    asyncio.run(_hash_directory_scanner_helper(manager, path))
+class HashResult(NamedTuple):
+    hash: HashValue
+    size: int
+    mtime: int
+    seen_before: bool
 
 
-async def _hash_directory_scanner_helper(manager: Manager, path: Path) -> None:
+XXH128Result = NewType("XXH128Result", HashResult)
+
+HashResults = dict[HashAlgorithm, HashResult]
+
+
+logger = logging.getLogger(__name__)
+
+
+async def hash_directory(manager: Manager, path: Path) -> None:
     await manager.async_db_hash_startup()
-    await HashClient(manager).hash_directory(path)
+    await Hasher(manager.tui, manager.config, manager.db_manager).hash_folder(path)
     manager.tui.print_dedupe_stats()
     await manager.async_db_close()
 
 
-def _compute_hash(file: Path, algorithm: Literal["xxh128", "md5", "sha256"]) -> str:
-    with file.open("rb") as file_io:
+def _compute_hash(file: Path, algorithm: HashAlgorithm) -> HashValue:
+    assert file.is_absolute()
+    chunk_size = _VIDEO_CHUNK_SIZE if file.suffix.lower() in constants.FileExt.VIDEO else _DEFAULT_CHUNK_SIZE
+    with file.open("rb") as fp:
         hash = _HASHERS[algorithm]()
-        buffer = bytearray(_CHUNK_SIZE)  # Reusable buffer to reduce allocations
+        buffer = bytearray(chunk_size)  # Reusable buffer to reduce allocations
         mem_view = memoryview(buffer)
-        while size := file_io.readinto(buffer):
+        while size := fp.readinto(buffer):
             hash.update(mem_view[:size])
 
-    return hash.hexdigest()
+    return HashValue(hash.hexdigest())
 
 
-class HashClient:
+async def compute_hash(file: Path, hash_type: HashAlgorithm) -> str:
+    return await asyncio.to_thread(_compute_hash, file, hash_type)
+
+
+@dataclasses.dataclass(slots=True)
+class Hasher:
     """Manage hashes and db insertion."""
 
-    def __init__(self, manager: Manager) -> None:
-        self.manager = manager
-        self.xxhash = "xxh128"
-        self.md5 = "md5"
-        self.sha256 = "sha256"
-        self.hashed_media_items: set[MediaItem] = set()
-        self.hashes_dict: defaultdict[str, defaultdict[int, set[Path]]] = defaultdict(lambda: defaultdict(set))
-        self._sem = asyncio.BoundedSemaphore(20)
-        self._cwd: Path = Path.cwd()
+    tui: TUI
+    config: Config
+    database: Database
+    concurrency: int = 20
 
-    async def hash_file(self, filename: Path | str, hash_type: Literal["xxh128", "md5", "sha256"]) -> str:
-        file_path = self._cwd / filename
-        return await asyncio.to_thread(_compute_hash, file_path, hash_type)
+    _xxh128_hashes: dict[Path, XXH128Result] = dataclasses.field(init=False, default_factory=dict)
+    _sem: asyncio.BoundedSemaphore = dataclasses.field(init=False)
+    _hashes: tuple[HashAlgorithm, ...] = dataclasses.field(init=False)
 
-    @property
-    def _to_trash(self) -> bool:
-        return self.dupe_cleanup_options.send_deleted_to_trash
+    def __post_init__(self) -> None:
+        self._sem = asyncio.BoundedSemaphore(self.concurrency)
+        self._hashes = HashAlgorithm.xxh128, *self.config.dedupe.additional_hashes
 
     @property
-    def _deleted_file_suffix(self) -> Literal["Sent to trash", "Permanently deleted"]:
-        return "Sent to trash" if self._to_trash else "Permanently deleted"
+    def results(self) -> MappingProxyType[Path, XXH128Result]:
+        return MappingProxyType(self._xxh128_hashes)
 
-    @property
-    def dupe_cleanup_options(self) -> Dedupe:
-        return config.get().dedupe
+    async def hash_folder(self, path: Path) -> None:
+        if not await aio.is_dir(path):
+            raise NotADirectoryError(path)
 
-    async def hash_directory(self, path: Path) -> None:
-        path = Path(path)
-        with self.manager.tui(screen="hashing"), self.manager.tui.hashing(path):
-            if not await asyncio.to_thread(path.is_dir):
-                raise NotADirectoryError
-            for file in path.rglob("*"):
-                _ = await self.update_db_and_retrive_hash(file)
-
-    async def hash_item(self, media_item: MediaItem) -> None:
-        if media_item.is_segment:
-            return
-        hash = await self.update_db_and_retrive_hash(
-            media_item.complete_file, media_item.original_filename, media_item.referer
-        )
-        await self.save_hash_data(media_item, hash)
-
-    async def run(self, media_item: MediaItem) -> None:
-        if media_item.is_segment:
-            return
-        if config.get().dedupe.hashing != Hashing.IN_PLACE:
-            return
-
-        try:
-            assert media_item.original_filename
-            hash = await self.update_db_and_retrive_hash(
-                media_item.complete_file, media_item.original_filename, media_item.referer
-            )
-            await self.save_hash_data(media_item, hash)
-        except Exception as e:
-            log(f"After hash processing failed: '{media_item.complete_file}' with error {e}", 40, exc_info=True)
-
-    async def update_db_and_retrive_hash(
-        self, file: Path | str, original_filename: str | None = None, referer: URL | None = None
-    ) -> str | None:
-        file = Path(file)
-
-        if file.suffix in constants.TempExt:
-            return
-
-        if not await aio.get_size(file):
-            return
-
-        hash = await self._update_db_and_retrive_hash_helper(file, original_filename, referer, hash_type=self.xxhash)
-        if config.get().dedupe.add_md5_hash:
-            await self._update_db_and_retrive_hash_helper(file, original_filename, referer, hash_type=self.md5)
-        if config.get().dedupe.add_sha256_hash:
-            await self._update_db_and_retrive_hash_helper(file, original_filename, referer, hash_type=self.sha256)
-        return hash
-
-    async def _update_db_and_retrive_hash_helper(
-        self,
-        file: Path | str,
-        original_filename: str | None,
-        referer: URL | None,
-        hash_type: str,
-    ) -> str | None:
-        """Generates hash of a file."""
-        await self.manager.tui.hashing.update_currently_hashing(file)
-        hash = await self.manager.db_manager.hash_table.get_file_hash_exists(file, hash_type)
-        try:
-            if not hash:
-                hash = await self.manager.hash_manager.hash_file(file, hash_type)
-                await self.manager.db_manager.hash_table.insert_or_update_hash_db(
-                    hash,
-                    hash_type,
-                    file,
-                    original_filename,
-                    referer,
-                )
-                self.manager.tui.hashing.add_hashed(hash_type)
-            else:
-                self.manager.tui.hashing.add_prev_hashed()
-                await self.manager.db_manager.hash_table.insert_or_update_hash_db(
-                    hash,
-                    hash_type,
-                    file,
-                    original_filename,
-                    referer,
-                )
-        except Exception as e:
-            log(f"Error hashing '{file}' : {e}", 40, exc_info=True)
-        else:
-            return hash
-
-    async def save_hash_data(self, media_item: MediaItem, hash: str | None) -> None:
-        if not hash:
-            return
-        absolute_path = await asyncio.to_thread(media_item.complete_file.resolve)
-        size = await aio.get_size(media_item.complete_file)
-        assert size
-        self.hashed_media_items.add(media_item)
-        if hash:
-            media_item.hash = hash
-        self.hashes_dict[hash][size].add(absolute_path)
-
-    async def cleanup_dupes_after_download(self) -> None:
-        if config.get().dedupe.hashing == Hashing.OFF:
-            return
-        if not config.get().dedupe.auto_dedupe:
-            return
-        if config.get().runtime.ignore_history:
-            return
-        with self.manager.tui.get_hash_live(stop=True):
-            file_hashes_dict = await self.get_file_hashes_dict()
-        with self.manager.tui.get_remove_file_via_hash_live(stop=True):
-            await self.final_dupe_cleanup(file_hashes_dict)
-
-    async def final_dupe_cleanup(self, final_dict: dict[str, dict]) -> None:
-        """cleanup files based on dedupe setting"""
-
-        get_matches = self.manager.db_manager.hash_table.get_files_with_hash_matches
-        async with asyncio.TaskGroup() as tg:
-
-            async def delete_dupes(hash_value: str, size: int) -> None:
-                db_matches = await get_matches(hash_value, size, "xxh128")
-                for row in db_matches[1:]:
-                    file = Path(row["folder"], row["download_filename"])
+        with self.tui(screen="hashing"), self.tui.hashing(path):
+            async with asyncio.TaskGroup() as tg:
+                async for file in aio.rglob(path, "*"):
                     await self._sem.acquire()
-                    tg.create_task(self._delete_and_log(file, hash_value))
+                    tg.create_task(self._hash_file(file))
 
-            for hash_value, size_dict in final_dict.items():
-                for size in size_dict:
-                    tg.create_task(delete_dupes(hash_value, size))
+    async def _hash_item(self, media_item: MediaItem) -> None:
+        if media_item.is_segment or media_item.complete_file.suffix in constants.TempExt:
+            return
 
-    async def _delete_and_log(self, file: Path, xxh128_value: str) -> None:
-        hash_string = f"xxh128:{xxh128_value}"
+        results = await self._hash_file(media_item.complete_file)
+        if not results:
+            return
+
+        xxh128_result = XXH128Result(results[HashAlgorithm.xxh128])
+        media_item.hash = xxh128_result.hash
+        self._xxh128_hashes[media_item.complete_file] = xxh128_result
+        # TODO: save results to the database
+
+    async def _hash_file(self, file: Path) -> HashResults | None:
         try:
-            deleted = await _delete_file(file, self._to_trash)
-        except OSError as e:
-            log(f"Unable to remove '{file}' ({hash_string}): {e}", 40)
-        else:
-            if not deleted:
-                return
+            with self.tui.hashing.new_hook(file):
+                results = await asyncio.gather(*(self._get_hash_or_compute(file, algo) for algo in self._hashes))
 
-            msg = (
-                f"Removed new download '{file}' [{self._deleted_file_suffix}]. "
-                f"File hash matches with a previous download ({hash_string})"
-            )
-            log(msg, 10)
-            self.manager.tui.hashing.add_removed()
+        except Exception as e:
+            # Files may have been deleted/moved after we downloaded them
+            logger.exception(f"Unable to hash file = '{file}'({e})")
+        else:
+            return dict(zip(self._hashes, results, strict=True))
         finally:
             self._sem.release()
 
-    async def get_file_hashes_dict(self) -> dict:
-        """Get a dictionary of files based on matching file hashes and file size."""
-        downloads = self.manager.completed_downloads - self.hashed_media_items
+    async def _get_hash_or_compute(self, file: Path, hash_algo: HashAlgorithm) -> HashResult:
+        """Generates hash of a file."""
+        stat = await aio.stat(file)
+        f_size = stat.st_size
+        f_mtime = int(stat.st_mtime)
+        db_lookup = await self.database.hash_table.get_file_hash_exists(file, hash_algo)
 
-        async def exists(item: MediaItem) -> MediaItem | None:
-            if await asyncio.to_thread(item.complete_file.is_file):
-                return item
+        match db_lookup:
+            case [hash, size, mtime] if size == f_size:
+                if mtime is None:
+                    # TODO: logic here to delete db row
+                    pass
 
-        for media_item in filter(None, await asyncio.gather(*(exists(item) for item in downloads))):
-            try:
-                await self.hash_item(media_item)
-            except Exception as e:
-                msg = f"Unable to hash file = {media_item.complete_file}: {e}"
-                log(msg, 40)
+                self.tui.hashing.add_prev_hashed()
+                return HashResult(HashValue(hash), size, f_mtime, seen_before=True)
+            case _:
+                hash = await compute_hash(file, hash_algo)
+                self.tui.hashing.add_hashed(hash_algo)
+                return HashResult(HashValue(hash), f_size, f_mtime, seen_before=False)
 
-        return self.hashes_dict
+    async def in_place_hash(self, media_item: MediaItem) -> None:
+        if self.config.dedupe.hashing is not Hashing.IN_PLACE:
+            return
+        await self._sem.acquire()
+        await self._hash_item(media_item)
+
+    async def post_download_hash(self, downloads: Iterable[MediaItem]) -> None:
+        if self.config.dedupe.hashing is not Hashing.POST_DOWNLOAD:
+            return
+
+        with self.tui(screen="hashing"):
+            async with asyncio.TaskGroup() as tg:
+                for item in downloads:
+                    await self._sem.acquire()
+                    tg.create_task(self._hash_item(item))
+
+    async def dedupe(self) -> None:
+        if self.config.runtime.ignore_history or not self.config.dedupe.auto_dedupe:
+            return
+        with self.tui(screen="hashing"):  # TODO: Add a new screen for "removing_hashing"
+            czkawka = Czkawka(
+                send_to_trash_bin=self.config.dedupe.send_deleted_to_trash,
+                concurrency=self.concurrency,
+                on_delete=self.tui.hashing.add_removed,
+            )
+            await czkawka.run(self.results)
+
+
+@dataclasses.dataclass(slots=True, kw_only=True)
+class Czkawka:
+    """Deletes dedupes based on hash results"""
+
+    send_to_trash_bin: bool
+    concurrency: int = 20
+    on_delete: Callable[[], Any] = lambda: None
+    _sem: asyncio.BoundedSemaphore = dataclasses.field(init=False)
+    _suffix: str = dataclasses.field(init=False)
+
+    def __post_init__(self) -> None:
+        self._sem = asyncio.BoundedSemaphore(self.concurrency)
+        self._suffix = "Sent to trash" if self.send_to_trash_bin else "Permanently deleted"
+
+    async def run(self, results: Mapping[Path, XXH128Result]) -> None:
+        """cleanup files based on dedupe setting"""
+        async with asyncio.TaskGroup() as tg:
+            for file, result in results.items():
+                if not result.seen_before:
+                    continue
+                # TODO: get hashes form db. We shoul query all files tih a matching result and only keep the first one
+                await self._sem.acquire()
+                _ = tg.create_task(self._delete_and_log(file, result.hash))
+
+    async def _delete_and_log(self, file: Path, xxh128_value: HashValue) -> None:
+        hash_string = f"xxh128:{xxh128_value}"
+        try:
+            deleted = await _delete_file(file, self.send_to_trash_bin)
+        except OSError as e:
+            logger.exception(f"Unable to remove '{file}' ({hash_string}): {e}")
+        else:
+            if not deleted:
+                return
+            msg = (
+                f"Removed new download '{file}' [{self._suffix}]. "
+                f"File hash matches with a previous download ({hash_string})"
+            )
+            logger.info(msg)
+            self.on_delete()
+        finally:
+            self._sem.release()
 
 
 async def _delete_file(path: Path, to_trash: bool = True) -> bool:
@@ -248,17 +228,16 @@ async def _delete_file(path: Path, to_trash: bool = True) -> bool:
     if to_trash:
         coro = asyncio.to_thread(send2trash, path)
     else:
-        coro = asyncio.to_thread(path.unlink)
+        coro = aio.unlink(path)
 
     try:
         await coro
-        return True
     except FileNotFoundError:
-        pass
+        return False
     except OSError as e:
         # send2trash raises everything as a bare OSError. We should only ignore FileNotFound and raise everything else
-        msg = str(e)
-        if "File not found" not in msg:
+        if "file not found" not in str(e).casefold():
             raise
-
-    return False
+        return False
+    else:
+        return True
