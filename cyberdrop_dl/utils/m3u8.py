@@ -187,7 +187,7 @@ class VariantM3U8Parser:
         return next(self.get_rendition_groups(only=only, exclude=exclude))
 
 
-def get_best_group_from_playlist(
+def select_best_rendition(
     m3u8_playlist: M3U8, only: Iterable[str] = (), *, exclude: Iterable[str] = ()
 ) -> RenditionGroupDetails:
     return VariantM3U8Parser(m3u8_playlist).get_best_group(only=only, exclude=exclude)

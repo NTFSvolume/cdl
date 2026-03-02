@@ -77,7 +77,7 @@ class ChibiSafeCrawler(Crawler, is_abc=True):
 
         for file in album.files:
             url = self.parse_url(file.url.removeprefix("null"))
-            if self.check_album_results(url, results):
+            if self.check_complete_by_album_results(url, results):
                 continue
             new_scrape_item = scrape_item.create_child(url)
             self._handle_file(new_scrape_item, file)

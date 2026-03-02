@@ -192,7 +192,7 @@ class XhamsterCrawler(Crawler):
 
     def _handle_img(self, scrape_item: ScrapeItem, img: dict[str, Any], results: dict[str, int]):
         src, page_url = self.parse_url(img["imageURL"]), self.parse_url(img["pageURL"])
-        if self.check_album_results(src, results):
+        if self.check_complete_by_album_results(src, results):
             return
 
         _, ext = self.get_filename_and_ext(src.name)

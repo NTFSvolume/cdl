@@ -228,7 +228,7 @@ class PornHubCrawler(Crawler):
         original_name = link.name.rsplit(")")[-1]
         name = original_name.removeprefix("original_")
         canonical_url = link.with_name(name)
-        if self.check_album_results(canonical_url, results):
+        if self.check_complete_by_album_results(canonical_url, results):
             return
         custom_filename, ext = self.get_filename_and_ext(name, assume_ext=".jpg")
         await self.handle_file(

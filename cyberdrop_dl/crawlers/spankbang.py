@@ -95,7 +95,7 @@ class SpankBangCrawler(Crawler):
     async def web_pager(
         self, url: AbsoluteHttpURL, next_page_selector: str | None = None, *, cffi: bool = False, **kwargs: Any
     ) -> AsyncGenerator[BeautifulSoup]:
-        async for soup in super()._web_pager(url, next_page_selector, cffi=True, **kwargs):
+        async for soup in super().web_pager(url, next_page_selector, impersonate=True, **kwargs):
             yield soup
 
     @error_handling_wrapper

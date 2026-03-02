@@ -112,6 +112,10 @@ def parse_http(date: str, /) -> UTCAwareDatetime:
     return _normalize(email.utils.parsedate_to_datetime(date))
 
 
+def parse_timestamp_from_iso(date_or_datetime: str, /) -> TimeStamp:
+    return to_timestamp(parse_iso(date_or_datetime))
+
+
 def to_timestamp(date: datetime.datetime) -> TimeStamp:
     return TimeStamp(int(date.timestamp()))
 

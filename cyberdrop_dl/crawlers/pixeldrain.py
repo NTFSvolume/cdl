@@ -168,7 +168,7 @@ class PixelDrainCrawler(Crawler):
 
         results = await self.get_album_results(list_id)
         for file in files:
-            if self.check_album_results(file.download_url, results):
+            if self.check_complete_by_album_results(file.download_url, results):
                 continue
 
             url = origin / "u" / file.id
@@ -216,7 +216,7 @@ class PixelDrainCrawler(Crawler):
                 new_scrape_item = scrape_item.create_child(url)
 
                 if node.type == "file":
-                    if self.check_album_results(node.download_url, results):
+                    if self.check_complete_by_album_results(node.download_url, results):
                         continue
 
                     for part in node.path.split("/")[2:-1]:

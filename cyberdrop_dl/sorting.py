@@ -11,8 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 import imagesize
 
-from cyberdrop_dl import config, constants
-from cyberdrop_dl.ffmpeg import probe
+from cyberdrop_dl import config, constants, ffmpeg
 from cyberdrop_dl.utils import delete_empty_files_and_folders, strings
 
 if TYPE_CHECKING:
@@ -72,7 +71,7 @@ class Sorter:
         for fut in asyncio.as_completed(asyncio.to_thread(_get_files, f) for f in folders):
             folder, files = await fut
             folder_name = folder.name
-            with self.tui.sorting(folder_name, total=len(files)) as progress:
+            with self.tui.sorting.new_hook(folder_name, total=len(files)) as progress:
 
                 async def sort(file: Path, name: str = folder_name) -> None:
                     try:
@@ -103,7 +102,7 @@ class Sorter:
 
         bitrate = duration = sample_rate = None
         try:
-            probe_output = await probe(file)
+            probe_output = await ffmpeg.probe(file)
             if audio := probe_output.audio:
                 duration = audio.duration or probe_output.format.duration
                 bitrate = audio.bitrate
@@ -158,7 +157,7 @@ class Sorter:
         codec = duration = framerate = height = resolution = width = None
 
         try:
-            probe_output = await probe(file)
+            probe_output = await ffmpeg.probe(file)
             if video := probe_output.video:
                 width = video.width
                 height = video.height

@@ -175,7 +175,7 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
         return BeautifulSoup(content, "html.parser")
 
     @final
-    async def json(self, encoding: str | None = None, content_type: str | bool = True) -> Any:
+    async def json(self, encoding: str | None = None, content_type: str | bool | None = True) -> Any:
         if self.status == 204:
             raise ScrapeError(204)
 

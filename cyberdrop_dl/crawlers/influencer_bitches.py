@@ -55,7 +55,7 @@ class InfluencerBitchesCrawler(Crawler):
         for a_tag in soup.select(_SELECTORS.PICTURES):
             link_str: str = css.select(a_tag, "img", "data-full")
             link = self.parse_url(link_str)
-            if self.check_album_results(link, results):
+            if self.check_complete_by_album_results(link, results):
                 continue
             web_url = self.parse_url(css.get_attr(a_tag, "href"))
             new_scrape_item = scrape_item.create_child(web_url)

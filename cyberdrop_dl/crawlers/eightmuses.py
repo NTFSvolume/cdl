@@ -57,7 +57,7 @@ class EightMusesCrawler(Crawler):
 
             image_link_str: str = css.select(image, "img", "data-src").replace("/th/", "/fm/")
             image_link = self.parse_url(image_link_str)
-            if not self.check_album_results(image_link, results):
+            if not self.check_complete_by_album_results(image_link, results):
                 filename, ext = self.get_filename_and_ext(f"{tile_title}.jpg")
                 await self.handle_file(image_link, new_scrape_item, filename, ext)
             scrape_item.add_children()

@@ -77,7 +77,7 @@ class LusciousCrawler(Crawler):
         async for albums in self._pager(scrape_item, is_album=True):
             for album in albums:
                 link = self.parse_url(album["url_to_original"])
-                if not self.check_album_results(link, results):
+                if not self.check_complete_by_album_results(link, results):
                     filename, ext = self.get_filename_and_ext(link.name)
                     await self.handle_file(link, scrape_item, filename, ext)
                 scrape_item.add_children()

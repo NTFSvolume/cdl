@@ -14,7 +14,7 @@ _COLUMNS = ("site", "primary URL", "supported domains", "supported paths")
 
 def get_crawlers_info_as_rich_table() -> Table:
     table = Table(title="cyberdrop-dl supported sites")
-    for column in _COLUMNS[:3]:
+    for column in _COLUMNS[0:3]:
         table.add_column(column, no_wrap=True)
 
     for row_values in _gen_crawlers_info_rows():

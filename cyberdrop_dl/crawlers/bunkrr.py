@@ -185,7 +185,7 @@ class BunkrrCrawler(Crawler):
             return
 
         assert src
-        if self.check_album_results(src, results):
+        if self.check_complete_by_album_results(src, results):
             return
 
         await self._direct_file(scrape_item, src, file.name)

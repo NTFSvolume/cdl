@@ -90,7 +90,7 @@ class ImgurCrawler(Crawler):
         results = await self.get_album_results(album_id)
         for image in album["images"]:
             link = self.parse_url(image["link"])
-            if self.check_album_results(link, results):
+            if self.check_complete_by_album_results(link, results):
                 continue
             web_url = self.PRIMARY_URL / image["id"]
             new_scrape_item = scrape_item.create_child(web_url)

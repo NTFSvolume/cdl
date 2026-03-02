@@ -159,7 +159,7 @@ class CheveretoCrawler(Crawler, is_generic=True):
     ) -> None:
         results = results or {}
         for web_url, src_url in self._get_album_files(soup):
-            if self.check_album_results(web_url, results):
+            if self.check_complete_by_album_results(web_url, results):
                 continue
 
             new_scrape_item = scrape_item.create_child(web_url)

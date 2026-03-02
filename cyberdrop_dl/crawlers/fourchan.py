@@ -76,7 +76,7 @@ class FourChanCrawler(Crawler):
                 post = cast("ImagePost", post)
                 file_micro_timestamp, ext = post["tim"], post["ext"]
                 url = FILES_BASE_URL / board / f"{file_micro_timestamp}{ext}"
-                if self.check_album_results(url, results):
+                if self.check_complete_by_album_results(url, results):
                     continue
 
                 custom_filename = self.create_custom_filename(file_stem, ext)

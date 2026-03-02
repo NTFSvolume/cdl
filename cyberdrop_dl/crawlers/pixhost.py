@@ -60,7 +60,7 @@ class PixHostCrawler(Crawler):
         for thumb, web_url in self.iter_tags(soup, _SELECTORS.GALLERY_IMAGES):
             assert thumb
             src = _thumbnail_to_src(thumb)
-            if not self.check_album_results(src, results):
+            if not self.check_complete_by_album_results(src, results):
                 new_scrape_item = scrape_item.create_child(web_url)
                 self.create_task(self.direct_file(new_scrape_item, src))
             scrape_item.add_children()

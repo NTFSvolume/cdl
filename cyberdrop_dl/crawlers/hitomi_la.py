@@ -199,7 +199,7 @@ class HitomiLaCrawler(Crawler):
 
         for index, image in enumerate(gallery["files"], 1):
             img_reader_url = gallery_reader_url.with_fragment(str(index))
-            if self.check_album_results(img_reader_url, results):
+            if self.check_complete_by_album_results(img_reader_url, results):
                 continue
             link = get_image_url(servers, image)
             new_scrape_item = scrape_item.create_child(img_reader_url)
