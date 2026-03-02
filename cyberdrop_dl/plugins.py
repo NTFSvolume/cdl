@@ -21,7 +21,6 @@ from typing import TYPE_CHECKING, Final
 
 from cyberdrop_dl import env
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Iterable
     from importlib.metadata import EntryPoint

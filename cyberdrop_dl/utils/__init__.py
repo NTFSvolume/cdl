@@ -43,7 +43,6 @@ from cyberdrop_dl.exceptions import (
 
 from . import json
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Generator, Mapping
 

@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import dataclasses
-import logging
 from http import HTTPStatus
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from yaml import YAMLError
     from yarl import URL

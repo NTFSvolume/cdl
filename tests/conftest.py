@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -9,7 +8,6 @@ import pytest
 from cyberdrop_dl import scrape_mapper
 from cyberdrop_dl.manager import Manager
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
     from pathlib import Path

@@ -7,7 +7,6 @@ It calls checks_complete_by_referer several times even if no request is going to
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, ClassVar
 
 from mega.api import MegaAPI
@@ -21,7 +20,6 @@ from cyberdrop_dl.downloader.mega_nz import MegaDownloader
 from cyberdrop_dl.exceptions import LoginError, ScrapeError
 from cyberdrop_dl.utils import error_handling_wrapper
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from mega.filesystem import FileSystem
 

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import itertools
-import logging
 import re
 from hashlib import sha256
 from typing import TYPE_CHECKING, ClassVar, Literal, NotRequired, TypedDict, TypeGuard
@@ -12,7 +11,6 @@ from cyberdrop_dl.data_structures.url_objects import FILE_HOST_ALBUM, AbsoluteHt
 from cyberdrop_dl.exceptions import PasswordProtectedError, ScrapeError
 from cyberdrop_dl.utils import error_handling_wrapper
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Iterable
 

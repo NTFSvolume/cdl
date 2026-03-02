@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Final
 
 from cyberdrop_dl.exceptions import ScrapeError
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Callable
 

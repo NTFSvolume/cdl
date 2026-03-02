@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
 
 import pytest
@@ -9,7 +8,6 @@ from cyberdrop_dl.scraper import scrape_mapper
 from cyberdrop_dl import crawlers
 from cyberdrop_dl.crawlers.crawler import create_crawlers
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.manager import Manager
 

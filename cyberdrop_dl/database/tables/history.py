@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, cast
 
 from .definitions import create_fixed_history, create_history
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     import datetime
     from collections.abc import AsyncGenerator
@@ -20,6 +19,7 @@ if TYPE_CHECKING:
 
 
 _FETCH_MANY_SIZE: int = 1000
+logger = logging.getLogger(__name__)
 
 
 class HistoryTable:

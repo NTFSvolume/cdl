@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import dataclasses
 import importlib.util
-import logging
 import re
 from collections.abc import Sequence
 from pathlib import Path
@@ -18,7 +17,6 @@ from cyberdrop_dl.data_structures.url_objects import MediaItem, ScrapeItem
 from cyberdrop_dl.scrape_mapper import ScrapeMapper
 from cyberdrop_dl.utils import parse_url
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.crawlers.crawler import Crawler
     from cyberdrop_dl.manager import Manager

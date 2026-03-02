@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import logging
 from typing import TYPE_CHECKING, ClassVar, Final
 
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
@@ -9,7 +8,6 @@ from cyberdrop_dl.utils import error_handling_wrapper, xor_decrypt
 
 from ._chevereto import CheveretoCrawler
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.crawlers.crawler import RateLimit, SupportedDomains
 

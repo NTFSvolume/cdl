@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 import dataclasses
-import logging
 from collections.abc import Iterator, Mapping
 from typing import TYPE_CHECKING, Any, Self
 
 from cyberdrop_dl import __version__, yaml
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from pathlib import Path
 

@@ -6,12 +6,13 @@ from typing import TYPE_CHECKING, cast
 
 from .definitions import create_files, create_hash, create_hash_index
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     import aiosqlite
     from yarl import URL
 
     from cyberdrop_dl.database import Database
+
+logger = logging.getLogger(__name__)
 
 
 class HashTable:

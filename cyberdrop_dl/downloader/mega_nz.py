@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING, Any
 
 import aiofiles
@@ -10,7 +9,6 @@ from mega.chunker import MegaChunker, get_chunks
 from cyberdrop_dl.clients.download_client import StreamDownloader
 from cyberdrop_dl.downloader.downloader import Downloader
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Coroutine
 

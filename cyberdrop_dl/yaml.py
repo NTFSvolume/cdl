@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from datetime import date, timedelta
 from enum import Enum
 from pathlib import Path, PurePath
@@ -11,7 +10,6 @@ from yarl import URL
 
 from cyberdrop_dl.exceptions import InvalidYamlError
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from pydantic import BaseModel
     from yaml.nodes import ScalarNode

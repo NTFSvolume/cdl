@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import dataclasses
-import logging
 from contextvars import ContextVar
 from typing import TYPE_CHECKING
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from pathlib import Path
 

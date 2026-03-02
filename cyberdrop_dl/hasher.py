@@ -13,7 +13,6 @@ from send2trash import send2trash
 from cyberdrop_dl import aio, constants
 from cyberdrop_dl.constants import HashAlgorithm, Hashing
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
     from pathlib import Path

@@ -17,7 +17,6 @@ from cyberdrop_dl.scrape_mapper import ScrapeMapper
 from cyberdrop_dl.tui import TUI
 from cyberdrop_dl.utils import filepath, get_system_information, json
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Iterable
     from pathlib import Path

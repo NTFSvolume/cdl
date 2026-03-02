@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Self, overload
 
 import yarl
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Generator, Mapping
 

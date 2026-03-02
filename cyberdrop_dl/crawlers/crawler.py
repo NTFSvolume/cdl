@@ -50,7 +50,6 @@ from cyberdrop_dl.utils import (
 from cyberdrop_dl.utils.filepath import compose_custom_filename, get_filename_and_ext, sanitize_filename
 from cyberdrop_dl.utils.strings import safe_format
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Coroutine, Generator, Iterable
     from http.cookies import BaseCookie

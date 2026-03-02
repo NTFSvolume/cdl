@@ -18,7 +18,6 @@ from cyberdrop_dl.utils.apprise import send_apprise_notifications
 from cyberdrop_dl.utils.sorting import Sorter
 from cyberdrop_dl.webhook import send_notification
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Sequence
 

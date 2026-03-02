@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 import dataclasses
-import logging
 import shutil
 from typing import TYPE_CHECKING, Literal
 
 from cyberdrop_dl import env
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from rich.console import RenderableType
 

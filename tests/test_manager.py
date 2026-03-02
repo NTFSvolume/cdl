@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from dataclasses import Field
 from typing import TYPE_CHECKING, Any, TypeVar
 
@@ -10,7 +9,6 @@ from cyberdrop_dl import config
 from cyberdrop_dl.manager import Manager, log_app_state
 from cyberdrop_dl.models import merge_dicts
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from pydantic import BaseModel
 

@@ -20,7 +20,6 @@ from cyberdrop_dl.exceptions import DownloadError, InvalidContentTypeError, Slow
 from cyberdrop_dl.tui.common import ProgressHook
 from cyberdrop_dl.utils import dates
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine, Mapping
 

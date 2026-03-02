@@ -8,7 +8,6 @@ from packaging.version import Version
 
 from .definitions import create_schema_version
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     import aiosqlite
 
@@ -16,6 +15,7 @@ if TYPE_CHECKING:
 
 
 CURRENT_APP_SCHEMA_VERSION = "8.10.0"
+logger = logging.getLogger(__name__)
 
 
 class SchemaVersionTable:

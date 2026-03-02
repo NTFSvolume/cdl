@@ -12,10 +12,10 @@ from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import error_handling_wrapper
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
+logger = logging.getLogger(__name__)
 _PRIMARY_URL = AbsoluteHttpURL("https://real-debrid.com")
 _API_ENTRYPOINT = AbsoluteHttpURL("https://api.real-debrid.com/rest/1.0")
 _ERROR_CODES = {

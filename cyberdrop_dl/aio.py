@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
-import logging
 import shutil
 import tempfile
 from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable, Coroutine, Iterable, Iterator
@@ -14,7 +13,6 @@ from stat import S_ISREG
 from typing import IO, TYPE_CHECKING, Any, AnyStr, Generic, ParamSpec, Self, TypeVar, cast, overload
 from weakref import WeakValueDictionary
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Sequence
 

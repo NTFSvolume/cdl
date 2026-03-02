@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import contextlib
 import json
-import logging
 from dataclasses import asdict, dataclass, fields
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self
@@ -12,7 +11,6 @@ from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, ScrapeError
 from cyberdrop_dl.utils import css, error_handling_wrapper
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator
 

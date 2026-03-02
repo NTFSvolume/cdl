@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import sqlite3
 from collections import Counter
 from typing import TYPE_CHECKING
@@ -10,7 +9,6 @@ from cyberdrop_dl.clients.hash_client import hash_directory_scanner
 
 from cyberdrop_dl import appdata, config
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from pathlib import Path
 

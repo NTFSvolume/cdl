@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import contextlib
-import logging
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, ClassVar
 
@@ -19,7 +18,6 @@ from rich.progress import (
 from cyberdrop_dl import __version__
 from cyberdrop_dl.tui.common import ColumnsType, OverflowingPanel, ProgressHook, UIPanel
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Generator
 

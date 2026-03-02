@@ -7,14 +7,12 @@ Gitee: https://gitee.com/qkqpttgf/OneManager-php
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler
 from cyberdrop_dl.exceptions import InvalidContentTypeError
 from cyberdrop_dl.utils import css, error_handling_wrapper
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from bs4 import Tag
 

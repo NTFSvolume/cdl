@@ -23,7 +23,6 @@ _VIDEO_HLS_BATCH_SIZE = 10
 _AUDIO_HLS_BATCH_SIZE = 50
 
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine
 
