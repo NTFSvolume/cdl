@@ -50,7 +50,7 @@ from cyberdrop_dl.utils.filepath import compose_custom_filename, get_filename_an
 from cyberdrop_dl.utils.strings import safe_format
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Callable, Coroutine, Generator, Iterable, Mapping
+    from collections.abc import AsyncGenerator, Callable, Coroutine, Generator, Iterable
     from http.cookies import BaseCookie
 
     import yarl
@@ -139,9 +139,9 @@ class Registry:
 
 
 class CrawlerLogger(logging.LoggerAdapter[logging.Logger]):
-    def __init__(self, cls: Crawler, logger: logging.Logger, extra: Mapping[str, object] | None = None) -> None:
+    def __init__(self, cls: Crawler) -> None:
         self._domain = cls.FOLDER_DOMAIN
-        super().__init__(logger)
+        super().__init__(logging.getLogger(type(self).__qualname__))
 
     def process(self, msg: str, kwargs: Any) -> tuple[str, Any]:
         return f"[{self._domain}] {msg}", kwargs
@@ -152,6 +152,91 @@ class CrawlerLogger(logging.LoggerAdapter[logging.Logger]):
 
 def _url(item: ScrapeItem | AbsoluteHttpURL) -> AbsoluteHttpURL:
     return item if isinstance(item, AbsoluteHttpURL) else item.url
+
+
+class CrawlerProxy:
+    def __init__(self, crawler: Crawler) -> None:
+        self._crawler = crawler
+
+    @copy_signature(HTTPClient._request)
+    def request(self, *args, **kwargs):
+        return self._crawler.request(*args, **kwargs)
+
+    @copy_signature(request)
+    async def request_json(self, *args, **kwargs) -> Any:
+        return await self._crawler.request_json(*args, **kwargs)
+
+    @copy_signature(request)
+    async def request_soup(self, *args, **kwargs) -> BeautifulSoup:
+        return await self._crawler.request_soup(*args, **kwargs)
+
+    @copy_signature(request)
+    async def request_text(self, *args, **kwargs) -> str:
+        return await self._crawler.request_text(*args, **kwargs)
+
+
+class HLS(CrawlerProxy):
+    async def get_m3u8(
+        self,
+        m3u8_playlist_url: AbsoluteHttpURL,
+        /,
+        headers: dict[str, str] | None = None,
+        *,
+        only: Iterable[str] = (),
+        exclude: Iterable[str] = ("vp09",),
+    ) -> tuple[m3u8.RenditionGroup, m3u8.RenditionGroupDetails | None]:
+        m3u8_obj = await self._get_m3u8(m3u8_playlist_url, headers)
+        if m3u8_obj.is_variant:
+            return await self._resolve_variant_m3u8(m3u8_obj, headers, only=only, exclude=exclude)
+        m3u8_obj.media_type = "video"
+        return m3u8.RenditionGroup(m3u8_obj), None
+
+    async def get_m3u8_from_playlist_url(
+        self,
+        m3u8_playlist_url: AbsoluteHttpURL,
+        /,
+        headers: dict[str, str] | None = None,
+        *,
+        only: Iterable[str] = (),
+        exclude: Iterable[str] = ("vp09",),
+    ) -> tuple[m3u8.RenditionGroup, m3u8.RenditionGroupDetails]:
+        """Get m3u8 rendition group from a playlist m3u8 (variant m3u8), selecting the best format"""
+        m3u8_playlist = await self._get_m3u8(m3u8_playlist_url, headers)
+        return await self._resolve_variant_m3u8(m3u8_playlist, headers, only=only, exclude=exclude)
+
+    async def _resolve_variant_m3u8(
+        self,
+        m3u8_playlist: m3u8.M3U8,
+        /,
+        headers: dict[str, str] | None = None,
+        *,
+        only: Iterable[str] = (),
+        exclude: Iterable[str] = ("vp09",),
+    ):
+        rendition_group_info = m3u8.get_best_group_from_playlist(m3u8_playlist, only=only, exclude=exclude)
+        renditions_urls = rendition_group_info.urls
+        video = await self._get_m3u8(renditions_urls.video, headers, "video")
+        audio = await self._get_m3u8(renditions_urls.audio, headers, "audio") if renditions_urls.audio else None
+        subtitle = (
+            await self._get_m3u8(renditions_urls.subtitle, headers, "subtitles") if renditions_urls.subtitle else None
+        )
+        return m3u8.RenditionGroup(video, audio, subtitle), rendition_group_info
+
+    async def get_m3u8_from_index_url(
+        self, url: AbsoluteHttpURL, /, headers: dict[str, str] | None = None
+    ) -> m3u8.RenditionGroup:
+        """Get m3u8 rendition group from an index that only has 1 rendition, a video (non variant m3u8)"""
+        return m3u8.RenditionGroup(await self._get_m3u8(url, headers, "video"))
+
+    async def _get_m3u8(
+        self,
+        url: AbsoluteHttpURL,
+        /,
+        headers: dict[str, str] | None = None,
+        media_type: Literal["video", "audio", "subtitles"] | None = None,
+    ) -> m3u8.M3U8:
+        content = await self.request_text(url, headers=headers)
+        return m3u8.M3U8(content, url.parent, media_type)
 
 
 class Crawler(ABC):
@@ -196,8 +281,9 @@ class Crawler(ABC):
 
         self.logged_in: bool = False
         self._scraped_items: set[str] = set()
-        self.logger = CrawlerLogger(logging.getLogger(type(self).__qualname__))
+        self.logger = CrawlerLogger(self)
         self._semaphore = asyncio.Semaphore(20)
+        self.hls = HLS(self)
         self.__post_init__()
 
     def __post_init__(self) -> None:  # noqa: B027
@@ -871,42 +957,6 @@ class Crawler(ABC):
             raise ScrapeError(422, "Infinite redirect")
         scrape_item.url = redirect
         _ = self.create_task(self.run(scrape_item))
-
-    async def get_m3u8_from_playlist_url(
-        self,
-        m3u8_playlist_url: AbsoluteHttpURL,
-        /,
-        headers: dict[str, str] | None = None,
-        *,
-        only: Iterable[str] = (),
-        exclude: Iterable[str] = ("vp09",),
-    ) -> tuple[m3u8.RenditionGroup, m3u8.RenditionGroupDetails]:
-        """Get m3u8 rendition group from a playlist m3u8 (variant m3u8), selecting the best format"""
-        m3u8_playlist = await self._get_m3u8(m3u8_playlist_url, headers)
-        rendition_group_info = m3u8.get_best_group_from_playlist(m3u8_playlist, only=only, exclude=exclude)
-        renditions_urls = rendition_group_info.urls
-        video = await self._get_m3u8(renditions_urls.video, headers, "video")
-        audio = await self._get_m3u8(renditions_urls.audio, headers, "audio") if renditions_urls.audio else None
-        subtitle = (
-            await self._get_m3u8(renditions_urls.subtitle, headers, "subtitles") if renditions_urls.subtitle else None
-        )
-        return m3u8.RenditionGroup(video, audio, subtitle), rendition_group_info
-
-    async def get_m3u8_from_index_url(
-        self, url: AbsoluteHttpURL, /, headers: dict[str, str] | None = None
-    ) -> m3u8.RenditionGroup:
-        """Get m3u8 rendition group from an index that only has 1 rendition, a video (non variant m3u8)"""
-        return m3u8.RenditionGroup(await self._get_m3u8(url, headers, "video"))
-
-    async def _get_m3u8(
-        self,
-        url: AbsoluteHttpURL,
-        /,
-        headers: dict[str, str] | None = None,
-        media_type: Literal["video", "audio", "subtitles"] | None = None,
-    ) -> m3u8.M3U8:
-        content = await self.request_text(url, headers=headers)
-        return m3u8.M3U8(content, url.parent, media_type)
 
     @final
     def create_custom_filename(
