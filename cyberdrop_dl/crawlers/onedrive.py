@@ -4,17 +4,20 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from functools import partial
 from typing import TYPE_CHECKING, Any, ClassVar, Self
 
+from cyberdrop_dl import cache
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
+from cyberdrop_dl.utils import error_handling_wrapper
 from cyberdrop_dl.utils.dates import to_timestamp
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
@@ -102,8 +105,8 @@ class OneDriveCrawler(Crawler):
     FOLDER_DOMAIN: ClassVar[str] = "OneDrive"
 
     def __post_init__(self) -> None:
-        badger_token: str = self.manager.cache_manager.get("onedrive_badger_token") or ""
-        badger_token_expires: str = self.manager.cache_manager.get("onedrive_badger_token_expires") or ""
+        badger_token: str = cache.get().get("onedrive_badger_token") or ""
+        badger_token_expires: str = cache.get().get("onedrive_badger_token_expires") or ""
         self.auth_headers = {}
         expired = True
         if badger_token_expires:
@@ -116,7 +119,7 @@ class OneDriveCrawler(Crawler):
         if badger_token and not expired:
             self.auth_headers = {"Prefer": "autoredeem", "Authorization": f"Badger {badger_token}"}
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         if self.auth_headers:
             return
         await self.get_badger_token(BADGER_URL)
@@ -203,7 +206,7 @@ class OneDriveCrawler(Crawler):
         # file.url should be API URL, ex: https://api.onedrive.com/v1.0/drives/<container_id>/items/<resid>?authkey=<auth_key>
         # Auth key will be removed in database but a new one can be generated from scrape_item.url
         filename, ext = self.get_filename_and_ext(file.name)
-        scrape_item.possible_datetime = file.date
+        scrape_item.timestamp = file.date
         await self.handle_file(file.url, scrape_item, filename, ext, debrid_link=file.download_url)
 
     async def make_api_request(self, api_url: AbsoluteHttpURL) -> dict[str, Any]:
@@ -226,8 +229,8 @@ class OneDriveCrawler(Crawler):
         badger_token: str = json_resp["token"]
         badger_token_expires: str = json_resp["expiryTimeUtc"]
         self.auth_headers = {"Prefer": "autoredeem", "Authorization": f"Badger {badger_token}"}
-        self.manager.cache_manager.save("onedrive_badger_token", badger_token)
-        self.manager.cache_manager.save("onedrive_badger_token_expires", badger_token_expires)
+        cache.get().save("onedrive_badger_token", badger_token)
+        cache.get().save("onedrive_badger_token_expires", badger_token_expires)
 
 
 def is_share_link(url: AbsoluteHttpURL) -> bool:

@@ -1,54 +1,53 @@
-# pyright: ignore[reportIncompatibleVariableOverride]
 from __future__ import annotations
 
+import contextlib
 import copy
+import dataclasses
 import datetime
-from dataclasses import asdict, dataclass, field
-from enum import IntEnum
+import logging
+from collections.abc import Generator
+from dataclasses import field
+from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Self, overload
 
 import yarl
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Generator, Mapping
 
-    import aiohttp
-    from propcache.api import under_cached_property as cached_property
-    from rich.progress import TaskID
-
-    from cyberdrop_dl import signature
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.annotations import copy_signature
 
     class AbsoluteHttpURL(yarl.URL):
-        @signature.copy(yarl.URL.__new__)
+        @copy_signature(yarl.URL.__new__)
         def __new__(cls) -> AbsoluteHttpURL: ...
 
-        @signature.copy(yarl.URL.__truediv__)
+        @copy_signature(yarl.URL.__truediv__)
         def __truediv__(self) -> AbsoluteHttpURL: ...
 
-        @signature.copy(yarl.URL.__mod__)
+        @copy_signature(yarl.URL.__mod__)
         def __mod__(self) -> AbsoluteHttpURL: ...
 
-        @cached_property
-        def host(self) -> str: ...
+        @property
+        def host(self) -> str: ...  # pyright: ignore[reportIncompatibleVariableOverride]
 
-        @cached_property
-        def scheme(self) -> Literal["http", "https"]: ...
+        @property
+        def scheme(self) -> Literal["http", "https"]: ...  # pyright: ignore[reportIncompatibleVariableOverride]
 
-        @cached_property
-        def absolute(self) -> Literal[True]: ...
+        @property
+        def absolute(self) -> Literal[True]: ...  # pyright: ignore[reportIncompatibleVariableOverride]
 
-        @cached_property
-        def parent(self) -> AbsoluteHttpURL: ...
+        @property
+        def parent(self) -> AbsoluteHttpURL: ...  # pyright: ignore[reportIncompatibleVariableOverride]
 
-        @signature.copy(yarl.URL.with_path)
+        @copy_signature(yarl.URL.with_path)
         def with_path(self) -> AbsoluteHttpURL: ...
 
-        @signature.copy(yarl.URL.with_host)
+        @copy_signature(yarl.URL.with_host)
         def with_host(self) -> AbsoluteHttpURL: ...
 
-        @signature.copy(yarl.URL.origin)
+        @copy_signature(yarl.URL.origin)
         def origin(self) -> AbsoluteHttpURL: ...
 
         @overload
@@ -57,7 +56,7 @@ if TYPE_CHECKING:
         @overload
         def with_query(self, **kwargs: yarl.QueryVariable) -> AbsoluteHttpURL: ...
 
-        @signature.copy(yarl.URL.with_query)
+        @copy_signature(yarl.URL.with_query)
         def with_query(self) -> AbsoluteHttpURL: ...
 
         @overload
@@ -66,7 +65,7 @@ if TYPE_CHECKING:
         @overload
         def extend_query(self, **kwargs: yarl.QueryVariable) -> AbsoluteHttpURL: ...
 
-        @signature.copy(yarl.URL.extend_query)
+        @copy_signature(yarl.URL.extend_query)
         def extend_query(self) -> AbsoluteHttpURL: ...
 
         @overload
@@ -75,32 +74,35 @@ if TYPE_CHECKING:
         @overload
         def update_query(self, **kwargs: yarl.QueryVariable) -> AbsoluteHttpURL: ...
 
-        @signature.copy(yarl.URL.update_query)
+        @copy_signature(yarl.URL.update_query)
         def update_query(self) -> AbsoluteHttpURL: ...
 
-        @signature.copy(yarl.URL.without_query_params)
+        @copy_signature(yarl.URL.without_query_params)
         def without_query_params(self) -> AbsoluteHttpURL: ...
 
-        @signature.copy(yarl.URL.with_fragment)
+        @copy_signature(yarl.URL.with_fragment)
         def with_fragment(self) -> AbsoluteHttpURL: ...
 
-        @signature.copy(yarl.URL.with_name)
+        @copy_signature(yarl.URL.with_name)
         def with_name(self) -> AbsoluteHttpURL: ...
 
-        @signature.copy(yarl.URL.with_suffix)
+        @copy_signature(yarl.URL.with_suffix)
         def with_suffix(self) -> AbsoluteHttpURL: ...
 
-        @signature.copy(yarl.URL.join)
+        @copy_signature(yarl.URL.join)
         def join(self) -> AbsoluteHttpURL: ...
 
-        @signature.copy(yarl.URL.joinpath)
+        @copy_signature(yarl.URL.joinpath)
         def joinpath(self) -> AbsoluteHttpURL: ...
 
 else:
     AbsoluteHttpURL = yarl.URL
 
 
-class ScrapeItemType(IntEnum):
+logger = logging.getLogger(__name__)
+
+
+class ScrapeItemType(Enum):
     FORUM = 0
     FORUM_POST = 1
     FILE_HOST_PROFILE = 2
@@ -119,7 +121,7 @@ class HlsSegment(NamedTuple):
     url: AbsoluteHttpURL
 
 
-@dataclass(unsafe_hash=True, slots=True, kw_only=True)
+@dataclasses.dataclass(unsafe_hash=True, slots=True, kw_only=True)
 class MediaItem:
     url: AbsoluteHttpURL
     domain: str
@@ -127,30 +129,25 @@ class MediaItem:
     download_folder: Path
     filename: str
     original_filename: str
-    download_filename: str | None = field(default=None)
-    filesize: int | None = field(default=None, compare=False)
+    download_filename: str | None = None
+    filesize: int | None = None
     ext: str
     db_path: str
-
-    debrid_link: AbsoluteHttpURL | None = field(default=None, compare=False)
-    duration: float | None = field(default=None, compare=False)
+    debrid_url: AbsoluteHttpURL | None = None
+    duration: float | None = None
     is_segment: bool = False
-    fallbacks: Callable[[aiohttp.ClientResponse, int], AbsoluteHttpURL] | list[AbsoluteHttpURL] | None = field(
-        default=None, compare=False
-    )
     album_id: str | None = None
-    datetime: int | None = field(default=None, compare=False)
-    parents: list[AbsoluteHttpURL] = field(default_factory=list, compare=False)
-    parent_threads: set[AbsoluteHttpURL] = field(default_factory=set, compare=False)
+    timestamp: int | None = None
+    datetime: datetime.datetime | None = field(init=False, default=None)
+    hash: str | None = None
 
-    current_attempt: int = field(default=0, compare=False)
-    partial_file: Path = None  # type: ignore
-    complete_file: Path = None  # type: ignore
-    hash: str | None = field(default=None, compare=False)
-    downloaded: bool = field(default=False, compare=False)
+    parents: list[AbsoluteHttpURL] = field(default_factory=list)
+    parent_threads: set[AbsoluteHttpURL] = field(default_factory=set)
+    attempts: int = field(init=False, default=0)
+    complete_file: Path = field(init=False)
 
-    parent_media_item: MediaItem | None = field(default=None, compare=False)
-    _task_id: TaskID | None = field(default=None, compare=False)
+    headers: dict[str, str] = field(default_factory=dict, compare=False)
+    downloaded: bool = False
     metadata: object = field(init=False, default_factory=dict, compare=False)
 
     def __repr__(self) -> str:
@@ -160,10 +157,18 @@ class MediaItem:
         if self.url.scheme == "metadata":
             self.db_path = ""
 
-    def datetime_obj(self) -> datetime.datetime | None:
-        if self.datetime:
-            assert isinstance(self.datetime, int), f"Invalid {self.datetime =!r} from {self.referer}"
-            return datetime.datetime.fromtimestamp(self.datetime)
+        self.complete_file = self.download_folder / self.filename
+        if self.timestamp:
+            assert isinstance(self.timestamp, int), f"Invalid {self.timestamp =!r} from {self.referer}"
+            self.datetime = datetime.datetime.fromtimestamp(self.timestamp, tz=datetime.UTC)
+
+    @property
+    def real_url(self) -> AbsoluteHttpURL:
+        return self.debrid_url or self.url
+
+    @property
+    def partial_file(self) -> Path:
+        return self.complete_file.with_suffix(self.complete_file.suffix + ".part")
 
     @staticmethod
     def from_item(
@@ -176,7 +181,7 @@ class MediaItem:
         filename: str,
         db_path: str,
         original_filename: str | None = None,
-        ext: str = "",
+        ext: str | None = None,
     ) -> MediaItem:
         return MediaItem(
             url=url,
@@ -189,68 +194,57 @@ class MediaItem:
             ext=ext or Path(filename).suffix,
             original_filename=original_filename or filename,
             parents=origin.parents.copy(),
-            datetime=origin.possible_datetime if isinstance(origin, ScrapeItem) else origin.datetime,
-            parent_media_item=None if isinstance(origin, ScrapeItem) else origin,
+            timestamp=origin.timestamp,
             parent_threads=origin.parent_threads.copy(),
         )
 
-    @property
-    def task_id(self) -> TaskID | None:
-        if self.parent_media_item is not None:
-            return self.parent_media_item.task_id
-        return self._task_id
-
-    def set_task_id(self, task_id: TaskID | None) -> None:
-        if self.task_id is not None and task_id is not None:
-            # We already have a task_id; we can't replace it, only reset it.
-            # This should never happen. Calling code should always check the value before making a new task.
-            # We can't silently ignore it either because we will lose any reference to the created task.
-            raise ValueError("task_id is already set")
-        if self.parent_media_item is not None:
-            self.parent_media_item.set_task_id(task_id)
-        else:
-            self._task_id = task_id
-
-    def as_jsonable_dict(self) -> dict[str, Any]:
-        item = asdict(self)
-        if datetime := self.datetime_obj():
-            item["datetime"] = datetime
-        item["attempts"] = item.pop("current_attempt")
+    def as_dict(self) -> dict[str, Any]:
+        me = dataclasses.asdict(self)
+        me["partial_file"] = self.partial_file
         if self.hash:
-            item["hash"] = f"xxh128:{self.hash}"
-        for name in ("fallbacks", "_task_id", "is_segment", "parent_media_item"):
-            _ = item.pop(name)
-        return item
+            me["hash"] = f"xxh128:{self.hash}"
+        for name in ("is_segment",):
+            _ = me.pop(name)
+        return me
 
 
-@dataclass(kw_only=True, slots=True)
+@dataclasses.dataclass(kw_only=True, slots=True)
 class ScrapeItem:
     url: AbsoluteHttpURL
     parent_title: str = ""
     part_of_album: bool = False
     album_id: str | None = None
-    possible_datetime: int | None = None
+    timestamp: int | None = None
     retry_path: Path | None = None
+
+    type: ScrapeItemType | None = field(default=None, init=False)
+    completed_at: int | None = None
+    created_at: int | None = None
+    password: str | None = None
 
     parents: list[AbsoluteHttpURL] = field(default_factory=list, init=False)
     parent_threads: set[AbsoluteHttpURL] = field(default_factory=set, init=False)
-    children: int = field(default=0, init=False)
-    children_limit: int = field(default=0, init=False)
-    type: ScrapeItemType | None = field(default=None, init=False)
-    completed_at: int | None = field(default=None, init=False)
-    created_at: int | None = field(default=None, init=False)
-    children_limits: list[int] = field(default_factory=list, init=False)
-    password: str | None = field(default=None, init=False)
+    _children: int = field(default=0, init=False)
+    _children_limit: int = field(default=0, init=False)
+    _children_limits: list[int] = field(default_factory=list, init=False)
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}(url={self.url!r}, parent_title={self.parent_title!r}, possible_datetime={self.possible_datetime!r}"
+        return (
+            f"{type(self).__name__}(url={self.url!r}, parent_title={self.parent_title!r}, timestamp={self.timestamp!r}"
+        )
 
     def __post_init__(self) -> None:
-        self.password = self.url.query.get("password")
+        self.password = self.password or self.url.query.get("password")
+
+    @property
+    def datetime(self) -> datetime.datetime | None:
+        if self.timestamp:
+            assert isinstance(self.timestamp, int), f"Invalid {self.timestamp =!r} from {self.url}"
+            return datetime.datetime.fromtimestamp(self.timestamp, tz=datetime.UTC)
 
     def add_to_parent_title(self, title: str) -> None:
         """Adds a title to the parent title."""
-        from cyberdrop_dl.utils.utilities import sanitize_folder
+        from cyberdrop_dl.utils.filepath import sanitize_folder
 
         if not title or self.retry_path:
             return
@@ -271,106 +265,76 @@ class ScrapeItem:
 
         self.parent_title = (self.parent_title + "/" + title) if self.parent_title else title
 
-    def set_type(self, scrape_item_type: ScrapeItemType | None, _: Manager | None = None) -> None:
-        self.type = scrape_item_type
-        self.reset_childen()
-
     def reset_childen(self) -> None:
-        self.children = self.children_limit = 0
+        self._children = self._children_limit = 0
         if self.type is None:
             return
         try:
-            self.children_limit = self.children_limits[self.type]
+            self._children_limit = self._children_limits[self.type.value]
         except (IndexError, TypeError):
             pass
 
     def add_children(self, number: int = 1) -> None:
-        self.children += number
-        if self.children_limit and self.children >= self.children_limit:
-            from cyberdrop_dl.exceptions import MaxChildrenError
+        self._children += number
+        if self._children_limit and self._children >= self._children_limit:
+            raise RecursionError("Max number of children reached", self)
 
-            raise MaxChildrenError(origin=self)
-
-    def reset(self, reset_parents: bool = False, reset_parent_title: bool = False) -> None:
+    def reset(self, *, reset_parents: bool = False) -> None:
         """Resets `album_id`, `type` and `posible_datetime` back to `None`
 
         Reset `part_of_album` back to `False`
         """
-        self.album_id = self.possible_datetime = self.type = None
+        self.album_id = self.timestamp = self.type = None
         self.part_of_album = False
         self.reset_childen()
         if reset_parents:
             self.parents = []
             self.parent_threads = set()
-        if reset_parent_title:
-            self.parent_title = ""
-
-    def setup_as(self, title: str, type: ScrapeItemType, *, album_id: str | None = None) -> None:
-        self.part_of_album = True
-        if album_id:
-            self.album_id = album_id
-        if self.type != type:
-            self.set_type(type)
-        self.add_to_parent_title(title)
 
     def create_new(
         self,
         url: AbsoluteHttpURL,
         *,
-        new_title_part: str = "",
-        part_of_album: bool = False,
-        album_id: str | None = None,
-        possible_datetime: int | None = None,
+        new_title_part: str | None = None,
         add_parent: AbsoluteHttpURL | bool | None = None,
     ) -> Self:
         """Creates a scrape item."""
-        from cyberdrop_dl.utils.utilities import is_absolute_http_url
 
-        scrape_item = self.copy()
-        assert is_absolute_http_url(url)
+        me = self.copy()
 
         if add_parent:
-            new_parent = add_parent if isinstance(add_parent, AbsoluteHttpURL) else self.url
-            assert is_absolute_http_url(new_parent)
-            scrape_item.parents.append(new_parent)
+            parent = self.url if add_parent is True else add_parent
+            me.parents.append(parent)
 
         if new_title_part:
-            scrape_item.add_to_parent_title(new_title_part)
+            me.add_to_parent_title(new_title_part)
 
-        scrape_item.url = url
-        scrape_item.part_of_album = part_of_album or scrape_item.part_of_album
-        scrape_item.possible_datetime = possible_datetime or scrape_item.possible_datetime
-        scrape_item.album_id = album_id or scrape_item.album_id
-        return scrape_item
+        me.url = url
+        return me
 
-    def create_child(
-        self,
-        url: AbsoluteHttpURL,
-        *,
-        new_title_part: str = "",
-        album_id: str | None = None,
-        possible_datetime: int | None = None,
-    ) -> Self:
-        return self.create_new(
-            url,
-            part_of_album=True,
-            add_parent=True,
-            new_title_part=new_title_part,
-            album_id=album_id,
-            possible_datetime=possible_datetime,
-        )
+    def create_child(self, url: AbsoluteHttpURL, *, new_title_part: str | None = None) -> Self:
+        return self.create_new(url, add_parent=True, new_title_part=new_title_part)
 
-    def setup_as_album(self: ScrapeItem, title: str, *, album_id: str | None = None) -> None:
-        return self.setup_as(title, type=FILE_HOST_ALBUM, album_id=album_id)
+    def setup_as(self, title: str, type: ScrapeItemType, /, album_id: str | None = None) -> None:
+        self.part_of_album = True
+        if album_id:
+            self.album_id = album_id
+        if self.type != type:
+            self.type = type
+            self.reset_childen()
+        self.add_to_parent_title(title)
 
-    def setup_as_profile(self: ScrapeItem, title: str, *, album_id: str | None = None) -> None:
-        return self.setup_as(title, type=FILE_HOST_PROFILE, album_id=album_id)
+    def setup_as_album(self, title: str, /, album_id: str | None = None) -> None:
+        return self.setup_as(title, FILE_HOST_ALBUM, album_id=album_id)
 
-    def setup_as_forum(self: ScrapeItem, title: str, *, album_id: str | None = None) -> None:
-        return self.setup_as(title, type=FORUM, album_id=album_id)
+    def setup_as_profile(self, title: str, /, album_id: str | None = None) -> None:
+        return self.setup_as(title, FILE_HOST_PROFILE, album_id=album_id)
 
-    def setup_as_post(self: ScrapeItem, title: str, *, album_id: str | None = None) -> None:
-        return self.setup_as(title, type=FORUM_POST, album_id=album_id)
+    def setup_as_forum(self, title: str, /, album_id: str | None = None) -> None:
+        return self.setup_as(title, FORUM, album_id=album_id)
+
+    def setup_as_post(self, title: str, /, album_id: str | None = None) -> None:
+        return self.setup_as(title, FORUM_POST, album_id=album_id)
 
     @property
     def origin(self) -> AbsoluteHttpURL | None:
@@ -385,9 +349,9 @@ class ScrapeItem:
     def create_download_path(self, domain: str) -> Path:
         if self.retry_path:
             return self.retry_path
-        if self.parent_title and self.part_of_album:
-            return Path(self.parent_title)
         if self.parent_title:
+            if self.part_of_album:
+                return Path(self.parent_title)
             return Path(self.parent_title) / f"Loose Files ({domain})"
         return Path(f"Loose Files ({domain})")
 
@@ -395,31 +359,46 @@ class ScrapeItem:
         """Returns a deep copy of this scrape_item"""
         return copy.deepcopy(self)
 
+    @contextlib.contextmanager
+    def track_changes(self) -> Generator[None]:
+        og_url = self.url
+        try:
+            yield
+        finally:
+            if og_url != self.url:
+                logger.info(f"URL transformation applied : \n  old_url: {og_url}\n  new_url: {self.url}")
 
-class QueryDatetimeRange(NamedTuple):
-    before: datetime.datetime | None = None
-    after: datetime.datetime | None = None
+
+@dataclasses.dataclass(slots=True, order=True)
+class DatetimeRange:
+    before: datetime.datetime
+    after: datetime.datetime
+
+    def __post_init__(self) -> None:
+        if self.before <= self.after:
+            raise ValueError
+
+    @classmethod
+    def from_url(cls, url: AbsoluteHttpURL) -> DatetimeRange | None:
+        return cls(
+            cls._extract(url.query, "before") or datetime.datetime.max,
+            cls._extract(url.query, "after") or datetime.datetime.min,
+        )
+
+    def __contains__(self, other: object) -> bool:
+        if not isinstance(other, datetime.datetime):
+            return False
+        return self.before <= other <= self.after
+
+    def as_query(self) -> dict[str, str]:
+        query: dict[str, str] = {}
+        if self.before != datetime.datetime.max:
+            query["before"] = self.before.isoformat()
+        if self.after != datetime.datetime.min:
+            query["after"] = self.after.isoformat()
+        return query
 
     @staticmethod
-    def from_url(url: AbsoluteHttpURL) -> QueryDatetimeRange | None:
-        self = QueryDatetimeRange(_date_from_query_param(url, "before"), _date_from_query_param(url, "after"))
-        if self == (None, None):
-            return None
-        if (self.before and self.after) and (self.before <= self.after):
-            raise ValueError
-        return self
-
-    def is_in_range(self, other: datetime.datetime) -> bool:
-        if (self.before and other >= self.before) or (self.after and other <= self.after):
-            return False
-        return True
-
-    def as_query(self) -> dict[str, Any]:
-        return {name: value.isoformat() for name, value in self._asdict().items() if value}
-
-
-def _date_from_query_param(url: AbsoluteHttpURL, query_param: str) -> datetime.datetime | None:
-    from cyberdrop_dl.utils.dates import parse_aware_iso_datetime
-
-    if value := url.query.get(query_param):
-        return parse_aware_iso_datetime(value)
+    def _extract(query: Mapping[str, str], name: str) -> datetime.datetime | None:
+        if value := query.get(name):
+            return datetime.datetime.fromisoformat(value).astimezone(datetime.UTC)

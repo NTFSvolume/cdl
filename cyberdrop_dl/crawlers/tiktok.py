@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import logging
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, auto_task_id
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, type_adapter
+from cyberdrop_dl.utils import error_handling_wrapper, type_adapter
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
@@ -101,11 +103,11 @@ class TikTokCrawler(Crawler):
     def __post_init__(self) -> None:
         self._headers: dict[str, Any] = {"X-Requested-With": "XMLHttpRequest"}
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         cookie_name = "sessionid"
         if value := self.get_cookie_value(cookie_name):
             self._headers["x-proxy-cookie"] = f"{cookie_name}={value}"
-            self.log(f"[{self.FOLDER_DOMAIN}] Found {cookie_name} cookies")
+            self.logger(f"[{self.FOLDER_DOMAIN}] Found {cookie_name} cookies")
         self.client.client_manager.cookies.clear_domain(self.PRIMARY_URL.host)
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
@@ -167,7 +169,7 @@ class TikTokCrawler(Crawler):
 
         submit_url = _API_SUBMIT_TASK_URL.with_query(url=media_id)
         task_id: str = (await self._api_request(submit_url))["task_id"]
-        self.log(f"[{self.FOLDER_DOMAIN}] trying to download {media_id = } with {task_id = }")
+        self.logger(f"[{self.FOLDER_DOMAIN}] trying to download {media_id = } with {task_id = }")
         json_data = await self._get_task_result(task_id)
         post = Post.from_dict(json_data["detail"])
         post.is_src_quality = True
@@ -204,7 +206,7 @@ class TikTokCrawler(Crawler):
         scrape_item.add_to_parent_title(title)
         post_title = self.create_separate_post_title(post.title, post.id, post.create_time)
         scrape_item.setup_as_album(post_title, album_id=post.id)
-        scrape_item.possible_datetime = post.create_time
+        scrape_item.timestamp = post.create_time
         self._handle_images(scrape_item, post)
         self._handle_audio(scrape_item, post)
         self._handle_video(scrape_item, post)

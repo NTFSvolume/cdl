@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import css, error_handling_wrapper
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
@@ -62,7 +63,7 @@ class LuxureTVCrawler(Crawler):
             return
 
         soup = await self.request_soup(scrape_item.url, impersonate=True)
-        scrape_item.possible_datetime = self.parse_iso_date(css.get_json_ld_date(soup))
+        scrape_item.timestamp = self.parse_iso_date(css.get_json_ld_date(soup))
         video_player = css.select(soup, Selector.VIDEO_PLAYER)
         title = css.select_text(soup, Selector.TITLE)
         link = self.parse_url(css.get_attr(video_player, "src"))

@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import dataclasses
 import itertools
+import logging
 from typing import TYPE_CHECKING, ClassVar
 from xml.etree import ElementTree
 
 from cyberdrop_dl.crawlers.xenforo.xenforo import XenforoCrawler
 from cyberdrop_dl.exceptions import MaxChildrenError, ScrapeError
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     import datetime
     from collections.abc import Iterable
@@ -65,7 +67,7 @@ class vBulletinCrawler(XenforoCrawler, is_abc=True):  # noqa: N801
         cls.XF_PAGE_URL_PART_NAME = "page"
         cls.XF_POST_URL_PART_NAME = "post"
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         if not self.logged_in:
             login_url = self.PRIMARY_URL / "login.php"
             await self._login(login_url)

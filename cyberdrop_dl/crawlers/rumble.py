@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import itertools
+import logging
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 
 from cyberdrop_dl.compat import IntEnum
@@ -9,9 +10,9 @@ from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.mediaprops import Resolution, Subtitle
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DownloadError, ScrapeError
-from cyberdrop_dl.utils import aio, css, m3u8
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, parse_url
+from cyberdrop_dl.utils import aio, css, error_handling_wrapper, m3u8, parse_url
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
 
@@ -42,7 +43,7 @@ class Format(NamedTuple):
     is_single_file: bool  # for formats with the same resolution, give priority to non hls
     bitrate: int
     size: int
-    type: FormatType  #  On formats where everything else is the same, choose mp4 over webm
+    type: FormatType  # On formats where everything else is the same, choose mp4 over webm
     url: AbsoluteHttpURL
     m3u8: m3u8.RenditionGroup | None = None
 
@@ -161,7 +162,7 @@ class RumbleCrawler(Crawler):
             _, ext = self.get_filename_and_ext(best_format.url.name)
 
         video_name = self.create_custom_filename(video.title, ext, file_id=embed_id, resolution=best_format.resolution)
-        scrape_item.possible_datetime = self.parse_iso_date(video.upload_date)
+        scrape_item.timestamp = self.parse_iso_date(video.upload_date)
         scrape_item.url = video.url
         self.create_task(
             self.handle_file(

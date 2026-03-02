@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from ._wordpress import WordPressHTMLCrawler, WordPressMediaCrawler
 from .bestprettygirl import BestPrettyGirlCrawler
 from .everia import EveriaClubCrawler
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from ._wordpress import WordPressBaseCrawler
 

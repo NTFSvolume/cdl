@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import dataclasses
 import json
+import logging
 import re
 from collections.abc import Generator
 from pathlib import Path
@@ -10,13 +11,13 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from aiohttp import ClientConnectorError
 
-from cyberdrop_dl.constants import FILE_FORMATS
+from cyberdrop_dl import aio, constants
 from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths, auto_task_id
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError
-from cyberdrop_dl.utils import aio, css, open_graph
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, parse_url, xor_decrypt
+from cyberdrop_dl.utils import css, error_handling_wrapper, open_graph, parse_url, xor_decrypt
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
 
@@ -35,7 +36,6 @@ class Selector:
     IMAGE_PREVIEW = "img.max-h-full.w-auto.object-cover.relative"
 
 
-VIDEO_AND_IMAGE_EXTS: set[str] = FILE_FORMATS["Images"] | FILE_FORMATS["Videos"]
 HOST_OPTIONS: set[str] = {"bunkr.site", "bunkr.cr", "bunkr.ph"}
 DEEP_SCRAPE_CDNS: set[str] = {"burger", "milkshake"}  # CDNs under maintanance, ignore them and try to get a cached URL
 FILE_KEYS = "id", "name", "original", "slug", "type", "extension", "size", "timestamp", "thumbnail", "cdnEndpoint"
@@ -100,7 +100,7 @@ class File:
         src_str = self.thumbnail.replace("/thumbs/", "/")
         ext = Path(self.name).suffix
         src = parse_url(src_str).with_suffix(ext).with_query(None)
-        if src.suffix.lower() not in FILE_FORMATS["Images"]:
+        if src.suffix.lower() not in constants.FileExt.IMAGE:
             src = src.with_host(src.host.replace("i-", ""))
         return _override_cdn(src)
 
@@ -169,22 +169,24 @@ class BunkrrCrawler(Crawler):
             return
 
         deep_scrape = False
-        scrape_item.possible_datetime = self.parse_date(file.date, "%H:%M:%S %d/%m/%Y")
+        scrape_item.timestamp = self.parse_date(file.date, "%H:%M:%S %d/%m/%Y")
         try:
             src = file.src()
         except ValueError:
-            deep_scrape = True
+            src = None
 
-        deep_scrape = deep_scrape or (
-            src.suffix.lower() not in VIDEO_AND_IMAGE_EXTS
+        deep_scrape = (
+            not src
+            or src.suffix.lower() not in constants.FileExt.VIDEO_OR_IMAGE
             or "no-image" in src.name
-            or self.deep_scrape
+            or self.config.runtime.deep_scrape
             or any(cdn in src.host for cdn in DEEP_SCRAPE_CDNS)
         )
         if deep_scrape:
             self.create_task(self.run(scrape_item))
             return
 
+        assert src
         if self.check_album_results(src, results):
             return
 
@@ -203,7 +205,7 @@ class BunkrrCrawler(Crawler):
             if len(src.parts) > 2:
                 src = None
 
-        if not src or self.deep_scrape:
+        if not src or self.config.runtime.deep_scrape:
             dl_link = css.select(soup, Selector.DOWNLOAD_BUTTON, "href")
             file_id = self.parse_url(dl_link).name
             src = await self._request_download(file_id)

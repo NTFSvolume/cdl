@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import logging
 from sqlite3 import IntegrityError, Row
 from typing import TYPE_CHECKING, cast
 
-from cyberdrop_dl.utils.utilities import log
-
 from .definitions import create_fixed_history, create_history
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     import datetime
     from collections.abc import AsyncGenerator
@@ -100,7 +100,7 @@ class HistoryTable:
         current_referer, completed = await select_referer_and_completed()
         if completed and url != referer and str(referer) != current_referer:
             # Update the referer if it has changed so that check_complete_by_referer can work
-            log(f"Updating referer of {url} from {current_referer} to {referer}")
+            logger.info(f"Updating referer of {url} from {current_referer} to {referer}")
             await update_referer()
 
         return completed
@@ -283,7 +283,7 @@ class HistoryTable:
                 yield cast("list[Row]", rows)
 
         except Exception as e:
-            log(f"Error getting bunkr failed via size: {e}", 40, exc_info=e)
+            logger.info(f"Error getting bunkr failed via size: {e}", 40, exc_info=e)
 
     async def get_all_bunkr_failed_via_hash(self) -> AsyncGenerator[list[Row]]:
         query = """
@@ -298,7 +298,7 @@ class HistoryTable:
                 yield cast("list[Row]", rows)
 
         except Exception as e:
-            log(f"Error getting bunkr failed via hash: {e}", 40, exc_info=e)
+            logger.info(f"Error getting bunkr failed via hash: {e}", 40, exc_info=e)
 
     async def fix_primary_keys(self) -> None:
         domain_column, *_ = await self._get_media_table_columns()

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_text_between
+from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
@@ -36,7 +37,7 @@ class ImgurCrawler(Crawler):
         if data := json_resp.get("data"):
             raise ScrapeError(json_resp["status"], data["error"])
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         await self._get_client_id(self.PRIMARY_URL)
 
     # TODO: cache this
@@ -106,7 +107,7 @@ class ImgurCrawler(Crawler):
 
     @error_handling_wrapper
     async def _image(self, scrape_item: ScrapeItem, image: dict[str, Any]) -> None:
-        scrape_item.possible_datetime = image["datetime"]
+        scrape_item.timestamp = image["datetime"]
         url = self.parse_url(image["link"])
         filename, ext = self.get_filename_and_ext(url.name)
         await self.handle_file(url, scrape_item, filename, ext, metadata=image)

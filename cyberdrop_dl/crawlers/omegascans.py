@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import itertools
+import logging
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import css, error_handling_wrapper
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
@@ -85,7 +86,7 @@ class OmegaScansCrawler(Crawler):
             date_str = css.select_text(soup, DATE_JS_SELECTOR).split('created_at\\":\\"')[1].split(".")[0]
             date = self.parse_date(date_str)
 
-        scrape_item.possible_datetime = date
+        scrape_item.timestamp = date
         for attribute in ("src", "data-src"):
             for _, link in self.iter_tags(soup, IMAGE_SELECTOR, attribute):
                 filename, ext = self.get_filename_and_ext(link.name)

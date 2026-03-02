@@ -5,15 +5,16 @@ from __future__ import annotations
 import base64
 import dataclasses
 import itertools
+import logging
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
-from cyberdrop_dl.crawlers.crawler import Crawler, DBPathBuilder, SupportedPaths, auto_task_id
+from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, auto_task_id
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, is_blob_or_svg, type_adapter
+from cyberdrop_dl.utils import css, error_handling_wrapper, is_blob_or_svg, type_adapter
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
@@ -62,7 +63,6 @@ class MediaFireCrawler(Crawler):
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = _PRIMARY_URL
     DOMAIN: ClassVar[str] = "mediafire"
     SKIP_PRE_CHECK: ClassVar[bool] = True
-    create_db_path = staticmethod(DBPathBuilder.name)
 
     def __post_init__(self) -> None:
         self.api = MediaFireAPI(self)
@@ -144,7 +144,7 @@ class MediaFireCrawler(Crawler):
             return
 
         soup = await self.request_soup(scrape_item.url, impersonate=True)
-        scrape_item.possible_datetime = self.parse_iso_date(file.created)
+        scrape_item.timestamp = self.parse_iso_date(file.created)
         link = self.parse_url(_extract_download_link(soup))
         filename, ext = self.get_filename_and_ext(file.filename)
         await self.handle_file(link, scrape_item, file.filename, ext, custom_filename=filename)
@@ -214,7 +214,7 @@ def _extract_download_link(soup: BeautifulSoup) -> str:
             raise ScrapeError(410)
         raise ScrapeError(422)
 
-    if encoded_url := css.get_attr_or_none(download_button, "data-scrambled-url"):
+    if encoded_url := css._get_attr(download_button, "data-scrambled-url"):
         return base64.b64decode(encoded_url).decode()
 
     url = css.get_attr(download_button, "href")

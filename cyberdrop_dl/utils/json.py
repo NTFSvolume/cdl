@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import base64
 import dataclasses
 import datetime
@@ -9,11 +8,13 @@ import functools
 import json
 import json.decoder
 import json.scanner
+import logging
 import re
 import time
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, ParamSpec, Protocol, Self, TypeGuard, TypeVar
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
     from pathlib import Path
@@ -32,7 +33,7 @@ else:
     _py_make_scanner = json.scanner.py_make_scanner
 
 _encoders: dict[tuple[bool, int | None], LenientJSONEncoder] = {}
-_REPLACE_QUOTES_PAIRS = [
+_REPLACE_QUOTES_PAIRS = (
     ("{'", '{"'),
     ("'}", '"}'),
     ("['", '["'),
@@ -43,58 +44,48 @@ _REPLACE_QUOTES_PAIRS = [
     ("' :", '" :'),
     ("',", '",'),
     (": '", ': "'),
-]
+)
 
 
 class _DataclassInstance(Protocol):
     __dataclass_fields__: ClassVar[dict[str, dataclasses.Field[Any]]]
 
 
+def default(o: object) -> Any:
+    if isinstance(o, datetime.date):
+        return o.isoformat()
+    if isinstance(o, enum.Enum):
+        return o.value
+    if isinstance(o, set):
+        return sorted(o)
+    if callable(serialize := getattr(o, "__json__", None)):
+        return serialize()
+    if _is_namedtuple_instance(o):
+        return o._asdict()
+    if _is_dataclass_instance(o):
+        return dataclasses.asdict(o)
+    if _is_pydantic_instance(o):
+        return o.model_dump()
+    return str(o)
+
+
 class LenientJSONEncoder(json.JSONEncoder):
     def __init__(self, *, sort_keys: bool = False, indent: int | None = None) -> None:
-        """Custom encoder that can handle:
-
-        - dataclasses
-        - namedtuples
-        - enums
-        - date & datetime
-        - sets
-        - subclasses of dict
-
-        Any incompatible object will be serialized as str, except types."""
-        super().__init__(check_circular=False, ensure_ascii=False, sort_keys=sort_keys, indent=indent)
-
-    def default(self, o: object) -> Any:
-        if isinstance(o, datetime.date):
-            return o.isoformat()
-        if isinstance(o, enum.Enum):
-            return self.default(o.value)
-        if isinstance(o, set):
-            return sorted(o)
-        if _is_namedtuple_instance(o):
-            return o._asdict()
-        if _is_dataclass_instance(o):
-            return dataclasses.asdict(o)
-        if isinstance(o, dict):  # Handle subclasses of dict
-            return dict(o)
-        if _is_pydantic_instance(o):
-            return o.model_dump()
-        if isinstance(o, type):  # Do not serialize classes, only instances
-            return super().default(o)
-        return str(o)
+        super().__init__(check_circular=False, ensure_ascii=False, sort_keys=sort_keys, indent=indent, default=default)
 
 
 class JSDecoder(json.JSONDecoder):
-    def __init__(self):
-        """Custom decoder that tries to transforms javascript objects into valid json
+    """Custom decoder that tries to transforms javascript objects into valid json
 
-        It can only handle simple js objects but that's enough most of the time"""
+    It can only handle simple js objects"""
+
+    def __init__(self):
         super().__init__()
         self.parse_string = _parse_js_string
         self.scan_once = _py_make_scanner(self)
 
 
-def _verbose_decode_error_msg(func: Callable[_P, _R]) -> Callable[_P, _R]:
+def _verbose(func: Callable[_P, _R]) -> Callable[_P, _R]:
     @functools.wraps(func)
     def wrapper(*args, **kwargs) -> _R:
         try:
@@ -107,11 +98,12 @@ def _verbose_decode_error_msg(func: Callable[_P, _R]) -> Callable[_P, _R]:
     return wrapper
 
 
-def _get_encoder(*, sort_keys: bool = False, indent: int | None = None):
+def _get_encoder(*, sort_keys: bool = False, indent: int | None = None) -> LenientJSONEncoder:
     key = sort_keys, indent
-    if key not in _encoders:
-        _encoders[key] = LenientJSONEncoder(sort_keys=sort_keys, indent=indent)
-    return _encoders[key]
+    encoder = _encoders.get(key)
+    if not encoder:
+        encoder = _encoders[key] = LenientJSONEncoder(sort_keys=sort_keys, indent=indent)
+    return encoder
 
 
 def _parse_js_string(*args, **kwargs) -> tuple[Any, int]:
@@ -146,27 +138,24 @@ def _is_pydantic_instance(obj: object, /) -> TypeGuard[BaseModel]:
     return hasattr(obj, "model_dump") and not isinstance(obj, type)
 
 
-def dumps(obj: object, /, *, sort_keys: bool = False, indent: int | None = None) -> Any:
+def dumps(obj: object, /, *, sort_keys: bool = False, indent: int | None = None, **_) -> Any:
     encoder = _get_encoder(sort_keys=sort_keys, indent=indent)
     return encoder.encode(obj)
 
 
-async def dump_jsonl(data: Iterable[dict[str, Any]], /, file: Path, *, append: bool = True) -> None:
-    def dump():
-        with file.open(mode="a" if append else "w", encoding="utf8") as f:
-            for item in data:
-                f.writelines(_DEFAULT_ENCODER.iterencode(item))
-                f.write("\n")
-
-    await asyncio.to_thread(dump)
+def dump_jsonl(data: Iterable[dict[str, Any]], /, file: Path) -> None:
+    with file.open(mode="a", encoding="utf8") as f:
+        for item in data:
+            f.writelines(_DEFAULT_ENCODER.iterencode(item))
+            f.write("\n")
 
 
-loads = _verbose_decode_error_msg(json.loads)
+loads = _verbose(json.loads)
 _JS_DECODER = JSDecoder()
 _DEFAULT_ENCODER = _get_encoder()
 
 
-@_verbose_decode_error_msg
+@_verbose
 def load_js_obj(string: str, /) -> Any:
     """Parses a string representation of a JavaScript object into a Python object.
 
@@ -183,14 +172,14 @@ def load_js_obj(string: str, /) -> Any:
     return _JS_DECODER.decode(string)
 
 
-@dataclasses.dataclass(frozen=True, slots=True)
+@dataclasses.dataclass(slots=True)
 class JSONWebToken:
     # https://www.rfc-editor.org/rfc/rfc7519.html
     alg: str
-    headers: dict[str, str] = dataclasses.field(repr=False)
-    payload: dict[str, Any] = dataclasses.field(repr=False)
+    headers: dict[str, str]
+    payload: dict[str, Any]
     signature: str
-    _encoded_token: str
+    encoded: str
 
     @classmethod
     def decode(cls, jwt: str, /) -> Self:
@@ -213,7 +202,7 @@ class JSONWebToken:
         return False
 
     def __str__(self) -> str:
-        return self._encoded_token
+        return self.encoded
 
 
 def is_jwt(string: str) -> bool:

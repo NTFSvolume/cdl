@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import css, error_handling_wrapper
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
@@ -31,7 +32,7 @@ class Rule34XXXCrawler(Crawler):
     DOMAIN: ClassVar[str] = "rule34.xxx"
     FOLDER_DOMAIN: ClassVar[str] = "Rule34XXX"
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         self.update_cookies({"resize-original": "1"})
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
@@ -58,7 +59,7 @@ class Rule34XXXCrawler(Crawler):
         soup = await self.request_soup(scrape_item.url)
 
         date_str = css.select_text(soup, _SELECTORS.DATE).removeprefix("Posted: ")
-        scrape_item.possible_datetime = self.parse_date(date_str)
+        scrape_item.timestamp = self.parse_date(date_str)
         link_str = css.select(soup, _SELECTORS.IMAGE_OR_VIDEO, "src")
         link = self.parse_url(link_str)
         filename, ext = self.get_filename_and_ext(link.name)

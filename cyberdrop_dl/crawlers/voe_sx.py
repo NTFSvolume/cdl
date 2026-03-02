@@ -4,6 +4,7 @@ import base64
 import codecs
 import dataclasses
 import json
+import logging
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
@@ -12,9 +13,9 @@ from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPa
 from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.data_structures.mediaprops import Resolution, Subtitle
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import m3u8, open_graph
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, parse_url
+from cyberdrop_dl.utils import error_handling_wrapper, m3u8, open_graph, parse_url
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Generator
 
@@ -127,7 +128,7 @@ class VoeSxCrawler(Crawler):
         m3u8 = None
         if video.resolution == (0, 0) and video.hls_url:
             msg = f"Unable to extract high resolution MP4 formats for {scrape_item.url}. Falling back to HLS"
-            self.log(msg, 30)
+            self.logger(msg, 30)
 
             m3u8 = await self.get_m3u8_from_index_url(video.hls_url, headers=_HEADERS)
 

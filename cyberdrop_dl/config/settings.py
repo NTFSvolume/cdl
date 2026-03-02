@@ -1,0 +1,462 @@
+# ruff: noqa: RUF012
+import dataclasses
+import logging
+import random
+import re
+from datetime import date, datetime, timedelta
+from functools import cached_property
+from pathlib import Path
+from typing import Literal
+
+import aiohttp
+from pydantic import ByteSize, Field, NonNegativeFloat, NonNegativeInt, PositiveFloat, PositiveInt, field_validator
+
+from cyberdrop_dl.constants import Browser, HashAlgorithm, Hashing
+from cyberdrop_dl.models import AppriseURL, Settings, SettingsGroup
+from cyberdrop_dl.models.types import (
+    ByteSizeSerilized,
+    HttpURL,
+    ListNonEmptyStr,
+    ListNonNegativeInt,
+    ListPydanticURL,
+    LogPath,
+    MainLogPath,
+    NonEmptyStr,
+    NonEmptyStrOrNone,
+    PathOrNone,
+)
+from cyberdrop_dl.models.validators import falsy_as_none, to_bytesize, to_timedelta
+
+_DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:142.0) Gecko/20100101 Firefox/142.0"
+_DEFAULT_APP_STORAGE = Path("./AppData")
+_DEFAULT_DOWNLOAD_STORAGE = Path("./cdl_downloads")
+_DEFAULT_REQUIRED_FREE_SPACE = to_bytesize("5GB")
+_DEFAULT_CHUNK_SIZE = to_bytesize("10MB")
+_MIN_REQUIRED_FREE_SPACE = to_bytesize("512MB")
+_LOGS_DATETIME_FORMAT = "%Y%m%d_%H%M%S"
+_LOGS_DATE_FORMAT = "%Y_%m_%d"
+_SORTING_COMMON_FIELDS = {
+    "base_dir",
+    "ext",
+    "file_date",
+    "file_date_iso",
+    "file_date_us",
+    "filename",
+    "parent_dir",
+    "sort_dir",
+}
+
+
+class FormatValidator:
+    @classmethod
+    def _validate_format(cls, value: str, valid_keys: set[str]) -> None:
+        from cyberdrop_dl.utils.strings import validate_format_string
+
+        validate_format_string(value, valid_keys)
+
+
+class Downloads(FormatValidator, SettingsGroup):
+    block_download_sub_folders: bool = False
+    disable_file_timestamps: bool = False
+    include_album_id_in_folder_name: bool = False
+    include_thread_id_in_folder_name: bool = False
+    max_children: ListNonNegativeInt = []
+    remove_domains_from_folder_names: bool = False
+    remove_generated_id_from_filenames: bool = False
+    scrape_single_forum_post: bool = False
+    separate_posts_format: NonEmptyStr = "{default}"
+    separate_posts: bool = False
+    skip_download_mark_completed: bool = False
+    max_thread_depth: NonNegativeInt = 0
+    max_thread_folder_depth: NonNegativeInt | None = None
+
+    @field_validator("separate_posts_format", mode="after")
+    @classmethod
+    def valid_format(cls, value: str) -> str:
+        valid_keys = {"default", "title", "id", "number", "date"}
+        cls._validate_format(value, valid_keys)
+        return value
+
+
+class Files(SettingsGroup):
+    download_folder: Path = Field(default=_DEFAULT_DOWNLOAD_STORAGE, validation_alias="d")
+    dump_json: bool = Field(default=False, validation_alias="j")
+    input_file: Path = Field(default=_DEFAULT_APP_STORAGE / "Configs/{config}/URLs.txt", validation_alias="i")
+    save_pages_html: bool = False
+
+
+class Logs(SettingsGroup):
+    download_error_urls: LogPath = Path("Download_Error_URLs.csv")
+    last_forum_post: LogPath = Path("Last_Scraped_Forum_Posts.csv")
+    log_folder: Path = _DEFAULT_APP_STORAGE / "logs"
+    logs_expire_after: timedelta | None = None
+    main_log: MainLogPath = Path("downloader.log")
+    rotate_logs: bool = False
+    scrape_error_urls: LogPath = Path("Scrape_Error_URLs.csv")
+    unsupported_urls: LogPath = Path("Unsupported_URLs.csv")
+    webhook: AppriseURL | None = None
+    _created_at: datetime = Field(default_factory=datetime.now)
+
+    @property
+    def jsonl_file(self):
+        return self.main_log.with_suffix(".results.jsonl")
+
+    @field_validator("webhook", mode="before")
+    @classmethod
+    def handle_falsy(cls, value: str) -> str | None:
+        return falsy_as_none(value)
+
+    @field_validator("logs_expire_after", mode="before")
+    @staticmethod
+    def parse_logs_duration(input_date: timedelta | str | int | None) -> timedelta | str | None:
+        if value := falsy_as_none(input_date):
+            return to_timedelta(value)
+
+    def model_post_init(self, *_) -> None:
+        self._resolve_filenames()
+
+    def _resolve_filenames(self) -> None:
+        object.__setattr__(self, "log_folder", self.log_folder.expanduser().resolve().absolute())
+        now_file_iso: str = self._created_at.strftime(_LOGS_DATETIME_FORMAT)
+        now_folder_iso: str = self._created_at.strftime(_LOGS_DATE_FORMAT)
+        for name, log_file in vars(self).items():
+            if name == "log_folder" or not isinstance(log_file, Path) or log_file.suffix not in (".csv", ".log"):
+                continue
+
+            log_file = self.log_folder / log_file
+
+            if self.rotate_logs:
+                file_name = f"{log_file.stem}_{now_file_iso}{log_file.suffix}"
+                log_file = log_file.parent / now_folder_iso / file_name
+
+            object.__setattr__(self, name, log_file)
+
+    def delete_old_logs_and_folders(self) -> None:
+        if not self.logs_expire_after:
+            return
+
+        for file in self.log_folder.rglob("*"):
+            if file.suffix.lower() not in (".log", ".csv"):
+                continue
+
+            if (self._created_at - datetime.fromtimestamp(file.stat().st_ctime)) > self.logs_expire_after:
+                file.unlink()
+
+
+@dataclasses.dataclass(slots=True)
+class Range:
+    min: float
+    max: float
+
+    def __post_init__(self) -> None:
+        if not self.max:
+            self.max = float("inf")
+
+    def __contains__(self, value: float, /) -> bool:
+        return self.min <= value <= self.max
+
+
+@dataclasses.dataclass(slots=True, frozen=True)
+class FileSizeRanges:
+    video: Range
+    image: Range
+    other: Range
+
+
+class FileSizeLimits(SettingsGroup):
+    max_image_size: ByteSizeSerilized = ByteSize(0)
+    max_other_size: ByteSizeSerilized = ByteSize(0)
+    max_video_size: ByteSizeSerilized = ByteSize(0)
+    min_image_size: ByteSizeSerilized = ByteSize(0)
+    min_other_size: ByteSizeSerilized = ByteSize(0)
+    min_video_size: ByteSizeSerilized = ByteSize(0)
+
+    @cached_property
+    def ranges(self) -> FileSizeRanges:
+        return FileSizeRanges(
+            video=Range(
+                self.min_video_size,
+                self.max_video_size,
+            ),
+            image=Range(
+                self.min_image_size,
+                self.max_image_size,
+            ),
+            other=Range(
+                self.min_other_size,
+                self.max_other_size,
+            ),
+        )
+
+
+@dataclasses.dataclass(slots=True, frozen=True)
+class MediaDurationRanges:
+    video: Range
+    audio: Range
+
+
+class MediaDurationLimits(SettingsGroup):
+    max_video_duration: timedelta = timedelta(seconds=0)
+    max_audio_duration: timedelta = timedelta(seconds=0)
+    min_video_duration: timedelta = timedelta(seconds=0)
+    min_audio_duration: timedelta = timedelta(seconds=0)
+
+    @cached_property
+    def ranges(self) -> MediaDurationRanges:
+        return MediaDurationRanges(
+            video=Range(
+                self.min_video_duration.total_seconds(),
+                self.max_video_duration.total_seconds(),
+            ),
+            audio=Range(
+                self.min_audio_duration.total_seconds(),
+                self.max_audio_duration.total_seconds(),
+            ),
+        )
+
+    @field_validator("*", mode="before")
+    @staticmethod
+    def parse_runtime_duration(input_date: timedelta | str | int | None) -> timedelta | str:
+        return to_timedelta(input_date)
+
+
+class Ignore(SettingsGroup):
+    exclude_after: date | None = None
+    exclude_before: date | None = None
+
+    exclude_files_with_no_extension: bool = True
+    exclude_audio: bool = False
+    exclude_images: bool = False
+    exclude_other: bool = False
+    exclude_videos: bool = False
+
+    filename_regex_filter: NonEmptyStrOrNone = None
+    ignore_coomer_ads: bool = False
+    ignore_coomer_post_content: bool = True
+    only_hosts: ListNonEmptyStr = []
+    skip_hosts: ListNonEmptyStr = []
+
+    @field_validator("filename_regex_filter")
+    @classmethod
+    def is_valid_regex(cls, value: str | None) -> str | None:
+        if not value:
+            return None
+        try:
+            _ = re.compile(value)
+        except re.error as e:
+            raise ValueError("input is not a valid regex") from e
+        return value
+
+
+class Jdownloader(Settings):
+    enabled: bool = False
+    autostart: bool = False
+    download_dir: PathOrNone = None
+    whitelist: ListNonEmptyStr = []
+
+
+class Runtime(SettingsGroup):
+    log_level: NonNegativeInt = logging.DEBUG
+    console_log_level: NonNegativeInt = 100
+    deep_scrape: bool = False
+    ignore_history: bool = False
+    jdownloader: Jdownloader = Jdownloader()
+    delete_empty_folders: bool = True
+    delete_partial_files: bool = False
+    slow_download_speed: ByteSizeSerilized = ByteSize(0)
+    update_last_forum_post: bool = True
+
+
+class Sorting(FormatValidator, SettingsGroup):
+    scan_folder: PathOrNone = None
+    sort_downloads: bool = False
+    sort_folder: Path = _DEFAULT_DOWNLOAD_STORAGE / "Cyberdrop-DL Sorted Downloads"
+    sort_incrementer_format: NonEmptyStr = " ({i})"
+    sorted_audio: NonEmptyStrOrNone = "{sort_dir}/{base_dir}/Audio/{filename}{ext}"
+    sorted_image: NonEmptyStrOrNone = "{sort_dir}/{base_dir}/Images/{filename}{ext}"
+    sorted_other: NonEmptyStrOrNone = "{sort_dir}/{base_dir}/Other/{filename}{ext}"
+    sorted_video: NonEmptyStrOrNone = "{sort_dir}/{base_dir}/Videos/{filename}{ext}"
+
+    @field_validator("sort_incrementer_format", mode="after")
+    @classmethod
+    def valid_sort_incrementer_format(cls, value: str | None) -> str | None:
+        if value is not None:
+            valid_keys = {"i"}
+            cls._validate_format(value, valid_keys)
+        return value
+
+    @field_validator("sorted_audio", mode="after")
+    @classmethod
+    def valid_sorted_audio(cls, value: str | None) -> str | None:
+        if value is not None:
+            valid_keys = _SORTING_COMMON_FIELDS | {"bitrate", "duration", "length", "sample_rate"}
+            cls._validate_format(value, valid_keys)
+        return value
+
+    @field_validator("sorted_image", mode="after")
+    @classmethod
+    def valid_sorted_image(cls, value: str | None) -> str | None:
+        if value is not None:
+            valid_keys = _SORTING_COMMON_FIELDS | {"height", "resolution", "width"}
+            cls._validate_format(value, valid_keys)
+        return value
+
+    @field_validator("sorted_other", mode="after")
+    @classmethod
+    def valid_sorted_other(cls, value: str | None) -> str | None:
+        if value is not None:
+            valid_keys = _SORTING_COMMON_FIELDS | {"bitrate", "duration", "length", "sample_rate"}
+            cls._validate_format(value, valid_keys)
+        return value
+
+    @field_validator("sorted_video", mode="after")
+    @classmethod
+    def valid_sorted_video(cls, value: str | None) -> str | None:
+        if value is not None:
+            valid_keys = _SORTING_COMMON_FIELDS | {
+                "codec",
+                "duration",
+                "fps",
+                "height",
+                "length",
+                "resolution",
+                "width",
+            }
+            cls._validate_format(value, valid_keys)
+        return value
+
+
+class Cookies(SettingsGroup):
+    cookies: Path | None = None
+    cookies_from: Browser | None = None
+
+    @property
+    def auto_import(self) -> bool:
+        return bool(self.cookies_from)
+
+
+class Dedupe(SettingsGroup):
+    add_md5_hash: bool = False
+    add_sha256_hash: bool = False
+    auto_dedupe: bool = True
+    hashing: Hashing = Hashing.IN_PLACE
+    send_deleted_to_trash: bool = True
+    hashes: tuple[HashAlgorithm, ...] = (HashAlgorithm.xxh128,)
+
+    @property
+    def additional_hashes(self) -> tuple[HashAlgorithm, ...]:
+        return tuple(sorted(set(self.hashes).difference({HashAlgorithm.xxh128})))
+
+    @field_validator("hashes", mode="after")
+    @classmethod
+    def unique_list(cls, value: list[HashAlgorithm]) -> tuple[HashAlgorithm, ...]:
+        return tuple(sorted(set(value) | {HashAlgorithm.xxh128}))
+
+
+# ruff: noqa: RUF012
+
+
+class General(SettingsGroup):
+    ssl_context: Literal["truststore", "certifi", "truststore+certifi"] | None = "truststore+certifi"
+    disable_crawlers: ListNonEmptyStr = []
+    flaresolverr: HttpURL | None = None
+    max_file_name_length: PositiveInt = 95
+    max_folder_name_length: PositiveInt = 60
+    proxy: HttpURL | None = None
+    required_free_space: ByteSizeSerilized = _DEFAULT_REQUIRED_FREE_SPACE
+    user_agent: NonEmptyStr = _DEFAULT_USER_AGENT
+
+    @field_validator("ssl_context", mode="before")
+    @classmethod
+    def ssl(cls, value: str | None) -> str | None:
+        if isinstance(value, str):
+            value = value.lower().strip()
+        return falsy_as_none(value)
+
+    @field_validator("disable_crawlers", mode="after")
+    @classmethod
+    def unique_list(cls, value: list[str]) -> list[str]:
+        return sorted(set(value))
+
+    @field_validator("flaresolverr", "proxy", mode="before")
+    @classmethod
+    def falsy_urls(cls, value: str) -> str | None:
+        return falsy_as_none(value)
+
+    @field_validator("required_free_space", mode="after")
+    @classmethod
+    def override_min(cls, value: ByteSize) -> ByteSize:
+        return max(value, _MIN_REQUIRED_FREE_SPACE)
+
+
+class RateLimiting(SettingsGroup):
+    download_attempts: PositiveInt = 2
+    download_delay: NonNegativeFloat = 0.0
+    download_speed_limit: ByteSizeSerilized = ByteSize(0)
+    jitter: NonNegativeFloat = 0
+    max_simultaneous_downloads_per_domain: PositiveInt = 5
+    max_simultaneous_downloads: PositiveInt = 15
+    rate_limit: PositiveFloat = 25
+
+    connection_timeout: PositiveFloat = 15
+    read_timeout: PositiveFloat | None = 300
+
+    @field_validator("read_timeout", mode="before")
+    @classmethod
+    def parse_timeouts(cls, value: object) -> object | None:
+        return falsy_as_none(value)
+
+    @property
+    def curl_timeout(self) -> tuple[float, float]:
+        return self.connection_timeout, self.read_timeout or 0
+
+    @property
+    def aiohttp_timeout(self) -> aiohttp.ClientTimeout:
+        return aiohttp.ClientTimeout(
+            total=None,
+            sock_connect=self.connection_timeout,
+            sock_read=self.read_timeout,
+        )
+
+    @property
+    def chunk_size(self) -> int:
+        if not self.download_speed_limit:
+            return _DEFAULT_CHUNK_SIZE
+        return min(_DEFAULT_CHUNK_SIZE, self.download_speed_limit)
+
+    @property
+    def total_download_delay(self) -> NonNegativeFloat:
+        """download_delay + jitter"""
+        return self.download_delay + self.get_jitter()
+
+    def get_jitter(self) -> NonNegativeFloat:
+        """Get a random number in the range [0, self.jitter]"""
+        return random.uniform(0, self.jitter)
+
+
+class UIOptions(SettingsGroup):
+    refresh_rate: PositiveInt = 10
+
+
+class GenericCrawlerInstances(SettingsGroup):
+    wordpress_media: ListPydanticURL = []
+    wordpress_html: ListPydanticURL = []
+    discourse: ListPydanticURL = []
+    chevereto: ListPydanticURL = []
+
+
+class ConfigSettings(Settings):
+    cookies: Cookies = Cookies()
+    download: Downloads = Downloads()
+    dedupe: Dedupe = Dedupe()
+    file_size_limits: FileSizeLimits = FileSizeLimits()
+    files: Files = Files()
+    general: General = General()
+    generic_crawlers_instances: GenericCrawlerInstances = GenericCrawlerInstances()
+    ignore: Ignore = Ignore()
+    logs: Logs = Logs()
+    media_duration_limits: MediaDurationLimits = MediaDurationLimits()
+    rate_limits: RateLimiting = RateLimiting()
+    runtime: Runtime = Runtime()
+    sorting: Sorting = Sorting()
+    ui_options: UIOptions = UIOptions()

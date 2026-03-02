@@ -2,14 +2,15 @@ from __future__ import annotations
 
 import itertools
 import json
+import logging
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils.logger import log_debug
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import error_handling_wrapper
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
@@ -62,7 +63,6 @@ class LusciousCrawler(Crawler):
             filters = [{"name": i, "value": v} for i, v in query.items() if i not in ("page", "display", "q")]
             data["variables"] = {"input": {"display": sorting, "filters": filters, "page": page}}
 
-        log_debug(data)
         return json.dumps(data)
 
     @error_handling_wrapper
@@ -118,5 +118,5 @@ class LusciousCrawler(Crawler):
             data=query,
             headers={"Content-Type": "application/json"},
         )
-        log_debug(json_resp)
+
         return json_resp

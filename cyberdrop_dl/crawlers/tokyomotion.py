@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, remove_parts
+from cyberdrop_dl.utils import css, error_handling_wrapper, remove_parts
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
@@ -88,7 +89,7 @@ class TokioMotionCrawler(Crawler):
                 raise ScrapeError(401, "Private video")
             raise ScrapeError(422, "Couldn't find video source")
 
-        scrape_item.possible_datetime = self.parse_date(css.select_text(soup, _SELECTORS.VIDEO_DATE))
+        scrape_item.timestamp = self.parse_date(css.select_text(soup, _SELECTORS.VIDEO_DATE))
         link_str = css.get_attr(src, "src")
         link = self.parse_url(link_str)
         title = css.select_text(soup, "title").rsplit(" - TOKYO Motion")[0].strip()

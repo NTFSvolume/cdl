@@ -12,6 +12,7 @@ Xenforo sites have a REST API but the APi is private only. Admins of the site ne
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import TYPE_CHECKING, ClassVar
 
 from bs4 import BeautifulSoup
@@ -19,9 +20,9 @@ from bs4 import BeautifulSoup
 from cyberdrop_dl.crawlers._forum import HTMLMessageBoardCrawler, MessageBoardSelectors, PostSelectors
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import LoginError, ScrapeError
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import css, error_handling_wrapper
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
@@ -82,7 +83,7 @@ class XenforoCrawler(HTMLMessageBoardCrawler, is_abc=True):
     def get_filename_and_ext(self, filename: str) -> tuple[str, str]:
         # The `forum` keyword is misleading now. It only works for Xenforo sites, not every forum
         # TODO: Change `forum` parameter to `xenforo`
-        return super().get_filename_and_ext(filename, forum=True)
+        return super().get_filename_and_ext(filename, xenforo=True)
 
     @error_handling_wrapper
     async def xf_login(self, login_url: AbsoluteHttpURL, session_cookie: str, username: str, password: str) -> None:
@@ -149,7 +150,7 @@ def parse_login_form(resp_text: str) -> dict[str, str]:
     data = {
         name: value
         for elem in inputs
-        if (name := css.get_attr_or_none(elem, "name")) and (value := css.get_attr_or_none(elem, "value"))
+        if (name := css._get_attr(elem, "name")) and (value := css._get_attr(elem, "value"))
     }
     if data:
         return data

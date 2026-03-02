@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import base64
+import logging
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import error_handling_wrapper
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
 
@@ -42,7 +44,7 @@ class TubeCorporateCrawler(Crawler, is_abc=True):
         api_url = self._get_api_url(scrape_item, video_id)
         video = _choose_best_format(await self.request_json(api_url))
         video_info = await self._get_video_info(scrape_item, video_id)
-        scrape_item.possible_datetime = self.parse_iso_date(video_info["post_date"])
+        scrape_item.timestamp = self.parse_iso_date(video_info["post_date"])
 
         decoded_url = _decode_base64(video["video_url"])
         link = self.parse_url(decoded_url, relative_to=scrape_item.url.origin(), trim=False)

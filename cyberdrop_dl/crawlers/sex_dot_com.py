@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import itertools
+import logging
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import error_handling_wrapper
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
@@ -73,7 +75,7 @@ class SexDotComCrawler(Crawler):
         else:
             return
 
-        scrape_item.possible_datetime = self.parse_date(real_item["createdAt"])
+        scrape_item.timestamp = self.parse_date(real_item["createdAt"])
         scrape_item.url = canonical_url
         await self.handle_file(media_url, scrape_item, filename, ext)
         scrape_item.add_children()

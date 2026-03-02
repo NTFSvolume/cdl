@@ -5,8 +5,7 @@ from typing import ClassVar
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import FILE_HOST_ALBUM, AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import css, error_handling_wrapper
 
 PRIMARY_URL = AbsoluteHttpURL("https://imgbox.com")
 IMAGES_SELECTOR = "div#gallery-view-content img"

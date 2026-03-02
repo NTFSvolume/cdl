@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, auto_task_id
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import css, error_handling_wrapper
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from bs4 import BeautifulSoup
 
@@ -41,7 +42,7 @@ class ImageBamCrawler(Crawler):
     FOLDER_DOMAIN: ClassVar[str] = "ImageBam"
     NEXT_PAGE_SELECTOR: ClassVar[str] = Selectors.NEXT_PAGE
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         # This skips the "Continue to image" pages.
         self.update_cookies({"nsfw_inter": "1", "sfw_inter": "1"})
 
@@ -85,7 +86,7 @@ class ImageBamCrawler(Crawler):
             for _, new_scrape_item in self.iter_children(scrape_item, soup, Selectors.THUMBNAILS, results=results):
                 self.create_task(self._image_task(new_scrape_item))
 
-            next_page = css.select_one_get_attr_or_none(soup, Selectors.NEXT_PAGE, "href")
+            next_page = css.select_one_get_attr(soup, Selectors.NEXT_PAGE, "href")
             if not next_page:
                 break
             soup = await self.request_soup(self.parse_url(next_page))

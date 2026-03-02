@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime  # noqa: TC003
 from typing import TYPE_CHECKING, Literal
 
 from pydantic import AliasPath, BaseModel, Field
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Iterable
 

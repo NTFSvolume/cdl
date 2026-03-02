@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import itertools
+import logging
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from pydantic import dataclasses
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import error_handling_wrapper
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
@@ -57,7 +59,7 @@ class GirlsReleasedCrawler(Crawler):
         title = self.create_separate_post_title(set_.name, set_id, set_.date)
         title = self.create_title(title, set_id)
         scrape_item.setup_as_album(title, album_id=set_id)
-        scrape_item.possible_datetime = set_.date
+        scrape_item.timestamp = set_.date
         for image in set_.images:
             url = self.parse_url(image[3])
             new_scrape_item = scrape_item.create_child(url)

@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import json
+import logging
 from enum import StrEnum
 from typing import TYPE_CHECKING, ClassVar, NamedTuple
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_text_between
+from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from bs4 import BeautifulSoup, Tag
 
@@ -184,7 +185,7 @@ class AShemaleTubeCrawler(Crawler):
 
         if video_object := soup.select_one(_SELECTORS.VIDEO_PROPS_JS):
             json_data = json.loads(css.get_text(video_object))
-            scrape_item.possible_datetime = self.parse_iso_date(json_data.get("uploadDate", ""))
+            scrape_item.timestamp = self.parse_iso_date(json_data.get("uploadDate", ""))
 
         title = css.select_text(soup, "title").split("- aShemaletube.com")[0].strip()
         scrape_item.url = canonical_url

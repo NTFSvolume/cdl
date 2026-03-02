@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import logging
 import re
 from collections.abc import Generator
 from enum import IntEnum
 from typing import TYPE_CHECKING, Any, TypeAlias
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Generator
 

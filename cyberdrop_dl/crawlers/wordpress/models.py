@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 from pydantic import AfterValidator, AliasPath, BaseModel, Field
 
 from cyberdrop_dl.compat import StrEnum
-from cyberdrop_dl.models.base_models import SequenceModel
+from cyberdrop_dl.models._base import SequenceModel
 
 _ModelT = TypeVar("_ModelT", bound=BaseModel)
 

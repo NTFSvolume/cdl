@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, ClassVar, NamedTuple
 
 from cyberdrop_dl.crawlers.crawler import Crawler
 from cyberdrop_dl.data_structures.mediaprops import Resolution
-from cyberdrop_dl.utils import css, open_graph
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import css, error_handling_wrapper, open_graph
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from bs4 import BeautifulSoup
 
@@ -39,7 +40,7 @@ class FluidPlayerCrawler(Crawler, is_abc=True):
         link = self.parse_url(best_format.link_str)
         filename, ext = self.get_filename_and_ext(link.name)
         title = open_graph.title(soup)
-        scrape_item.possible_datetime = self.parse_iso_date(css.get_json_ld_date(soup))
+        scrape_item.timestamp = self.parse_iso_date(css.get_json_ld_date(soup))
         custom_filename = self.create_custom_filename(title, ext, file_id=video_id, resolution=best_format.resolution)
         return await self.handle_file(
             scrape_item.url, scrape_item, filename, ext, custom_filename=custom_filename, debrid_link=link
@@ -69,7 +70,7 @@ def _get_best_format(soup: BeautifulSoup) -> Format:
     def parse():
         for src in soup.select(Selector.VIDEO_SRC):
             url = css.get_attr(src, "src")
-            quality = css.get_attr_or_none(src, "title")
+            quality = css._get_attr(src, "title")
             resolution = parse_resolution(quality)
             yield Format(resolution, url)
 

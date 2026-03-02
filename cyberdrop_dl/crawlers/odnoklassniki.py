@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -7,9 +8,9 @@ from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.mediaprops import Resolution
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import css, json
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_text_between
+from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, json
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from bs4 import BeautifulSoup
 
@@ -76,7 +77,7 @@ class OdnoklassnikiCrawler(Crawler):
 
         channel_id = channel_str.removeprefix("c")
         gwt_hash = get_text_between(css.select_text(soup, Selector.CHANNEL_HASH), 'gwtHash:"', '",')
-        last_element_id = css.select_one_get_attr_or_none(soup, *Selector.CHANNEL_LAST_ELEMENT)
+        last_element_id = css.select_one_get_attr(soup, *Selector.CHANNEL_LAST_ELEMENT)
         name = css.select_text(soup, Selector.CHANNEL_NAME)
         scrape_item.setup_as_album(self.create_title(name, channel_id), album_id=channel_id)
 
@@ -141,11 +142,24 @@ class OdnoklassnikiCrawler(Crawler):
         self.client.client_manager.cookies.clear_domain(cdn_url.host)
         json_ld = css.get_json_ld(soup)
         title: str = metadata["movie"].get("title") or json_ld["name"]
-        scrape_item.possible_datetime = self.parse_iso_date(json_ld["uploadDate"])
+        scrape_item.timestamp = self.parse_iso_date(json_ld["uploadDate"])
         filename = self.create_custom_filename(title, ".mp4", file_id=video_id, resolution=resolution)
         await self.handle_file(
             mobile_url, scrape_item, video_id + ".mp4", custom_filename=filename, debrid_link=cdn_url
         )
+
+    def _get_download_headers(self, referer: AbsoluteHttpURL) -> dict[str, str]:
+        return super()._download_headers_(referer) | {
+            "Accept-Language": "en-gb, en;q=0.8",
+            "User-Agent": _CHROME_ANDROID_USER_AGENT,
+            "Referer": "https://m.ok.ru/",
+            "Origin": "https://m.ok.ru",
+        }
+
+
+_CHROME_ANDROID_USER_AGENT: str = (
+    "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.7204.180 Mobile Safari/537.36"
+)
 
 
 def _get_best_src(metadata: dict[str, Any]) -> tuple[Resolution, str]:

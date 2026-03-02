@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import dataclasses
+import logging
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl.crawlers._kvs import extract_kvs_video
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures import AbsoluteHttpURL, Resolution
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, filter_query
+from cyberdrop_dl.utils import css, error_handling_wrapper, filter_query
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
@@ -128,7 +129,7 @@ class PimpBunnyCrawler(Crawler):
         custom_filename = self.create_custom_filename(
             video.title, video.url.suffix, file_id=video.id, resolution=video.resolution
         )
-        scrape_item.possible_datetime = self.parse_iso_date(css.get_json_ld_date(soup))
+        scrape_item.timestamp = self.parse_iso_date(css.get_json_ld_date(soup))
         await self.handle_file(
             scrape_item.url,
             scrape_item,

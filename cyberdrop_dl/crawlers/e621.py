@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import itertools
+import logging
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl import __version__
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import error_handling_wrapper
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
@@ -67,7 +69,7 @@ class E621Crawler(Crawler):
                     continue
                 timestamp = self.parse_date(post["created_at"])
                 link = self.parse_url(file_url)
-                new_scrape_item = scrape_item.create_child(link, possible_datetime=timestamp)
+                new_scrape_item = scrape_item.create_child(link, timestamp=timestamp)
                 filename, ext = self.get_filename_and_ext(link.name)
                 await self.handle_file(link, new_scrape_item, filename, ext)
                 scrape_item.add_children()

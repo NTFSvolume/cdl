@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import enum
+import logging
 import sys
 from typing import TYPE_CHECKING, TypeVar
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
@@ -42,10 +44,10 @@ else:
     StrEnum = enum.StrEnum
 
 
-class MayBeUpperStrEnum(StrEnum):
+class CIStrEnum(StrEnum):
     @classmethod
-    def _missing_(cls, value: object):
-        try:
-            return cls[str(value).upper()]
-        except KeyError as e:
-            raise e
+    def _missing_(cls, value: object) -> CIStrEnum | None:
+        value = str(value)
+        for member in cls:
+            if member.name.casefold() == value:
+                return member

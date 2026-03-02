@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import importlib.util
+import logging
 import re
 from collections.abc import Sequence
 from pathlib import Path
@@ -14,12 +15,13 @@ from typing_extensions import TypedDict
 
 from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.data_structures.url_objects import MediaItem, ScrapeItem
-from cyberdrop_dl.scraper.scrape_mapper import ScrapeMapper
-from cyberdrop_dl.utils.utilities import parse_url
+from cyberdrop_dl.scrape_mapper import ScrapeMapper
+from cyberdrop_dl.utils import parse_url
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.crawlers.crawler import Crawler
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.manager import Manager
 
 
 def _crawler_mock(func: str = "handle_media_item") -> mock._patch[mock.AsyncMock]:
@@ -106,7 +108,7 @@ async def test_crawler(running_manager: Manager, crawler_test_case: CrawlerTestC
                 None,
             )
             assert crawler, f"{test_case.domain} is not a valid crawler domain. Test case is invalid"
-            await crawler.startup()
+            await crawler._async_init_()
             item = ScrapeItem(url=crawler.parse_url(test_case.input_url))
             await crawler.run(item)
 

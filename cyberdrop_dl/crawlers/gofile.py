@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import itertools
+import logging
 import re
 from hashlib import sha256
 from typing import TYPE_CHECKING, ClassVar, Literal, NotRequired, TypedDict, TypeGuard
@@ -9,8 +10,9 @@ from typing import TYPE_CHECKING, ClassVar, Literal, NotRequired, TypedDict, Typ
 from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import FILE_HOST_ALBUM, AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.exceptions import PasswordProtectedError, ScrapeError
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import error_handling_wrapper
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Iterable
 
@@ -105,7 +107,7 @@ class GoFileCrawler(Crawler):
         if "notFound" in json_resp["status"]:
             raise ScrapeError(404)
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         await self._get_credentials(_API_ENTRYPOINT)
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
@@ -206,10 +208,10 @@ class GoFileCrawler(Crawler):
             return
 
         if file.get("isFrozen"):
-            self.log(f"{link} is marked as frozen, download may fail", 30)
+            self.logger(f"{link} is marked as frozen, download may fail", 30)
 
         filename, ext = self.get_filename_and_ext(file["name"], mime_type=file.get("mimetype"))
-        scrape_item.possible_datetime = file["createTime"]
+        scrape_item.timestamp = file["createTime"]
         await self.handle_file(link, scrape_item, file["name"], ext, custom_filename=filename, metadata=file)
 
     @error_handling_wrapper
@@ -237,6 +239,9 @@ class GoFileCrawler(Crawler):
             return match.group(1)
 
         raise ScrapeError(401, "Couldn't generate GoFile websiteToken", origin=_GLOBAL_JS_URL)
+
+    def _get_download_headers(self, referer: AbsoluteHttpURL) -> dict[str, str]:
+        return super()._download_headers_(referer) | self.headers
 
 
 def _check_node_is_accessible(node: Node) -> TypeGuard[File | Folder]:

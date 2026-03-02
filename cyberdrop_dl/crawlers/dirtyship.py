@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import TYPE_CHECKING, ClassVar, NamedTuple
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import css, error_handling_wrapper
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from bs4 import BeautifulSoup
 
@@ -149,7 +150,7 @@ class DirtyShipCrawler(Crawler):
 
     def get_flowplayer_sources(self, soup: BeautifulSoup) -> set[Format]:
         flow_player = soup.select_one(_SELECTORS.FLOWPLAYER_VIDEO)
-        data_item: str | None = css.get_attr_or_none(flow_player, "data-item") if flow_player else None
+        data_item: str | None = css._get_attr(flow_player, "data-item") if flow_player else None
         if not data_item:
             return set()
         data_item = data_item.replace(r"\/", "/")

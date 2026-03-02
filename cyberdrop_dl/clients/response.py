@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import logging
 from json import loads as json_loads
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Self
@@ -15,8 +16,9 @@ from propcache import under_cached_property
 
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import InvalidContentTypeError, ScrapeError
-from cyberdrop_dl.utils.utilities import parse_url
+from cyberdrop_dl.utils import parse_url
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 

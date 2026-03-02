@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import dataclasses
+import logging
 from http import HTTPStatus
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from yaml import YAMLError
-from yarl import URL
-
-from cyberdrop_dl.constants import VALIDATION_ERROR_FOOTER
-
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
+    from yaml import YAMLError
+    from yarl import URL
+
     from cyberdrop_dl.data_structures.url_objects import MediaItem, ScrapeItem
 
 
@@ -174,7 +174,7 @@ class RestrictedDateRangeError(SkipDownloadError):
     def __init__(self, origin: MediaItem) -> None:
         """This error will be thrown when the publication date of the media item is not allowed by config."""
         ui_failure = "Restricted DateRange"
-        message = f"File upload date ({origin.datetime_obj()}s) out of config range"
+        message = f"File upload date ({origin.datetime}) out of config range"
         super().__init__(ui_failure, message=message, origin=origin)
 
 
@@ -209,20 +209,17 @@ class JDownloaderError(CDLBaseError):
 
 
 class InvalidYamlError(CDLBaseError):
-    def __init__(self, file: Path, e: Exception) -> None:
+    def __init__(self, file: Path, e: YAMLError) -> None:
         """This error will be thrown when a yaml config file has invalid values."""
-        file_path = file.resolve()
+        file = file.resolve()
         ui_failure = "Invalid YAML"
-        msg = f"Unable to read file '{file_path}'"
-        if isinstance(e, YAMLError):
-            msg = f"File '{file_path}' is not a valid YAML file"
-        mark = getattr(e, "problem_mark", None)
-        if mark:
+        msg = f"File '{file}' is not a valid YAML file"
+
+        if mark := getattr(e, "problem_mark", None):
             msg += f"\n\nThe error was found in this line: \n {mark}"
 
-        problem = getattr(e, "problem", str(e))
-        msg += f"\n\n{problem.capitalize()}"
-        msg += f"\n\n{VALIDATION_ERROR_FOOTER}"
+        problem = getattr(e, "problem", str(e)).capitalize()
+        msg += f"\n\n{problem}\n\nPlease delete the file or fix the errors"
         super().__init__(ui_failure, message=msg, origin=file)
 
 
@@ -244,6 +241,8 @@ def create_error_msg(error: int | str) -> str:
 
 
 def get_origin(origin: ScrapeItem | Path | MediaItem | URL | None = None) -> Path | URL | None:
+    from yarl import URL
+
     if origin and not isinstance(origin, URL | Path):
         return origin.parents[0] if origin.parents else None
     return origin

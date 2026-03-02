@@ -5,15 +5,17 @@ https://developers.cloudflare.com/stream/
 
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
+from cyberdrop_dl.utils import error_handling_wrapper
 from cyberdrop_dl.utils.json import JSONWebToken, is_jwt
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
@@ -57,7 +59,7 @@ class CloudflareStreamCrawler(Crawler):
             jwt = JSONWebToken.decode(token)
             video_id = jwt.payload["sub"]
             if jwt.is_expired():
-                self.raise_exc(scrape_item, ScrapeError(401, "Access token to the video has expired"))
+                self.handle_error(scrape_item, ScrapeError(401, "Access token to the video has expired"))
                 return
         else:
             token = None

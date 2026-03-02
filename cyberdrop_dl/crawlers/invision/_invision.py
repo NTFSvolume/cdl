@@ -6,12 +6,14 @@ A Invision site has a tag with a `ipsCopyright` class and the text: "Powered By 
 from __future__ import annotations
 
 import dataclasses
+import logging
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers._forum import HTMLMessageBoardCrawler
 from cyberdrop_dl.crawlers.xenforo.xenforo import DEFAULT_XF_POST_SELECTORS, DEFAULT_XF_SELECTORS, XenforoCrawler
 from cyberdrop_dl.utils import css
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.crawlers._forum import MessageBoardSelectors
     from cyberdrop_dl.crawlers.crawler import SupportedPaths

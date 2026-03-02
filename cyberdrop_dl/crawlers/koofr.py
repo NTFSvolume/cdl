@@ -5,10 +5,10 @@ from typing import Any, ClassVar, Literal
 
 from pydantic import dataclasses
 
-from cyberdrop_dl.crawlers.crawler import Crawler, DBPathBuilder, SupportedDomains, SupportedPaths
+from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.exceptions import DownloadError, PasswordProtectedError, ScrapeError
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import error_handling_wrapper
 
 _APP_URL = AbsoluteHttpURL("https://app.koofr.net")
 _APP_LINKS = _APP_URL / "api/v2/public/links"
@@ -36,7 +36,6 @@ class KooFrCrawler(Crawler):
     }
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = _PRIMARY_URL
     DOMAIN: ClassVar[str] = "koofr"
-    create_db_path = staticmethod(DBPathBuilder.path_qs_frag)
 
     def __post_init__(self) -> None:
         self.api = KooFrAPI(self)
@@ -91,7 +90,7 @@ class KooFrCrawler(Crawler):
             return
 
         filename, ext = self.get_filename_and_ext(file.name)
-        scrape_item.possible_datetime = file.modified // 1000
+        scrape_item.timestamp = file.modified // 1000
         await self.handle_file(link, scrape_item, file.name, ext, custom_filename=filename)
 
 

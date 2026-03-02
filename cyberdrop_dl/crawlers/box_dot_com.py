@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections import defaultdict
 from enum import StrEnum
 from pathlib import Path
@@ -12,9 +13,9 @@ from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPa
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.models import AliasModel
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import css, error_handling_wrapper
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
@@ -131,7 +132,7 @@ class BoxDotComCrawler(Crawler):
         assert file.type == ItemType.file
         filename, ext = self.get_filename_and_ext(file.name)
         link = DOWNLOAD_URL_BASE.update_query(shared_name=shared_name, file_id=file.typed_id)
-        scrape_item.possible_datetime = file.date
+        scrape_item.timestamp = file.date
         await self.handle_file(scrape_item.url, scrape_item, filename, ext, debrid_link=link)
 
     def build_file_system(self, items: list[Item], root_id: str) -> dict[Path, Item]:

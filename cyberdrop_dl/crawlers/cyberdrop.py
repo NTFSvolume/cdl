@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import css, error_handling_wrapper
+from cyberdrop_dl.utils.filepath import remove_file_id
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
@@ -58,7 +60,7 @@ class CyberdropCrawler(Crawler):
         scrape_item.setup_as_album(title, album_id=album_id)
 
         date_str = css.select_text(soup, Selector.ALBUM_DATE)
-        scrape_item.possible_datetime = self.parse_date(date_str, "%d.%m.%Y")
+        scrape_item.timestamp = self.parse_date(date_str, "%d.%m.%Y")
 
         for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.ALBUM_ITEM):
             self.create_task(self.run(new_scrape_item))
@@ -83,6 +85,9 @@ class CyberdropCrawler(Crawler):
         name: str = info["name"]
         filename, ext = self.get_filename_and_ext(name)
         link = self.parse_url(auth["url"])
+        if self.config.download.remove_generated_id_from_filenames:
+            filename = remove_file_id(filename, ext)
+
         await self.handle_file(link, scrape_item, name, ext, custom_filename=filename)
 
 

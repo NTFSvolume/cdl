@@ -7,6 +7,7 @@ It calls checks_complete_by_referer several times even if no request is going to
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, ClassVar
 
 from mega.api import MegaAPI
@@ -14,12 +15,13 @@ from mega.core import MegaCore
 from mega.crypto import b64_to_a32
 from mega.data_structures import Crypto
 
-from cyberdrop_dl.crawlers.crawler import Crawler, DBPathBuilder, SupportedDomains, SupportedPaths, auto_task_id
+from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths, auto_task_id
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.downloader.mega_nz import MegaDownloader
 from cyberdrop_dl.exceptions import LoginError, ScrapeError
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import error_handling_wrapper
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from mega.filesystem import FileSystem
 
@@ -46,7 +48,6 @@ class MegaNzCrawler(Crawler):
     DOMAIN: ClassVar[str] = "mega.nz"
     FOLDER_DOMAIN: ClassVar[str] = "MegaNz"
     OLD_DOMAINS: ClassVar[tuple[str, ...]] = ("mega.co.nz",)
-    create_db_path = staticmethod(DBPathBuilder.path_qs_frag)
 
     core: MegaCore
     downloader: MegaDownloader
@@ -60,12 +61,12 @@ class MegaNzCrawler(Crawler):
         return self.manager.auth_config.meganz.password or None
 
     def _init_downloader(self) -> MegaDownloader:
-        self.core = MegaCore(MegaAPI(self.manager.client_manager._session))
+        self.core = MegaCore(MegaAPI(self.manager.client._aiohttp_session))
         self.downloader = dl = MegaDownloader(self.manager, self.DOMAIN)  # type: ignore[reportIncompatibleVariableOverride]
         dl.startup()
         return dl
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         await self.login(self.PRIMARY_URL)
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
@@ -140,7 +141,7 @@ class MegaNzCrawler(Crawler):
             if await self.check_complete_from_referer(canonical_url):
                 continue
 
-            child_item = scrape_item.create_child(canonical_url, possible_datetime=file.created_at)
+            child_item = scrape_item.create_child(canonical_url, timestamp=file.created_at)
             for part in path.parent.parts[1:]:
                 child_item.add_to_parent_title(part)
 

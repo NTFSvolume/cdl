@@ -1,196 +1,122 @@
 from __future__ import annotations
 
+import asyncio
 import datetime
 import email.utils
-import warnings
-from functools import lru_cache
-from typing import TYPE_CHECKING, Literal, NewType, ParamSpec, TypeAlias, TypeVar
+import logging
+import shutil
+import subprocess
+import sys
+from typing import TYPE_CHECKING, NewType
 
-import dateparser.date
-
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
-TimeStamp = NewType("TimeStamp", int)
-DateOrder: TypeAlias = Literal["DMY", "DYM", "MDY", "MYD", "YDM", "YMD"]
-ParserKind: TypeAlias = Literal["timestamp", "relative-time", "custom-formats", "absolute-time", "no-spaces-time"]
-
-_S = TypeVar("_S", bound=str)
-_P = ParamSpec("_P")
-_R = TypeVar("_R", bound=datetime.datetime | None)
-
-_DEFAULT_PARSERS: list[ParserKind] = ["relative-time", "custom-formats", "absolute-time", "no-spaces-time"]
-_DEFAULT_DATE_ORDER = "MDY"
-
-try:
-    from tzlocal import get_localzone
-
-    _TIMEZONE = get_localzone()
-except (ImportError, LookupError):
-    _TIMEZONE = None
+    from pathlib import Path
 
 
-def _coerce_to_list(value: _S | set[_S] | list[_S] | tuple[_S, ...] | None) -> list[_S]:
-    if value is None:
-        return []
-    if isinstance(value, tuple | set):
-        return list(value)
-    if isinstance(value, list):
-        return value
-    return [value]
+if sys.platform == "win32":
+    # Try to import win32con for Windows constants, fallback to hardcoded values if unavailable
+    try:
+        import win32con  # type: ignore[reportMissingModuleSource]  # pyright: ignore[reportMissingModuleSource]
 
+    except ImportError:
+        win32con = None
 
-class DateParser(dateparser.date.DateDataParser):
-    """Parses incomplete dates, but they must have at least a known year and month
+    FILE_WRITE_ATTRIBUTES = 256
+    OPEN_EXISTING = win32con.OPEN_EXISTING if win32con else 3
+    FILE_ATTRIBUTE_NORMAL = win32con.FILE_ATTRIBUTE_NORMAL if win32con else 128
+    FILE_FLAG_BACKUP_SEMANTICS = win32con.FILE_FLAG_BACKUP_SEMANTICS if win32con else 33554432
 
-    Parsed dates are guaranteed to be in the past with time at midnight (if unknown)
+    # Windows epoch is January 1, 1601. Unix epoch is January 1, 1970
+    WIN_EPOCH_OFFSET = 116444736e9
 
-    It can parse date strings like:
+    from ctypes import byref, windll, wintypes
 
-    `relative-time`:
-    >>> "Today"
-    >>> "Yesterday"
-    >>> "1 hour ago"
-    >>> "1 year, 2 months ago"
-    >>> "3 hours, 50 minutes ago
+    def _set_win_time(file: Path, datetime: float) -> None:
+        nano_ts: float = datetime * 1e7  # Windows uses nano seconds for dates
+        timestamp = int(nano_ts + WIN_EPOCH_OFFSET)
 
-    `absolute-time`:
-    >>> "Fri, 12 Dec 2014 10:55:50"
+        # Windows dates are 64bits, split into 2 32bits unsigned ints (dwHighDateTime , dwLowDateTime)
+        # XOR to get the date as bytes, then shift to get the first 32 bits (dwHighDateTime)
+        ctime = wintypes.FILETIME(timestamp & 0xFFFFFFFF, timestamp >> 32)
+        access_mode = FILE_WRITE_ATTRIBUTES
+        sharing_mode = 0  # Exclusive access
+        security_mode = None  # Use default security attributes
+        creation_disposition = OPEN_EXISTING
 
-    `no-spaces-time`:
-    >>> "10032022"
+        # FILE_FLAG_BACKUP_SEMANTICS allows access to directories
+        flags = FILE_ATTRIBUTE_NORMAL | FILE_FLAG_BACKUP_SEMANTICS
+        template_file = None
 
-    `timestamp`:
-    >>> "1747880678"
-
-    `custom-formats`
-    """
-
-    def __init__(
-        self, parsers: list[ParserKind] | ParserKind | None = None, date_order: DateOrder | None = None
-    ) -> None:
-        date_order = date_order or _DEFAULT_DATE_ORDER
-        parsers = _coerce_to_list(parsers) or _DEFAULT_PARSERS
-        super().__init__(
-            languages=["en"],
-            try_previous_locales=True,
-            settings={
-                "DATE_ORDER": date_order,
-                "PREFER_DAY_OF_MONTH": "first",
-                "PREFER_DATES_FROM": "past",
-                "REQUIRE_PARTS": ["month"],
-                "RETURN_TIME_AS_PERIOD": True,
-                "PARSERS": parsers,
-            },
+        params = (
+            access_mode,
+            sharing_mode,
+            security_mode,
+            creation_disposition,
+            flags,
+            template_file,
         )
 
-    def parse_with_locales(
-        self, date_string: str, date_formats: list[str] | str | None = None
-    ) -> tuple[datetime.datetime, str] | tuple[None, None]:
-        date_string = dateparser.date.sanitize_date(date_string)
-        date_formats = _coerce_to_list(date_formats)
-        parse = dateparser.date._DateLocaleParser.parse
-        for locale in self._get_applicable_locales(date_string):
-            date_data = parse(locale, date_string, date_formats, settings=self._settings)
-            if not date_data or not date_data.date_obj:
-                continue
+        handle = windll.kernel32.CreateFileW(str(file), *params)
+        windll.kernel32.SetFileTime(
+            handle,
+            byref(ctime),  # Creation time
+            None,  # Access time
+            None,  # Modification time
+        )
+        windll.kernel32.CloseHandle(handle)
 
-            return date_data.date_obj, date_data.period or ""
-        return None, None
-
-    def parse_possible_incomplete_date(
-        self, date_string: str, date_formats: list[str] | str | None = None
-    ) -> datetime.datetime | None:
-        """Adds current year to the date if it is missing from it"""
-        date_formats = _coerce_to_list(date_formats)
-        if _TIMEZONE is None:
-            return datetime.datetime.strptime(date_string, date_formats[0])
-        date_data = dateparser.date.parse_with_formats(date_string, date_formats, self._settings)
-        return date_data.date_obj
-
-    def parse_human_date(self, date_string: str) -> datetime.datetime | None:
-        parsed_date, precision = self.parse_with_locales(date_string, [])
-        if parsed_date:
-            if precision == "time":
-                return parsed_date
-            return parsed_date.replace(hour=0, minute=0, second=0, microsecond=0)
+    async def set_creation_time(file: Path, timestamp: float) -> None:
+        return await asyncio.to_thread(_set_win_time, file, timestamp)
 
 
-@lru_cache(maxsize=10)
-def _get_parser(parser_kind: ParserKind | None = None, date_order: DateOrder | None = None) -> DateParser:
-    return DateParser(parser_kind, date_order)
+elif sys.platform == "darwin" and (MAC_OS_SET_FILE := shutil.which("SetFile") or ""):
+    # SetFile is non standard in macOS. Only users that have xcode installed will have SetFile
+
+    async def set_creation_time(file: Path, timestamp: float) -> None:
+        time_string = datetime.datetime.fromtimestamp(timestamp).strftime("%m/%d/%Y %H:%M:%S")
+        process = await asyncio.subprocess.create_subprocess_exec(
+            MAC_OS_SET_FILE,
+            "-d",
+            time_string,
+            file,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        _ = await process.wait()
+
+else:
+
+    async def set_creation_time(file: Path, timestamp: float) -> None: ...
 
 
-def _as_utc(date_time: datetime.datetime) -> datetime.datetime:
-    return date_time.astimezone(datetime.UTC)
+TimeStamp = NewType("TimeStamp", int)
+UTCAwareDatetime = NewType("UTCAwareDatetime", datetime.datetime)
 
 
-def _normalize(date_time: datetime.datetime) -> datetime.datetime:
-    if date_time.tzinfo is not None:
-        return _as_utc(date_time).replace(tzinfo=None, microsecond=0)
+def _normalize(date_time: datetime.datetime) -> UTCAwareDatetime:
+    date_time = date_time.astimezone(datetime.UTC)
     if date_time.microsecond:
-        return date_time.replace(microsecond=0)
-    return date_time
+        date_time = date_time.replace(microsecond=0)
+    return UTCAwareDatetime(date_time)
 
 
-def _suppress_warnings(func: Callable[_P, _R]) -> Callable[_P, _R]:
-    def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
-        with warnings.catch_warnings(record=True):
-            warnings.filterwarnings("ignore", category=DeprecationWarning)
-            return func(*args, **kwargs)
-
-    return wrapper
+def parse_iso(date_or_datetime: str, /) -> UTCAwareDatetime:
+    return _normalize(datetime.datetime.fromisoformat(date_or_datetime))
 
 
-@_suppress_warnings
-def parse_iso(date_or_datetime: str, /) -> datetime.datetime:
-    return datetime.datetime.fromisoformat(date_or_datetime)
+def parse_format(date_or_datetime: str, /, format: str) -> UTCAwareDatetime:
+    return _normalize(datetime.datetime.strptime(date_or_datetime, format))
 
 
-@_suppress_warnings
-def parse_human(
-    date_string: str,
-    /,
-    parser_kind: ParserKind | None = None,
-    date_order: DateOrder | None = None,
-) -> datetime.datetime | None:
-    parser = _get_parser(parser_kind, date_order)
-    return parser.parse_human_date(date_string)
-
-
-@_suppress_warnings
-def parse(date_or_datetime: str, format: str | None = None, /, *, iso: bool = False) -> datetime.datetime | None:
-    if not date_or_datetime:
-        raise ValueError("Unable to extract date")
-
-    if iso:
-        return parse_iso(date_or_datetime)
-    if format:
-        if format == "%Y-%m-%d" or format.startswith("%Y-%m-%d %H:%M:%S"):
-            raise ValueError("Do not use a custom format to parse iso8601 dates. Call parse_iso_date instead")
-        return _get_parser().parse_possible_incomplete_date(date_or_datetime, format)
-
-    return parse_human(date_or_datetime)
-
-
-def parse_aware_iso_datetime(value: str) -> datetime.datetime | None:
-    try:
-        return _as_utc(parse_iso(value))
-    except Exception:
-        return
-
-
-# Return dt obj
-def parse_http(date: str, /) -> int:
+def parse_http(date: str, /) -> UTCAwareDatetime:
     """parse rfc 2822 or an "HTTP-date" format as defined by RFC 9110"""
-    date_time = email.utils.parsedate_to_datetime(date)
-    return to_timestamp(date_time)
+    return _normalize(email.utils.parsedate_to_datetime(date))
 
 
 def to_timestamp(date: datetime.datetime) -> TimeStamp:
     return TimeStamp(int(date.timestamp()))
 
 
-if __name__ == "__main__":
-    print(parse_human("today at noon"))  # noqa: T201
-    print(parse_human("today"))  # noqa: T201
+def from_timestamp(timestamp: int) -> UTCAwareDatetime:
+    return _normalize(datetime.datetime.fromtimestamp(timestamp))

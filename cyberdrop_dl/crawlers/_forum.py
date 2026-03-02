@@ -13,20 +13,22 @@ import asyncio
 import base64
 import dataclasses
 import datetime
+import logging
 import re
 from abc import abstractmethod
 from typing import TYPE_CHECKING, ClassVar, Protocol, final
 
 from bs4 import BeautifulSoup, Tag
 
+from cyberdrop_dl import config
 from cyberdrop_dl.constants import HTTP_REGEX_LINKS
 from cyberdrop_dl.crawlers.crawler import Crawler
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import LoginError, MaxChildrenError, ScrapeError
-from cyberdrop_dl.utils import css
+from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, is_blob_or_svg
 from cyberdrop_dl.utils.dates import TimeStamp, to_timestamp
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_text_between, is_blob_or_svg
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Iterable, Sequence
 
@@ -193,7 +195,7 @@ class MessageBoardCrawler(Crawler, is_abc=True):
         # Implementation of this method MUST return `None` instead of raising an error
         raise NotImplementedError
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         await self.login()
 
     @final
@@ -208,17 +210,17 @@ class MessageBoardCrawler(Crawler, is_abc=True):
     @final
     @property
     def scrape_single_forum_post(self) -> bool:
-        return self.manager.config_manager.settings_data.download_options.scrape_single_forum_post
+        return config.get().download.scrape_single_forum_post
 
     @final
     @property
     def max_thread_depth(self) -> int:
-        return self.manager.config_manager.settings_data.download_options.maximum_thread_depth
+        return config.get().download.max_thread_depth
 
     @final
     @property
     def max_thread_folder_depth(self):
-        return self.manager.config.download_options.maximum_thread_folder_depth
+        return config.get().download.max_thread_folder_depth
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         if not self.logged_in and self.login_required is True:
@@ -326,7 +328,7 @@ class MessageBoardCrawler(Crawler, is_abc=True):
     async def write_last_forum_post(self, thread_url: AbsoluteHttpURL, last_post_url: AbsoluteHttpURL | None) -> None:
         if not last_post_url or last_post_url == thread_url:
             return
-        self.manager.log_manager.write_last_post_log(last_post_url)
+        self.manager.logs.write_last_post_log(last_post_url)
 
     # TODO: Move this to the base crawler
     # TODO: Define an unified workflow for crawlers to perform and check login
@@ -347,7 +349,7 @@ class MessageBoardCrawler(Crawler, is_abc=True):
             raise LoginError(message=msg)
 
         msg += " Scraping without an account"
-        self.log(msg, 30)
+        self.logger(msg, 30)
 
     async def check_login_with_request(self, login_url: AbsoluteHttpURL) -> tuple[str, bool]:
         text = await self.request_text(login_url, cache_disabled=True)
@@ -428,7 +430,7 @@ class HTMLMessageBoardCrawler(MessageBoardCrawler, is_abc=True):
                 try:
                     title = self.create_title(get_post_title(soup, self.SELECTORS), thread_id=thread.id)
                 except ScrapeError as e:
-                    self.log_debug("Got an unprocessable soup", 40, exc_info=e)
+                    self.logger.debug("Got an unprocessable soup", 40, exc_info=e)
                     raise
                 scrape_item.add_to_parent_title(title)
 
@@ -452,7 +454,7 @@ class HTMLMessageBoardCrawler(MessageBoardCrawler, is_abc=True):
                 post_url = self.make_post_url(thread, current_post.id)
                 new_scrape_item = scrape_item.create_new(
                     thread.url,
-                    possible_datetime=current_post.timestamp,
+                    timestamp=current_post.timestamp,
                     add_parent=post_url,
                 )
                 self.create_task(self.post(new_scrape_item, current_post))
@@ -492,10 +494,10 @@ class HTMLMessageBoardCrawler(MessageBoardCrawler, is_abc=True):
             max_children_error = e
 
         if seen:
-            self.log(f"[{self.FOLDER_DOMAIN}] post #{post.id} {stats = }")
+            self.logger(f"[{self.FOLDER_DOMAIN}] post #{post.id} {stats = }")
         if duplicates:
             msg = f"Found duplicate links in post {scrape_item.parent}. Selectors are too generic: {duplicates}"
-            self.log(msg, bug=True)
+            self.logger(msg, bug=True)
         await asyncio.gather(*tasks)
         if max_children_error is not None:
             raise max_children_error
@@ -539,7 +541,7 @@ class HTMLMessageBoardCrawler(MessageBoardCrawler, is_abc=True):
             yield soup
 
     def get_next_page(self, soup: BeautifulSoup) -> str | None:
-        return css.select_one_get_attr_or_none(soup, *self.SELECTORS.next_page)
+        return css.select_one_get_attr(soup, *self.SELECTORS.next_page)
 
     @final
     @error_handling_wrapper
@@ -553,7 +555,7 @@ class HTMLMessageBoardCrawler(MessageBoardCrawler, is_abc=True):
         if self.is_thumbnail(link):
             link = self.thumbnail_to_img(link)
             if not link:
-                return self.log(f"Skipping thumbnail: {link}")
+                return self.logger(f"Skipping thumbnail: {link}")
         await self.handle_link(scrape_item, link)
 
     async def get_absolute_link(self, link: str | AbsoluteHttpURL) -> AbsoluteHttpURL | None:

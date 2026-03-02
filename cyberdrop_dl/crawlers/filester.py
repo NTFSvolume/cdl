@@ -1,12 +1,13 @@
-from __future__ import annotations  #
+from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, open_graph
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_text_between
+from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, open_graph
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
@@ -80,7 +81,7 @@ class FilesterCrawler(Crawler):
         dl_link = await self._request_download(slug)
         name = open_graph.title(soup)
         mime_type = css.select_text(soup, Selector.MIME_TYPE)
-        scrape_item.possible_datetime = self.parse_iso_date(css.select_text(soup, Selector.UPLOAD_DATE))
+        scrape_item.timestamp = self.parse_iso_date(css.select_text(soup, Selector.UPLOAD_DATE))
         filename, ext = self.get_filename_and_ext(name, mime_type=mime_type)
         await self.handle_file(dl_link, scrape_item, name, ext, custom_filename=filename)
 

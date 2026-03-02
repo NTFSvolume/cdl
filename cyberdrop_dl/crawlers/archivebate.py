@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers.mixdrop import MixDropCrawler
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import css, open_graph
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_text_between
+from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, open_graph
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.crawlers.crawler import SupportedDomains, SupportedPaths
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
@@ -56,11 +57,11 @@ class ArchiveBateCrawler(MixDropCrawler):
 
         url = scrape_item.url
         # Can't use check_complete_by_referer. We need the mixdrop url for that
-        db_path = self.create_db_path(url)
-        check_complete = await self.manager.db_manager.history_table.check_complete(self.DOMAIN, url, url, db_path)
+        db_path = self._create_db_path_(url)
+        check_complete = await self.manager.database.history_table.check_complete(self.DOMAIN, url, url, db_path)
         if check_complete:
-            self.log(f"Skipping {scrape_item.url} as it has already been downloaded", 10)
-            self.manager.progress_manager.download_progress.add_previously_completed()
+            self.logger(f"Skipping {scrape_item.url} as it has already been downloaded", 10)
+            self.manager.tui.files.add_prev_completed()
             return
 
         soup = await self.request_soup(scrape_item.url)
@@ -75,7 +76,7 @@ class ArchiveBateCrawler(MixDropCrawler):
         video_src = css.select(soup, _SELECTORS.VIDEO, "src")
         title = self.create_title(f"{user_name} [{site_name}]")
         scrape_item.setup_as_profile(title)
-        scrape_item.possible_datetime = self.parse_date(date_str)
+        scrape_item.timestamp = self.parse_date(date_str)
         mixdrop_url = self.get_embed_url(self.parse_url(video_src))  # Override domain
 
         if await self.check_complete_from_referer(mixdrop_url):

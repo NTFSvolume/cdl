@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import logging
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, open_graph
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_text_between
+from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, open_graph
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
@@ -65,7 +66,7 @@ class YouJizzCrawler(Crawler):
         scrape_item.url = canonical_url
         video = _parse_video(soup)
         link = self.parse_url(video.best_src.url)
-        scrape_item.possible_datetime = self.parse_date(video.date)
+        scrape_item.timestamp = self.parse_date(video.date)
         filename, ext = self.get_filename_and_ext(link.name)
         custom_filename = self.create_custom_filename(
             video.title, ext, file_id=video_id, resolution=video.best_src.resolution

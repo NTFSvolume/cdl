@@ -1,14 +1,13 @@
 import datetime
-from collections.abc import Iterable
 from enum import StrEnum, auto
 from pathlib import Path
-from typing import Annotated, Any, Literal, Self
+from typing import Literal
 
-from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
+from cyclopts import Parameter
+from pydantic import Field
 
-from cyberdrop_dl.cli.arguments import ArgumentParams
-from cyberdrop_dl.config import ConfigSettings, GlobalSettings
-from cyberdrop_dl.models.types import HttpURL
+from cyberdrop_dl.config import Config
+from cyberdrop_dl.models import Settings
 
 
 class UIOptions(StrEnum):
@@ -18,18 +17,45 @@ class UIOptions(StrEnum):
     FULLSCREEN = auto()
 
 
-class CLIargs(BaseModel):
-    links: Annotated[
-        list[HttpURL],
-        ArgumentParams(positional_only=True, metavar="LINK(s)"),
-    ] = Field(
-        default=[],
-        description="link(s) to content to download (passing multiple links is supported)",
-    )
+@Parameter(name="*", negative_bool=[])
+class CLIargs(Settings):
     appdata_folder: Path | None = Field(
         default=None,
         description="AppData folder path",
     )
+
+    config_file: Path | None = Field(
+        default=None,
+        description="path to the CDL settings.yaml file to load",
+    )
+
+    impersonate: (
+        Literal[
+            "chrome",
+            "edge",
+            "safari",
+            "safari_ios",
+            "chrome_android",
+            "firefox",
+        ]
+        | None
+    ) = Field(
+        default=None,
+        description="Use this target as impersonation for all scrape requests",
+    )
+
+    portrait: bool = Field(
+        default=False,
+        description="force CDL to run with a vertical layout",
+    )
+    print_stats: bool = Field(
+        default=True,
+        description="show stats report at the end of a run",
+    )
+
+
+@Parameter(name="*", negative_bool="")
+class RetryArgs(Settings):
     completed_after: datetime.date | None = Field(
         default=None,
         description="only retry downloads that were completed on or after this date",
@@ -39,115 +65,12 @@ class CLIargs(BaseModel):
         description="only retry downloads that were completed on or before this date",
     )
 
-    config_file: Path | None = Field(
-        default=None,
-        description="path to the CDL settings.yaml file to load",
-    )
-
-    download: bool = Field(
-        default=False,
-        description="skips UI, start download immediately",
-    )
-    download_tiktok_audios: bool = Field(
-        default=False,
-        description="download TikTok audios from posts and save them as separate files",
-    )
-    download_tiktok_src_quality_videos: bool = Field(
-        default=False,
-        description="download TikTok videos in source quality",
-    )
-    impersonate: Annotated[
-        Literal[
-            "chrome",
-            "edge",
-            "safari",
-            "safari_ios",
-            "chrome_android",
-            "firefox",
-        ]
-        | bool
-        | None,
-        ArgumentParams(nargs="?", const=True),
-    ] = Field(
-        default=None,
-        description="Use this target as impersonation for all scrape requests",
-    )
     max_items_retry: int = Field(
         default=0,
         description="max number of links to retry",
     )
-    portrait: bool = Field(
-        default=False,
-        description="force CDL to run with a vertical layout",
-    )
-    print_stats: bool = Field(
-        default=True,
-        description="show stats report at the end of a run",
-    )
-    retry_all: bool = Field(
-        default=False,
-        description="retry all downloads",
-    )
-    retry_failed: bool = Field(
-        default=False,
-        description="retry failed downloads",
-    )
-    retry_maintenance: bool = Field(
-        default=False,
-        description="retry download of maintenance files (bunkr). Requires files to be hashed",
-    )
-    show_supported_sites: bool = Field(
-        default=False,
-        description="shows a list of supported sites and exits",
-    )
-    ui: UIOptions = Field(
-        default=UIOptions.FULLSCREEN,
-        description="DISABLED, ACTIVITY, SIMPLE or FULLSCREEN",
-    )
-
-    @property
-    def retry_any(self) -> bool:
-        return any((self.retry_all, self.retry_failed, self.retry_maintenance))
-
-    @property
-    def fullscreen_ui(self) -> bool:
-        return self.ui == UIOptions.FULLSCREEN
-
-    @computed_field
-    def __computed__(self) -> dict[str, bool]:
-        return {"retry_any": self.retry_any, "fullscreen_ui": self.fullscreen_ui}
-
-    @model_validator(mode="after")
-    def mutually_exclusive(self) -> Self:
-        group1 = [self.links, self.retry_all, self.retry_failed, self.retry_maintenance]
-        msg1 = "`--links`, '--retry-all', '--retry-maintenace' and '--retry-failed' are mutually exclusive"
-        _check_mutually_exclusive(group1, msg1)
-        return self
-
-    @field_validator("ui", mode="before")
-    @classmethod
-    def lower(cls, value: str) -> str:
-        return value.lower()
 
 
-def _check_mutually_exclusive(group: Iterable[Any], msg: str) -> None:
-    if sum(1 for value in group if value) >= 2:
-        raise ValueError(msg)
-
-
-class ParsedArgs(BaseModel):
+class ParsedArgs(Settings):
     cli_only_args: CLIargs = CLIargs()
-    config_settings: ConfigSettings = ConfigSettings()
-    global_settings: GlobalSettings = GlobalSettings()
-
-    def model_post_init(self, *_) -> None:
-        if self.cli_only_args.retry_all or self.cli_only_args.retry_maintenance:
-            self.config_settings.runtime_options.ignore_history = True
-
-        if (
-            not self.cli_only_args.fullscreen_ui
-            or self.cli_only_args.retry_any
-            or self.cli_only_args.config_file
-            or self.config_settings.sorting.sort_downloads
-        ):
-            self.cli_only_args.download = True
+    config: Config = Config()

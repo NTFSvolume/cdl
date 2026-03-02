@@ -4,13 +4,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
+from cyberdrop_dl.managers.config_manager import ConfigManager
 from rich.text import Text
 
 from cyberdrop_dl import constants
 from cyberdrop_dl.constants import NotificationResult
-from cyberdrop_dl.managers.config_manager import ConfigManager
-from cyberdrop_dl.managers.manager import Manager
-from cyberdrop_dl.managers.path_manager import PathManager
+from cyberdrop_dl.manager import Manager
 from cyberdrop_dl.utils import apprise
 from tests.fake_classes.managers import FakeCacheManager
 
@@ -39,29 +38,29 @@ class AppriseTestCase:
 
 def test_get_apprise_urls() -> None:
     with pytest.raises(ValueError):
-        apprise.get_apprise_urls()
+        apprise.read()
 
     with pytest.raises(ValueError):
-        apprise.get_apprise_urls(urls=["url"], file=Path.cwd())
+        apprise.read(urls=["url"], file=Path.cwd())
 
     with pytest.raises(SystemExit):
-        apprise.get_apprise_urls(file=TEST_FILES_PATH / "invalid_single_url.txt")
+        apprise.read(file=TEST_FILES_PATH / "invalid_single_url.txt")
 
     with pytest.raises(SystemExit):
-        apprise.get_apprise_urls(file=TEST_FILES_PATH / "invalid_multiple_urls.txt")
+        apprise.read(file=TEST_FILES_PATH / "invalid_multiple_urls.txt")
 
-    result = apprise.get_apprise_urls(file=TEST_FILES_PATH / "file_that_does_not_exists.txt")
+    result = apprise.read(file=TEST_FILES_PATH / "file_that_does_not_exists.txt")
     assert result == []
 
-    result = apprise.get_apprise_urls(file=TEST_FILES_PATH / "empty_file.txt")
+    result = apprise.read(file=TEST_FILES_PATH / "empty_file.txt")
     assert result == []
 
-    result = apprise.get_apprise_urls(file=TEST_FILES_PATH / "valid_single_url.txt")
+    result = apprise.read(file=TEST_FILES_PATH / "valid_single_url.txt")
     assert isinstance(result, list), "Result is not a list"
     assert len(result) == 1, "This should be a single URL"
     assert isinstance(result[0], apprise.AppriseURL), "Parsed URL is not an AppriseURL"
 
-    result = apprise.get_apprise_urls(file=TEST_FILES_PATH / "valid_multiple_urls.txt")
+    result = apprise.read(file=TEST_FILES_PATH / "valid_multiple_urls.txt")
     assert isinstance(result, list), "Result is not a list"
     assert len(result) == 5, "These should be 5 URLs"
 
@@ -81,11 +80,6 @@ def test_get_apprise_urls() -> None:
 
 
 async def send_notification(test_case: AppriseTestCase) -> None:
-    FAKE_MANAGER.config_manager.apprise_urls = []
-    if test_case.urls and any(test_case.urls):
-        FAKE_MANAGER.config_manager.apprise_urls = apprise.get_apprise_urls(urls=test_case.urls)
-    FAKE_MANAGER.path_manager = PathManager(FAKE_MANAGER)
-    FAKE_MANAGER.path_manager.main_log = test_case.file or TEST_FILES_PATH / "valid_single_url.txt"
     constants.LOG_OUTPUT_TEXT = Text(test_case.name)
     result, logs = await apprise.send_apprise_notifications(FAKE_MANAGER)
     assert result.value == test_case.result.value, f"Result for this case should be {test_case.result.value}"

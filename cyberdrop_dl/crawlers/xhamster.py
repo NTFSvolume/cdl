@@ -5,6 +5,7 @@ import codecs
 import dataclasses
 import itertools
 import json
+import logging
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl.compat import IntEnum
@@ -12,8 +13,9 @@ from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.mediaprops import Resolution
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_text_between, parse_url, xor_decrypt
+from cyberdrop_dl.utils import error_handling_wrapper, get_text_between, parse_url, xor_decrypt
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
@@ -171,7 +173,7 @@ class XhamsterCrawler(Crawler):
         gallery_id = str(gallery["id"])
         title = self.create_title(f"{gallery['title']} [gallery]", gallery_id)
         scrape_item.setup_as_album(title, album_id=gallery_id)
-        scrape_item.possible_datetime = gallery["created"]
+        scrape_item.timestamp = gallery["created"]
 
         results = await self.get_album_results(gallery_id)
         n_pages: int = page_details["paginationProps"]["lastPageNumber"]
@@ -209,7 +211,7 @@ class XhamsterCrawler(Crawler):
 
         initials = await self._get_window_initials(scrape_item.url)
         video = _parse_video(initials)
-        scrape_item.possible_datetime = video.created
+        scrape_item.timestamp = video.created
         custom_filename = self.create_custom_filename(
             video.title,
             ".mp4",

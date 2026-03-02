@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import css, error_handling_wrapper
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
@@ -42,7 +43,7 @@ class PimpAndHostCrawler(Crawler):
                 scrape_item.setup_as_album(title, album_id=album_id)
 
                 if date_tag := soup.select_one(DATE_SELECTOR):
-                    scrape_item.possible_datetime = self.parse_date(css.get_attr(date_tag, "title"), DATE_FORMAT)
+                    scrape_item.timestamp = self.parse_date(css.get_attr(date_tag, "title"), DATE_FORMAT)
 
             for _, new_scrape_item in self.iter_children(scrape_item, soup, FILES_SELECTOR):
                 self.create_task(self.run(new_scrape_item))
@@ -54,6 +55,6 @@ class PimpAndHostCrawler(Crawler):
         link_str: str = css.select(soup, IMAGE_SELECTOR, "data-src")
         link = self.parse_url(link_str)
         date_str: str = css.select(soup, DATE_SELECTOR, "title")
-        scrape_item.possible_datetime = self.parse_date(date_str, DATE_FORMAT)
+        scrape_item.timestamp = self.parse_date(date_str, DATE_FORMAT)
         filename, ext = self.get_filename_and_ext(link.name)
         await self.handle_file(link, scrape_item, filename, ext)

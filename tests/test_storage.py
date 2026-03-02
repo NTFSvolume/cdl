@@ -1,45 +1,86 @@
+from __future__ import annotations
+
 import asyncio
 import dataclasses
-from collections.abc import AsyncGenerator
+import logging
 from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest import mock
 
 import pytest
 
-from cyberdrop_dl.managers.manager import Manager
-from cyberdrop_dl.managers.storage_manager import StorageManager
+from cyberdrop_dl import storage
+from cyberdrop_dl.storage import StorageChecker
+
+logger = logging.getLogger(__name__)
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
 
 
 @pytest.fixture
-async def storage(running_manager: Manager) -> AsyncGenerator[StorageManager]:
-    yield StorageManager(running_manager)
+async def storag() -> AsyncGenerator[StorageChecker]:
+    async with StorageChecker(required_free_space=512_000_000) as m:
+        yield m
 
 
-async def test_unsupported_fs_should_not_return_zero(storage: StorageManager) -> None:
+async def test_unsupported_fs_should_not_return_zero() -> None:
     cwd = await asyncio.to_thread(Path().resolve)
-    free_space = await storage._get_free_space(cwd)
+    free_space = await storage.get_free_space(cwd)
     assert free_space > 0
     with mock.patch("psutil.disk_usage", side_effect=OSError(None, "operation not supported")):
-        free_space = await storage._get_free_space(cwd)
+        free_space = await storage.get_free_space(cwd)
         assert free_space == -1
 
     with mock.patch("psutil.disk_usage", side_effect=OSError(None, "another error")):
         with pytest.raises(OSError):
-            await storage._get_free_space(cwd)
+            _ = await storage.get_free_space(cwd)
 
 
-async def test_fuse_filesystem_should_not_return_zero(storage: StorageManager) -> None:
+async def test_fuse_filesystem_should_not_return_zero() -> None:
     cwd = await asyncio.to_thread(Path().resolve)
-    partition = storage._get_partition(cwd)
+    partition = storage.find_partition(cwd)
     assert partition
-    storage._partitions = [dataclasses.replace(partition, fstype="fuse")]
+    assert not storage.is_fuse_fs(cwd)
+    storage._PARTITIONS = [dataclasses.replace(partition, fstype="fuse")]  # pyright: ignore[reportPrivateUsage]
+    assert storage.is_fuse_fs(cwd)
 
-    free_space = await storage._get_free_space(cwd)
+    free_space = await storage.get_free_space(cwd)
     assert free_space > 0
 
     class NullUsage:
         free = 0
 
     with mock.patch("psutil.disk_usage", return_value=NullUsage()):
-        free_space = await storage._get_free_space(cwd)
+        free_space = await storage.get_free_space(cwd)
         assert free_space == -1
+
+
+def test_storage_only_work_with_abs_paths() -> None:
+    cwd = Path()
+    with pytest.raises(ValueError):
+        _ = storage.find_partition(cwd)
+
+    assert storage.find_partition(cwd.resolve())
+
+
+async def test_find_partition_finds_the_correct_partition() -> None:
+    def part(path: str):
+        return storage.DiskPartition(Path(path), Path(path), "", "")
+
+    def find(path: str):
+        return storage.find_partition(Path(path))
+
+    root, home, usb, external_ssd = partitions = [
+        part("/"),
+        part("/home"),
+        part("/mnt/USB"),
+        part("/home/external_SSD"),
+    ]
+
+    storage._PARTITIONS = partitions  # pyright: ignore[reportPrivateUsage]
+
+    assert find("/swap_file") is root
+    assert find("/home/user/.bash_rc") is home
+    assert find("/home/external_SSD/song.mp3") is external_ssd
+    assert find("/mnt/USB") is usb
+    assert find("/mnt") is root

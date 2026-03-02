@@ -1,15 +1,16 @@
 from __future__ import annotations
 
 import itertools
+import logging
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from bs4 import BeautifulSoup
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, auto_task_id
 from cyberdrop_dl.exceptions import DDOSGuardError, PasswordProtectedError, ScrapeError
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_text_between
+from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
@@ -161,7 +162,7 @@ class YetiShareCrawler(Crawler, is_abc=True):
         token = raw_link.rpartition("?download_token=")[-1]
         link = self.parse_url(raw_link).with_query(download_token=token)
 
-        scrape_item.possible_datetime = self.parse_date(
+        scrape_item.timestamp = self.parse_date(
             css.select_text(soup, Selector.FILE_UPLOAD_DATE),
             "%d/%m/%Y %H:%M:%S",
         )

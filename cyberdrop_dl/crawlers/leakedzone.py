@@ -3,14 +3,15 @@ from __future__ import annotations
 import binascii
 import dataclasses
 import itertools
+import logging
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl.compat import IntEnum
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_text_between
+from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from bs4 import BeautifulSoup
 
@@ -122,14 +123,14 @@ class LeakedZoneCrawler(Crawler):
         m3u8 = await self.get_m3u8_from_index_url(url)
         filename, ext = self.get_filename_and_ext(f"{post.id}.mp4")
         if post.created_at:
-            scrape_item.possible_datetime = self.parse_iso_date(post.created_at)
+            scrape_item.timestamp = self.parse_iso_date(post.created_at)
         await self.handle_file(scrape_item.url, scrape_item, filename, ext, m3u8=m3u8)
 
     async def _handle_image(self, scrape_item: ScrapeItem, post: Post) -> None:
         image_url = self.IMAGES_CDN / post.image
         filename, ext = self.get_filename_and_ext(image_url.name)
         assert post.created_at
-        scrape_item.possible_datetime = self.parse_iso_date(post.created_at)
+        scrape_item.timestamp = self.parse_iso_date(post.created_at)
         custom_filename = self.create_custom_filename(filename, ext, file_id=post.id)
         await self.handle_file(image_url, scrape_item, filename, ext, custom_filename=custom_filename)
 

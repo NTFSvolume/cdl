@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import logging
 import re
 from fractions import Fraction
 from typing import TYPE_CHECKING, Final, NamedTuple
 
 from cyberdrop_dl.exceptions import ScrapeError
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 

@@ -3,15 +3,16 @@ from __future__ import annotations
 import asyncio
 import itertools
 import json
+import logging
 from collections import defaultdict
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_text_between
+from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from bs4 import BeautifulSoup
 
@@ -117,7 +118,7 @@ class XVideosCrawler(Crawler):
             raise ScrapeError(404, css.get_text(error))
 
         title = css.page_title(soup, self.DOMAIN)
-        scrape_item.possible_datetime = self.parse_iso_date(css.get_json_ld_date(soup))
+        scrape_item.timestamp = self.parse_iso_date(css.get_json_ld_date(soup))
         script = css.select_text(soup, Selectors.HLS_VIDEO_JS)
         m3u8_url = self.parse_url(get_text_between(script, "setVideoHLS('", "')"))
         m3u8, info = await self.get_m3u8_from_playlist_url(m3u8_url)

@@ -2,15 +2,16 @@ from __future__ import annotations
 
 import itertools
 import json
+import logging
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.mediaprops import Resolution
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_text_between
+from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
@@ -90,7 +91,7 @@ class NoodleMagazineCrawler(Crawler):
         best_source = max(Source.new(source) for source in playlist_data["sources"])
         title: str = css.select(soup, "title").get_text().split(" watch online")[0]
 
-        scrape_item.possible_datetime = self.parse_iso_date(metadata["uploadDate"])
+        scrape_item.timestamp = self.parse_iso_date(metadata["uploadDate"])
         content_url = self.parse_url(metadata["contentUrl"])
         filename, ext = self.get_filename_and_ext(content_url.name)
         video_id = filename.removesuffix(ext)

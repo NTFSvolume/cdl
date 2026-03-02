@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
@@ -10,10 +11,10 @@ from typing import TYPE_CHECKING, ClassVar
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import css
+from cyberdrop_dl.utils import css, error_handling_wrapper
 from cyberdrop_dl.utils.dates import TimeStamp, to_timestamp
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from bs4 import Tag
 
@@ -166,7 +167,7 @@ class PkmncardsCrawler(Crawler):
         link = card.download_url  # .with_suffix(".png")  # they offer both jpg and png. png is higher quality
         set_title = self.create_title(f"{card.set.name} ({card.set.full_code})")
         scrape_item.setup_as_album(set_title, album_id=card.set.abbr)
-        scrape_item.possible_datetime = card.set.release_date
+        scrape_item.timestamp = card.set.release_date
         filename, ext = self.get_filename_and_ext(link.name, assume_ext=".jpg")
         custom_filename = self.create_custom_filename(card.full_name, ext)
         await self.handle_file(link, scrape_item, filename, ext, custom_filename=custom_filename)
