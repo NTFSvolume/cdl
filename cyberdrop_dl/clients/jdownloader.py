@@ -9,7 +9,6 @@ from myjdapi import myjdapi
 
 from cyberdrop_dl.exceptions import JDownloaderError
 
-logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -22,7 +21,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass(frozen=True, slots=True)
 class JDownloaderConfig:
     enabled: bool
     username: str
@@ -30,17 +29,19 @@ class JDownloaderConfig:
     device: str
     download_dir: Path
     autostart: bool
+    whitelist: list[str]
 
     @staticmethod
     def from_config(config: Config) -> JDownloaderConfig:
-        download_dir = config.runtime.jdownloader_download_dir or config.files.download_folder
+        download_dir = config.runtime.jdownloader.download_dir or config.files.download_folder
         return JDownloaderConfig(
-            enabled=config.runtime.send_unsupported_to_jdownloader,
+            enabled=config.runtime.jdownloader.enabled,
             device=config.auth.jdownloader.device,
             username=config.auth.jdownloader.username,
             password=config.auth.jdownloader.password,
-            download_dir=download_dir.resolve(),
-            autostart=config.runtime.jdownloader_autostart,
+            download_dir=download_dir,
+            whitelist=config.runtime.jdownloader.whitelist,
+            autostart=config.runtime.jdownloader.autostart,
         )
 
 
@@ -53,13 +54,25 @@ class JDownloader:
     _device: Jddevice | None = dataclasses.field(default=None, init=False)
 
     @classmethod
-    def from_config(cls, options: Config | JDownloaderConfig, /) -> Self:
-        if not isinstance(options, JDownloaderConfig):
-            options = JDownloaderConfig.from_config(options)
-        return cls(options)
+    def from_config(cls, config: Config | JDownloaderConfig, /) -> Self:
+        if not isinstance(config, JDownloaderConfig):
+            config = JDownloaderConfig.from_config(config)
+        return cls(config)
 
-    def __post_init__(self):
+    @property
+    def enabled(self):
+        return self._enabled
+
+    def __post_init__(self) -> None:
         self._enabled = self.config.enabled
+
+    def is_whitelisted(self, url: AbsoluteHttpURL) -> bool:
+        if not self.enabled:
+            return False
+        if not self.config.whitelist:
+            return True
+
+        return any(domain in url.host for domain in self.config.whitelist)
 
     async def _connect(self) -> None:
         if not all((self.config.username, self.config.password, self.config.device)):
@@ -67,10 +80,10 @@ class JDownloader:
 
         api = myjdapi.Myjdapi()
         api.set_app_key("CYBERDROP-DL")
-        await asyncio.to_thread(api.connect, self.config.username, self.config.password)
+        _ = await asyncio.to_thread(api.connect, self.config.username, self.config.password)
         self._device = api.get_device(self.config.device)
 
-    async def connect(self) -> None:
+    async def ready(self) -> None:
         if not self._enabled or self._device is not None:
             return
         try:
@@ -109,5 +122,5 @@ class JDownloader:
                     },
                 ],
             )
-        except (AssertionError, myjdapi.MYJDException) as e:
+        except myjdapi.MYJDException as e:
             raise JDownloaderError(str(e)) from e

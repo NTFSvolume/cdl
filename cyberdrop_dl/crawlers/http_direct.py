@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, ClassVar
 
+from typing_extensions import override
+
 from cyberdrop_dl import constants
 from cyberdrop_dl.crawlers.crawler import Crawler
 from cyberdrop_dl.exceptions import NoExtensionError
@@ -16,11 +18,17 @@ if TYPE_CHECKING:
 class DirectHTTPFile(Crawler, is_generic=True):
     DOMAIN: ClassVar[str] = "no_crawler"
 
+    @override
+    async def ready(self) -> bool:  # pyright: ignore[reportIncompatibleMethodOverride]
+        if not self._ready:
+            _ = self._init_downloader_()
+        return self._ready
+
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         try:
             filename, ext = get_filename_and_ext(scrape_item.url.name)
         except NoExtensionError:
-            filename, ext = get_filename_and_ext(scrape_item.url.name, forum=True)
+            filename, ext = get_filename_and_ext(scrape_item.url.name, xenforo=True)
 
         if ext not in constants.FileExt.MEDIA:
             raise ValueError

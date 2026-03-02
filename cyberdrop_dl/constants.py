@@ -27,7 +27,7 @@ HTTP_REGEX_LINKS = re.compile(
 
 
 class BlockedDomains:
-    partial_match = frozenset(
+    partial_match: frozenset[str] = frozenset(
         (
             "allmylinks.com",
             "amazon.com",
@@ -46,7 +46,7 @@ class BlockedDomains:
         )
     )
 
-    exact_match = frozenset()
+    exact_match: frozenset[str] = frozenset()
 
     if not env.ENABLE_TWITTER:
         partial_match = partial_match.union("twitter.com", ".x.com")

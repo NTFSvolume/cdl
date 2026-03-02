@@ -55,6 +55,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Coroutine, Generator, Iterable
     from http.cookies import BaseCookie
 
+    import yarl
     from bs4 import BeautifulSoup, Tag
     from curl_cffi.requests.impersonate import BrowserTypeLiteral
 
@@ -303,11 +304,18 @@ class Crawler(ABC):
         if self._USE_DOWNLOAD_SERVERS_LOCKS:
             self.client.download_limiter.register_server_lock(self.DOMAIN)
 
+    @property
+    def is_ready(self) -> bool:
+        return self._ready
+
+    @property
+    def enabled(self) -> bool:
+        return not self.disabled
+
     @final
-    async def ready(self) -> bool:
+    async def ready(self) -> None:
         if not self._ready:
             await self._async_init_()
-        return self._ready
 
     @property
     def waiting_items(self) -> int:
@@ -1001,14 +1009,12 @@ class Site:
 _CrawlerT = TypeVar("_CrawlerT", bound=Crawler)
 
 
-def create_crawlers(
-    urls: Iterable[str] | Iterable[AbsoluteHttpURL], base_crawler: type[_CrawlerT]
-) -> set[type[_CrawlerT]]:
+def create_crawlers(base_crawler: type[_CrawlerT], *urls: str | yarl.URL) -> set[type[_CrawlerT]]:
     """Creates new subclasses of the base crawler from the urls"""
     return {_create_subclass(url, base_crawler) for url in urls}
 
 
-def _create_subclass(url: AbsoluteHttpURL | str, base_class: type[_CrawlerT]) -> type[_CrawlerT]:
+def _create_subclass(url: yarl.URL | str, base_class: type[_CrawlerT]) -> type[_CrawlerT]:
     if isinstance(url, str):
         url = AbsoluteHttpURL(url)
     assert is_absolute_http_url(url)
