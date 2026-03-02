@@ -28,8 +28,8 @@ _HASHERS: Final = {
     HashAlgorithm.xxh128: xxhash.xxh128,
     HashAlgorithm.sha256: hashlib.sha256,
 }
-_DEFAULT_CHUNK_SIZE: Final = 1024 * 1024  # 1MB
-_VIDEO_CHUNK_SIZE: Final = _DEFAULT_CHUNK_SIZE * 10
+_1MB: Final = 1024 * 1024  # 1MB
+_10MB: Final = _1MB * 10
 HashValue = NewType("HashValue", str)
 
 
@@ -37,7 +37,6 @@ class HashResult(NamedTuple):
     hash: HashValue
     size: int
     mtime: int
-    seen_before: bool
 
 
 XXH128Result = NewType("XXH128Result", HashResult)
@@ -49,15 +48,16 @@ logger = logging.getLogger(__name__)
 
 
 async def hash_directory(manager: Manager, path: Path) -> None:
+    # TODO: make db a context manager
     await manager.async_db_hash_startup()
     await Hasher(manager.tui, manager.config, manager.db_manager).hash_folder(path)
     manager.tui.print_dedupe_stats()
     await manager.async_db_close()
 
 
-def _compute_hash(file: Path, algorithm: HashAlgorithm) -> HashValue:
+def compute_hash(file: Path, algorithm: HashAlgorithm) -> HashValue:
     assert file.is_absolute()
-    chunk_size = _VIDEO_CHUNK_SIZE if file.suffix.lower() in constants.FileExt.VIDEO else _DEFAULT_CHUNK_SIZE
+    chunk_size = _10MB if file.suffix.lower() in constants.FileExt.VIDEO else _1MB
     with file.open("rb") as fp:
         hash = _HASHERS[algorithm]()
         buffer = bytearray(chunk_size)  # Reusable buffer to reduce allocations
@@ -68,13 +68,11 @@ def _compute_hash(file: Path, algorithm: HashAlgorithm) -> HashValue:
     return HashValue(hash.hexdigest())
 
 
-async def compute_hash(file: Path, hash_type: HashAlgorithm) -> str:
-    return await asyncio.to_thread(_compute_hash, file, hash_type)
-
-
 @dataclasses.dataclass(slots=True)
 class Hasher:
-    """Manage hashes and db insertion."""
+    """Manage hashes and db insertion.
+
+    The hasher will have a peak RAM consumtion of  (concurrency * 10MB) while hashing"""
 
     tui: TUI
     config: Config
@@ -137,17 +135,17 @@ class Hasher:
         db_lookup = await self.database.hash_table.get_file_hash_exists(file, hash_algo)
 
         match db_lookup:
-            case [hash, size, mtime] if size == f_size:
-                if mtime is None:
-                    # TODO: logic here to delete db row
+            case [hash, db_size, db_mtime] if db_size == f_size:
+                if db_mtime is None:
+                    # TODO: pre v9 db row. We need to delete them
                     pass
 
                 self.tui.hashing.add_prev_hashed()
-                return HashResult(HashValue(hash), size, f_mtime, seen_before=True)
+                return HashResult(HashValue(hash), f_size, f_mtime)
             case _:
-                hash = await compute_hash(file, hash_algo)
+                hash = await asyncio.to_thread(compute_hash, file, hash_algo)
                 self.tui.hashing.add_hashed(hash_algo)
-                return HashResult(HashValue(hash), f_size, f_mtime, seen_before=False)
+                return HashResult(HashValue(hash), f_size, f_mtime)
 
     async def in_place_hash(self, media_item: MediaItem) -> None:
         if self.config.dedupe.hashing is not Hashing.IN_PLACE:
@@ -195,9 +193,7 @@ class Czkawka:
         """cleanup files based on dedupe setting"""
         async with asyncio.TaskGroup() as tg:
             for file, result in results.items():
-                if not result.seen_before:
-                    continue
-                # TODO: get hashes form db. We shoul query all files tih a matching result and only keep the first one
+                # TODO: We should query all files with a matching result from the db and only keep the oldest one
                 await self._sem.acquire()
                 _ = tg.create_task(self._delete_and_log(file, result.hash))
 
