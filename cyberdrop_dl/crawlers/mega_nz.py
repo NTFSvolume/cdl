@@ -52,11 +52,11 @@ class MegaNzCrawler(Crawler):
 
     @property
     def user(self) -> str | None:
-        return self.manager.auth_config.meganz.email or None
+        return self.manager.config.auth.meganz.email or None
 
     @property
     def password(self) -> str | None:
-        return self.manager.auth_config.meganz.password or None
+        return self.manager.config.auth.meganz.password or None
 
     def _init_downloader(self) -> MegaDownloader:
         self.core = MegaCore(MegaAPI(self.manager.client._aiohttp_session))

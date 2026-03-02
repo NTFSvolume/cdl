@@ -25,6 +25,7 @@ from cyberdrop_dl.cookies import get_cookies_from_browser, make_simple_cookie, r
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
 from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, ScrapeError
 from cyberdrop_dl.logger import spacer
+from cyberdrop_dl.utils import best_match
 
 _curl_import_error = None
 try:
@@ -413,15 +414,9 @@ class HTTPClient:
         if "json" not in response.content_type:
             return
 
-        if check := self.json_resp_checkers.get(response.url.host):
-            check(await response.json())
+        if check := best_match(response.url.host, self.json_resp_checkers):
+            check(await response.json(), response)
             return
-
-        for domain, check in self.json_resp_checkers.items():
-            if domain in response.url.host:
-                self.json_resp_checkers[response.url.host] = check
-                check(await response.json())
-                return
 
     def _prepare_headers(self, headers: Mapping[str, str] | None = None) -> CIMultiDict[str]:
         """Add default headers and transform it to CIMultiDict"""

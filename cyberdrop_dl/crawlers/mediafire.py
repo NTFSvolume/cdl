@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 
     from bs4 import BeautifulSoup
 
+    from cyberdrop_dl.clients.response import AbstractResponse
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
 
@@ -66,9 +67,10 @@ class MediaFireCrawler(Crawler):
         self.api = MediaFireAPI(self)
 
     @classmethod
-    def _json_response_check(cls, json_resp: Any) -> None:
+    def _json_resp_check_(cls, json_resp: dict[str, Any], _resp: AbstractResponse) -> None:
         if not isinstance(json_resp, dict) or "response" not in json_resp:
             return
+
         resp: dict[str, Any] = json_resp["response"]
         if resp["result"] != "Success":
             code: int = resp["error"]

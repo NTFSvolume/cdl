@@ -12,6 +12,7 @@ from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import error_handling_wrapper
 
 if TYPE_CHECKING:
+    from cyberdrop_dl.clients.response import AbstractResponse
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
 
@@ -112,7 +113,7 @@ class PixelDrainCrawler(Crawler):
             )
 
     @classmethod
-    def _json_response_check(cls, json_resp: dict[str, Any]) -> None:
+    def _json_resp_check_(cls, json_resp: dict[str, Any], resp: AbstractResponse) -> None:
         # TODO: pass the resp obj to the json check functions
         return
         if not json_resp["success"]:

@@ -6,6 +6,8 @@ import re
 from hashlib import sha256
 from typing import TYPE_CHECKING, ClassVar, Literal, NotRequired, TypedDict, TypeGuard
 
+from typing_extensions import override
+
 from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import FILE_HOST_ALBUM, AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.exceptions import PasswordProtectedError, ScrapeError
@@ -15,6 +17,8 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Iterable
 
     from typing_extensions import ReadOnly
+
+    from cyberdrop_dl.clients.response import AbstractResponse
 
 
 _API_ENTRYPOINT = AbsoluteHttpURL("https://api.gofile.io")
@@ -98,8 +102,9 @@ class GoFileCrawler(Crawler):
     def __post_init__(self) -> None:
         self.headers: dict[str, str] = {}
 
+    @override
     @classmethod
-    def _json_response_check(cls, json_resp: Response) -> None:
+    def _json_resp_check_(cls, json_resp: Response, resp: AbstractResponse) -> None:
         if not isinstance(json_resp, dict):
             return
         if "notFound" in json_resp["status"]:
@@ -221,7 +226,7 @@ class GoFileCrawler(Crawler):
             self.update_cookies({"accountToken": api_key})
 
     async def _get_api_key(self) -> str:
-        if key := self.manager.auth_config.gofile.api_key:
+        if key := self.manager.config.auth.gofile.api_key:
             return key
 
         api_url = _API_ENTRYPOINT / "accounts"

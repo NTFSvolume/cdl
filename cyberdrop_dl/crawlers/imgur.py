@@ -8,6 +8,7 @@ from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between
 
 if TYPE_CHECKING:
+    from cyberdrop_dl.clients.response import AbstractResponse
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
 _API_ENTRYPOINT = AbsoluteHttpURL("https://api.imgur.com/3/")
@@ -31,7 +32,7 @@ class ImgurCrawler(Crawler):
         self.client_id: str = ""
 
     @classmethod
-    def _json_response_check(cls, json_resp: dict[str, Any]) -> None:
+    def _json_resp_check_(cls, json_resp: dict[str, Any], resp: AbstractResponse) -> None:
         if data := json_resp.get("data"):
             raise ScrapeError(json_resp["status"], data["error"])
 

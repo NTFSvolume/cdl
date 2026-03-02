@@ -5,9 +5,9 @@ import dataclasses
 import datetime
 import logging
 import re
-from collections.abc import AsyncGenerator, Generator
+from collections import defaultdict
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, Self, TypeVar
 
 from cyberdrop_dl import aio, plugins
 from cyberdrop_dl.clients.jdownloader import JDownloader
@@ -21,19 +21,19 @@ from cyberdrop_dl.crawlers.wordpress import WordPressHTMLCrawler, WordPressMedia
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.exceptions import JDownloaderError, NoExtensionError
 from cyberdrop_dl.logger import spacer
-from cyberdrop_dl.utils import get_download_path, match_host_to_domain, remove_trailing_slash
+from cyberdrop_dl.utils import best_match, get_download_path, parse_url, remove_trailing_slash
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterable, Coroutine, Generator, Iterable
+    from collections.abc import AsyncGenerator, AsyncIterable, AsyncIterator, Coroutine, Generator, Iterable
 
     import aiosqlite
 
     from cyberdrop_dl.config import Config
     from cyberdrop_dl.crawlers import Crawler
+    from cyberdrop_dl.database import Database
     from cyberdrop_dl.manager import Manager
 
     CrawlerT = TypeVar("CrawlerT", bound=Crawler)
-    _T_co = TypeVar("_T_co", covariant=True)
 
 _seen_urls: set[AbsoluteHttpURL] = set()
 _crawlers_disabled_at_runtime: set[str] = set()
@@ -73,21 +73,28 @@ class CrawlerFactory:
 
 
 @dataclasses.dataclass(slots=True, eq=False)
-class ScrapeSource:
-    """Wrap an async generator to get stats"""
+class AsyncStatsWrapper:
+    """Wraps an async ScrapeItem iterator and collects basic statistics while iterating."""
 
-    _gen = AsyncGenerator[ScrapeItem]
-    _input_file: Path | None = None
-    count: int = 0
-    groups: set[str] = dataclasses.field(default_factory=set)
-
-    @property
-    def group_count(self) -> int:
-        return len(self.groups)
+    _source: AsyncIterator[ScrapeItem]
+    count: int = dataclasses.field(init=False, default=0)
+    groups: list[str] = dataclasses.field(init=False, default_factory=list)
+    url_count: dict[str, int] = dataclasses.field(init=False, default_factory=lambda: defaultdict(int))
 
     @property
-    def using_input_file(self) -> bool:
-        return self._input_file is not None
+    def unique_groups(self) -> list[str]:
+        return list(dict.fromkeys(self.groups))
+
+    def __aiter__(self) -> Self:
+        return self
+
+    async def __anext__(self) -> ScrapeItem:
+        item = await self._source.__anext__()
+        self.count += 1
+        if item.parent_title:
+            self.groups.append(item.parent_title)
+        self.url_count[item.url.host] += 1
+        return item
 
 
 async def from_urls(source: Iterable[AbsoluteHttpURL]) -> AsyncGenerator[ScrapeItem, None]:
@@ -99,8 +106,6 @@ async def from_file(file: Path) -> AsyncGenerator[ScrapeItem]:
     """Loads links from args / input file."""
     async for group_name, urls in _parse_input_file_groups(file):
         for url in urls:
-            if not url:
-                continue
             item = ScrapeItem(url=url)
             if group_name:
                 item.add_to_parent_title(group_name)
@@ -108,11 +113,11 @@ async def from_file(file: Path) -> AsyncGenerator[ScrapeItem]:
             yield item
 
 
-async def _parse_input_file_groups(input_file: Path) -> AsyncGenerator[tuple[str, list[AbsoluteHttpURL]]]:
+async def _parse_input_file_groups(input_file: Path) -> AsyncGenerator[tuple[str | None, list[AbsoluteHttpURL]]]:
     """Split URLs from input file by their groups."""
 
     if not await aio.is_file(input_file):
-        yield ("", [])
+        yield (None, [])
         return
 
     block_quote = False
@@ -128,7 +133,21 @@ async def _parse_input_file_groups(input_file: Path) -> AsyncGenerator[tuple[str
 
             block_quote = not block_quote if line == "#\n" else block_quote
             if not block_quote:
-                yield ("", list(regex_links(line)))
+                yield (None, list(regex_links(line)))
+
+
+async def load_failed_links(database: Database) -> AsyncGenerator[ScrapeItem]:
+    """Loads failed links from database."""
+    async for rows in database.history_table.get_failed_items():
+        for row in rows:
+            yield _create_item_from_row(row)
+
+
+async def load_bunkr_fails_via_hash(database: Database) -> AsyncGenerator[ScrapeItem]:
+    """Loads all bunkr links with maintenance hash."""
+    async for rows in database.history_table.get_all_bunkr_failed():
+        for row in rows:
+            yield _create_item_from_row(row)
 
 
 class ScrapeMapper:
@@ -139,15 +158,18 @@ class ScrapeMapper:
         self.config: Config = manager.config
         self.crawlers: dict[str, type[Crawler]] = {}
         self.factory: CrawlerFactory = CrawlerFactory(manager)
-        self.direct_http: DirectHTTPFile = DirectHTTPFile(self.manager)
+        self.direct_http: DirectHTTPFile = DirectHTTPFile(manager)
         self.jdownloader: JDownloader = JDownloader.from_config(self.config)
         self.crawlers["real-debrid"] = RealDebridCrawler
         self.real_debrid: RealDebridCrawler = self.factory[RealDebridCrawler]
+        self._ready: bool = False
 
     def _create_task(self, coro: Coroutine[Any, Any, Any]) -> None:
         _ = self.manager.task_group.create_task(coro)
 
     async def ready(self) -> None:
+        if self._ready:
+            return
         self.crawlers.update(get_crawlers_mapping())
         generic_crawlers = create_generic_crawlers(self.config)
         for crawler in generic_crawlers:
@@ -156,6 +178,7 @@ class ScrapeMapper:
         disable_crawlers(self.crawlers, self.config)
         plugins.load(self.manager)
         _ = await asyncio.gather(self.jdownloader.ready(), self.real_debrid.ready(), self.direct_http.ready())
+        self._ready = True
 
     async def run(self, source: AsyncIterable[ScrapeItem]) -> None:
         """Starts the orchestra."""
@@ -163,18 +186,6 @@ class ScrapeMapper:
         async for item in source:
             item._children_limits = self.config.download.max_children
             self._create_task(self.send_to_crawler(item))
-
-    async def load_failed_links(self) -> AsyncGenerator[ScrapeItem]:
-        """Loads failed links from database."""
-        async for rows in self.manager.database.history_table.get_failed_items():
-            for row in rows:
-                yield _create_item_from_row(row)
-
-    async def load_all_bunkr_failed_links_via_hash(self) -> AsyncGenerator[ScrapeItem]:
-        """Loads all bunkr links with maintenance hash."""
-        async for rows in self.manager.database.history_table.get_all_bunkr_failed():
-            for row in rows:
-                yield _create_item_from_row(row)
 
     async def filter_and_send_to_crawler(self, scrape_item: ScrapeItem) -> None:
         """Send scrape_item to a supported crawler."""
@@ -184,13 +195,9 @@ class ScrapeMapper:
     async def send_to_crawler(self, scrape_item: ScrapeItem) -> None:
         """Maps URLs to their respective handlers."""
         scrape_item.url = remove_trailing_slash(scrape_item.url)
-        crawler = match_host_to_domain(
-            scrape_item.url.host,
-            self.crawlers,
-        )
 
-        if crawler:
-            crawler = self.factory[crawler]
+        if cls := best_match(scrape_item.url.host, self.crawlers):
+            crawler = self.factory[cls]
             await crawler.ready()
             self._create_task(crawler.run(scrape_item))
             return
@@ -207,9 +214,9 @@ class ScrapeMapper:
         except (NoExtensionError, ValueError):
             pass
 
-        if self.jdownloader.is_whitelisted(scrape_item.url):
-            logger.info(f"Sending unsupported URL to JDownloader: {scrape_item.url}", 20)
-            success = False
+        if self.jdownloader.enabled and self.jdownloader.is_whitelisted(scrape_item.url):
+            logger.info(f"Sending unsupported URL to JDownloader: {scrape_item.url}")
+
             try:
                 download_folder = get_download_path(self.manager, scrape_item, "jdownloader")
                 relative_download_dir = download_folder.relative_to(self.config.files.download_folder)
@@ -220,8 +227,10 @@ class ScrapeMapper:
                 )
                 success = True
             except JDownloaderError as e:
-                logger.info(f"Failed to send {scrape_item.url} to JDownloader\n{e.message}", 40)
+                logger.error(f"Failed to send {scrape_item.url} to JDownloader\n{e.message}")
                 self.manager.logs.write_unsupported(scrape_item.url, scrape_item)
+                success = False
+
             self.manager.tui.scrape_errors.add_unsupported(sent_to_jdownloader=success)
             return
 
@@ -296,10 +305,9 @@ def regex_links(line: str) -> Generator[AbsoluteHttpURL]:
     http_urls = (x.group().replace(".md.", ".") for x in re.finditer(REGEX_LINKS, line))
     for link in http_urls:
         try:
-            encoded = "%" in link
-            yield AbsoluteHttpURL(link, encoded=encoded)
+            yield parse_url(link)
         except Exception as e:
-            logger.info(f"Unable to parse URL from input file: {link} {e:!r}", 40)
+            logger.error(f"Unable to parse URL from input file: {link} {e:!r}")
 
 
 def _create_item_from_row(row: aiosqlite.Row) -> ScrapeItem:
@@ -342,7 +350,7 @@ def register_crawler(
         other = existing_crawlers.get(domain)
         if from_user:
             if not other and (
-                match := match_host_to_domain(
+                match := best_match(
                     crawler.PRIMARY_URL.host,
                     existing_crawlers,
                 )
@@ -356,7 +364,7 @@ def register_crawler(
                 )
                 if from_user == "raise":
                     raise ValueError(msg)
-                logger.info(msg, 40)
+                logger.error(msg)
                 continue
             else:
                 logger.info(f"Successfully mapped {crawler.PRIMARY_URL} to generic crawler {crawler.GENERIC_NAME}")

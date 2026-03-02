@@ -13,6 +13,7 @@ from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import error_handling_wrapper
 
 if TYPE_CHECKING:
+    from cyberdrop_dl.clients.response import AbstractResponse
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
 logger = logging.getLogger(__name__)
@@ -66,7 +67,7 @@ class RealDebridCrawler(Crawler):
     _RATE_LIMIT: ClassVar[RateLimit] = 250, 60
 
     @classmethod
-    def _json_response_check(cls, json_resp: dict[str, Any]) -> None:
+    def _json_resp_check_(cls, json_resp: dict[str, Any], _resp: AbstractResponse) -> None:
         if code := json_resp.get("error_code"):
             code = 7 if code == 16 else code
             msg = _ERROR_CODES.get(code, "Unknown error").capitalize()
@@ -74,7 +75,7 @@ class RealDebridCrawler(Crawler):
             raise ScrapeError(ui_failure, msg)
 
     def __post_init__(self) -> None:
-        token = self.manager.auth_config.realdebrid.api_key
+        token = self.manager.config.auth.realdebrid.api_key
         self.disabled = not bool(token)
         self.api = RealDebridAPI(self, token)
 

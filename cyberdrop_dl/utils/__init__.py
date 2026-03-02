@@ -192,12 +192,6 @@ def error_handling_wrapper(
     return wrapper
 
 
-"""~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
-
-
-"""~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
-
-
 def _get_size(path: os.DirEntry[str]) -> int | None:
     try:
         return path.stat(follow_symlinks=False).st_size
@@ -205,17 +199,19 @@ def _get_size(path: os.DirEntry[str]) -> int | None:
         return
 
 
-def match_host_to_domain(host: str, domains: dict[str, _T]) -> _T | None:
-    """get most restrictive domain if multiple domain matches"""
+def best_match(host: str, domains: dict[str, _T]) -> _T | None:
+    """Get the value whose key is is the longest substring of `domain`
+
+    If found, a key is added to make the next lookup is O(1)"""
     if found := domains.get(host):
         return found
     try:
-        domain = max((domain for domain in domains if domain in host), key=len)
+        best_match = max((domain for domain in domains if domain in host), key=len)
 
     except (ValueError, TypeError):
         return
     else:
-        domains[host] = found = domains[domain]
+        domains[host] = found = domains[best_match]
         return found
 
 
@@ -341,10 +337,11 @@ def parse_url(link_str: URL | str, relative_to: AbsoluteHttpURL | None = None, *
 
     url = _str_to_url(link_str) if isinstance(link_str, str) else link_str
     if not url.absolute:
-        assert relative_to
+        if not relative_to:
+            raise InvalidURLError("Relative URL with no known base", url=link_str)
         url = relative_to.join(url)
     if not url.scheme:
-        url = url.with_scheme("https")
+        url = url.with_scheme(relative_to.scheme if relative_to else "https")
     assert is_absolute_http_url(url)
     if not trim:
         return url
