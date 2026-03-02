@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+from abc import ABC, abstractmethod
 from json import loads as json_loads
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Any, Generic, TypeVar, final
 
 import aiohttp.multipart
 from aiohttp import ClientResponse
@@ -12,6 +13,7 @@ from aiohttp.client_reqrep import ContentDisposition
 from bs4 import BeautifulSoup
 from multidict import CIMultiDict, CIMultiDictProxy
 from propcache import under_cached_property
+from typing_extensions import TypeIs
 
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import InvalidContentTypeError, ScrapeError
@@ -24,9 +26,14 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.clients.flaresolverr import FlareSolverrSolution
 
+    _ResponseT = TypeVar("_ResponseT", bound=ClientResponse | CurlResponse | None)
+else:
+    _ResponseT = object
+    CurlResponse = object
+
 
 @dataclasses.dataclass(slots=True, weakref_slot=True)
-class AbstractResponse:
+class AbstractResponse(ABC, Generic[_ResponseT]):
     """
     Class to represent common methods and attributes between:
         - `aiohttp.ClientResponse`
@@ -40,20 +47,44 @@ class AbstractResponse:
     url: AbsoluteHttpURL
     location: AbsoluteHttpURL | None
 
-    _resp: ClientResponse | CurlResponse | None = None
-    _text: str = ""
+    _resp: _ResponseT
+    _text: str
     _cache: dict[str, Any] = dataclasses.field(init=False, default_factory=dict)
     _read_lock: asyncio.Lock = dataclasses.field(init=False, default_factory=asyncio.Lock)
 
-    @classmethod
-    def from_resp(cls, response: ClientResponse | CurlResponse) -> Self:
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__} [{self.status}] ({self.url})>"
+
+    @staticmethod
+    def is_aiohttp(resp: AbstractResponse[Any]) -> TypeIs[_AIOHTTPResponse]:
+        return isinstance(resp._resp, ClientResponse)
+
+    @abstractmethod
+    async def _read(self) -> bytes: ...
+
+    @abstractmethod
+    async def _read_text(self, encoding: str | None = None) -> str: ...
+
+    @abstractmethod
+    def iter_chunked(self, size: int) -> AsyncIterator[bytes]: ...
+
+    def _check_content_type(self, *content_types: str, expecting: str) -> None:
+        if not any(type_ in self.content_type for type_ in content_types):
+            msg = f"Received {self.content_type}, was expecting {expecting}"
+            raise InvalidContentTypeError(message=msg)
+
+    @final
+    @staticmethod
+    def from_resp(response: ClientResponse | CurlResponse) -> _AIOHTTPResponse | _CurlResponse:
         if isinstance(response, ClientResponse):
             status = response.status
             headers = response.headers
+            cls = _AIOHTTPResponse
         else:
             status = response.status_code
             multi_items = ((k, v) for k, v in response.headers.multi_items() if v is not None)
             headers = CIMultiDictProxy(CIMultiDict(multi_items))
+            cls = _CurlResponse
 
         url = AbsoluteHttpURL(response.url)
         content_type, location = cls.parse_headers(url, headers)
@@ -63,21 +94,25 @@ class AbstractResponse:
             headers=headers,
             url=url,
             location=location,
-            _resp=response,
+            _text="",
+            _resp=response,  # pyright: ignore[reportArgumentType]
         )
 
-    @classmethod
-    def from_flaresolverr(cls, solution: FlareSolverrSolution) -> Self:
-        content_type, location = cls.parse_headers(solution.url, solution.headers)
-        return cls(
+    @final
+    @staticmethod
+    def from_flaresolverr(solution: FlareSolverrSolution) -> _FlareSolverrResponse:
+        content_type, location = AbstractResponse.parse_headers(solution.url, solution.headers)
+        return _FlareSolverrResponse(
             content_type=content_type,
             status=solution.status,
             headers=solution.headers,
             url=solution.url,
             location=location,
             _text=solution.content,
+            _resp=None,
         )
 
+    @final
     @staticmethod
     def parse_headers(url: AbsoluteHttpURL, headers: CIMultiDictProxy[str]) -> tuple[str, AbsoluteHttpURL | None]:
         if location := headers.get("location"):
@@ -88,6 +123,7 @@ class AbstractResponse:
         content_type = (headers.get("Content-Type") or "").lower()
         return content_type, location
 
+    @final
     @under_cached_property
     def content_disposition(self) -> ContentDisposition:
         header = self.headers["Content-Disposition"]
@@ -96,6 +132,7 @@ class AbstractResponse:
         filename = aiohttp.multipart.content_disposition_filename(params)
         return ContentDisposition(disposition_type, params, filename)
 
+    @final
     @property
     def filename(self) -> str:
         assert self.content_disposition.filename
@@ -113,29 +150,23 @@ class AbstractResponse:
         """
         return self.status < 400
 
+    @final
     async def read(self) -> bytes:
-        assert self._resp is not None
         async with self._read_lock:
-            if isinstance(self._resp, ClientResponse):
-                return await self._resp.read()
-            return await self._resp.acontent()
+            return await self._read()
 
+    @final
     async def text(self, encoding: str | None = None) -> str:
         if self._text:
             return self._text
 
-        assert self._resp is not None
         async with self._read_lock:
             if self._text:
                 return self._text
-            if isinstance(self._resp, ClientResponse):
-                self._text = await self._resp.text(encoding)
-            else:
-                if encoding:
-                    self._resp.encoding = encoding
-                self._text = await self._resp.atext()
-        return self._text
+            self._text = await self._read_text(encoding)
+            return self._text
 
+    @final
     async def soup(self, encoding: str | None = None) -> BeautifulSoup:
         self._check_content_type("text", "html", expecting="HTML")
         content = await self.text(encoding)
@@ -143,6 +174,7 @@ class AbstractResponse:
             raise ScrapeError(204, "Received empty html response")
         return BeautifulSoup(content, "html.parser")
 
+    @final
     async def json(self, encoding: str | None = None, content_type: str | bool = True) -> Any:
         if self.status == 204:
             raise ScrapeError(204)
@@ -157,17 +189,44 @@ class AbstractResponse:
 
         return json_loads(await self.text(encoding))
 
-    def _check_content_type(self, *content_types, expecting: str):
-        if not any(type_ in self.content_type for type_ in content_types):
-            msg = f"Received {self.content_type}, was expecting {expecting}"
-            raise InvalidContentTypeError(message=msg)
+
+class _FlareSolverrResponse(AbstractResponse[None]):
+    __slots__ = ()
+
+    async def _read(self) -> bytes:
+        return self._text.encode()
+
+    async def _read_text(self, encoding: str | None = None) -> str:
+        return self._text
+
+    async def iter_chunked(self, size: int) -> AsyncIterator[bytes]:
+        yield await self._read()
+
+
+class _AIOHTTPResponse(AbstractResponse[ClientResponse]):
+    __slots__ = ()
+
+    async def _read(self) -> bytes:
+        return await self._resp.read()
+
+    async def _read_text(self, encoding: str | None = None) -> str:
+        return await self._resp.text(encoding)
 
     def iter_chunked(self, size: int) -> AsyncIterator[bytes]:
-        assert self._resp
-        if isinstance(self._resp, ClientResponse):
-            return self._resp.content.iter_chunked(size)
+        return self._resp.content.iter_chunked(size)
+
+
+class _CurlResponse(AbstractResponse[CurlResponse]):
+    __slots__ = ()
+
+    async def _read(self) -> bytes:
+        return await self._resp.acontent()
+
+    async def _read_text(self, encoding: str | None = None) -> str:
+        if encoding:
+            self._resp.encoding = encoding
+        return await self._resp.atext()
+
+    def iter_chunked(self, size: int) -> AsyncIterator[bytes]:
         # Curl does not support size. We get chunks as they come
         return self._resp.aiter_content()
-
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} [{self.status}] ({self.url})>"
