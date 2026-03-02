@@ -1,18 +1,20 @@
 from __future__ import annotations
 
+import logging
 import sqlite3
 from collections import Counter
 from typing import TYPE_CHECKING
 
 import pytest
-
-from cyberdrop_dl import appdata, config
 from cyberdrop_dl.clients.hash_client import hash_directory_scanner
 
+from cyberdrop_dl import appdata, config
+
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from cyberdrop_dl.managers import Manager
+    from cyberdrop_dl.manager import Manager
 
 
 def get_hashes(path: Path) -> set[tuple[str, str]]:

@@ -17,10 +17,11 @@ from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError
 from cyberdrop_dl.tui import show_msg
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from cyberdrop_dl.clients.http import HttpClient
+    from cyberdrop_dl.clients.http import HTTPClient
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +74,7 @@ class _FlareSolverrResponse:
 class FlareSolverr:
     """Class that handles communication with flaresolverr."""
 
-    client: HttpClient
+    client: HTTPClient
     url: AbsoluteHttpURL | None = None
 
     _session_id: str = dataclasses.field(init=False, default="")

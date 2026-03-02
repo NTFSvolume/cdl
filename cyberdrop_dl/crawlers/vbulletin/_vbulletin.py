@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import dataclasses
 import itertools
+import logging
 from typing import TYPE_CHECKING, ClassVar
 from xml.etree import ElementTree
 
 from cyberdrop_dl.crawlers.xenforo.xenforo import XenforoCrawler
 from cyberdrop_dl.exceptions import MaxChildrenError, ScrapeError
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     import datetime
     from collections.abc import Iterable

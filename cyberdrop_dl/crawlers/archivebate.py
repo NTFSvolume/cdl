@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers.mixdrop import MixDropCrawler
@@ -7,6 +8,7 @@ from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, open_graph
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.crawlers.crawler import SupportedDomains, SupportedPaths
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
@@ -56,10 +58,10 @@ class ArchiveBateCrawler(MixDropCrawler):
         url = scrape_item.url
         # Can't use check_complete_by_referer. We need the mixdrop url for that
         db_path = self._create_db_path_(url)
-        check_complete = await self.manager.db_manager.history_table.check_complete(self.DOMAIN, url, url, db_path)
+        check_complete = await self.manager.database.history_table.check_complete(self.DOMAIN, url, url, db_path)
         if check_complete:
             self.logger(f"Skipping {scrape_item.url} as it has already been downloaded", 10)
-            self.manager.tui.files.add_previously_completed()
+            self.manager.tui.files.add_prev_completed()
             return
 
         soup = await self.request_soup(scrape_item.url)

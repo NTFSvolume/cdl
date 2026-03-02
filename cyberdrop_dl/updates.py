@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 from cyberdrop_dl import __version__ as current
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     import aiohttp
 

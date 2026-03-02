@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import logging
 from contextvars import ContextVar
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
@@ -13,6 +14,7 @@ from rich.progress import BarColumn, Progress
 
 from cyberdrop_dl.tui.common import ColumnsType, OverflowingPanel, TaskCounter
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Generator
 

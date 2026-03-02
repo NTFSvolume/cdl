@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import enum
+import logging
 import sys
 from typing import TYPE_CHECKING, TypeVar
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Iterator
 

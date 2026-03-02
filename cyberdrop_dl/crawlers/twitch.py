@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import dataclasses
 import json
+import logging
 from typing import TYPE_CHECKING, Any, ClassVar, Final, Literal
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
@@ -11,6 +12,7 @@ from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import error_handling_wrapper, parse_url
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Generator
 

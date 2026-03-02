@@ -43,11 +43,12 @@ from cyberdrop_dl.exceptions import (
 
 from . import json
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Generator, Mapping
 
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
-    from cyberdrop_dl.managers import Manager
+    from cyberdrop_dl.manager import Manager
 
     _P = ParamSpec("_P")
     _T = TypeVar("_T")
@@ -203,6 +204,20 @@ def _get_size(path: os.DirEntry[str]) -> int | None:
         return path.stat(follow_symlinks=False).st_size
     except (OSError, ValueError):
         return
+
+
+def match_host_to_domain(host: str, domains: dict[str, _T]) -> _T | None:
+    """get most restrictive domain if multiple domain matches"""
+    if found := domains.get(host):
+        return found
+    try:
+        domain = max((domain for domain in domains if domain in host), key=len)
+
+    except (ValueError, TypeError):
+        return
+    else:
+        domains[host] = found = domains[domain]
+        return found
 
 
 def check_partials_and_empty_folders(config: config.Config) -> None:

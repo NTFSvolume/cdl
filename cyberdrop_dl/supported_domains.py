@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from cyberdrop_dl.crawlers import FORUM_CRAWLERS, WEBSITE_CRAWLERS
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Iterable
 

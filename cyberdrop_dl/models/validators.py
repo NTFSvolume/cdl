@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import logging
 import re
 from datetime import timedelta
 from typing import TYPE_CHECKING, Literal, SupportsIndex, SupportsInt, TypeAlias, TypeVar
 
 from pydantic import ByteSize, TypeAdapter
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path

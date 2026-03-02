@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import random
 import string
 from datetime import UTC, datetime
@@ -9,6 +10,7 @@ from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPa
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from bs4 import BeautifulSoup
 

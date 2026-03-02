@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
+import logging
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl.crawlers._kvs import extract_kvs_video
@@ -8,6 +9,7 @@ from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures import AbsoluteHttpURL, Resolution
 from cyberdrop_dl.utils import css, error_handling_wrapper, filter_query
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 

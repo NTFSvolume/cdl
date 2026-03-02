@@ -12,6 +12,7 @@ Xenforo sites have a REST API but the APi is private only. Admins of the site ne
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import TYPE_CHECKING, ClassVar
 
 from bs4 import BeautifulSoup
@@ -21,6 +22,7 @@ from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import LoginError, ScrapeError
 from cyberdrop_dl.utils import css, error_handling_wrapper
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 

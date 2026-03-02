@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -9,6 +10,7 @@ from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, json
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from bs4 import BeautifulSoup
 
@@ -147,7 +149,7 @@ class OdnoklassnikiCrawler(Crawler):
         )
 
     def _get_download_headers(self, referer: AbsoluteHttpURL) -> dict[str, str]:
-        return super()._get_download_headers(referer) | {
+        return super()._download_headers_(referer) | {
             "Accept-Language": "en-gb, en;q=0.8",
             "User-Agent": _CHROME_ANDROID_USER_AGENT,
             "Referer": "https://m.ok.ru/",

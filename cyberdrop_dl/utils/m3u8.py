@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import timedelta
 from enum import StrEnum
@@ -13,6 +14,7 @@ from m3u8 import Media, Playlist
 from cyberdrop_dl.data_structures.mediaprops import Codecs, Resolution
 from cyberdrop_dl.utils import parse_url
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
 

@@ -17,6 +17,7 @@ from pydantic import ByteSize
 
 from cyberdrop_dl.exceptions import InsufficientFreeSpaceError
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 

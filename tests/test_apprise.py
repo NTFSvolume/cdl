@@ -9,7 +9,7 @@ from rich.text import Text
 
 from cyberdrop_dl import constants
 from cyberdrop_dl.constants import NotificationResult
-from cyberdrop_dl.managers import Manager
+from cyberdrop_dl.manager import Manager
 from cyberdrop_dl.utils import apprise
 from tests.fake_classes.managers import FakeCacheManager
 

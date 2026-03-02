@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
+import logging
 from collections import deque
 from types import MappingProxyType
 from typing import TYPE_CHECKING, ClassVar, Final, Self
@@ -10,6 +11,7 @@ from rich.markup import escape
 from rich.panel import Panel
 from rich.progress import Progress, ProgressColumn, Task, TaskID
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Callable
 

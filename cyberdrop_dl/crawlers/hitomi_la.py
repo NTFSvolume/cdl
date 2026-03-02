@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import re
 import struct
 from collections import defaultdict
@@ -13,6 +14,7 @@ from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import error_handling_wrapper, get_filename_and_ext
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 

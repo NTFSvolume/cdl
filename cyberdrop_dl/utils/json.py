@@ -8,11 +8,13 @@ import functools
 import json
 import json.decoder
 import json.scanner
+import logging
 import re
 import time
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple, ParamSpec, Protocol, Self, TypeGuard, TypeVar
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
     from pathlib import Path

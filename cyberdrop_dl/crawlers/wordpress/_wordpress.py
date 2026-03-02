@@ -9,6 +9,7 @@ from __future__ import annotations
 import dataclasses
 import datetime
 import itertools
+import logging
 import re
 from abc import abstractmethod
 from typing import TYPE_CHECKING, ClassVar, TypeVar, final
@@ -24,6 +25,7 @@ from cyberdrop_dl.utils.dates import to_timestamp
 
 from .models import HTML, Category, CategorySequence, ColletionType, Post, PostSequence, Tag, TagSequence
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncIterable, Iterable
 

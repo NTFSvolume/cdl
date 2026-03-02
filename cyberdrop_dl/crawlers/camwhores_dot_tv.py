@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers._kvs import KernelVideoSharingCrawler
@@ -7,6 +8,7 @@ from cyberdrop_dl.crawlers.porntrex import PorntrexCrawler
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.utils import css
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.crawlers.crawler import SupportedPaths
 

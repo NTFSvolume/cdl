@@ -15,6 +15,7 @@ from cyberdrop_dl import config, constants
 from cyberdrop_dl.ffmpeg import probe
 from cyberdrop_dl.utils import delete_empty_files_and_folders, strings
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Iterable
 

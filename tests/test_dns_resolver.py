@@ -2,8 +2,7 @@ import asyncio
 
 from aiohttp import resolver
 
-from cyberdrop_dl import constants
-from cyberdrop_dl.managers import http
+from cyberdrop_dl import constants, http
 
 
 def test_dns_resolver_should_be_async_on_windows_macos_and_linux() -> None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 from pydantic import BaseModel
@@ -11,6 +12,7 @@ from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedDomains, 
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import error_handling_wrapper
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
@@ -106,7 +108,7 @@ class PixelDrainCrawler(Crawler):
     def __post_init__(self) -> None:
         self._headers: dict[str, str] = {}
         if api_key := config.get().auth.pixeldrain.api_key:
-            self._headers["Authorization"] = self.manager.http_client.basic_auth(
+            self._headers["Authorization"] = self.manager.client.basic_auth(
                 "Cyberdrop-DL",
                 api_key,
             )
@@ -284,4 +286,4 @@ class PixelDrainCrawler(Crawler):
     _file_task = auto_task_id(_file)
 
     def _get_download_headers(self, referer: AbsoluteHttpURL) -> dict[str, str]:
-        return super()._get_download_headers(referer=referer) | self._headers
+        return super()._download_headers_(referer=referer) | self._headers

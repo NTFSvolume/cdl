@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
@@ -13,6 +14,7 @@ from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import css, error_handling_wrapper
 from cyberdrop_dl.utils.dates import TimeStamp, to_timestamp
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from bs4 import Tag
 

@@ -31,6 +31,7 @@ _MAIN_LOGGER: ContextVar[LogHandler] = ContextVar("_MAIN_LOGGER")
 MAX_LOGS_SIZE = 25 * 1024 * 1024  # 25MB
 
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     import threading
     from collections.abc import Callable, Generator, Iterable

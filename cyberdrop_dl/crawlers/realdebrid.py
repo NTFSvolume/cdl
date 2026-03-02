@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.logger import log
 from cyberdrop_dl.utils import error_handling_wrapper
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
@@ -118,7 +119,7 @@ class RealDebridCrawler(Crawler):
         title = self.create_title(f"files [{url.host}]")
         scrape_item.setup_as_album(title)
         debrid_link = await self.api.unrestrict(url, scrape_item.password)
-        log(f"[{self.FOLDER_DOMAIN}]:\n  Original URL: {url}\n  Debrid URL: {debrid_link}", 10)
+        logger.info(f"[{self.FOLDER_DOMAIN}]:\n  Original URL: {url}\n  Debrid URL: {debrid_link}", 10)
         filename, ext = self.get_filename_and_ext(debrid_link.name)
         await self.handle_file(
             url,

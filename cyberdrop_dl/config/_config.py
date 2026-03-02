@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
+import logging
 from contextvars import ContextVar, Token
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, ClassVar, Self
@@ -13,6 +14,7 @@ from cyberdrop_dl.config.auth import AuthSettings
 from cyberdrop_dl.config.settings import ConfigSettings
 from cyberdrop_dl.models import get_model_fields, merge_models
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Iterable
 

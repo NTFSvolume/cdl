@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import itertools
+import logging
 import re
 from collections import defaultdict
 from collections.abc import Generator
@@ -21,6 +22,7 @@ from cyberdrop_dl.models.validators import falsy_as, falsy_as_none
 from cyberdrop_dl.utils import css, error_handling_wrapper, remove_parts
 from cyberdrop_dl.utils.dates import to_timestamp
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable, Coroutine, Generator
 

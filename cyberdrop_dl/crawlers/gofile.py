@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import itertools
+import logging
 import re
 from hashlib import sha256
 from typing import TYPE_CHECKING, ClassVar, Literal, NotRequired, TypedDict, TypeGuard
@@ -11,6 +12,7 @@ from cyberdrop_dl.data_structures.url_objects import FILE_HOST_ALBUM, AbsoluteHt
 from cyberdrop_dl.exceptions import PasswordProtectedError, ScrapeError
 from cyberdrop_dl.utils import error_handling_wrapper
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Iterable
 
@@ -239,7 +241,7 @@ class GoFileCrawler(Crawler):
         raise ScrapeError(401, "Couldn't generate GoFile websiteToken", origin=_GLOBAL_JS_URL)
 
     def _get_download_headers(self, referer: AbsoluteHttpURL) -> dict[str, str]:
-        return super()._get_download_headers(referer) | self.headers
+        return super()._download_headers_(referer) | self.headers
 
 
 def _check_node_is_accessible(node: Node) -> TypeGuard[File | Folder]:

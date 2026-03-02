@@ -69,7 +69,7 @@ class FileStatsPanel(UIPanel):
     def add_completed(self) -> None:
         self._increase_counter("completed")
 
-    def add_previously_completed(self) -> None:
+    def add_prev_completed(self) -> None:
         self._increase_counter("previously_completed")
 
     def add_skipped(self) -> None:

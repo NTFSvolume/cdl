@@ -15,6 +15,7 @@ from rich.layout import Layout
 from rich.live import Live
 from rich.text import Text
 
+from cyberdrop_dl.constants import HashAlgorithm
 from cyberdrop_dl.logger import spacer
 from cyberdrop_dl.tui.errors import DownloadErrors, ScrapeErrors, UIFailure
 from cyberdrop_dl.tui.files import FileStatsPanel
@@ -23,6 +24,7 @@ from cyberdrop_dl.tui.scrape import DownloadsPanel, ScrapingPanel, StatusMessage
 from cyberdrop_dl.tui.screens import AppScreens, Screen
 from cyberdrop_dl.tui.sorting import SortingPanel
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Generator
     from pathlib import Path
@@ -38,7 +40,7 @@ _tui: ContextVar[TUI] = ContextVar("_tui")
 @dataclasses.dataclass(slots=True)
 class TUI:
     refresh_rate: int = 10
-    enabled_hashes: tuple[str, ...] = ("xxh128",)
+    enabled_hashes: tuple[HashAlgorithm, ...] = (HashAlgorithm.xxh128,)
     disabled: bool = False
 
     # main scraping panels

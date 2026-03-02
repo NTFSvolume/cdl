@@ -9,6 +9,7 @@ from myjdapi import myjdapi
 
 from cyberdrop_dl.exceptions import JDownloaderError
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -52,7 +53,7 @@ class JDownloader:
     _device: Jddevice | None = dataclasses.field(default=None, init=False)
 
     @classmethod
-    def new(cls, options: Config | JDownloaderConfig, /) -> Self:
+    def from_config(cls, options: Config | JDownloaderConfig, /) -> Self:
         if not isinstance(options, JDownloaderConfig):
             options = JDownloaderConfig.from_config(options)
         return cls(options)

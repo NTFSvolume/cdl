@@ -14,6 +14,7 @@ from cyberdrop_dl.dependencies import apprise
 from cyberdrop_dl.logger import adopt_logger, get_logs_content, spacer
 from cyberdrop_dl.models import AppriseURL, format_validation_error
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
     from pathlib import Path

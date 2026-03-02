@@ -13,6 +13,7 @@ import asyncio
 import base64
 import dataclasses
 import datetime
+import logging
 import re
 from abc import abstractmethod
 from typing import TYPE_CHECKING, ClassVar, Protocol, final
@@ -27,6 +28,7 @@ from cyberdrop_dl.exceptions import LoginError, MaxChildrenError, ScrapeError
 from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, is_blob_or_svg
 from cyberdrop_dl.utils.dates import TimeStamp, to_timestamp
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Iterable, Sequence
 

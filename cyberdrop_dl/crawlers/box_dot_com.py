@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from collections import defaultdict
 from enum import StrEnum
 from pathlib import Path
@@ -14,6 +15,7 @@ from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.models import AliasModel
 from cyberdrop_dl.utils import css, error_handling_wrapper
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 

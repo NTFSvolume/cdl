@@ -4,6 +4,7 @@ import base64
 import codecs
 import dataclasses
 import json
+import logging
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
@@ -14,6 +15,7 @@ from cyberdrop_dl.data_structures.mediaprops import Resolution, Subtitle
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import error_handling_wrapper, m3u8, open_graph, parse_url
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Generator
 

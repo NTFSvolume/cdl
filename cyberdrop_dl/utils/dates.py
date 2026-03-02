@@ -3,11 +3,13 @@ from __future__ import annotations
 import asyncio
 import datetime
 import email.utils
+import logging
 import shutil
 import subprocess
 import sys
 from typing import TYPE_CHECKING, NewType
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from pathlib import Path
 

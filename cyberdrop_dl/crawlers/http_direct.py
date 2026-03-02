@@ -1,17 +1,19 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl import constants
 from cyberdrop_dl.crawlers.crawler import Crawler
 from cyberdrop_dl.exceptions import NoExtensionError
-from cyberdrop_dl.utils import get_filename_and_ext
+from cyberdrop_dl.utils.filepath import get_filename_and_ext
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
 
-class DirectHttpFile(Crawler, is_generic=True):
+class DirectHTTPFile(Crawler, is_generic=True):
     DOMAIN: ClassVar[str] = "no_crawler"
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:

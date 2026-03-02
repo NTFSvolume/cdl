@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import dataclasses
+import logging
 import shutil
 from typing import TYPE_CHECKING, Literal
 
+from cyberdrop_dl import env
+
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from rich.console import RenderableType
-
-
-from cyberdrop_dl import env
 
 
 def is_terminal_in_portrait() -> bool:

@@ -4,7 +4,7 @@ import pytest
 
 from cyberdrop_dl.clients.flaresolverr import FlareSolverr, _Command
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.managers import Manager
+from cyberdrop_dl.manager import Manager
 from cyberdrop_dl.scrape_mapper import ScrapeMapper
 
 ENV_NAME = "CDL_FLARESOLVERR"
@@ -17,7 +17,7 @@ pytestmark = pytest.mark.skipif(not FLARESOLVER_URL, reason=f"{ENV_NAME} environ
 async def flaresolverr(running_manager: Manager):
     async with ScrapeMapper.managed(running_manager) as scrape_mapper:
         await scrape_mapper.run()
-        flare = running_manager.http_client._flaresolverr
+        flare = running_manager.client._flaresolverr
         flare.url = AbsoluteHttpURL(FLARESOLVER_URL) / "v1"
         yield flare
 

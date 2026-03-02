@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import dataclasses
 import json
+import logging
 import re
 from collections.abc import Generator
 from pathlib import Path
@@ -16,6 +17,7 @@ from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError
 from cyberdrop_dl.utils import css, error_handling_wrapper, open_graph, parse_url, xor_decrypt
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import urllib.parse
 from typing import TYPE_CHECKING, Any, ClassVar, final
 
@@ -8,6 +9,7 @@ from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import PasswordProtectedError
 from cyberdrop_dl.utils import css, error_handling_wrapper, json, open_graph
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator
 

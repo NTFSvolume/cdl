@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, ParamSpec, TypeVar
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     _P = ParamSpec("_P")
     _R = TypeVar("_R")

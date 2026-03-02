@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 from unittest import mock
 
@@ -11,8 +12,9 @@ from cyberdrop_dl.crawlers import xenforo as crawlers
 from cyberdrop_dl.crawlers.xenforo import xenforo
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.managers import Manager
+from cyberdrop_dl.manager import Manager
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
     from pathlib import Path
@@ -74,7 +76,7 @@ async def post_startup_manager(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     downloads = str(tmp_path / "Downloads")
     monkeypatch.chdir(tmp_path)
     manager = Manager(("--appdata-folder", appdata, "-d", downloads))
-    await manager.async_startup()
+    await manager.run()
     yield manager
     await manager.async_db_close()
     await manager.close()

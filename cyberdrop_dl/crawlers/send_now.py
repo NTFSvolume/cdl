@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import error_handling_wrapper
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
@@ -57,5 +59,5 @@ class SendNowCrawler(Crawler):
 
             async with self.request(scrape_item.url, impersonate=True):
                 pass
-            cookies = self.manager.http_client.cookies.filter_cookies(PRIMARY_URL)
+            cookies = self.manager.client.cookies.filter_cookies(PRIMARY_URL)
             self.got_cookies = bool(cookies)

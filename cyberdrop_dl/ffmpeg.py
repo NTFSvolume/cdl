@@ -17,6 +17,7 @@ from multidict import CIMultiDict, CIMultiDictProxy
 from cyberdrop_dl import aio
 from cyberdrop_dl.utils import get_valid_dict
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterator, Mapping, Sequence
 

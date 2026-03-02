@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import dataclasses
 import itertools
+import logging
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
@@ -13,6 +14,7 @@ from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import css, error_handling_wrapper, is_blob_or_svg, type_adapter
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 

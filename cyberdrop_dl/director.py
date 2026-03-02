@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, ParamSpec, TypeVar
 from cyberdrop_dl import config
 from cyberdrop_dl.dependencies import browser_cookie3
 from cyberdrop_dl.logger import setup_logging, spacer
-from cyberdrop_dl.managers import Manager
+from cyberdrop_dl.manager import Manager
 from cyberdrop_dl.scrape_mapper import ScrapeMapper
 from cyberdrop_dl.updates import check_latest_pypi
 from cyberdrop_dl.utils import check_partials_and_empty_folders
@@ -18,6 +18,7 @@ from cyberdrop_dl.utils.apprise import send_apprise_notifications
 from cyberdrop_dl.utils.sorting import Sorter
 from cyberdrop_dl.webhook import send_notification
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Sequence
 
@@ -56,7 +57,7 @@ async def _run_manager(manager: Manager) -> None:
     config_ = config.get()
     with setup_logging(config_.logs.main_log, config_.runtime.log_level, config_.runtime.console_log_level):
         logger.info("Starting Async Processes...")
-        await manager.async_startup()
+        await manager.run()
 
         logger.info("Starting CDL...\n")
         await _scheduler(manager)
@@ -99,7 +100,7 @@ async def _post_runtime(manager: Manager) -> None:
     logger.info(spacer())
     logger.info("Running Post-Download Processes", extra={"color": "green"})
 
-    await manager.hash_manager.hash_client.cleanup_dupes_after_download()
+    await manager.hasher.hash_client.cleanup_dupes_after_download()
 
     if config.get().sorting.sort_downloads:
         sorter = Sorter(manager)

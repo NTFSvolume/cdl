@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest import mock
@@ -11,6 +12,7 @@ import pytest
 from cyberdrop_dl import storage
 from cyberdrop_dl.storage import StorageChecker
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 

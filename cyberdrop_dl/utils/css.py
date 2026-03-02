@@ -11,6 +11,7 @@ from cyberdrop_dl.exceptions import ScrapeError
 
 from . import json
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
 

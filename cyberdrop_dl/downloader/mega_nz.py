@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import TYPE_CHECKING, Any
 
 import aiofiles
@@ -9,6 +10,7 @@ from mega.chunker import MegaChunker, get_chunks
 from cyberdrop_dl.clients.download_client import StreamDownloader
 from cyberdrop_dl.downloader.downloader import Downloader
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Coroutine
 
@@ -17,12 +19,12 @@ if TYPE_CHECKING:
     from yarl import URL
 
     from cyberdrop_dl.data_structures.url_objects import MediaItem
-    from cyberdrop_dl.managers import Manager
+    from cyberdrop_dl.manager import Manager
 
 
 class MegaDownloadClient(StreamDownloader):
     def __init__(self, manager: Manager) -> None:
-        super().__init__(manager, manager.http_client)
+        super().__init__(manager, manager.client)
         self._decrypt_mapping: dict[URL, tuple[Crypto, int]] = {}
         self.SUPPORT_RANGES = False
 
@@ -72,7 +74,7 @@ class MegaDownloader(Downloader):
     def startup(self) -> None:
         """Starts the downloader."""
         self.client = MegaDownloadClient(self.manager)  # type: ignore[reportIncompatibleVariableOverride]
-        self._semaphore = asyncio.Semaphore(self.manager.http_client.get_download_slots(self.domain))
+        self._semaphore = asyncio.Semaphore(self.manager.client.get_download_slots(self.domain))
 
     def register(self, url: URL, crypto: Crypto, file_size: int) -> None:
         self.client._decrypt_mapping[url] = crypto, file_size

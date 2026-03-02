@@ -7,12 +7,14 @@ Gitee: https://gitee.com/qkqpttgf/OneManager-php
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler
 from cyberdrop_dl.exceptions import InvalidContentTypeError
 from cyberdrop_dl.utils import css, error_handling_wrapper
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from bs4 import Tag
 
@@ -44,7 +46,7 @@ class OneManagerCrawler(Crawler, is_abc=True):
         await self.process_path(scrape_item)
 
     async def _async_post_init_(self) -> None:
-        self.manager.http_client.download_limiter[self.DOMAIN] = 2
+        self.manager.client.download_limiter[self.DOMAIN] = 2
 
     @error_handling_wrapper
     async def process_path(self, scrape_item: ScrapeItem) -> None:

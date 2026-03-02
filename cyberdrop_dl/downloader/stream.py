@@ -20,6 +20,7 @@ from cyberdrop_dl.exceptions import DownloadError, InvalidContentTypeError, Slow
 from cyberdrop_dl.tui.common import ProgressHook
 from cyberdrop_dl.utils import dates
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine, Mapping
 
@@ -27,7 +28,7 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.config import Config
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
-    from cyberdrop_dl.managers import Manager
+    from cyberdrop_dl.manager import Manager
     from cyberdrop_dl.tui.common import ProgressHook
 
 
@@ -75,7 +76,7 @@ class StreamDownloader:
         if not media_item.is_segment and self.config.download.skip_download_mark_completed:
             logger.info(f"Download skipped {media_item.url} due to mark completed option")
             self.manager.tui.files.add_skipped()
-            await self.manager.db_manager.history_table.mark_complete(media_item.domain, media_item)
+            await self.manager.database.history_table.mark_complete(media_item.domain, media_item)
             return False
 
         # We need to make the request first to get the file size and create the progress hook for the UI
@@ -103,8 +104,8 @@ class StreamDownloader:
     async def _check_file_duration(self, media_item: MediaItem) -> None:
         if media_item.is_segment:
             return
-        has_valid_duration = await self.manager.http_client.check_file_duration(media_item)
-        await self.manager.db_manager.history_table.add_filesize(media_item.domain, media_item)
+        has_valid_duration = await self.manager.client.check_file_duration(media_item)
+        await self.manager.database.history_table.add_filesize(media_item.domain, media_item)
         if not has_valid_duration:
             await asyncio.to_thread(media_item.complete_file.unlink)
             logger.warning(f"Download deleted {media_item.url} due to runtime restrictions")
@@ -135,7 +136,7 @@ class StreamDownloader:
         if resp.status == HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE:
             await asyncio.to_thread(media_item.partial_file.unlink)
 
-        await self.manager.http_client.check_http_status(resp, is_download=True)
+        await self.manager.client.check_http_status(resp, is_download=True)
         if not media_item.is_segment:
             _check_content_type(media_item.ext, resp.headers)
 
@@ -163,14 +164,14 @@ class StreamDownloader:
         self, url: AbsoluteHttpURL, domain: str, headers: dict[str, str]
     ) -> AsyncGenerator[AbstractResponse | aiohttp.ClientResponse]:
         if domain in _USE_IMPERSONATION:
-            resp = await self.manager.http_client.curl_session.get(str(url), stream=True, headers=headers)
+            resp = await self.manager.client.curl_session.get(str(url), stream=True, headers=headers)
             try:
                 yield AbstractResponse.from_resp(resp)
             finally:
                 await resp.aclose()
             return
 
-        async with self.manager.http_client.aiohttp_session.get(url, headers=headers) as resp:
+        async with self.manager.client.aiohttp_session.get(url, headers=headers) as resp:
             yield resp
 
     async def _download_stream(
@@ -230,10 +231,10 @@ class StreamDownloader:
         await asyncio.to_thread(Path.chmod, media_item.complete_file, 0o666)
         if media_item.is_segment:
             return
-        await self.manager.hash_manager.hash_client.run(media_item)
+        await self.manager.hasher.hash_client.run(media_item)
         self.manager.add_completed(media_item)
         self.manager.tui.files.add_completed()
-        await self.manager.db_manager.history_table.mark_complete(media_item.domain, media_item)
+        await self.manager.database.history_table.mark_complete(media_item.domain, media_item)
         if not self.config.download.disable_file_timestamps:
             await _set_file_datetime(media_item)
         logger.info(f"Download finished: {media_item.url}")

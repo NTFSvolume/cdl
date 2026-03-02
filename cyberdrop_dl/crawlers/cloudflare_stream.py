@@ -5,6 +5,7 @@ https://developers.cloudflare.com/stream/
 
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import TYPE_CHECKING, ClassVar
 
@@ -14,6 +15,7 @@ from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import error_handling_wrapper
 from cyberdrop_dl.utils.json import JSONWebToken, is_jwt
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 

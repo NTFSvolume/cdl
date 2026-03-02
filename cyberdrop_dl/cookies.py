@@ -21,6 +21,7 @@ from http.cookies import SimpleCookie
 
 from cyberdrop_dl.dependencies import browser_cookie3
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncIterable, Awaitable, Callable, Iterable
     from pathlib import Path

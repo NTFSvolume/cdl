@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
@@ -11,6 +12,7 @@ from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.scrape_mapper import _create_item_from_row
 from cyberdrop_dl.utils import parse_url
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     import aiosqlite
 

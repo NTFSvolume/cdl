@@ -30,7 +30,7 @@ from typing import (
 from aiolimiter import AsyncLimiter
 
 from cyberdrop_dl.annotations import copy_signature
-from cyberdrop_dl.clients.http import HttpClient
+from cyberdrop_dl.clients.http import HTTPClient
 from cyberdrop_dl.data_structures.mediaprops import ISO639Subtitle, Resolution
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
 from cyberdrop_dl.downloader.downloader import Downloader
@@ -50,6 +50,7 @@ from cyberdrop_dl.utils import (
 from cyberdrop_dl.utils.filepath import compose_custom_filename, get_filename_and_ext, sanitize_filename
 from cyberdrop_dl.utils.strings import safe_format
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Coroutine, Generator, Iterable
     from http.cookies import BaseCookie
@@ -58,7 +59,7 @@ if TYPE_CHECKING:
     from curl_cffi.requests.impersonate import BrowserTypeLiteral
 
     from cyberdrop_dl.clients.response import AbstractResponse
-    from cyberdrop_dl.managers import Manager
+    from cyberdrop_dl.manager import Manager
     from cyberdrop_dl.tui.common import ProgressHook
 
 _P = ParamSpec("_P")
@@ -97,7 +98,7 @@ class PlaceHolderConfig:
 _placeholder_config = PlaceHolderConfig()
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass(slots=True, order=True)
 class CrawlerInfo:
     site: str
     primary_url: AbsoluteHttpURL
@@ -167,6 +168,7 @@ class Crawler(ABC):
     _IMPERSONATE: ClassVar[BrowserTypeLiteral | bool | None] = None
 
     DB_PATH_BUILDER: ClassVar[DBPathBuilder] = "path"
+    disabled: bool = False
 
     @abstractmethod
     async def fetch(self, scrape_item: ScrapeItem) -> None: ...
@@ -182,10 +184,10 @@ class Crawler(ABC):
         self.manager = manager
         self.config = manager.config
         self.downloader: Downloader
-        self.client: HttpClient = manager.http_client
+        self.client: HTTPClient = manager.client
         self._startup_lock: asyncio.Lock = asyncio.Lock()
         self._ready: bool = False
-        self.disabled: bool = False
+
         self.logged_in: bool = False
         self._scraped_items: set[str] = set()
         self.logger = logging.getLogger(type(self).__qualname__)
@@ -313,7 +315,7 @@ class Crawler(ABC):
             return 0
         return len(self._semaphore._waiters)
 
-    @copy_signature(HttpClient._request)
+    @copy_signature(HTTPClient._request)
     @contextlib.asynccontextmanager
     async def request(
         self, *args, impersonate: BrowserTypeLiteral | bool | None = None, **kwargs
@@ -353,7 +355,7 @@ class Crawler(ABC):
         for host in (self.DOMAIN, self.PRIMARY_URL.host):
             self.client.json_resp_checkers[host] = self._json_resp_check_
 
-    def _get_download_headers(self, referer: AbsoluteHttpURL) -> dict[str, str]:
+    def _download_headers_(self, referer: AbsoluteHttpURL) -> dict[str, str]:
         return {
             "User-Agent": self.config.general.user_agent,
             "Referer": str(referer),
@@ -419,7 +421,7 @@ class Crawler(ABC):
     def new_task_id(self, url: AbsoluteHttpURL) -> ProgressHook:
         """Creates a new task_id (shows the URL in the UI and logs)"""
         self.logger.info(f"Scraping [{self.FOLDER_DOMAIN}]: {url}")
-        return self.manager.tui.scrape(url)
+        return self.manager.tui.scrape.new_hook(url)
 
     @staticmethod
     def is_subdomain(url: AbsoluteHttpURL) -> bool:
@@ -474,7 +476,7 @@ class Crawler(ABC):
             ext=ext,
         )
         media_item.debrid_url = debrid_link
-        media_item.headers = self._get_download_headers(media_item.referer)
+        media_item.headers = self._download_headers_(media_item.referer)
         if metadata is not None:
             media_item.metadata = metadata
         await self.handle_media_item(media_item, m3u8)
@@ -503,10 +505,10 @@ class Crawler(ABC):
         This method is called automatically on a created media item,
         but Crawler code can use it to skip unnecessary requests"""
         db_path = self._create_db_path_(url)
-        check_complete = await self.manager.db_manager.history_table.check_complete(self.DOMAIN, url, referer, db_path)
+        check_complete = await self.manager.database.history_table.check_complete(self.DOMAIN, url, referer, db_path)
         if check_complete:
             self.logger.info(f"Skipping {url} as it has already been downloaded")
-            self.manager.tui.files.add_previously_completed()
+            self.manager.tui.files.add_prev_completed()
         return check_complete
 
     async def handle_media_item(self, media_item: MediaItem, m3u8: m3u8.RenditionGroup | None = None) -> None:
@@ -517,7 +519,7 @@ class Crawler(ABC):
         check_complete = await self.check_complete(media_item.url, media_item.referer)
         if check_complete:
             if media_item.album_id:
-                await self.manager.db_manager.history_table.set_album_id(self.DOMAIN, media_item)
+                await self.manager.database.history_table.set_album_id(self.DOMAIN, media_item)
             return
 
         if await self.check_skip_by_config(media_item):
@@ -554,10 +556,10 @@ class Crawler(ABC):
         """
         url = item if isinstance(item, AbsoluteHttpURL) else item.url
         domain = None if any_crawler else self.DOMAIN
-        downloaded = await self.manager.db_manager.history_table.check_complete_by_referer(domain, url)
+        downloaded = await self.manager.database.history_table.check_complete_by_referer(domain, url)
         if downloaded:
             self.logger.info(f"Skipping {url} as it has already been downloaded")
-            self.manager.tui.files.add_previously_completed()
+            self.manager.tui.files.add_prev_completed()
             return True
         return False
 
@@ -566,16 +568,16 @@ class Crawler(ABC):
         self: Crawler, scrape_item: ScrapeItem | AbsoluteHttpURL, hash_type: Literal["md5", "sha256"], hash_value: str
     ) -> bool:
         """Returns `True` if at least 1 file with this hash is recorded on the database"""
-        downloaded = await self.manager.db_manager.hash_table.check_hash_exists(hash_type, hash_value)
+        downloaded = await self.manager.database.hash_table.check_hash_exists(hash_type, hash_value)
         if downloaded:
             url = scrape_item if isinstance(scrape_item, AbsoluteHttpURL) else scrape_item.url
             self.logger.info(f"Skipping {url} as its hash ({hash_type}:{hash_value}) has already been downloaded")
-            self.manager.tui.files.add_previously_completed()
+            self.manager.tui.files.add_prev_completed()
         return downloaded
 
     async def get_album_results(self, album_id: str) -> dict[str, int]:
         """Checks whether an album has completed given its domain and album id."""
-        return await self.manager.db_manager.history_table.check_album(self.DOMAIN, album_id)
+        return await self.manager.database.history_table.check_album(self.DOMAIN, album_id)
 
     def handle_external_links(self, scrape_item: ScrapeItem, reset: bool = True) -> None:
         """Maps external links to the scraper class."""
@@ -606,7 +608,7 @@ class Crawler(ABC):
         url_path = self._create_db_path_(url)
         if url_path in album_results and album_results[url_path] != 0:
             self.logger.info(f"Skipping {url} as it has already been downloaded")
-            self.manager.tui.files.add_previously_completed()
+            self.manager.tui.files.add_prev_completed()
             return True
         return False
 
@@ -812,16 +814,15 @@ class Crawler(ABC):
                 yield tg
 
     @final
-    def parse_date(self, date_or_datetime: str, format: str | None = None, /) -> dates.TimeStamp | None:
+    def parse_date(self, date_or_datetime: str, format: str, /) -> dates.TimeStamp | None:
         try:
-            parsed_date = dates.parse_format(date_or_datetime)
+            parsed_date = dates.parse_format(date_or_datetime, format)
         except ValueError as e:
             self.logger.error(
                 f"Date parsing for {self.DOMAIN} seems to be broken [{date_or_datetime=}, {format=}]: {e}"
             )
         else:
-            if parsed_date:
-                return dates.to_timestamp(parsed_date)
+            return dates.to_timestamp(parsed_date)
 
     @final
     def parse_iso_date(self, date_or_datetime: str, /) -> dates.TimeStamp | None:
@@ -830,8 +831,7 @@ class Crawler(ABC):
         except ValueError as e:
             self.logger.error(f"Date parsing for {self.DOMAIN} seems to be broken [{date_or_datetime=} iso=True]: {e}")
         else:
-            if parsed_date:
-                return dates.to_timestamp(parsed_date)
+            return dates.to_timestamp(parsed_date)
 
     async def _get_redirect_url(self, url: AbsoluteHttpURL) -> AbsoluteHttpURL:
         async with self.request(url) as resp:
@@ -976,6 +976,8 @@ class Crawler(ABC):
                     custom_filename=sub_name,
                 )
             )
+
+    catch_errors = error_handling_context
 
 
 def _make_scrape_mapper_keys(cls: type[Crawler] | Crawler) -> tuple[str, ...]:

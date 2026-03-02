@@ -23,6 +23,7 @@ _VIDEO_HLS_BATCH_SIZE = 10
 _AUDIO_HLS_BATCH_SIZE = 50
 
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine
 
@@ -30,7 +31,7 @@ if TYPE_CHECKING:
     from cyberdrop_dl.clients.download_client import StreamDownloader
     from cyberdrop_dl.config import Config
     from cyberdrop_dl.data_structures.url_objects import MediaItem
-    from cyberdrop_dl.managers import Manager
+    from cyberdrop_dl.manager import Manager
 
     P = ParamSpec("P")
     R = TypeVar("R")
@@ -110,7 +111,7 @@ class Downloader:
         """Marks the media item as incomplete in the database."""
         if media_item.is_segment:
             return
-        await self.manager.db_manager.history_table.insert_incompleted(media_item.domain, media_item)
+        await self.manager.database.history_table.insert_incompleted(media_item.domain, media_item)
 
     @contextlib.asynccontextmanager
     async def _limiter(self, media_item: MediaItem):
@@ -151,11 +152,11 @@ class Downloader:
         if media_item.is_segment:
             return
 
-        if not self.manager.http_client.check_allowed_filetype(media_item):
+        if not self.manager.client.check_allowed_filetype(media_item):
             raise RestrictedFiletypeError(origin=media_item)
-        if not await self.manager.http_client.check_file_duration(media_item):
+        if not await self.manager.client.check_file_duration(media_item):
             raise DurationError(origin=media_item)
-        if not self.manager.http_client.check_allowed_date_range(media_item):
+        if not self.manager.client.check_allowed_date_range(media_item):
             raise RestrictedDateRangeError(origin=media_item)
 
     @error_handling_wrapper
@@ -163,7 +164,7 @@ class Downloader:
     async def _download(self, media_item: MediaItem) -> bool | None:
         try:
             if not media_item.is_segment:
-                media_item.duration = await self.manager.db_manager.history_table.get_duration(
+                media_item.duration = await self.manager.database.history_table.get_duration(
                     media_item.domain, media_item
                 )
                 await self._check_file_can_download(media_item)

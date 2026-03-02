@@ -32,6 +32,8 @@ try:
 except ImportError as e:
     _curl_import_error = e
 
+
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable, Iterable, Mapping
     from http.cookies import BaseCookie
@@ -134,7 +136,7 @@ class RateLimiter:
 
 
 @dataclasses.dataclass(slots=True, kw_only=True)
-class HttpClient:
+class HTTPClient:
     """
     Wrapper around aiohttp.ClientSession / curl.AsyncSession
 
@@ -240,7 +242,7 @@ class HttpClient:
         - Closes underliying response on exit.
         """
 
-        self = cast("HttpClient", self)
+        self = cast("HTTPClient", self)
         headers = self._prepare_headers(headers)
         request_params["data"] = data
         request_params["json"] = json

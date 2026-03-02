@@ -5,7 +5,7 @@ import dataclasses
 import hashlib
 import logging
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, Final, NamedTuple, NewType
+from typing import TYPE_CHECKING, Any, Final, NamedTuple, NewType, Self
 
 import xxhash
 from send2trash import send2trash
@@ -13,6 +13,7 @@ from send2trash import send2trash
 from cyberdrop_dl import aio, constants
 from cyberdrop_dl.constants import HashAlgorithm, Hashing
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
     from pathlib import Path
@@ -20,7 +21,7 @@ if TYPE_CHECKING:
     from cyberdrop_dl.config import Config
     from cyberdrop_dl.data_structures.url_objects import MediaItem
     from cyberdrop_dl.database import Database
-    from cyberdrop_dl.managers import Manager
+    from cyberdrop_dl.manager import Manager
     from cyberdrop_dl.tui import TUI
 
 _HASHERS: Final = {
@@ -50,7 +51,7 @@ logger = logging.getLogger(__name__)
 async def hash_directory(manager: Manager, path: Path) -> None:
     # TODO: make db a context manager
     await manager.async_db_hash_startup()
-    await Hasher(manager.tui, manager.config, manager.db_manager).hash_folder(path)
+    await Hasher.build(manager).hash_folder(path)
     manager.tui.print_dedupe_stats()
     await manager.async_db_close()
 
@@ -83,6 +84,10 @@ class Hasher:
     _xxh128_hashes: dict[Path, XXH128Result] = dataclasses.field(init=False, default_factory=dict)
     _sem: asyncio.BoundedSemaphore = dataclasses.field(init=False)
     _hashes: tuple[HashAlgorithm, ...] = dataclasses.field(init=False)
+
+    @classmethod
+    def build(cls, manager: Manager) -> Self:
+        return cls(manager.tui, manager.config, manager.database)
 
     def __post_init__(self) -> None:
         self._sem = asyncio.BoundedSemaphore(self.concurrency)
@@ -140,7 +145,7 @@ class Hasher:
                 if db_mtime is None:
                     # TODO: pre v9 db row. We need to delete them
                     pass
-                else:
+                elif db_mtime == f_mtime:
                     self.tui.hashing.add_prev_hashed()
                     return HashResult(HashValue(hash), f_size, f_mtime)
             case _:
@@ -169,6 +174,7 @@ class Hasher:
     async def dedupe(self) -> None:
         if self.config.runtime.ignore_history or not self.config.dedupe.auto_dedupe:
             return
+
         with self.tui(screen="hashing"):  # TODO: Add a new screen for "removing_hashing"
             czkawka = Czkawka(
                 send_to_trash_bin=self.config.dedupe.send_deleted_to_trash,
@@ -182,7 +188,7 @@ class Hasher:
 class Czkawka:
     """Deletes dedupes based on hash results"""
 
-    # Why this name? Czkawka it's a popular dedupe sofware and this class works in a similar way to find matches
+    # Why this name? Czkawka it's a popular dedupe software and this class works in a similar way to find matches
     # https://github.com/qarmin/czkawka.
 
     send_to_trash_bin: bool

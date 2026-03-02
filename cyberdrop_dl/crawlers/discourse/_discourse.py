@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import itertools
+import logging
 from typing import TYPE_CHECKING, Any, ClassVar, TypeVar
 
 from bs4 import BeautifulSoup
@@ -18,6 +19,7 @@ from cyberdrop_dl.utils.dates import to_timestamp
 
 from .models import AvailablePost, PostStream, Topic
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncIterable, Iterable
 

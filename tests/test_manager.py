@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import Field
 from typing import TYPE_CHECKING, Any, TypeVar
 
 import pytest
 
 from cyberdrop_dl import config
-from cyberdrop_dl.managers import Manager, log_app_state
+from cyberdrop_dl.manager import Manager, log_app_state
 from cyberdrop_dl.models import merge_dicts
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from pydantic import BaseModel
 
@@ -121,11 +123,11 @@ def test_args_logging_should_censor_webhook(
 
 
 async def test_async_db_close(running_manager: Manager) -> None:
-    await running_manager.async_startup()
-    assert not isinstance(running_manager.db_manager, Field)
-    assert not isinstance(running_manager.hash_manager, Field)
+    await running_manager.run()
+    assert not isinstance(running_manager.database, Field)
+    assert not isinstance(running_manager.hasher, Field)
     assert "overwrite" not in str(running_manager.logs.main_log)
     await running_manager.async_db_close()
-    assert isinstance(running_manager.db_manager, Field)
-    assert isinstance(running_manager.hash_manager, Field)
+    assert isinstance(running_manager.database, Field)
+    assert isinstance(running_manager.hasher, Field)
     await running_manager.close()

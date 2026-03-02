@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
 
 from cyberdrop_dl import scrape_mapper
-from cyberdrop_dl.managers import Manager
+from cyberdrop_dl.manager import Manager
 
+logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
     from pathlib import Path
@@ -75,7 +77,7 @@ def post_startup_manager(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Man
 @pytest.fixture(scope="function")
 async def running_manager(manager: Manager) -> AsyncGenerator[Manager]:
     scrape_mapper.existing_crawlers.clear()
-    await manager.async_startup()
+    await manager.run()
     manager.states.RUNNING.set()
     yield manager
     manager.states.RUNNING.clear()
