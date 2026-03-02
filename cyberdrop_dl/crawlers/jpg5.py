@@ -9,7 +9,7 @@ from cyberdrop_dl.utils import error_handling_wrapper, xor_decrypt
 from ._chevereto import CheveretoCrawler
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.crawlers.crawler import RateLimit, SupportedDomains
+    from cyberdrop_dl.crawlers import RateLimit, SupportedDomains
 
 _CDN: Final = "selti-delivery.ru"
 _DECRYPTION_KEY: Final = b"seltilovessimpcity@simpcityhatesscrapers"

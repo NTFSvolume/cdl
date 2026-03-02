@@ -12,8 +12,8 @@ if TYPE_CHECKING:
     import datetime
     from collections.abc import Iterable
 
+    from cyberdrop_dl.crawlers import SupportedPaths
     from cyberdrop_dl.crawlers._forum import Thread
-    from cyberdrop_dl.crawlers.crawler import SupportedPaths
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
 
 N_POSTS_PER_PAGE = 15

@@ -13,8 +13,8 @@ from typing import TYPE_CHECKING, Any, Literal, TypeVar
 from cyberdrop_dl import aio, plugins
 from cyberdrop_dl.clients.jdownloader import JDownloader
 from cyberdrop_dl.constants import REGEX_LINKS, BlockedDomains
+from cyberdrop_dl.crawlers import create_crawlers
 from cyberdrop_dl.crawlers._chevereto import CheveretoCrawler
-from cyberdrop_dl.crawlers.crawler import create_crawlers
 from cyberdrop_dl.crawlers.discourse import DiscourseCrawler
 from cyberdrop_dl.crawlers.http_direct import DirectHTTPFile
 from cyberdrop_dl.crawlers.realdebrid import RealDebridCrawler
@@ -322,7 +322,7 @@ def _create_item_from_row(row: aiosqlite.Row) -> ScrapeItem:
 
 
 def get_crawlers_mapping(include_generics: bool = False) -> dict[str, type[Crawler]]:
-    from cyberdrop_dl.crawlers.crawler import Registry
+    from cyberdrop_dl.crawlers import Registry
 
     Registry.import_all()
 

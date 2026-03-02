@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, ClassVar
 from typing_extensions import override
 
 from cyberdrop_dl import constants
-from cyberdrop_dl.crawlers.crawler import Crawler
+from cyberdrop_dl.crawlers import Crawler
 from cyberdrop_dl.exceptions import NoExtensionError
 from cyberdrop_dl.utils.filepath import get_filename_and_ext
 

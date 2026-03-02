@@ -7,7 +7,7 @@ import time
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl import env
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, auto_task_id
+from cyberdrop_dl.crawlers import Crawler, SupportedPaths, auto_task_id
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import css, dates, error_handling_wrapper

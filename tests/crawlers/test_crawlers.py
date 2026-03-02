@@ -18,7 +18,7 @@ from cyberdrop_dl.scrape_mapper import ScrapeMapper
 from cyberdrop_dl.utils import parse_url
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.crawlers.crawler import Crawler
+    from cyberdrop_dl.crawlers import Crawler
     from cyberdrop_dl.manager import Manager
 
 

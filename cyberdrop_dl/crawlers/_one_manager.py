@@ -9,14 +9,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
-from cyberdrop_dl.crawlers.crawler import Crawler
+from cyberdrop_dl.crawlers import Crawler
 from cyberdrop_dl.exceptions import InvalidContentTypeError
 from cyberdrop_dl.utils import css, error_handling_wrapper
 
 if TYPE_CHECKING:
     from bs4 import Tag
 
-    from cyberdrop_dl.crawlers.crawler import SupportedPaths
+    from cyberdrop_dl.crawlers import SupportedPaths
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
 
 

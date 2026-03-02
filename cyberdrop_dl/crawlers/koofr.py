@@ -5,7 +5,7 @@ from typing import Any, ClassVar, Literal
 
 from pydantic import dataclasses
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
+from cyberdrop_dl.crawlers import Crawler, SupportedDomains, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.exceptions import DownloadError, PasswordProtectedError, ScrapeError
 from cyberdrop_dl.utils import error_handling_wrapper

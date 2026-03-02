@@ -4,7 +4,7 @@ import dataclasses
 import re
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
+from cyberdrop_dl.crawlers import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.mediaprops import Subtitle
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError

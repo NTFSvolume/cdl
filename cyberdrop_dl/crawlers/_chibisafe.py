@@ -15,13 +15,13 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from pydantic import Field
 
-from cyberdrop_dl.crawlers.crawler import Crawler
+from cyberdrop_dl.crawlers import Crawler
 from cyberdrop_dl.models import AliasModel
 from cyberdrop_dl.utils import error_handling_wrapper, type_adapter
 from cyberdrop_dl.utils.dates import to_timestamp
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.crawlers.crawler import SupportedPaths
+    from cyberdrop_dl.crawlers import SupportedPaths
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
 

@@ -2,7 +2,7 @@
 # We can create subclasses dynamically by their URL
 
 
-from cyberdrop_dl.crawlers.crawler import create_crawlers
+from cyberdrop_dl.crawlers import create_crawlers
 
 from ._discourse import DiscourseCrawler
 

@@ -6,7 +6,7 @@ import pytest
 from cyberdrop_dl.scraper import scrape_mapper
 
 from cyberdrop_dl import crawlers
-from cyberdrop_dl.crawlers.crawler import create_crawlers
+from cyberdrop_dl.crawlers import create_crawlers
 
 if TYPE_CHECKING:
     from cyberdrop_dl.manager import Manager

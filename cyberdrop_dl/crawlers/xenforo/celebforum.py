@@ -7,7 +7,7 @@ from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from .xenforo import XenforoCrawler
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.crawlers.crawler import RateLimit
+    from cyberdrop_dl.crawlers import RateLimit
 
 
 class CelebForumCrawler(XenforoCrawler):

@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, ClassVar, TypeVar, final
 from bs4 import BeautifulSoup
 from pydantic import BaseModel
 
-from cyberdrop_dl.crawlers.crawler import Crawler
+from cyberdrop_dl.crawlers import Crawler
 from cyberdrop_dl.data_structures.url_objects import DatetimeRange
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import css, error_handling_wrapper, open_graph, unique
@@ -27,7 +27,7 @@ from .models import HTML, Category, CategorySequence, ColletionType, Post, PostS
 if TYPE_CHECKING:
     from collections.abc import AsyncIterable, Iterable
 
-    from cyberdrop_dl.crawlers.crawler import SupportedPaths
+    from cyberdrop_dl.crawlers import SupportedPaths
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
 
 _ModelT = TypeVar("_ModelT", bound=BaseModel)

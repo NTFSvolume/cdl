@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from aiohttp import ClientConnectorError
 
 from cyberdrop_dl import aio, constants
-from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths, auto_task_id
+from cyberdrop_dl.crawlers import Crawler, RateLimit, SupportedPaths, auto_task_id
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError
 from cyberdrop_dl.utils import css, error_handling_wrapper, open_graph, parse_url, xor_decrypt

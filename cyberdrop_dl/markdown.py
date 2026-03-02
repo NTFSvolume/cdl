@@ -7,7 +7,7 @@ from rich.table import Table
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
 
-    from cyberdrop_dl.crawlers.crawler import CrawlerInfo
+    from cyberdrop_dl.crawlers import CrawlerInfo
 
 _COLUMNS = ("site", "primary URL", "supported domains", "supported paths")
 
@@ -24,7 +24,7 @@ def get_crawlers_info_as_rich_table() -> Table:
 
 
 def _gen_crawlers_info_rows() -> Generator[tuple[str, ...]]:
-    from cyberdrop_dl.crawlers.crawler import Registry
+    from cyberdrop_dl.crawlers import Registry
 
     Registry.import_all()
 

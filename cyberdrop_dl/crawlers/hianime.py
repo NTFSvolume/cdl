@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 import bs4
 
 from cyberdrop_dl.aio import WeakAsyncLocks
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, auto_task_id
+from cyberdrop_dl.crawlers import Crawler, SupportedPaths, auto_task_id
 from cyberdrop_dl.crawlers.megacloud import MegaCloudCrawler
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError

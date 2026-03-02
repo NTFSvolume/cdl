@@ -3,8 +3,8 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING, Any, ClassVar
 
+from cyberdrop_dl.crawlers import Crawler, SupportedPaths
 from cyberdrop_dl.crawlers._kvs import extract_kvs_video
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures import AbsoluteHttpURL, Resolution
 from cyberdrop_dl.utils import css, error_handling_wrapper, filter_query
 

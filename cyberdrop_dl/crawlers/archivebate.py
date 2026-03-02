@@ -8,7 +8,7 @@ from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, open_graph
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.crawlers.crawler import SupportedDomains, SupportedPaths
+    from cyberdrop_dl.crawlers import SupportedDomains, SupportedPaths
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
 

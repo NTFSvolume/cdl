@@ -6,7 +6,7 @@ from cyberdrop_dl.crawlers._kvs import KernelVideoSharingCrawler
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.crawlers.crawler import SupportedPaths
+    from cyberdrop_dl.crawlers import SupportedPaths
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
 
