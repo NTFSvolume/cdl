@@ -28,8 +28,7 @@ from typing import (
 
 from aiolimiter import AsyncLimiter
 
-from cyberdrop_dl.annotations import copy_signature
-from cyberdrop_dl.clients.http import HTTPClient
+from cyberdrop_dl.clients.http import HTTPClient, HTTPClientProxy
 from cyberdrop_dl.data_structures.mediaprops import ISO639Subtitle, Resolution
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
 from cyberdrop_dl.downloader.downloader import Downloader
@@ -55,7 +54,6 @@ if TYPE_CHECKING:
 
     import yarl
     from bs4 import BeautifulSoup, Tag
-    from curl_cffi.requests.impersonate import BrowserTypeLiteral
 
     from cyberdrop_dl.clients.response import AbstractResponse
     from cyberdrop_dl.manager import Manager
@@ -154,29 +152,14 @@ def _url(item: ScrapeItem | AbsoluteHttpURL) -> AbsoluteHttpURL:
     return item if isinstance(item, AbsoluteHttpURL) else item.url
 
 
-class CrawlerProxy:
+class CrawlerProxy(HTTPClientProxy):
     def __init__(self, crawler: Crawler) -> None:
         self._crawler = crawler
-
-    @copy_signature(HTTPClient._request)
-    def request(self, *args, **kwargs):
-        return self._crawler.request(*args, **kwargs)
-
-    @copy_signature(request)
-    async def request_json(self, *args, **kwargs) -> Any:
-        return await self._crawler.request_json(*args, **kwargs)
-
-    @copy_signature(request)
-    async def request_soup(self, *args, **kwargs) -> BeautifulSoup:
-        return await self._crawler.request_soup(*args, **kwargs)
-
-    @copy_signature(request)
-    async def request_text(self, *args, **kwargs) -> str:
-        return await self._crawler.request_text(*args, **kwargs)
+        super().__init__(crawler.client)
 
 
-class HLS(CrawlerProxy):
-    async def get_m3u8(
+class HLS(HTTPClientProxy):
+    async def request_m3u8(
         self,
         m3u8_playlist_url: AbsoluteHttpURL,
         /,
@@ -213,14 +196,12 @@ class HLS(CrawlerProxy):
         only: Iterable[str] = (),
         exclude: Iterable[str] = ("vp09",),
     ):
-        rendition_group_info = m3u8.get_best_group_from_playlist(m3u8_playlist, only=only, exclude=exclude)
-        renditions_urls = rendition_group_info.urls
-        video = await self._get_m3u8(renditions_urls.video, headers, "video")
-        audio = await self._get_m3u8(renditions_urls.audio, headers, "audio") if renditions_urls.audio else None
-        subtitle = (
-            await self._get_m3u8(renditions_urls.subtitle, headers, "subtitles") if renditions_urls.subtitle else None
+        details = m3u8.get_best_group_from_playlist(m3u8_playlist, only=only, exclude=exclude)
+        video, *audio_and_subs = await asyncio.gather(
+            *(self._get_m3u8(url, headers, name) for name, url in details.urls._asdict().items() if url)  # pyright: ignore[reportArgumentType]
         )
-        return m3u8.RenditionGroup(video, audio, subtitle), rendition_group_info
+
+        return m3u8.RenditionGroup(video, *audio_and_subs), details
 
     async def get_m3u8_from_index_url(
         self, url: AbsoluteHttpURL, /, headers: dict[str, str] | None = None
@@ -239,7 +220,7 @@ class HLS(CrawlerProxy):
         return m3u8.M3U8(content, url.parent, media_type)
 
 
-class Crawler(ABC):
+class Crawler(HTTPClientProxy, ABC):
     OLD_DOMAINS: ClassVar[tuple[str, ...]] = ()
     SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = ()
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {}
@@ -257,7 +238,6 @@ class Crawler(ABC):
     _RATE_LIMIT: ClassVar[RateLimit] = 25, 1
     _DOWNLOAD_SLOTS: ClassVar[int | None] = None
     _USE_DOWNLOAD_SERVERS_LOCKS: ClassVar[bool] = False
-    _IMPERSONATE: ClassVar[BrowserTypeLiteral | bool | None] = None
 
     disabled: bool = False
 
@@ -272,6 +252,7 @@ class Crawler(ABC):
 
     @final
     def __init__(self, manager: Manager) -> None:
+        super().__init__(manager.client)
         self.manager = manager
         self.config = manager.config
         self.downloader: Downloader
@@ -283,15 +264,15 @@ class Crawler(ABC):
         self._scraped_items: set[str] = set()
         self.logger = CrawlerLogger(self)
         self._semaphore = asyncio.Semaphore(20)
-        self.hls = HLS(self)
+        self.hls = HLS(manager.client)
         self.__post_init__()
 
-    def __post_init__(self) -> None:  # noqa: B027
+    def __post_init__(self) -> None:
         """Override in subclasses to add custom init logic
 
         This method gets called inmediatly on class creation"""
 
-    async def _async_post_init_(self) -> None:  # noqa: B027
+    async def _async_post_init_(self) -> None:
         """Perform additional setup that requires I/O
 
         ex: login, getting API tokens, etc..
@@ -449,34 +430,6 @@ class Crawler(ABC):
     @final
     def create_task(self, coro: Coroutine[Any, Any, _T_co]) -> asyncio.Task[_T_co]:
         return self.manager.task_group.create_task(coro)
-
-    @copy_signature(HTTPClient._request)
-    @contextlib.asynccontextmanager
-    async def request(
-        self, *args, impersonate: BrowserTypeLiteral | bool | None = None, **kwargs
-    ) -> AsyncGenerator[AbstractResponse]:
-        if impersonate is None:
-            impersonate = self._IMPERSONATE
-
-        async with (
-            self.client._request(*args, impersonate=impersonate, **kwargs) as resp,
-        ):
-            yield resp
-
-    @copy_signature(request)
-    async def request_json(self, *args, **kwargs) -> Any:
-        async with self.request(*args, **kwargs) as resp:
-            return await resp.json()
-
-    @copy_signature(request)
-    async def request_soup(self, *args, **kwargs) -> BeautifulSoup:
-        async with self.request(*args, **kwargs) as resp:
-            return await resp.soup()
-
-    @copy_signature(request)
-    async def request_text(self, *args, **kwargs) -> str:
-        async with self.request(*args, **kwargs) as resp:
-            return await resp.text()
 
     @final
     @contextlib.contextmanager

@@ -8,7 +8,7 @@ import ssl
 import time
 from base64 import b64encode
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any, Literal, Self, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, cast
 
 import aiohttp
 import certifi
@@ -19,6 +19,7 @@ from aiolimiter import AsyncLimiter
 from multidict import CIMultiDict
 
 from cyberdrop_dl import aio, appdata, constants, ddos_guard, env, ffmpeg
+from cyberdrop_dl.annotations import copy_signature
 from cyberdrop_dl.clients.flaresolverr import FlareSolverr
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.cookies import get_cookies_from_browser, make_simple_cookie, read_netscape_files
@@ -38,6 +39,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable, Iterable, Mapping
     from http.cookies import BaseCookie
 
+    from bs4 import BeautifulSoup
     from curl_cffi.requests import AsyncSession
     from curl_cffi.requests.impersonate import BrowserTypeLiteral
     from curl_cffi.requests.models import Response as CurlResponse
@@ -431,6 +433,41 @@ class HTTPClient:
                     combined[key] = value
                     new.add(key)
         return combined
+
+
+class HTTPClientProxy:
+    _IMPERSONATE: ClassVar[BrowserTypeLiteral | bool | None] = None
+
+    def __init__(self, client: HTTPClient) -> None:
+        self.client = client
+
+    @copy_signature(HTTPClient._request)
+    @contextlib.asynccontextmanager
+    async def request(
+        self, *args, impersonate: BrowserTypeLiteral | bool | None = None, **kwargs
+    ) -> AsyncGenerator[AbstractResponse]:
+        if impersonate is None:
+            impersonate = self._IMPERSONATE
+
+        async with (
+            self.client._request(*args, impersonate=impersonate, **kwargs) as resp,
+        ):
+            yield resp
+
+    @copy_signature(request)
+    async def request_json(self, *args, **kwargs) -> Any:
+        async with self.request(*args, **kwargs) as resp:
+            return await resp.json()
+
+    @copy_signature(request)
+    async def request_soup(self, *args, **kwargs) -> BeautifulSoup:
+        async with self.request(*args, **kwargs) as resp:
+            return await resp.soup()
+
+    @copy_signature(request)
+    async def request_text(self, *args, **kwargs) -> str:
+        async with self.request(*args, **kwargs) as resp:
+            return await resp.text()
 
 
 def check_allowed_filetype(media_item: MediaItem, config: Config) -> bool:
