@@ -1,17 +1,21 @@
 from __future__ import annotations
 
+import asyncio
 import dataclasses
+import random
 from abc import ABC, abstractmethod
 from collections import deque
 from typing import TYPE_CHECKING, ClassVar, Final, Self, final
 
+from rich import get_console
 from rich.console import Group
+from rich.live import Live
 from rich.markup import escape
 from rich.panel import Panel
 from rich.progress import Progress, ProgressColumn, Task, TaskID
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Generator
 
     from rich.console import RenderableType
     from rich.progress import Task, TaskID
@@ -60,14 +64,21 @@ class DictProgress(Progress):
 @dataclasses.dataclass(slots=True)
 class ProgressHook:
     advance: Callable[[int], None]
+    get_speed: Callable[[], float]
     done: Callable[[], None]
-    speed: Callable[[], float]
+
+    _done: bool = dataclasses.field(init=False, default=False)
 
     def __enter__(self) -> Self:
+        if self._done:
+            raise RuntimeError
         return self
 
     def __exit__(self, *_) -> None:
+        if self._done:
+            raise RuntimeError
         self.done()
+        self._done = True
 
 
 ColumnsType = tuple[ProgressColumn | str, ...]
@@ -129,8 +140,8 @@ class OverflowPanel(UIComponent):
         self._visible_tasks: int = 0
         self._total_amount: int = 0
 
-        self._orphan_tasks: set[TaskID] = set()  # This aretasks that never got to show up on the UI
-        # The started and finished bfeore there was an avaibale slots on the panel
+        self._orphan_tasks: set[TaskID] = set()  # This are tasks that never got to show up on the UI
+        # They started and finished before there was any available slot on the panel
 
         self._panel: Panel = Panel(
             Group(self._progress, self._overflow),
@@ -142,9 +153,11 @@ class OverflowPanel(UIComponent):
     def __rich__(self) -> RenderableType:
         return self._panel
 
+    @final
     def _update_overflow(self) -> None:
         self._overflow.update(count=len(self._progress) - self._visible_tasks)
 
+    @final
     def new_task(self, description: object, /, total: float | None = None) -> ProgressHook:
         task = self._add_task(description, total)
 
@@ -152,13 +165,13 @@ class OverflowPanel(UIComponent):
             self._total_amount += amount
             self._progress.advance(task.id, amount)
 
-        def done() -> None:
+        def on_exit() -> None:
             self._remove_task(task)
 
-        def speed() -> float:
+        def get_speed() -> float:
             return task.finished_speed or task.speed or 0
 
-        return ProgressHook(advance, done, speed)
+        return ProgressHook(advance, get_speed, on_exit)
 
     @final
     def _add_task(self, description: object, total: float | None = None, /, *, completed: int = 0) -> Task:
@@ -199,3 +212,40 @@ class OverflowPanel(UIComponent):
             self._orphan_tasks.add(task.id)
 
         self._update_overflow()
+
+
+# THESE ARE JUST FOR TESTING
+
+
+class Random:
+    choice = random.choice
+
+    @staticmethod
+    def float(start: float, end: float) -> float:
+        return random.uniform(start, end)
+
+    @staticmethod
+    def int(start: float = 0.0, end: float = 1e12) -> int:
+        return random.randint(int(start), int(end))
+
+    @staticmethod
+    def int_until(target: int, max_step: float) -> Generator[int, None, None]:
+        total = 0
+        while total < target:
+            new = min(random.randint(1, int(max_step)), target - total)
+            yield new
+            total += new
+
+    @staticmethod
+    def sleep():
+        return asyncio.sleep(Random.float(0.0, 0.5))
+
+
+def create_live(renderable: RichProxy) -> Live:
+    return Live(
+        console=get_console(),
+        auto_refresh=True,
+        refresh_per_second=10,
+        transient=False,
+        get_renderable=renderable.__rich__,
+    )

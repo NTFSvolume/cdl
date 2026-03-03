@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import contextlib
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, ClassVar, Final
@@ -17,7 +18,7 @@ from rich.progress import (
 from rich.text import Text
 from typing_extensions import override
 
-from cyberdrop_dl.tui.common import ColumnsType, DictProgress, OverflowPanel, ProgressHook
+from cyberdrop_dl.tui.common import ColumnsType, DictProgress, OverflowPanel, ProgressHook, Random, create_live
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -42,11 +43,12 @@ class AutoDownloadColumn(DownloadColumn):
         if hls_task is None:
             return super().render(task)
 
-        downloaded_bytes_str = self._format_bytes(int(hls_task.completed))
-        completed_segs_str = f"{int(task.completed):,}"
-        total_segs_str = "?" if task.total is None else f"{int(task.total):,}"
-        download_status = f"{completed_segs_str}/{total_segs_str} segs [{downloaded_bytes_str}]"
-        return Text(download_status, style="progress.download")
+        downloaded_bytes = self._format_bytes(int(hls_task.completed))
+        completed_segs = int(task.completed)
+        total_segs = "?" if task.total is None else f"{int(task.total):,}"
+        total_width = len(str(total_segs))
+        download_status = f"{completed_segs:{total_width}d}/{total_segs} segs [{downloaded_bytes}]"
+        return Text(download_status, style="progress.download", justify="right")
 
     def _format_bytes(self, n_bytes: int) -> str:
         multiplier, unit = self._select_bytes_units(n_bytes)
@@ -82,7 +84,7 @@ class DownloadsPanel(OverflowPanel):
         "━",
         AutoTransferSpeedColumn(),
         "━",
-        TimeRemainingColumn(elapsed_when_finished=True),
+        TimeRemainingColumn(compact=True, elapsed_when_finished=True),
     )
 
     @property
@@ -99,48 +101,90 @@ class DownloadsPanel(OverflowPanel):
 
     @contextlib.contextmanager
     def new_hls_task(self, filename: str, /, segments: float | None = None) -> Generator[None]:
-        # For HLS downloads, we use 2 different tasks on 2 diferent progress (one hidden) to track it
-        # One to track the downloaded bytes (with an unknown total) and one to track
+        # For HLS downloads, we use 2 different tasks on 2 different progress bars
+        # One (hidden) to track the downloaded bytes (with an unknown total) and one to track
         # the number of downloaded segments (with a known total)
-        # We create both at the same time (so they have the same task_id) and smuggle the bytes task
+        # We create both at the same time and smuggle the bytes task
         # as a field of the segments task to make all info available to the main progress for rendering
 
         task_id = self._hls_progress.add_task("", total=None, visible=False)
-        _ = self.new_task(filename, segments)
-        task = self._progress[task_id]
-        hls_task = self._hls_progress[task_id]
-        # The None values are not required but its to shut up pyright
-        # in case _HLS_TASK_FIELD_NAME overlaps with a valid param
+        segments_task = self._add_task(filename, segments)
+        bytes_task = self._hls_progress[task_id]
+        # The None values are not required but pyright complains cause _HLS_TASK_FIELD_NAME may overlap with a valid param
         self._progress.update(
-            task_id,
+            segments_task.id,
             total=None,
             completed=None,
             advance=None,
             description=None,
             visible=None,
             refresh=False,
-            **{_HLS_TASK_FIELD_NAME: hls_task},
+            **{_HLS_TASK_FIELD_NAME: bytes_task},
         )
-        token = _current_hls_task.set(task_id)
+        token = _current_hls_task.set(segments_task.id)
         try:
             yield
         finally:
-            self._remove_task(task)
+            self._remove_task(segments_task)
             self._hls_progress.remove_task(task_id)
             _current_hls_task.reset(token)
 
     def new_hls_seg_task(self) -> ProgressHook:
-        task_id = _current_hls_task.get()
-        hls_task = self._hls_progress[task_id]
+        segments_task_id = _current_hls_task.get()
+        hls_task: Task = self._progress[segments_task_id].fields[_HLS_TASK_FIELD_NAME]
 
         def advance(amount: int) -> None:
             self._total_amount += amount
-            self._hls_progress.advance(task_id, amount)
+            self._hls_progress.advance(hls_task.id, amount)
 
-        def done() -> None:
-            self._progress.advance(task_id, 1)
+        def on_exit() -> None:
+            self._progress.advance(segments_task_id, 1)
 
-        def speed() -> float:
+        def get_speed() -> float:
             return hls_task.finished_speed or hls_task.speed or 0
 
-        return ProgressHook(advance, done, speed)
+        return ProgressHook(advance, get_speed, on_exit)
+
+
+async def test(n_files: int = 10) -> None:
+    panel = DownloadsPanel()
+
+    async def download(hook: ProgressHook, size: int) -> None:
+        with hook:
+            for chunk in Random.int_until(size, max_step=1e8):
+                hook.advance(chunk)
+                await Random.sleep()
+
+    async def download_file(file: str) -> None:
+        size = Random.int(1e4, 1e9)
+        hook = panel.new_task(file, size)
+        await download(hook, size)
+
+    async def download_hls(file: str) -> None:
+        sem = asyncio.BoundedSemaphore(20)
+
+        async def download_segment() -> None:
+            size = Random.int(1e2, 1e4)
+            hook = panel.new_hls_seg_task()
+            try:
+                await download(hook, size)
+            finally:
+                sem.release()
+
+        n_segments = Random.int(100, 1_000)
+
+        with panel.new_hls_task(file, n_segments):
+            async with asyncio.TaskGroup() as tg:
+                for _ in range(n_segments):
+                    await sem.acquire()
+                    tg.create_task(download_segment())
+
+    with create_live(panel):
+        async with asyncio.TaskGroup() as tg:
+            for file in (f"file_{idx:03d}" for idx in range(n_files)):
+                fn = Random.choice([download_hls, download_file])
+                tg.create_task(fn(file))
+
+
+if __name__ == "__main__":  # pragma: no coverage
+    asyncio.run(test())
