@@ -5,10 +5,10 @@ from typing import ClassVar
 from rich.progress import BarColumn, SpinnerColumn
 from typing_extensions import override
 
-from cyberdrop_dl.tui.common import ColumnsType, OverflowingPanel
+from cyberdrop_dl.tui.common import ColumnsType, OverflowPanel
 
 
-class SortingPanel(OverflowingPanel):
+class SortingPanel(OverflowPanel):
     """Class that keeps track of sorted files."""
 
     unit: ClassVar[str] = "Folders"

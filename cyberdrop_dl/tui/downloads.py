@@ -17,26 +17,20 @@ from rich.progress import (
 from rich.text import Text
 from typing_extensions import override
 
-from cyberdrop_dl.tui.common import ColumnsType, OverflowingPanel, ProgressHook, ProgressProxy
+from cyberdrop_dl.tui.common import ColumnsType, DictProgress, OverflowPanel, ProgressHook
 
 if TYPE_CHECKING:
     from collections.abc import Generator
 
 _current_hls_task: ContextVar[TaskID] = ContextVar("_current_hls_task")
-_HLS_TASK_FIELD_NAME = "hls"
+_HLS_TASK_FIELD_NAME: Final = "hls"
 
 
 class AutoTransferSpeedColumn(TransferSpeedColumn):
-    """Shows `X MBs/s` for files and `X segs/s` for HLS downloads"""
-
     @override
     def render(self, task: Task) -> Text:
-        if _HLS_TASK_FIELD_NAME not in task.fields:
-            return super().render(task)
-
-        speed = task.finished_speed or task.speed
-        download_status = "?" if speed is None else f"{int(speed)} seg/s"
-        return Text(download_status, style="progress.data.speed")
+        real_task: Task = task.fields.get(_HLS_TASK_FIELD_NAME, task)
+        return super().render(real_task)
 
 
 class AutoDownloadColumn(DownloadColumn):
@@ -44,17 +38,13 @@ class AutoDownloadColumn(DownloadColumn):
 
     @override
     def render(self, task: Task) -> Text:
-        if _HLS_TASK_FIELD_NAME not in task.fields:
+        hls_task: Task | None = task.fields.get(_HLS_TASK_FIELD_NAME)
+        if hls_task is None:
             return super().render(task)
 
-        hls_task: Task = task.fields[_HLS_TASK_FIELD_NAME]
         downloaded_bytes_str = self._format_bytes(int(hls_task.completed))
         completed_segs_str = f"{int(task.completed):,}"
-        if task.total is not None:
-            total_segs_str = f"{int(task.total):,}"
-        else:
-            total_segs_str = "?"
-
+        total_segs_str = "?" if task.total is None else f"{int(task.total):,}"
         download_status = f"{completed_segs_str}/{total_segs_str} segs [{downloaded_bytes_str}]"
         return Text(download_status, style="progress.download")
 
@@ -80,7 +70,7 @@ class AutoDownloadColumn(DownloadColumn):
         )
 
 
-class DownloadsPanel(OverflowingPanel):
+class DownloadsPanel(OverflowPanel):
     unit: ClassVar[str] = "files"
     columns: ClassVar[ColumnsType] = (
         SpinnerColumn(),
@@ -95,34 +85,56 @@ class DownloadsPanel(OverflowingPanel):
         TimeRemainingColumn(elapsed_when_finished=True),
     )
 
+    @property
+    def total_data_written(self) -> int:
+        return self._total_amount
+
     def __init__(self) -> None:
-        self.total_data_written: int = 0
         super().__init__(visible_tasks_limit=10)
-        self._hls_progress: Final[ProgressProxy] = ProgressProxy("dummy")
+        self._hls_progress: Final[DictProgress] = DictProgress("")
 
     @override
     def _clean_task_description(self, description: object, /) -> str:
         return self._remove_non_ascii(str(description).rsplit("/", 1)[-1])
 
     @contextlib.contextmanager
-    def new_hls_task(self, filename: object, /, segments: float | None = None) -> Generator[None]:
+    def new_hls_task(self, filename: str, /, segments: float | None = None) -> Generator[None]:
+        # For HLS downloads, we use 2 different tasks on 2 diferent progress (one hidden) to track it
+        # One to track the downloaded bytes (with an unknown total) and one to track
+        # the number of downloaded segments (with a known total)
+        # We create both at the same time (so they have the same task_id) and smuggle the bytes task
+        # as a field of the segments task to make all info available to the main progress for rendering
+
+        task_id = self._hls_progress.add_task("", total=None, visible=False)
         _ = self.new_task(filename, segments)
-        task_id = self._hls_progress.add_task("")
-        self._tasks[task_id].fields[_HLS_TASK_FIELD_NAME] = self._hls_progress.tasks_proxy[task_id]
+        task = self._progress[task_id]
+        hls_task = self._hls_progress[task_id]
+        # The None values are not required but its to shut up pyright
+        # in case _HLS_TASK_FIELD_NAME overlaps with a valid param
+        self._progress.update(
+            task_id,
+            total=None,
+            completed=None,
+            advance=None,
+            description=None,
+            visible=None,
+            refresh=False,
+            **{_HLS_TASK_FIELD_NAME: hls_task},
+        )
         token = _current_hls_task.set(task_id)
         try:
             yield
         finally:
-            self._remove_task(task_id)
+            self._remove_task(task)
             self._hls_progress.remove_task(task_id)
             _current_hls_task.reset(token)
 
     def new_hls_seg_task(self) -> ProgressHook:
         task_id = _current_hls_task.get()
-        hls_task: Task = self._tasks[task_id].fields[_HLS_TASK_FIELD_NAME]
+        hls_task = self._hls_progress[task_id]
 
         def advance(amount: int) -> None:
-            self.total_data_written += amount
+            self._total_amount += amount
             self._hls_progress.advance(task_id, amount)
 
         def done() -> None:
@@ -132,8 +144,3 @@ class DownloadsPanel(OverflowingPanel):
             return hls_task.finished_speed or hls_task.speed or 0
 
         return ProgressHook(advance, done, speed)
-
-    @override
-    def _advance(self, task_id: TaskID, amount: int = 1) -> None:
-        self.total_data_written += amount
-        self._progress.advance(task_id, amount)

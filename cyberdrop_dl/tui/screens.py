@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import dataclasses
 import shutil
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, TypedDict
 
 from cyberdrop_dl import env
+from cyberdrop_dl.tui.common import RichProxy
 
 if TYPE_CHECKING:
     from rich.console import RenderableType
@@ -32,8 +33,8 @@ def is_terminal_in_portrait() -> bool:
     return False
 
 
-@dataclasses.dataclass(slots=True)
-class Screen:
+@dataclasses.dataclass(slots=True, frozen=True)
+class Screen(RichProxy):
     horizontal: RenderableType
     vertical: RenderableType = ""
 
@@ -43,17 +44,8 @@ class Screen:
         return self.vertical if is_terminal_in_portrait() else self.horizontal
 
 
-@dataclasses.dataclass(slots=True, frozen=True, kw_only=True)
-class AppScreens:
+class AppScreens(TypedDict):
     scraping: Screen
     simple: Screen
     hashing: Screen
     sorting: Screen
-
-    def __getitem__(self, name: Literal["hashing", "sorting", "scraping", "simple"]) -> Screen:
-        return {
-            "hashing": self.hashing,
-            "sorting": self.sorting,
-            "simple": self.simple,
-            "scraping": self.scraping,
-        }[name]

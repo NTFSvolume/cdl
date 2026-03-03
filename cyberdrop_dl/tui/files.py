@@ -4,11 +4,12 @@ from typing import ClassVar
 
 from rich.panel import Panel
 from rich.progress import BarColumn, Progress
+from typing_extensions import override
 
-from cyberdrop_dl.tui.common import ColumnsType, TaskCounter, UIPanel
+from cyberdrop_dl.tui.common import ColumnsType, TaskCounter, UIComponent
 
 
-class FileStatsPanel(UIPanel):
+class FileStatsPanel(UIComponent):
     """Class that keeps track of completed, skipped and failed files."""
 
     columns: ClassVar[ColumnsType] = (
@@ -46,6 +47,9 @@ class FileStatsPanel(UIPanel):
             subtitle=self._subtitle,
         )
 
+    def __rich__(self) -> Panel:
+        return self._panel
+
     @property
     def _subtitle(self) -> str:
         return f"Total Files: [white]{self._total:,}"
@@ -62,6 +66,7 @@ class FileStatsPanel(UIPanel):
 
             progress.update(task.id, total=self._total, completed=completed)
 
+    @override
     def _increase_counter(self, task_name: str) -> None:
         super()._increase_counter(task_name)
         self._redraw()

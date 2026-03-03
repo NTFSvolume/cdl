@@ -4,18 +4,16 @@ import contextlib
 from typing import TYPE_CHECKING, ClassVar
 
 from rich.columns import Columns
-from rich.progress import Progress, SpinnerColumn, TaskID
+from rich.progress import Progress, SpinnerColumn, Task
 
 from cyberdrop_dl import __version__
-from cyberdrop_dl.tui.common import ColumnsType, OverflowingPanel, UIPanel
+from cyberdrop_dl.tui.common import ColumnsType, OverflowPanel, UIComponent
 
 if TYPE_CHECKING:
     from collections.abc import Generator
 
-    from rich.console import RenderableType
 
-
-class ScrapingPanel(OverflowingPanel):
+class ScrapingPanel(OverflowPanel):
     unit: ClassVar[str] = "URLs"
     columns: ClassVar[ColumnsType] = SpinnerColumn(), "[progress.description]{task.description}"
 
@@ -23,25 +21,29 @@ class ScrapingPanel(OverflowingPanel):
         super().__init__(visible_tasks_limit=5)
 
 
-class StatusMessage(UIPanel):
+class StatusMessage(UIComponent):
     columns: ClassVar[ColumnsType] = (SpinnerColumn(), "[progress.description]{task.description}")
 
-    def __init__(self) -> None:
+    def __init__(self, description: str = f"Running Cyberdrop-DL: v{__version__}") -> None:
         super().__init__()
         self.activity: Progress = Progress(*self.columns)
-        _ = self.activity.add_task(f"Running Cyberdrop-DL: v{__version__}", total=100, completed=0)
-        self._task_id: TaskID = self._progress.add_task("", total=100, completed=0, visible=False)
-        self._renderable: RenderableType = Columns([self.activity, self._progress])
+        _ = self.activity.add_task(description)
+        task_id = self._progress.add_task("", total=100, completed=0, visible=False)
+        self._task: Task = self._progress[task_id]
+        self._renderable: Columns = Columns([self.activity, self._progress])
+
+    def __rich__(self) -> Columns:
+        return self._renderable
 
     def _update(self, description: object = None) -> None:
         self._progress.update(
-            self._task_id,
+            self._task.id,
             description=str(description) if description is not None else None,
             visible=bool(description),
         )
 
     def __str__(self) -> str:
-        return self._tasks[self._task_id].description
+        return self._task.description
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(msg={self!s})"

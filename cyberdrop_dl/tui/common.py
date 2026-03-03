@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import dataclasses
+from abc import ABC, abstractmethod
 from collections import deque
-from types import MappingProxyType
-from typing import TYPE_CHECKING, ClassVar, Final, Self
+from typing import TYPE_CHECKING, ClassVar, Final, Self, final
 
 from rich.console import Group
 from rich.markup import escape
@@ -29,6 +29,34 @@ class TaskCounter:
     count: int = 0
 
 
+class RichProxy(ABC):
+    @abstractmethod
+    def __rich__(self) -> RenderableType: ...
+
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__}(renderable={self.__rich__()!r})>"
+
+
+class DictProgress(Progress):
+    """A progress with a dict like interface"""
+
+    def __getitem__(self, task_id: TaskID) -> Task:
+        with self._lock:
+            return self._tasks[task_id]
+
+    def __len__(self) -> int:
+        with self._lock:
+            return len(self._tasks)
+
+    def copy(self) -> dict[TaskID, Task]:
+        with self._lock:
+            return self._tasks.copy()
+
+    def keys(self) -> tuple[TaskID, ...]:
+        with self._lock:
+            return tuple(self._tasks.keys())
+
+
 @dataclasses.dataclass(slots=True)
 class ProgressHook:
     advance: Callable[[int], None]
@@ -41,14 +69,11 @@ class ProgressHook:
     def __exit__(self, *_) -> None:
         self.done()
 
-    def remove_done_callback(self) -> ProgressHook:
-        return ProgressHook(self.advance, lambda: None, self.speed)
-
 
 ColumnsType = tuple[ProgressColumn | str, ...]
 
 
-class OverFlow:
+class OverFlow(RichProxy):
     def __init__(self, unit: str) -> None:
         self._progress: Progress = Progress("[progress.description]{task.description}")
         self.unit: str = unit
@@ -69,51 +94,30 @@ class OverFlow:
         self._progress.update(self._task_id, description=str(self), visible=count > 0)
 
 
-class ProgressProxy(Progress):
-    """A progress that exposes their tasks"""
-
-    def __init__(self, *columns: ProgressColumn | str) -> None:
-        super().__init__(*columns, disable=True)
-        self.task_counters: dict[str, TaskCounter] = {}
-        self.tasks_proxy: MappingProxyType[TaskID, Task] = MappingProxyType(self._tasks)
-
-
-class UIPanel:
-    """A section of the TUI.
-
-    The panel could potencially fill the entire terminal or share it with other panels"""
+class UIComponent(RichProxy, ABC):
+    """A section of the TUI."""
 
     columns: ClassVar[ColumnsType]
 
     def __init__(self) -> None:
-        self._progress: Final[ProgressProxy] = ProgressProxy(*self.columns)
-        self._renderable: RenderableType = ""
+        self._progress: Final[DictProgress] = DictProgress(*self.columns)
+        self._counters: Final[dict[str, TaskCounter]] = {}
 
-    def __rich__(self) -> RenderableType:
-        return self._renderable
-
-    def __repr__(self) -> str:
-        return f"<{type(self).__name__}(panel={self._renderable!r})>"
-
-    @property
-    def _tasks(self) -> MappingProxyType[TaskID, Task]:
-        return self._progress.tasks_proxy
-
-    @property
-    def _counters(self) -> dict[str, TaskCounter]:
-        return self._progress.task_counters
-
+    @final
     @classmethod
     def _remove_non_ascii(cls, desc: str) -> str:
         return escape(_truncate(desc.encode("ascii", "ignore").decode().strip()))
 
+    def _clean_task_description(self, description: object, /) -> object:
+        return description
+
     def _increase_counter(self, task_name: str) -> None:
-        task_counter = self._progress.task_counters[task_name]
+        task_counter = self._counters[task_name]
         task_counter.count += 1
         self._progress.advance(task_counter.id)
 
 
-class OverflowingPanel(UIPanel):
+class OverflowPanel(UIComponent):
     unit: ClassVar[str]
 
     def __init__(self, visible_tasks_limit: int) -> None:
@@ -123,31 +127,60 @@ class OverflowingPanel(UIPanel):
         self._limit: int = visible_tasks_limit
         self._invisible_queue: deque[TaskID] = deque()
         self._visible_tasks: int = 0
-        self._orphan_tasks: set[TaskID] = set()
-        self._renderable: RenderableType = Panel(
+        self._total_amount: int = 0
+
+        self._orphan_tasks: set[TaskID] = set()  # This aretasks that never got to show up on the UI
+        # The started and finished bfeore there was an avaibale slots on the panel
+
+        self._panel: Panel = Panel(
             Group(self._progress, self._overflow),
             title=self._title,
             border_style="green",
             padding=(1, 1),
         )
 
-    def _update_overflow(self) -> None:
-        self._overflow.update(count=len(self._tasks) - self._visible_tasks)
+    def __rich__(self) -> RenderableType:
+        return self._panel
 
-    def _add_task(self, description: str, total: float | None = None, /, *, completed: int = 0) -> TaskID:
+    def _update_overflow(self) -> None:
+        self._overflow.update(count=len(self._progress) - self._visible_tasks)
+
+    def new_task(self, description: object, /, total: float | None = None) -> ProgressHook:
+        task = self._add_task(description, total)
+
+        def advance(amount: int = 1) -> None:
+            self._total_amount += amount
+            self._progress.advance(task.id, amount)
+
+        def done() -> None:
+            self._remove_task(task)
+
+        def speed() -> float:
+            return task.finished_speed or task.speed or 0
+
+        return ProgressHook(advance, done, speed)
+
+    @final
+    def _add_task(self, description: object, total: float | None = None, /, *, completed: int = 0) -> Task:
         visible = self._visible_tasks < self._limit
-        task_id = self._progress.add_task(f"[{_COLOR}]{description}", total=total, visible=visible, completed=completed)
+        task_id = self._progress.add_task(
+            f"[{_COLOR}]{self._clean_task_description(description)}",
+            total=total,
+            visible=visible,
+            completed=completed,
+        )
         if visible:
             self._visible_tasks += 1
         else:
             self._invisible_queue.append(task_id)
             self._update_overflow()
 
-        return task_id
+        return self._progress[task_id]
 
-    def _remove_task(self, task_id: TaskID) -> None:
-        was_visible = self._tasks[task_id].visible
-        self._progress.remove_task(task_id)
+    @final
+    def _remove_task(self, task: Task) -> None:
+        was_visible = task.visible
+        self._progress.remove_task(task.id)
         if was_visible:
             while True:
                 try:
@@ -157,33 +190,12 @@ class OverflowingPanel(UIPanel):
                     break
                 else:
                     try:
-                        self._orphan_tasks.remove(task_id)
+                        self._orphan_tasks.remove(task.id)
                     except KeyError:
                         self._progress.update(invisible_task_id, visible=True)
                         break
 
         else:
-            self._orphan_tasks.add(task_id)
+            self._orphan_tasks.add(task.id)
 
         self._update_overflow()
-
-    def _clean_task_description(self, description: object, /) -> str:
-        return str(description)
-
-    def new_task(self, description: object, /, total: float | None = None) -> ProgressHook:
-        task_id = self._add_task(self._clean_task_description(description), total)
-        task = self._tasks[task_id]
-
-        def advance(amount: int = 1) -> None:
-            self._advance(task_id, amount)
-
-        def done() -> None:
-            self._remove_task(task_id)
-
-        def speed() -> float:
-            return task.finished_speed or task.speed or 0
-
-        return ProgressHook(advance, done, speed)
-
-    def _advance(self, task_id: TaskID, amount: int = 1) -> None:
-        self._progress.advance(task_id, amount)

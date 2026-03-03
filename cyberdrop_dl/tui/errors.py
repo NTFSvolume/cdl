@@ -7,7 +7,7 @@ from typing import ClassVar, Self
 from rich.panel import Panel
 from rich.progress import BarColumn, TaskID
 
-from cyberdrop_dl.tui.common import ColumnsType, UIPanel
+from cyberdrop_dl.tui.common import ColumnsType, UIComponent
 
 
 @dataclasses.dataclass(slots=True, order=True)
@@ -28,7 +28,7 @@ class UIFailure:
         return cls(msg, count)
 
 
-class _ErrorsPanel(UIPanel):
+class _ErrorsPanel(UIComponent):
     """Base class that keeps track of errors and reasons."""
 
     columns: ClassVar[ColumnsType] = (
@@ -40,7 +40,7 @@ class _ErrorsPanel(UIPanel):
     )
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}(error_count={self._error_count!r}, errors={tuple(self._errors.keys())!r})"
+        return f"{type(self).__name__}(error_count={self._error_count!r}, errors={tuple(self._errors)!r})"
 
     def __init__(self) -> None:
         super().__init__()
@@ -54,6 +54,9 @@ class _ErrorsPanel(UIPanel):
             padding=(1, 1),
             subtitle=self._subtitle,
         )
+
+    def __rich__(self) -> Panel:
+        return self._panel
 
     @property
     def _subtitle(self) -> str:
@@ -74,7 +77,7 @@ class _ErrorsPanel(UIPanel):
         for task_id in self._errors.values():
             self._progress.update(task_id, total=self._error_count)
 
-        tasks = list(self._tasks.values())
+        tasks = self._progress.tasks
         tasks_sorted = sorted(tasks, key=lambda x: x.completed, reverse=True)
         if tasks == tasks_sorted:
             return
@@ -88,9 +91,8 @@ class _ErrorsPanel(UIPanel):
             )
 
     def results(self) -> list[UIFailure]:
-        return sorted(
-            UIFailure.parse(msg, int(self._tasks[task_id].completed)) for msg, task_id in self._errors.items()
-        )
+        tasks = self._progress.copy()
+        return sorted(UIFailure.parse(msg, int(tasks[task_id].completed)) for msg, task_id in self._errors.items())
 
 
 class DownloadErrors(_ErrorsPanel):

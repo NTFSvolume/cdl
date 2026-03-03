@@ -11,7 +11,7 @@ from rich.markup import escape
 from rich.panel import Panel
 from rich.progress import BarColumn, Progress
 
-from cyberdrop_dl.tui.common import ColumnsType, OverflowingPanel, TaskCounter
+from cyberdrop_dl.tui.common import ColumnsType, OverflowPanel, TaskCounter
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 _base_dir: ContextVar[Path] = ContextVar("_base_dir")
 
 
-class HashingPanel(OverflowingPanel):
+class HashingPanel(OverflowPanel):
     """Class that keeps track of hashed files."""
 
     columns: ClassVar[ColumnsType] = ("{task.description}",)
@@ -67,9 +67,9 @@ class HashingPanel(OverflowingPanel):
         return self._counters["removed"].count
 
     @contextlib.contextmanager
-    def __call__(self, path: Path) -> Generator[None]:
-        token = _base_dir.set(path)
-        desc = "[green]Base dir: [blue]" + escape(str(path))
+    def new_dir_task(self, dir: Path) -> Generator[None]:
+        token = _base_dir.set(dir)
+        desc = "[green]Base dir: [blue]" + escape(str(dir))
         self._progress.update(self._counters["base_dir"].id, description=desc)
         try:
             yield
