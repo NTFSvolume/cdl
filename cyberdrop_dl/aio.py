@@ -7,14 +7,17 @@ import contextlib
 import dataclasses
 import shutil
 import tempfile
+from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable, Coroutine, Iterable, Iterator
+from contextlib import AbstractAsyncContextManager
 from pathlib import Path
 from stat import S_ISREG
-from typing import IO, TYPE_CHECKING, Any, AnyStr, Generic, ParamSpec, Self, TypeVar, cast, overload
+from typing import IO, TYPE_CHECKING, Any, AnyStr, Generic, ParamSpec, Self, TypeVar, cast, final, overload
 from weakref import WeakValueDictionary
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Sequence
+    from types import TracebackType
 
     from _typeshed import OpenBinaryMode, OpenTextMode
 
@@ -22,6 +25,7 @@ if TYPE_CHECKING:
 _T = TypeVar("_T")
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
+_ExitT_co = TypeVar("_ExitT_co", bound="bool | None")
 
 
 @dataclasses.dataclass(slots=True, eq=False)
@@ -206,3 +210,29 @@ async def temp_dir() -> AsyncGenerator[Path]:
         yield Path(temp_dir.name)
     finally:
         await asyncio.to_thread(temp_dir.cleanup)
+
+
+class AsyncContextManagerMixin(ABC):
+    __ctx: AbstractAsyncContextManager[object, bool | None] | None = None
+
+    @final
+    async def __aenter__(self) -> Self:
+        if self.__ctx is not None:
+            raise RuntimeError(f"{type(self).__qualname__} does not support re-entrance")
+
+        ctx = self._asyncctx_()
+        me = await ctx.__aenter__()
+        self.__ctx = ctx
+        return cast("Self", me)
+
+    @final
+    async def __aexit__(
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
+    ) -> _ExitT_co:
+        assert self.__ctx is not None
+        ctx = self.__ctx
+        del self.__ctx
+        return cast("_ExitT_co", await ctx.__aexit__(exc_type, exc_val, exc_tb))
+
+    @abstractmethod
+    def _asyncctx_(self) -> AbstractAsyncContextManager[object, bool | None]: ...

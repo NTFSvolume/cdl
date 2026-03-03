@@ -6,10 +6,11 @@ import csv
 import dataclasses
 import logging
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Self
 
 from cyberdrop_dl import __version__, appdata, ffmpeg, storage
 from cyberdrop_dl.clients.http import HTTPClient
+from cyberdrop_dl.config import Config
 from cyberdrop_dl.database import Database
 from cyberdrop_dl.exceptions import get_origin
 from cyberdrop_dl.hasher import Hasher
@@ -23,7 +24,7 @@ if TYPE_CHECKING:
 
     from yarl import URL
 
-    from cyberdrop_dl.config import Config
+    from cyberdrop_dl.appdata import AppData
     from cyberdrop_dl.data_structures.url_objects import MediaItem, ScrapeItem
 
 
@@ -41,8 +42,10 @@ logger = logging.getLogger(__name__)
 
 
 class Manager:
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Config | None = None) -> None:
+        config = config or Config()
         self.config: Config = config
+        self.app_data: AppData = appdata.get()
         self.database: Database = Database(appdata.get().db_file, config.runtime.ignore_history)
         self.client: HTTPClient = HTTPClient.from_config(config)
         self.hasher: Hasher = Hasher.build(self)
@@ -53,8 +56,6 @@ class Manager:
         self.logs: LogsManager = LogsManager(config, self.task_group)
         self._completed_downloads: set[MediaItem] = set()
         self._completed_downloads_paths: set[Path] = set()
-        self._prev_downloads: set[MediaItem] = set()
-        self._prev_downloads_paths: set[Path] = set()
 
     @property
     def states(self) -> Events:
@@ -68,38 +69,31 @@ class Manager:
         self._completed_downloads.add(media_item)
         self._completed_downloads_paths.add(media_item.complete_file)
 
-    def add_prev(self, media_item: MediaItem) -> None:
-        self._prev_downloads.add(media_item)
-        self._prev_downloads_paths.add(media_item.complete_file)
-
     @property
     def completed_downloads(self) -> set[MediaItem]:
         return self._completed_downloads
 
-    @property
-    def prev_downloads(self) -> set[MediaItem]:
-        return self._prev_downloads
-
     @contextlib.asynccontextmanager
-    async def run(self) -> AsyncGenerator[ScrapeMapper]:
+    async def _asyncctx_(self) -> AsyncGenerator[Self]:
         """Async startup process for the manager."""
 
         _ = filepath.MAX_FILE_LEN.set(self.config.general.max_file_name_length)
         _ = filepath.MAX_FOLDER_LEN.set(self.config.general.max_folder_name_length)
-        self.log_app_state()
 
+        logger.info("Starting Async Processes...")
         async with (
             self.task_group,
-            self.client,
+            self.client,  # TODO: with database
             storage.monitor(self.config.general.required_free_space),
         ):
+            self.log_app_state()
             await self.client.load_cookie_files()
-            yield self.scrape_mapper
+            logger.info("Starting CDL...\n")
+            with self.manager.tui(screen="scraping"):
+                yield self
 
     def log_app_state(self) -> None:
-        config_ = self.config
-        app_data = appdata.get()
-        auth = {site: all(credentials.values()) for site, credentials in config_.auth.model_dump().items()}
+        auth = {site: all(credentials.values()) for site, credentials in self.config.auth.model_dump().items()}
 
         # f"Using Input File: {self.path_manager.input_file}",
         stats = dict(  # noqa: C408
@@ -107,10 +101,10 @@ class Manager:
             system=get_system_information(),
             ffmpeg=ffmpeg.get_ffmpeg_version(),
             ffprobe=ffmpeg.get_ffprobe_version(),
-            database=app_data.db_file,
-            config_file=config_.source,
+            database=self.app_data.db_file,
+            config_file=self.config.source,
             auth=auth,
-            config=config_.model_dump_json(indent=2, exclude={"auth"}),
+            config=self.config.model_dump_json(indent=2, exclude={"auth"}),
         )
         logger.debug(stats)
 

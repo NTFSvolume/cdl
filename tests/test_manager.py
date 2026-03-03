@@ -121,7 +121,7 @@ def test_args_logging_should_censor_webhook(
 
 
 async def test_async_db_close(running_manager: Manager) -> None:
-    await running_manager.run()
+    await running_manager
     assert not isinstance(running_manager.database, Field)
     assert not isinstance(running_manager.hasher, Field)
     assert "overwrite" not in str(running_manager.logs.main_log)

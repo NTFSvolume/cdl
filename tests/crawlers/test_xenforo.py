@@ -74,7 +74,7 @@ async def post_startup_manager(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     downloads = str(tmp_path / "Downloads")
     monkeypatch.chdir(tmp_path)
     manager = Manager(("--appdata-folder", appdata, "-d", downloads))
-    await manager.run()
+    await manager
     yield manager
     await manager.async_db_close()
     await manager.close()

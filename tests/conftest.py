@@ -75,7 +75,7 @@ def post_startup_manager(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Man
 @pytest.fixture(scope="function")
 async def running_manager(manager: Manager) -> AsyncGenerator[Manager]:
     scrape_mapper.existing_crawlers.clear()
-    await manager.run()
+    await manager
     manager.states.RUNNING.set()
     yield manager
     manager.states.RUNNING.clear()

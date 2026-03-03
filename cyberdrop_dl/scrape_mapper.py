@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import dataclasses
 import datetime
 import logging
@@ -8,9 +9,9 @@ import re
 from collections import defaultdict
 from collections.abc import Generator
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, Self, TypeVar
 
-from cyberdrop_dl import aio, plugins
+from cyberdrop_dl import aio, plugins, storage
 from cyberdrop_dl.clients.jdownloader import JDownloader
 from cyberdrop_dl.constants import REGEX_LINKS, BlockedDomains
 from cyberdrop_dl.crawlers import create_crawlers
@@ -22,7 +23,7 @@ from cyberdrop_dl.crawlers.wordpress import WordPressHTMLCrawler, WordPressMedia
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.exceptions import JDownloaderError, NoExtensionError
 from cyberdrop_dl.logger import spacer
-from cyberdrop_dl.utils import best_match, get_download_path, parse_url, remove_trailing_slash
+from cyberdrop_dl.utils import best_match, filepath, get_download_path, parse_url, remove_trailing_slash
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, AsyncIterable, Coroutine, Generator, Iterable
@@ -148,7 +149,7 @@ async def load_bunkr_fails_via_hash(database: Database) -> AsyncGenerator[Scrape
             yield _create_item_from_row(row)
 
 
-class ScrapeMapper:
+class ScrapeMapper(aio.AsyncContextManagerMixin):
     """This class maps links to their respective handlers, or JDownloader if they are unsupported."""
 
     def __init__(self, manager: Manager) -> None:
@@ -161,6 +162,23 @@ class ScrapeMapper:
         self.crawlers["real-debrid"] = RealDebridCrawler
         self.real_debrid: RealDebridCrawler = self.factory[RealDebridCrawler]
         self._ready: bool = False
+
+    @contextlib.asynccontextmanager
+    async def _asyncctx_(self) -> AsyncGenerator[Self]:
+        _ = filepath.MAX_FILE_LEN.set(self.config.general.max_file_name_length)
+        _ = filepath.MAX_FOLDER_LEN.set(self.config.general.max_folder_name_length)
+
+        logger.info("Starting Async Processes...")
+        async with (
+            self.manager.task_group,
+            self.manager.client,  # TODO: with database
+            storage.monitor(self.config.general.required_free_space),
+        ):
+            self.manager.log_app_state()
+            await self.manager.client.load_cookie_files()
+            logger.info("Starting CDL...\n")
+            with self.manager.tui(screen="scraping"):
+                yield self
 
     def _create_task(self, coro: Coroutine[Any, Any, Any]) -> None:
         _ = self.manager.task_group.create_task(coro)

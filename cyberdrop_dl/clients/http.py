@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, cast
 import aiohttp
 import certifi
 import truststore
-from aiohttp.client import ClientResponse, ClientSession
+from aiohttp.client import ClientSession
 from aiohttp.resolver import AsyncResolver, ThreadedResolver
 from aiolimiter import AsyncLimiter
 from multidict import CIMultiDict
@@ -138,7 +138,7 @@ class RateLimiter:
 
 
 @dataclasses.dataclass(slots=True, kw_only=True)
-class HTTPClient:
+class HTTPClient(aio.AsyncContextManagerMixin):
     """
     Wrapper around aiohttp.ClientSession / curl.AsyncSession
 
@@ -154,11 +154,12 @@ class HTTPClient:
     rate_limiter: RateLimiter
     ssl_context: ssl.SSLContext | Literal[False]
 
-    json_resp_checkers: dict[Domain, Callable[[Any, AbstractResponse], None]] = dataclasses.field(default_factory=dict)
+    json_resp_checkers: dict[Domain, Callable[[Any, AbstractResponse[Any]], None]] = dataclasses.field(
+        default_factory=dict
+    )
     _cookies: aiohttp.CookieJar | None = None
-    _aiohttp_session: aiohttp.ClientSession | None = None
+    aiohttp_session: aiohttp.ClientSession = dataclasses.field(init=False)
     _curl_session: AsyncSession[CurlResponse] | None = None
-
     _flaresolverr: FlareSolverr = dataclasses.field(init=False)
     _in_context: bool = dataclasses.field(init=False, default=False)
 
@@ -182,46 +183,35 @@ class HTTPClient:
         return {}
 
     @property
-    def cookies(self) -> aiohttp.CookieJar:
-        # Create it lazyly cause it is loop bound
-        if self._cookies is None:
-            self._cookies = aiohttp.CookieJar(quote_cookie=False)
-        return self._cookies
-
-    @property
     def curl_session(self) -> AsyncSession[CurlResponse]:
         if self._curl_session is None:
-            self._check_in_ctx()
             _check_curl_cffi_is_available()
             self._curl_session = self._create_curl_session()
         return self._curl_session
 
     @property
-    def aiohttp_session(self) -> ClientSession:
-        if self._aiohttp_session is None:
-            self._check_in_ctx()
-            self._aiohttp_session = self._create_aiohttp_session()
-        return self._aiohttp_session
+    def cookies(self) -> aiohttp.CookieJar:
+        # Create it lazyly cause it is loop bound for some reason
+        if self._cookies is None:
+            self._cookies = aiohttp.CookieJar(quote_cookie=False)
+        return self._cookies
 
-    def _check_in_ctx(self) -> None:
-        if not self._in_context:
-            raise RuntimeError(f"Only use {type(self).__name__} within a context manager.")
-
-    async def __aenter__(self) -> Self:
+    @contextlib.asynccontextmanager
+    async def _asyncctx_(self) -> AsyncGenerator[Self]:
         global _dns_resolver
         if _dns_resolver is None:
             _dns_resolver = await _get_dns_resolver()
-        if self._in_context:
-            raise RuntimeError(f"{type(self).__name__} does not allow re-entrance")
-        self._in_context = True
-        return self
 
-    async def __aexit__(self, *_) -> None:
-        sessions = filter(None, (self._aiohttp_session, self._curl_session, self._flaresolverr))
-        _ = await asyncio.gather(*(f.close() for f in sessions), return_exceptions=True)
-        self._aiohttp_session = None
-        self._curl_session = None
-        self._in_context = False
+        async with self.create_aiohttp_session() as aiosession:
+            self.aiohttp_session = aiosession
+            try:
+                yield self
+            finally:
+                await self._flaresolverr.close()
+                del self.aiohttp_session
+                if self._curl_session:
+                    await self._curl_session.close()
+                    self._curl_session = None
 
     @contextlib.asynccontextmanager
     async def _request(
@@ -234,7 +224,7 @@ class HTTPClient:
         data: Any = None,
         json: Any = None,
         **request_params: Any,
-    ) -> AsyncGenerator[AbstractResponse]:
+    ) -> AsyncGenerator[AbstractResponse[Any]]:
         """
         Asynchronous context manager for HTTP requests.
 
@@ -268,7 +258,7 @@ class HTTPClient:
         headers: CIMultiDict[str],
         request_params: dict[str, Any],
         impersonate: BrowserTypeLiteral | Literal[False] | None,
-    ) -> AsyncGenerator[AbstractResponse]:
+    ) -> AsyncGenerator[AbstractResponse[Any]]:
         logger.debug(f"Starting {method} request to {url}")
 
         if impersonate:
@@ -304,18 +294,18 @@ class HTTPClient:
             self.cookies.update_cookies(simple_cookie, url)
 
     async def _check_response(
-        self, abs_resp: AbstractResponse, url: AbsoluteHttpURL, data: Any | None = None
-    ) -> AbstractResponse:
+        self, resp: AbstractResponse[Any], url: AbsoluteHttpURL, data: Any | None = None
+    ) -> AbstractResponse[Any]:
         """Checks the HTTP response status and retries DDOS Guard errors with FlareSolverr.
 
         Returns an AbstractResponse confirmed to not be a DDOS Guard page."""
         try:
-            await self.check_http_status(abs_resp)
+            await self.check_http_status(resp)
         except DDOSGuardError:
             flare_solution = await self._flaresolverr.request(url, data)
             return AbstractResponse.from_flaresolverr(flare_solution)
         else:
-            return abs_resp
+            return resp
 
     @staticmethod
     def basic_auth(username: str, password: str) -> str:
@@ -324,7 +314,7 @@ class HTTPClient:
 
     def filter_cookies_by_word_in_domain(self, word: str) -> Iterable[tuple[str, BaseCookie[str]]]:
         """Yields pairs of `[domain, BaseCookie]` for every cookie with a domain that has `word` in it"""
-        if not self._cookies:
+        if not self.cookies:
             return
         self.cookies._do_expiration()
         for domain, _ in self.cookies._cookies:
@@ -357,7 +347,7 @@ class HTTPClient:
             cookies={cookie.key: cookie.value for cookie in self.cookies},
         )
 
-    def _create_aiohttp_session(self) -> ClientSession:
+    def create_aiohttp_session(self) -> ClientSession:
         assert _dns_resolver is not None
         tcp_conn = aiohttp.TCPConnector(
             ssl=self.ssl_context,
@@ -389,18 +379,11 @@ class HTTPClient:
 
         logger.info(spacer())
 
-    async def check_http_status(
-        self,
-        response: ClientResponse | CurlResponse | AbstractResponse,
-        *,
-        is_download: bool = False,
-    ) -> None:
+    async def check_http_status(self, response: AbstractResponse[Any], *, is_download: bool = False) -> None:
         """Checks the HTTP status code and raises an exception if it's not acceptable.
 
         If the response is successful and has valid html, returns soup
         """
-        if not isinstance(response, AbstractResponse):
-            response = AbstractResponse.from_resp(response)
 
         if is_download and (e_tag := response.headers.get("ETag")) in _DOWNLOAD_ERROR_ETAGS:
             raise DownloadError(HTTPStatus.NOT_FOUND, message=_DOWNLOAD_ERROR_ETAGS[e_tag])
@@ -412,7 +395,7 @@ class HTTPClient:
         await ddos_guard.check(response)
         raise DownloadError(status=response.status)
 
-    async def _check_json(self, response: AbstractResponse) -> None:
+    async def _check_json(self, response: AbstractResponse[Any]) -> None:
         if "json" not in response.content_type:
             return
 

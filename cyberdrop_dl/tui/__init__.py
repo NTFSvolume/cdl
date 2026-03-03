@@ -90,7 +90,7 @@ class TUI:
                 self._current_screen = ""
                 self._live.stop()
 
-    def print_stats(self, start_time: float) -> None:
+    def show_stats(self, start_time: float) -> None:
         """Prints the stats of the program."""
         # if not self.manager.parsed_args.cli_only_args.print_stats:
         #    return

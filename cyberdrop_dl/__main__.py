@@ -1,25 +1,25 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import functools
 import logging
 import sys
+import time
 from typing import TYPE_CHECKING, ParamSpec, TypeVar
 
-from cyberdrop_dl import config
 from cyberdrop_dl.dependencies import browser_cookie3
 from cyberdrop_dl.logger import setup_logging, spacer
 from cyberdrop_dl.manager import Manager
-from cyberdrop_dl.scrape_mapper import ScrapeMapper
+from cyberdrop_dl.notifications import send_apprise_notifications, send_webhook_notification
+from cyberdrop_dl.sorting import Sorter
 from cyberdrop_dl.updates import check_latest_pypi
 from cyberdrop_dl.utils import check_partials_and_empty_folders
-from cyberdrop_dl.utils.apprise import send_apprise_notifications
-from cyberdrop_dl.utils.sorting import Sorter
-from cyberdrop_dl.webhook import send_notification
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Coroutine, Sequence
+    from collections.abc import Callable, Coroutine
+    from pathlib import Path
+
+    from cyberdrop_dl.data_structures import AbsoluteHttpURL
 
     _P = ParamSpec("_P")
     _R = TypeVar("_R")
@@ -52,60 +52,46 @@ def _task_group_error_wrapper(
 
 
 @_task_group_error_wrapper
-async def _run_manager(manager: Manager) -> None:
-    config_ = config.get()
-    with setup_logging(config_.logs.main_log, config_.runtime.log_level, config_.runtime.console_log_level):
-        logger.info("Starting Async Processes...")
-        await manager.run()
+async def scrape(manager: Manager, source: list[AbsoluteHttpURL] | Path) -> None:
+    manager.config.resolve_paths()
+    main_log = manager.config.logs.main_log
+    start_time = time.monotonic()
+    with setup_logging(
+        main_log,
+        level=manager.config.runtime.log_level,
+        console_level=manager.config.runtime.console_log_level,
+    ):
+        async with manager.scrape_mapper as scrapper:
+            await scrapper.run(source)
 
-        logger.info("Starting CDL...\n")
-        await _scheduler(manager)
-        manager.tui.print_stats(1)
+        await _post_runtime(manager)
+        manager.tui.show_stats(start_time)
 
         logger.info(spacer())
 
-        await check_latest_pypi()
-        logger.info(spacer())
-        logger.info("Closing program...")
-        logger.info("Finished downloading. Enjoy :)", extra={"color": "green"})
+        async with manager.client.create_aiohttp_session() as session:
+            await check_latest_pypi(session)
+            logger.info(spacer())
+            logger.info("Closing program...")
+            logger.info("Finished downloading. Enjoy :)", extra={"color": "green"})
 
-        await send_notification(manager)
-        await send_apprise_notifications("", main_log=config_.logs.main_log)
-
-
-async def _scheduler(manager: Manager) -> None:
-    for func in (_runtime, _post_runtime):
-        if manager.states.SHUTTING_DOWN.is_set():
-            return
-
-        try:
-            await func(manager)
-        except asyncio.CancelledError:
-            if not manager.states.SHUTTING_DOWN.is_set():
-                raise
-
-
-async def _runtime(manager: Manager) -> None:
-    """Main runtime loop for the program, this will run until all scraping and downloading is complete."""
-
-    manager.states.RUNNING.set()
-    with manager.tui.get_main_live(stop=True):
-        async with ScrapeMapper.managed(manager) as scrape_mapper:
-            await scrape_mapper.run()
+            if webhook := manager.config.logs.webhook:
+                await send_webhook_notification(session, webhook, main_log)
+            await send_apprise_notifications("TODO: cappture contetx from stats", main_log=main_log)
 
 
 async def _post_runtime(manager: Manager) -> None:
-    """Actions to complete after main runtime, and before ui shutdown."""
+    """Actions to complete after the main scrape process"""
     logger.info(spacer())
     logger.info("Running Post-Download Processes", extra={"color": "green"})
+    await manager.hasher.post_download_hash(manager.completed_downloads)
+    await manager.hasher.dedupe()
 
-    await manager.hasher.hash_client.cleanup_dupes_after_download()
-
-    if config.get().sorting.sort_downloads:
-        sorter = Sorter(manager)
+    if manager.config.sorting.sort_downloads:
+        sorter = Sorter.from_config(manager.tui, manager.config)
         await sorter.run()
 
-    check_partials_and_empty_folders(manager)
+    check_partials_and_empty_folders(manager.config)
 
 
 def _loop_factory() -> asyncio.AbstractEventLoop:
@@ -115,26 +101,7 @@ def _loop_factory() -> asyncio.AbstractEventLoop:
     return loop
 
 
-class Director:
-    """Creates a manager and runs it"""
-
-    def __init__(self, args: Sequence[str] | None = None) -> None:
-        self.manager: Manager = Manager()
-
-    def run(self) -> int:
-        return self._run()
-
-    async def async_run(self) -> None:
-        try:
-            await _run_manager(self.manager)
-        finally:
-            await self.manager.close()
-
-    def _run(self) -> int:
-        exit_code = 1
-        with contextlib.suppress(Exception):
-            with asyncio.Runner(loop_factory=_loop_factory) as runner:
-                runner.run(self.async_run())
-            exit_code = 0
-
-        return exit_code
+def main() -> None:
+    manager = Manager()
+    with asyncio.Runner(loop_factory=_loop_factory) as runner:
+        runner.run(scrape(manager))
