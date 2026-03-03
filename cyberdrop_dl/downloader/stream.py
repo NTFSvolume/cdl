@@ -8,7 +8,7 @@ import shutil
 import time
 from http import HTTPStatus
 from pathlib import Path
-from typing import TYPE_CHECKING, ClassVar, Protocol
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol
 
 import aiofiles
 from aiolimiter import AsyncLimiter
@@ -124,14 +124,15 @@ class StreamDownloader:
             await self._check_resp(media_item, resp)
             media_item.filesize = resume_point + int(resp.headers.get("Content-Length", 0))
             if media_item.is_segment:
-                progress_hook = self.manager.tui.downloads.current_hook.remove_done_callback()
+                progress_hook = self.manager.tui.downloads.new_hls_seg_task()
             else:
-                progress_hook = self.manager.tui.downloads.new_hook(media_item.filename, media_item.filesize)
+                progress_hook = self.manager.tui.downloads.new_task(media_item.filename, media_item.filesize)
             if resume_point:
                 progress_hook.advance(resume_point)
-            yield self._get_stream_reader_(resp), progress_hook
 
-    async def _check_resp(self, media_item: MediaItem, resp: aiohttp.ClientResponse | AbstractResponse) -> None:
+            yield resp, progress_hook
+
+    async def _check_resp(self, media_item: MediaItem, resp: AbstractResponse[Any]) -> None:
         if resp.status == HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE:
             await asyncio.to_thread(media_item.partial_file.unlink)
 
@@ -153,7 +154,9 @@ class StreamDownloader:
             media_item.timestamp = last_modified
 
     @staticmethod
-    def _get_stream_reader_(resp: aiohttp.ClientResponse | AbstractResponse) -> AbstractResponse | aiohttp.StreamReader:
+    def _get_stream_reader_(
+        resp: aiohttp.ClientResponse | AbstractResponse[Any],
+    ) -> AbstractResponse[Any] | aiohttp.StreamReader:
         if isinstance(resp, AbstractResponse):
             return resp
         return resp.content
@@ -161,7 +164,7 @@ class StreamDownloader:
     @contextlib.asynccontextmanager
     async def __request_context(
         self, url: AbsoluteHttpURL, domain: str, headers: dict[str, str]
-    ) -> AsyncGenerator[AbstractResponse | aiohttp.ClientResponse]:
+    ) -> AsyncGenerator[AbstractResponse[Any]]:
         if domain in _USE_IMPERSONATION:
             resp = await self.manager.client.curl_session.get(str(url), stream=True, headers=headers)
             try:
@@ -171,7 +174,7 @@ class StreamDownloader:
             return
 
         async with self.manager.client.aiohttp_session.get(url, headers=headers) as resp:
-            yield resp
+            yield AbstractResponse.from_resp(resp)
 
     async def _download_stream(
         self, media_item: MediaItem, stream: ReadableStream, progress_hook: ProgressHook
@@ -230,7 +233,7 @@ class StreamDownloader:
         await asyncio.to_thread(Path.chmod, media_item.complete_file, 0o666)
         if media_item.is_segment:
             return
-        await self.manager.hasher.hash_client.run(media_item)
+        await self.manager.hasher.in_place_hash(media_item)
         self.manager.add_completed(media_item)
         self.manager.tui.files.add_completed()
         await self.manager.database.history_table.mark_complete(media_item.domain, media_item)

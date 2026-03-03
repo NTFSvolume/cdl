@@ -71,7 +71,7 @@ class Sorter:
         for fut in asyncio.as_completed(asyncio.to_thread(_get_files, f) for f in folders):
             folder, files = await fut
             folder_name = folder.name
-            with self.tui.sorting.new_hook(folder_name, total=len(files)) as progress:
+            with self.tui.sorting.new_task(folder_name, total=len(files)) as progress:
 
                 async def sort(file: Path, name: str = folder_name) -> None:
                     try:

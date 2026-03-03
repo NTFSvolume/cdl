@@ -69,7 +69,7 @@ class OverFlow:
         self._progress.update(self._task_id, description=str(self), visible=count > 0)
 
 
-class ProgressProxy2(Progress):
+class ProgressProxy(Progress):
     """A progress that exposes their tasks"""
 
     def __init__(self, *columns: ProgressColumn | str) -> None:
@@ -86,7 +86,7 @@ class UIPanel:
     columns: ClassVar[ColumnsType]
 
     def __init__(self) -> None:
-        self._progress: Final[ProgressProxy2] = ProgressProxy2(*self.columns)
+        self._progress: Final[ProgressProxy] = ProgressProxy(*self.columns)
         self._renderable: RenderableType = ""
 
     def __rich__(self) -> RenderableType:
@@ -104,7 +104,7 @@ class UIPanel:
         return self._progress.task_counters
 
     @classmethod
-    def _clean_task_desc(cls, desc: str) -> str:
+    def _remove_non_ascii(cls, desc: str) -> str:
         return escape(_truncate(desc.encode("ascii", "ignore").decode().strip()))
 
     def _increase_counter(self, task_name: str) -> None:
@@ -167,8 +167,12 @@ class OverflowingPanel(UIPanel):
 
         self._update_overflow()
 
-    def new_hook(self, description: object, /, total: float | None = None) -> ProgressHook:
-        task_id = self._add_task(str(description), total)
+    def _clean_task_description(self, description: object, /) -> str:
+        return str(description)
+
+    def new_task(self, description: object, /, total: float | None = None) -> ProgressHook:
+        task_id = self._add_task(self._clean_task_description(description), total)
+        task = self._tasks[task_id]
 
         def advance(amount: int = 1) -> None:
             self._advance(task_id, amount)
@@ -177,13 +181,9 @@ class OverflowingPanel(UIPanel):
             self._remove_task(task_id)
 
         def speed() -> float:
-            return self._get_speed(task_id)
+            return task.finished_speed or task.speed or 0
 
         return ProgressHook(advance, done, speed)
 
     def _advance(self, task_id: TaskID, amount: int = 1) -> None:
         self._progress.advance(task_id, amount)
-
-    def _get_speed(self, task_id: TaskID) -> float:
-        task = self._tasks[task_id]
-        return task.finished_speed or task.speed or 0

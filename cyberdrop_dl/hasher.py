@@ -108,7 +108,7 @@ class Hasher:
 
     async def _hash_file(self, file: Path) -> HashResults | None:
         try:
-            with self.tui.hashing.new_hook(file):
+            with self.tui.hashing.new_task(file):
                 results = await asyncio.gather(*(self._get_hash_or_compute(file, algo) for algo in self._hashes))
 
         except Exception as e:

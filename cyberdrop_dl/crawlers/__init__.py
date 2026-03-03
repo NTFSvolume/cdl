@@ -478,7 +478,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
     def new_task_id(self, url: AbsoluteHttpURL) -> ProgressHook:
         """Creates a new task_id (shows the URL in the UI and logs)"""
         self.logger.info(f"Scraping: {url}")
-        return self.manager.tui.scrape.new_hook(url)
+        return self.manager.tui.scrape.new_task(url)
 
     @staticmethod
     def is_subdomain(url: AbsoluteHttpURL) -> bool:

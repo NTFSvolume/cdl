@@ -1,30 +1,18 @@
 from __future__ import annotations
 
 import contextlib
-from contextvars import ContextVar
 from typing import TYPE_CHECKING, ClassVar
 
 from rich.columns import Columns
-from rich.progress import (
-    BarColumn,
-    DownloadColumn,
-    Progress,
-    SpinnerColumn,
-    TaskID,
-    TimeRemainingColumn,
-    TransferSpeedColumn,
-)
+from rich.progress import Progress, SpinnerColumn, TaskID
 
 from cyberdrop_dl import __version__
-from cyberdrop_dl.tui.common import ColumnsType, OverflowingPanel, ProgressHook, UIPanel
+from cyberdrop_dl.tui.common import ColumnsType, OverflowingPanel, UIPanel
 
 if TYPE_CHECKING:
     from collections.abc import Generator
 
     from rich.console import RenderableType
-
-
-_current_hook: ContextVar[ProgressHook] = ContextVar("_downloads")
 
 
 class ScrapingPanel(OverflowingPanel):
@@ -33,40 +21,6 @@ class ScrapingPanel(OverflowingPanel):
 
     def __init__(self) -> None:
         super().__init__(visible_tasks_limit=5)
-
-
-class DownloadsPanel(OverflowingPanel):
-    unit: ClassVar[str] = "files"
-    columns: ClassVar[ColumnsType] = (
-        SpinnerColumn(),
-        "[progress.description]{task.description}",
-        BarColumn(bar_width=None),
-        "[progress.percentage]{task.percentage:>6.2f}%",
-        "━",
-        DownloadColumn(),
-        "━",
-        TransferSpeedColumn(),
-        "━",
-        TimeRemainingColumn(),
-    )
-
-    def __init__(self) -> None:
-        self.total_data_written: int = 0
-        super().__init__(visible_tasks_limit=10)
-
-    @property
-    def current_hook(self) -> ProgressHook:
-        return _current_hook.get()
-
-    def new_hook(self, filename: object, /, total: float | None = None) -> ProgressHook:
-        filename = self._clean_task_desc(str(filename).rsplit("/", 1)[-1])
-        hook = super().new_hook(filename, total)
-        _ = _current_hook.set(hook)
-        return hook
-
-    def _advance(self, task_id: TaskID, amount: int = 1) -> None:
-        self.total_data_written += amount
-        super()._advance(task_id, amount)
 
 
 class StatusMessage(UIPanel):

@@ -17,10 +17,11 @@ from rich.text import Text
 
 from cyberdrop_dl.constants import HashAlgorithm
 from cyberdrop_dl.logger import spacer
+from cyberdrop_dl.tui.downloads import DownloadsPanel
 from cyberdrop_dl.tui.errors import DownloadErrors, ScrapeErrors, UIFailure
 from cyberdrop_dl.tui.files import FileStatsPanel
 from cyberdrop_dl.tui.hashing import HashingPanel
-from cyberdrop_dl.tui.scrape import DownloadsPanel, ScrapingPanel, StatusMessage
+from cyberdrop_dl.tui.scrape import ScrapingPanel, StatusMessage
 from cyberdrop_dl.tui.screens import AppScreens, Screen
 from cyberdrop_dl.tui.sorting import SortingPanel
 

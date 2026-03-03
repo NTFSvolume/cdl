@@ -2,16 +2,17 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from rich.progress import BarColumn, SpinnerColumn, TaskID
+from rich.progress import BarColumn, SpinnerColumn
+from typing_extensions import override
 
-from cyberdrop_dl.tui.common import OverflowingPanel
+from cyberdrop_dl.tui.common import ColumnsType, OverflowingPanel
 
 
 class SortingPanel(OverflowingPanel):
     """Class that keeps track of sorted files."""
 
     unit: ClassVar[str] = "Folders"
-    columns = (
+    columns: ClassVar[ColumnsType] = (
         SpinnerColumn(),
         "[progress.description]{task.description}",
         BarColumn(bar_width=None),
@@ -24,9 +25,9 @@ class SortingPanel(OverflowingPanel):
         super().__init__(visible_tasks_limit=1)
         self.audio_count = self.video_count = self.image_count = self.other_count = 0
 
-    def _add_task(self, description: str, total: float | None = None, /, *, completed: int = 0) -> TaskID:
-        description = self._clean_task_desc(description)
-        return super()._add_task(description, total)
+    @override
+    def _clean_task_description(self, description: object, /) -> str:
+        return self._remove_non_ascii(str(description))
 
     def add_audio(self) -> None:
         self.audio_count += 1
