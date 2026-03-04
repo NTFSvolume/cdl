@@ -27,7 +27,7 @@ class SortingPanel(OverflowPanel):
 
     @override
     def _clean_task_description(self, description: object, /) -> str:
-        return self._remove_non_ascii(str(description))
+        return self._escape(str(description))
 
     def add_audio(self) -> None:
         self.audio_count += 1

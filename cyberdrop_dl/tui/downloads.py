@@ -5,16 +5,19 @@ import contextlib
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, ClassVar, Final
 
+from rich.live import get_console
 from rich.progress import (
     BarColumn,
     DownloadColumn,
     SpinnerColumn,
     Task,
     TaskID,
+    TextColumn,
     TimeRemainingColumn,
     TransferSpeedColumn,
     filesize,
 )
+from rich.table import Column
 from rich.text import Text
 from typing_extensions import override
 
@@ -72,17 +75,30 @@ class AutoDownloadColumn(DownloadColumn):
         )
 
 
+class AutoTruncatedTextColumn(TextColumn):
+    def render(self, task: Task) -> Text:
+        text = super().render(task)
+        width = get_console().width
+        available_witdh = min((width * 60 // 100), (width - 65))
+        desc_limit = max(available_witdh, 8)
+        text.truncate(desc_limit, overflow="ellipsis")
+        return text
+
+
 class DownloadsPanel(OverflowPanel):
     unit: ClassVar[str] = "files"
     columns: ClassVar[ColumnsType] = (
         SpinnerColumn(),
-        "[progress.description]{task.description}",
+        AutoTruncatedTextColumn(
+            "[progress.description]{task.description}",
+            table_column=Column(justify="left", no_wrap=True),
+        ),
         BarColumn(bar_width=None),
-        "[progress.percentage]{task.percentage:>6.2f}%",
+        "[progress.percentage]{task.percentage:>6.1f}%",
         "━",
-        AutoDownloadColumn(),
+        AutoDownloadColumn(table_column=Column(justify="right", no_wrap=True)),
         "━",
-        AutoTransferSpeedColumn(),
+        AutoTransferSpeedColumn(table_column=Column(justify="right", no_wrap=True)),
         "━",
         TimeRemainingColumn(compact=True, elapsed_when_finished=True),
     )
@@ -97,7 +113,7 @@ class DownloadsPanel(OverflowPanel):
 
     @override
     def _clean_task_description(self, description: object, /) -> str:
-        return self._remove_non_ascii(str(description).rsplit("/", 1)[-1])
+        return self._escape(str(description).rsplit("/", 1)[-1])
 
     @contextlib.contextmanager
     def new_hls_task(self, filename: str, /, segments: float | None = None) -> Generator[None]:
@@ -155,12 +171,12 @@ async def test(n_files: int = 10) -> None:
                 hook.advance(chunk)
                 await Random.sleep()
 
-    async def download_file(file: str) -> None:
+    async def download_file(filename: str) -> None:
         size = Random.int(1e4, 1e9)
-        hook = panel.new_task(file, size)
+        hook = panel.new_task(filename, size)
         await download(hook, size)
 
-    async def download_hls(file: str) -> None:
+    async def download_hls(filename: str) -> None:
         sem = asyncio.BoundedSemaphore(20)
 
         async def download_segment() -> None:
@@ -173,7 +189,7 @@ async def test(n_files: int = 10) -> None:
 
         n_segments = Random.int(100, 1_000)
 
-        with panel.new_hls_task(file, n_segments):
+        with panel.new_hls_task(filename, n_segments):
             async with asyncio.TaskGroup() as tg:
                 for _ in range(n_segments):
                     await sem.acquire()

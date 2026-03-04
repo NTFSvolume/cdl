@@ -111,13 +111,14 @@ class UIComponent(RichProxy, ABC):
     columns: ClassVar[ColumnsType]
 
     def __init__(self) -> None:
-        self._progress: Final[DictProgress] = DictProgress(*self.columns)
+        self._progress: Final[DictProgress] = DictProgress(*self.columns, expand=True)
         self._counters: Final[dict[str, TaskCounter]] = {}
 
     @final
     @classmethod
-    def _remove_non_ascii(cls, desc: str) -> str:
-        return escape(_truncate(desc.encode("ascii", "ignore").decode().strip()))
+    def _escape(cls, desc: str) -> str:
+        return escape(desc)
+        # return escape(_truncate(desc.encode("ascii", "ignore").decode().strip()))
 
     def _clean_task_description(self, description: object, /) -> object:
         return description
