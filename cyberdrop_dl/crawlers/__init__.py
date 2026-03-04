@@ -32,7 +32,7 @@ from cyberdrop_dl.annotations import copy_signature
 from cyberdrop_dl.clients.http import HTTPClient, HTTPClientProxy
 from cyberdrop_dl.data_structures.mediaprops import ISO639Subtitle, Resolution
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
-from cyberdrop_dl.downloader.downloader import Downloader
+from cyberdrop_dl.downloader import Downloader
 from cyberdrop_dl.exceptions import MaxChildrenError, NoExtensionError, ScrapeError
 from cyberdrop_dl.utils import (
     css,

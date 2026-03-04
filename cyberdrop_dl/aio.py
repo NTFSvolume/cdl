@@ -144,6 +144,8 @@ write_bytes = to_thread(Path.write_bytes)
 write_text = to_thread(Path.write_text)
 resolve = to_thread(Path.resolve)
 copy = to_thread(shutil.copy)
+move = to_thread(shutil.move)
+chmod = to_thread(Path.chmod)
 
 
 def glob(path: Path, pattern: str) -> _AsyncPathIterator:

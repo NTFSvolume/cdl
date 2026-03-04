@@ -7,7 +7,7 @@ import aiofiles
 from mega.chunker import MegaChunker, get_chunks
 
 from cyberdrop_dl.clients.download_client import StreamDownloader
-from cyberdrop_dl.downloader.downloader import Downloader
+from cyberdrop_dl.downloader import Downloader
 
 if TYPE_CHECKING:
     from collections.abc import Coroutine

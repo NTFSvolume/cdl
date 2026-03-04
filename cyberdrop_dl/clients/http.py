@@ -18,12 +18,12 @@ from aiohttp.resolver import AsyncResolver, ThreadedResolver
 from aiolimiter import AsyncLimiter
 from multidict import CIMultiDict
 
-from cyberdrop_dl import aio, appdata, constants, ddos_guard, env, ffmpeg
+from cyberdrop_dl import aio, appdata, ddos_guard, env
 from cyberdrop_dl.annotations import copy_signature
 from cyberdrop_dl.clients.flaresolverr import FlareSolverr
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.cookies import get_cookies_from_browser, make_simple_cookie, read_netscape_files
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
+from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, ScrapeError
 from cyberdrop_dl.logger import spacer
 from cyberdrop_dl.utils import best_match
@@ -451,84 +451,6 @@ class HTTPClientProxy:
     async def request_text(self, *args, **kwargs) -> str:
         async with self.request(*args, **kwargs) as resp:
             return await resp.text()
-
-
-def check_allowed_filetype(media_item: MediaItem, config: Config) -> bool:
-    """Checks if the file type is allowed to download."""
-    ignore_options = config.ignore
-    ext = media_item.ext.lower()
-
-    if ignore_options.exclude_images and ext in constants.FileExt.IMAGE:
-        return False
-    if ignore_options.exclude_videos and ext in constants.FileExt.VIDEO:
-        return False
-    if ignore_options.exclude_audio and ext in constants.FileExt.AUDIO:
-        return False
-
-    return ext in constants.FileExt.MEDIA or not ignore_options.exclude_other
-
-
-def check_allowed_date_range(media_item: MediaItem, config: Config) -> bool:
-    """Checks if the file was uploaded within the config date range"""
-    datetime = media_item.datetime
-    if not datetime:
-        return True
-
-    item_date = datetime.date()
-    ignore_options = config.ignore
-
-    if ignore_options.exclude_before and item_date < ignore_options.exclude_before:
-        return False
-    if ignore_options.exclude_after and item_date > ignore_options.exclude_after:
-        return False
-    return True
-
-
-def check_content_length(headers: Mapping[str, Any]) -> None:
-    content_length, content_type = headers.get("Content-Length"), headers.get("Content-Type")
-    if content_length is None or content_type is None:
-        return
-    if content_length == "322509" and content_type == "video/mp4":
-        raise DownloadError(status="Bunkr Maintenance", message="Bunkr under maintenance")
-    if content_length == "73003" and content_type == "video/mp4":
-        raise DownloadError(410)  # Placeholder video with text "Video removed" (efukt)
-
-
-async def check_file_duration(media_item: MediaItem, config: Config) -> bool:
-    """Checks the file runtime against the config runtime limits."""
-    if media_item.is_segment:
-        return True
-
-    is_video = media_item.ext.lower() in constants.FileExt.VIDEO
-    is_audio = media_item.ext.lower() in constants.FileExt.AUDIO
-    if not (is_video or is_audio):
-        return True
-
-    duration_limits = config.media_duration_limits.ranges
-
-    async def get_duration() -> float | None:
-        if media_item.downloaded:
-            properties = await ffmpeg.probe(media_item.complete_file)
-        else:
-            properties = await ffmpeg.probe(media_item.url, headers=media_item.headers)
-
-        if properties.format.duration:
-            return properties.format.duration
-        if is_video and properties.video:
-            return properties.video.duration
-        if is_audio and properties.audio:
-            return properties.audio.duration
-
-    if media_item.duration is None:
-        media_item.duration = await get_duration()
-
-    if media_item.duration is None:
-        return True
-
-    if is_video:
-        return media_item.duration in duration_limits.video
-
-    return media_item.duration in duration_limits.audio
 
 
 async def _get_dns_resolver(
