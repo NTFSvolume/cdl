@@ -141,9 +141,6 @@ class OverflowPanel(UIComponent):
         self._visible_tasks: int = 0
         self._total_amount: int = 0
 
-        self._orphan_tasks: set[TaskID] = set()  # This are tasks that never got to show up on the UI
-        # They started and finished before there was any available slot on the panel
-
         self._panel: Panel = Panel(
             Group(self._progress, self._overflow),
             title=self._title,
@@ -187,8 +184,8 @@ class OverflowPanel(UIComponent):
             self._visible_tasks += 1
         else:
             self._invisible_queue.append(task_id)
-            self._update_overflow()
 
+        self._update_overflow()
         return self._progress[task_id]
 
     @final
@@ -204,13 +201,11 @@ class OverflowPanel(UIComponent):
                     break
                 else:
                     try:
-                        self._orphan_tasks.remove(task.id)
-                    except KeyError:
                         self._progress.update(invisible_task_id, visible=True)
+                    except KeyError:
+                        continue
+                    else:
                         break
-
-        else:
-            self._orphan_tasks.add(task.id)
 
         self._update_overflow()
 

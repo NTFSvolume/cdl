@@ -197,10 +197,17 @@ async def test(n_files: int = 10) -> None:
 
     with create_live(panel):
         async with asyncio.TaskGroup() as tg:
-            for file in (f"file_{idx:03d}" for idx in range(n_files)):
+            tg.create_task(download_file("file_X_with_a_very_long_name_and_?_#.mp4"))
+            files = iter(f"file_{idx:03d}" for idx in range(n_files))
+            for file in files:
+                fn = Random.choice([download_hls, download_file])
+                tg.create_task(fn(file))
+
+            await Random.sleep()
+            for file in files:
                 fn = Random.choice([download_hls, download_file])
                 tg.create_task(fn(file))
 
 
 if __name__ == "__main__":  # pragma: no coverage
-    asyncio.run(test())
+    asyncio.run(test(40))
