@@ -42,7 +42,7 @@ class RichProxy(ABC):
 
 
 class DictProgress(Progress):
-    """A progress with a dict like interface"""
+    """A progress with a dict like interface to access tasks"""
 
     def __getitem__(self, task_id: TaskID) -> Task:
         with self._lock:
@@ -52,14 +52,6 @@ class DictProgress(Progress):
         with self._lock:
             return len(self._tasks)
 
-    def copy(self) -> dict[TaskID, Task]:
-        with self._lock:
-            return self._tasks.copy()
-
-    def keys(self) -> tuple[TaskID, ...]:
-        with self._lock:
-            return tuple(self._tasks.keys())
-
 
 @dataclasses.dataclass(slots=True)
 class ProgressHook:
@@ -68,6 +60,10 @@ class ProgressHook:
     done: Callable[[], None]
 
     _done: bool = dataclasses.field(init=False, default=False)
+
+    @property
+    def speed(self) -> float:
+        return self.get_speed()
 
     def __enter__(self) -> Self:
         if self._done:
@@ -84,14 +80,14 @@ class ProgressHook:
 ColumnsType = tuple[ProgressColumn | str, ...]
 
 
-class OverFlow(RichProxy):
+class _OverFlow(RichProxy):
     def __init__(self, unit: str) -> None:
         self._progress: Progress = Progress("[progress.description]{task.description}")
         self.unit: str = unit
         self.total: int = 0
         self._task_id: TaskID = self._progress.add_task(str(self), visible=False)
 
-    def __rich__(self) -> RenderableType:
+    def __rich__(self) -> Progress:
         return self._progress
 
     def __str__(self) -> str:
@@ -134,10 +130,10 @@ class OverflowPanel(UIComponent):
 
     def __init__(self, visible_tasks_limit: int) -> None:
         super().__init__()
-        self._title: str = type(self).__name__.removesuffix("Panel")
-        self._overflow: OverFlow = OverFlow(self.unit)
-        self._limit: int = visible_tasks_limit
-        self._invisible_queue: deque[TaskID] = deque()
+        self._title: Final[str] = type(self).__name__.removesuffix("Panel")
+        self._overflow: Final[_OverFlow] = _OverFlow(self.unit)
+        self._limit: Final[int] = visible_tasks_limit
+        self._invisible_queue: Final[deque[TaskID]] = deque()
         self._visible_tasks: int = 0
         self._total_amount: int = 0
 
@@ -199,13 +195,13 @@ class OverflowPanel(UIComponent):
                 except IndexError:
                     self._visible_tasks -= 1
                     break
+
+                try:
+                    self._progress.update(invisible_task_id, visible=True)
+                except KeyError:
+                    continue
                 else:
-                    try:
-                        self._progress.update(invisible_task_id, visible=True)
-                    except KeyError:
-                        continue
-                    else:
-                        break
+                    break
 
         self._update_overflow()
 

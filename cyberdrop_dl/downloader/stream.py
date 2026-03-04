@@ -219,7 +219,7 @@ class StreamDownloader:
             if not self.slow_download_threshold:
                 return
 
-            if hook.get_speed() > self.slow_download_threshold:
+            if hook.speed > self.slow_download_threshold:
                 last_slow_speed_read = None
             elif not last_slow_speed_read:
                 last_slow_speed_read = time.perf_counter()

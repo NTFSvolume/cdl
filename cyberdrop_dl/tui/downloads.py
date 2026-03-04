@@ -24,7 +24,7 @@ from typing_extensions import override
 from cyberdrop_dl.tui.common import ColumnsType, DictProgress, OverflowPanel, ProgressHook, Random, create_live
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Generator, Iterable
 
 _current_hls_task: ContextVar[TaskID] = ContextVar("_current_hls_task")
 _HLS_TASK_FIELD_NAME: Final = "hls"
@@ -162,8 +162,10 @@ class DownloadsPanel(OverflowPanel):
         return ProgressHook(advance, get_speed, on_exit)
 
 
-async def test(n_files: int = 10) -> None:
+async def test() -> None:
     panel = DownloadsPanel()
+    import itertools
+    from pathlib import Path
 
     async def download(hook: ProgressHook, size: int) -> None:
         with hook:
@@ -172,11 +174,13 @@ async def test(n_files: int = 10) -> None:
                 await Random.sleep()
 
     async def download_file(filename: str) -> None:
-        size = Random.int(1e4, 1e9)
+        size = Random.int(1e6, 1e9)
         hook = panel.new_task(filename, size)
         await download(hook, size)
 
     async def download_hls(filename: str) -> None:
+        n_segments = Random.int(10, 500)
+
         sem = asyncio.BoundedSemaphore(20)
 
         async def download_segment() -> None:
@@ -187,27 +191,32 @@ async def test(n_files: int = 10) -> None:
             finally:
                 sem.release()
 
-        n_segments = Random.int(100, 1_000)
-
         with panel.new_hls_task(filename, n_segments):
             async with asyncio.TaskGroup() as tg:
                 for _ in range(n_segments):
                     await sem.acquire()
                     tg.create_task(download_segment())
 
+    files = [
+        str(f.with_suffix(Random.choice([".py", ".exe", ".jpg", ".mp4", ".zip"])))
+        for f in Path(__file__).parent.parent.rglob("*")
+    ]
+
     with create_live(panel):
         async with asyncio.TaskGroup() as tg:
-            tg.create_task(download_file("file_X_with_a_very_long_name_and_?_#.mp4"))
-            files = iter(f"file_{idx:03d}" for idx in range(n_files))
-            for file in files:
-                fn = Random.choice([download_hls, download_file])
-                tg.create_task(fn(file))
 
+            def download_files(files: Iterable[str]) -> None:
+                tg.create_task(download_file("file_X_with_a_very_long_name_and_?_#.mp4"))
+                for file in files:
+                    fn = Random.choice([download_hls, download_file])
+                    tg.create_task(fn(file))
+
+            # files_iter = iter(f"file_{idx:03d}" for idx in range(n_files))
+            files_iter = iter(files)
+            download_files(itertools.islice(files_iter, len(files) // 2))
             await Random.sleep()
-            for file in files:
-                fn = Random.choice([download_hls, download_file])
-                tg.create_task(fn(file))
+            download_files(files_iter)
 
 
 if __name__ == "__main__":  # pragma: no coverage
-    asyncio.run(test(40))
+    asyncio.run(test())

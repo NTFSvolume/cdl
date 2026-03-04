@@ -91,7 +91,7 @@ class _ErrorsPanel(UIComponent):
             )
 
     def results(self) -> list[UIFailure]:
-        tasks = self._progress.copy()
+        tasks = self._progress.tasks
         return sorted(UIFailure.parse(msg, int(tasks[task_id].completed)) for msg, task_id in self._errors.items())
 
 
