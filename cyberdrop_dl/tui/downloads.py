@@ -138,11 +138,10 @@ class DownloadsPanel(OverflowPanel):
 
     @contextlib.contextmanager
     def new_hls_task(self, filename: str, /, segments: float | None = None) -> Generator[None]:
-        # For HLS downloads, we use 2 different tasks on 2 different progress bars
-        # One (hidden) to track the downloaded bytes (with an unknown total) and one to track
-        # the number of downloaded segments (with a known total)
-        # We create both at the same time and smuggle the bytes task
-        # as a field of the segments task to make all info available to the main progress for rendering
+        # For HLS downloads, we use 2 different tasks. One on a hidden progress to track the downloaded bytes
+        # and one on the user facing progress to track the number of downloaded segments (with a known total)
+        # We create both at the same time and smuggle the bytes task as a field of the segments task
+        # to make all info available to the main progress for rendering
 
         task_id = self._hls_progress.add_task("", total=None, visible=False)
         segments_task = self._add_task(filename, segments)
@@ -184,15 +183,16 @@ class DownloadsPanel(OverflowPanel):
 
 
 async def test() -> None:
-    panel = DownloadsPanel()
     import itertools
     from pathlib import Path
+
+    panel = DownloadsPanel()
 
     async def download(hook: ProgressHook, size: int) -> None:
         with hook:
             for chunk in Random.int_until(size, min_step=1, max_step=1e7):
                 hook.advance(chunk)
-                await Random.sleep()
+                await asyncio.sleep(0.1)
 
     async def download_file(filename: str) -> None:
         size = Random.int(1e2, 1e9)
@@ -202,7 +202,7 @@ async def test() -> None:
     async def download_hls(filename: str) -> None:
         n_segments = Random.int(1, 1_200)
 
-        segmntes_sem = asyncio.BoundedSemaphore(20)
+        segments_sem = asyncio.BoundedSemaphore(20)
 
         async def download_segment() -> None:
             size = Random.int(1e2, 1e5)
@@ -210,12 +210,12 @@ async def test() -> None:
             try:
                 await download(hook, size)
             finally:
-                segmntes_sem.release()
+                segments_sem.release()
 
         with panel.new_hls_task(filename, n_segments):
             async with asyncio.TaskGroup() as tg:
                 for _ in range(n_segments):
-                    await segmntes_sem.acquire()
+                    await segments_sem.acquire()
                     tg.create_task(download_segment())
 
     files = Random.choices(
@@ -235,14 +235,14 @@ async def test() -> None:
                     fn = Random.choice([download_hls, download_file])
                     tg.create_task(fn(file))
 
-            # files_iter = iter(f"file_{idx:03d}" for idx in range(n_files))
-            files_iter = iter(files)
-            batch_size = len(files) // 4
-            for _ in range(4):
-                download_files(itertools.islice(files_iter, batch_size))
+            batches = 4
+            batch_size = len(files) // batches
+            iter_files = iter(files)
+            for _ in range(batches):
+                download_files(itertools.islice(iter_files, batch_size))
                 # The overflow number should go up every 2 seconds
-                await Random.sleep(2)
+                await asyncio.sleep(2)
 
 
-if __name__ == "__main__":  # pragma: no coverage
+if __name__ == "__main__":  # pragma: no cover
     asyncio.run(test())
