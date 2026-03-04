@@ -24,7 +24,6 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
-_loop = None
 _required_free_space: ContextVar[int] = ContextVar("_required_free_space")
 _PARTITIONS: list[DiskPartition] = []
 _UNAVAILABLE: set[Path] = set()
@@ -32,6 +31,7 @@ _LOCKS: dict[Path, asyncio.Lock] = defaultdict(asyncio.Lock)
 _CHECK_PERIOD: Final = 2  # how often the check_free_space_loop will run (in seconds)
 _LOG_PERIOD: Final = 10  # log storage details every <x> loops, AKA log every 20 (2x10) seconds,
 _free_space: dict[Path, int] = {}
+_running = asyncio.Event()
 
 
 @dataclasses.dataclass(frozen=True, slots=True, order=True)
@@ -98,9 +98,6 @@ async def has_sufficient_space(folder: Path) -> bool:
                 free_space = _free_space[mount] = await get_free_space(mount)
                 logger.info(f"A new mountpoint ('{mount!s}') will be used for '{folder}'")
                 logger.info(_Stats())
-                global _loop
-                if _loop is None:
-                    _loop = asyncio.create_task(_start_loop())
 
     return free_space == -1 or free_space > _required_free_space.get()
 
@@ -165,36 +162,25 @@ def clear_cache() -> None:
     _get_mount_point.cache_clear()
 
 
-@contextlib.asynccontextmanager
-async def monitor(required_free_space: int) -> AsyncGenerator[None]:
-    token = _required_free_space.set(required_free_space)
-    try:
-        yield
-    finally:
-        _required_free_space.reset(token)
-        global _loop
-        if _loop is not None:
-            try:
-                _ = _loop.cancel()
-                await _loop
-            except asyncio.CancelledError:
-                pass
-
-
 async def _start_loop() -> None:
     """Infinite loop to get free space of all used mounts and update internal dict"""
 
-    last_check = -1
-    assert len(_free_space) >= 1
-    while True:
-        last_check += 1
+    async def update():
         mountpoints = sorted(mount for mount, free_space in _free_space.items() if free_space != -1)
-        if mountpoints:
-            results = await asyncio.gather(*map(get_free_space, mountpoints))
-            _free_space.update(zip(mountpoints, results, strict=True))
+        if not mountpoints:
+            return
 
-        if last_check % _LOG_PERIOD == 0:
-            logger.debug(_Stats())
+        results = await asyncio.gather(*map(get_free_space, mountpoints))
+        _free_space.update(zip(mountpoints, results, strict=True))
+
+    last_check = -1
+    while True:
+        if _free_space:
+            last_check += 1
+            await update()
+
+            if last_check % _LOG_PERIOD == 0:
+                logger.debug(_Stats())
 
         await asyncio.sleep(_CHECK_PERIOD)
 
@@ -278,3 +264,19 @@ async def _check_nt_network_drive(folder: Path) -> None:
 
         else:
             _UNAVAILABLE.add(folder_drive)
+
+
+@contextlib.asynccontextmanager
+async def monitor(required_free_space: int) -> AsyncGenerator[None]:
+    loop = asyncio.create_task(_start_loop(), name="storage monitor")
+    token = _required_free_space.set(required_free_space)
+    await asyncio.sleep(0)
+    try:
+        yield
+    finally:
+        _required_free_space.reset(token)
+        try:
+            _ = loop.cancel("On monitor exit")
+            await loop
+        except asyncio.CancelledError:
+            pass
