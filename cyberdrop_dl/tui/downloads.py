@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import dataclasses
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, ClassVar, Final
 
-from rich.live import get_console
+from rich.jupyter import JupyterMixin
+from rich.measure import Measurement
 from rich.progress import (
     BarColumn,
     DownloadColumn,
@@ -26,8 +28,37 @@ from cyberdrop_dl.tui.common import ColumnsType, DictProgress, OverflowPanel, Pr
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
 
+    from rich.console import Console, ConsoleOptions, RenderableType, RenderResult
+
 _current_hls_task: ContextVar[TaskID] = ContextVar("_current_hls_task")
 _HLS_TASK_FIELD_NAME: Final = "hls"
+
+
+@dataclasses.dataclass(slots=True)
+class AutoWidth(JupyterMixin):
+    """Auto expands (if possible) or truncates (if not enought space) a renderable to a desired width ratio of the screen"""
+
+    renderable: RenderableType
+    ratio: float
+    min_cells: int = 10
+    min_cells_after: int = 70
+
+    def _desired_width(self, console_width: int) -> int:
+        return max(self.min_cells, int(min((console_width * self.ratio), (console_width - self.min_cells_after))))
+
+    def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
+        my_options = options.update_width(min(self._desired_width(console.width), options.max_width))
+        yield from console.render(self.renderable, my_options)
+
+    def __rich_measure__(self, console: Console, options: ConsoleOptions) -> Measurement:
+        my_options = options.update_width(self._desired_width(console.width))
+        return Measurement.get(console, my_options, self.renderable)
+
+
+class AutoWidthTextColumn(TextColumn):
+    def render(self, task: Task) -> AutoWidth:  # pyright: ignore[reportIncompatibleMethodOverride]
+        text = super().render(task)
+        return AutoWidth(text, ratio=0.6)
 
 
 class AutoTransferSpeedColumn(TransferSpeedColumn):
@@ -38,7 +69,7 @@ class AutoTransferSpeedColumn(TransferSpeedColumn):
 
 
 class AutoDownloadColumn(DownloadColumn):
-    """Shows `X/Y MBs` for files and `X/Y segs [Z MB]` for HLS downloads"""
+    """Shows `<completed>/<total> MBs` for files and `<downloaded_bytes> MBs (<completed>/<total> segments)` for HLS downloads"""
 
     @override
     def render(self, task: Task) -> Text:
@@ -50,7 +81,7 @@ class AutoDownloadColumn(DownloadColumn):
         completed_segs = int(task.completed)
         total_segs = "?" if task.total is None else f"{int(task.total):,}"
         total_width = len(str(total_segs))
-        download_status = f"{completed_segs:{total_width}d}/{total_segs} segs [{downloaded_bytes}]"
+        download_status = f"{downloaded_bytes} ({completed_segs:>{total_width},}/{total_segs})"
         return Text(download_status, style="progress.download", justify="right")
 
     def _format_bytes(self, n_bytes: int) -> str:
@@ -75,21 +106,11 @@ class AutoDownloadColumn(DownloadColumn):
         )
 
 
-class AutoTruncatedTextColumn(TextColumn):
-    def render(self, task: Task) -> Text:
-        text = super().render(task)
-        width = get_console().width
-        available_witdh = min((width * 60 // 100), (width - 65))
-        desc_limit = max(available_witdh, 8)
-        text.truncate(desc_limit, overflow="ellipsis")
-        return text
-
-
 class DownloadsPanel(OverflowPanel):
     unit: ClassVar[str] = "files"
     columns: ClassVar[ColumnsType] = (
-        SpinnerColumn(),
-        AutoTruncatedTextColumn(
+        SpinnerColumn("arc"),
+        AutoWidthTextColumn(
             "[progress.description]{task.description}",
             table_column=Column(justify="left", no_wrap=True),
         ),
@@ -169,38 +190,41 @@ async def test() -> None:
 
     async def download(hook: ProgressHook, size: int) -> None:
         with hook:
-            for chunk in Random.int_until(size, max_step=1e8):
+            for chunk in Random.int_until(size, min_step=1, max_step=1e7):
                 hook.advance(chunk)
                 await Random.sleep()
 
     async def download_file(filename: str) -> None:
-        size = Random.int(1e6, 1e9)
+        size = Random.int(1e2, 1e9)
         hook = panel.new_task(filename, size)
         await download(hook, size)
 
     async def download_hls(filename: str) -> None:
-        n_segments = Random.int(10, 500)
+        n_segments = Random.int(1, 1_200)
 
-        sem = asyncio.BoundedSemaphore(20)
+        segmntes_sem = asyncio.BoundedSemaphore(20)
 
         async def download_segment() -> None:
-            size = Random.int(1e2, 1e4)
+            size = Random.int(1e2, 1e5)
             hook = panel.new_hls_seg_task()
             try:
                 await download(hook, size)
             finally:
-                sem.release()
+                segmntes_sem.release()
 
         with panel.new_hls_task(filename, n_segments):
             async with asyncio.TaskGroup() as tg:
                 for _ in range(n_segments):
-                    await sem.acquire()
+                    await segmntes_sem.acquire()
                     tg.create_task(download_segment())
 
-    files = [
-        str(f.with_suffix(Random.choice([".py", ".exe", ".jpg", ".mp4", ".zip"])))
-        for f in Path(__file__).parent.parent.rglob("*")
-    ]
+    files = Random.choices(
+        [
+            str(f.with_suffix(Random.choice([".py", ".exe", ".jpg", ".mp4", ".zip"])))
+            for f in Path(__file__).parent.parent.rglob("*")
+        ],
+        k=Random.int(80, 200),
+    )
 
     with create_live(panel):
         async with asyncio.TaskGroup() as tg:
@@ -213,9 +237,11 @@ async def test() -> None:
 
             # files_iter = iter(f"file_{idx:03d}" for idx in range(n_files))
             files_iter = iter(files)
-            download_files(itertools.islice(files_iter, len(files) // 2))
-            await Random.sleep()
-            download_files(files_iter)
+            batch_size = len(files) // 4
+            for _ in range(4):
+                download_files(itertools.islice(files_iter, batch_size))
+                # The overflow number should go up every 2 seconds
+                await Random.sleep(2)
 
 
 if __name__ == "__main__":  # pragma: no coverage

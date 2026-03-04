@@ -211,6 +211,7 @@ class OverflowPanel(UIComponent):
 
 class Random:
     choice = random.choice
+    choices = random.choices
 
     @staticmethod
     def float(start: float, end: float) -> float:
@@ -221,23 +222,23 @@ class Random:
         return random.randint(int(start), int(end))
 
     @staticmethod
-    def int_until(target: int, max_step: float) -> Generator[int, None, None]:
+    def int_until(target: int, min_step: float, max_step: float) -> Generator[int, None, None]:
         total = 0
         while total < target:
-            new = min(random.randint(1, int(max_step)), target - total)
+            new = min(random.randint(int(min_step), int(max_step)), target - total)
             yield new
             total += new
 
     @staticmethod
-    def sleep():
-        return asyncio.sleep(Random.float(0.0, 0.5))
+    def sleep(delay: float = 0.1):
+        return asyncio.sleep(delay)
 
 
 def create_live(renderable: RichProxy) -> Live:
     return Live(
         console=get_console(),
         auto_refresh=True,
-        refresh_per_second=10,
+        refresh_per_second=20,
         transient=False,
         get_renderable=renderable.__rich__,
     )
