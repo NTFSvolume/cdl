@@ -7,7 +7,7 @@ import aiofiles
 from mega.chunker import MegaChunker, get_chunks
 
 from cyberdrop_dl.clients.download_client import StreamDownloader
-from cyberdrop_dl.downloader import Downloader
+from cyberdrop_dl.downloader import DownloadManager
 
 if TYPE_CHECKING:
     from collections.abc import Coroutine
@@ -62,7 +62,7 @@ class MegaDownloadClient(StreamDownloader):
         return asyncio.to_thread(prepare)
 
 
-class MegaDownloader(Downloader):
+class MegaDownloader(DownloadManager):
     client: MegaDownloadClient
 
     @property

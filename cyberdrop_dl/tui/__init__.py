@@ -17,6 +17,7 @@ from rich.text import Text
 
 from cyberdrop_dl.constants import HashAlgorithm
 from cyberdrop_dl.logger import spacer
+from cyberdrop_dl.tio.common import ProgressHook
 from cyberdrop_dl.tui.downloads import DownloadsPanel
 from cyberdrop_dl.tui.errors import DownloadErrors, ScrapeErrors, UIFailure
 from cyberdrop_dl.tui.files import FileStatsPanel
@@ -31,7 +32,7 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.config import Config
 
-
+__all__ = ["TUI", "ProgressHook"]
 logger = logging.getLogger(__name__)
 
 _tui: ContextVar[TUI] = ContextVar("_tui")

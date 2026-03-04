@@ -32,7 +32,7 @@ from cyberdrop_dl.annotations import copy_signature
 from cyberdrop_dl.clients.http import HTTPClient, HTTPClientProxy
 from cyberdrop_dl.data_structures.mediaprops import ISO639Subtitle, Resolution
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
-from cyberdrop_dl.downloader import Downloader
+from cyberdrop_dl.downloader import DownloadManager
 from cyberdrop_dl.exceptions import MaxChildrenError, NoExtensionError, ScrapeError
 from cyberdrop_dl.utils import (
     css,
@@ -246,7 +246,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         super().__init__(manager.client)
         self.manager = manager
         self.config = manager.config
-        self.downloader: Downloader
+        self.downloader: DownloadManager
         self.client: HTTPClient = manager.client
         self._startup_lock: asyncio.Lock = asyncio.Lock()
         self._ready: bool = False
@@ -293,8 +293,8 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
             "Referer": str(referer),
         }
 
-    def _downloader_(self) -> Downloader:
-        self.downloader = dl = Downloader(self.manager, self.DOMAIN)
+    def _downloader_(self) -> DownloadManager:
+        self.downloader = dl = DownloadManager(self.manager, self.DOMAIN)
         return dl
 
     @classmethod

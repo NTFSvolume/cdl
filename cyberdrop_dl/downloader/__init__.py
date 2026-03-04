@@ -6,17 +6,16 @@ import functools
 import logging
 import os
 import time
-from collections.abc import Mapping
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any, ClassVar, ParamSpec, Protocol, TypeVar, final
+from typing import TYPE_CHECKING, Any, ClassVar, Generic, ParamSpec, Protocol, final
 
 import aiofiles
 from aiohttp import ClientConnectorError, ClientError, ClientResponseError, hdrs
 from aiolimiter import AsyncLimiter
+from typing_extensions import TypeVar
 
 from cyberdrop_dl import aio, constants, ffmpeg, storage
 from cyberdrop_dl.clients.response import AbstractResponse
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
 from cyberdrop_dl.exceptions import (
     DownloadError,
     DurationError,
@@ -26,7 +25,6 @@ from cyberdrop_dl.exceptions import (
     SkipDownloadError,
     SlowDownloadError,
 )
-from cyberdrop_dl.tui.common import ProgressHook
 from cyberdrop_dl.utils import dates, error_handling_wrapper
 
 if TYPE_CHECKING:
@@ -37,20 +35,31 @@ if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
     from cyberdrop_dl.database import Database
     from cyberdrop_dl.manager import Manager
-    from cyberdrop_dl.tui import TUI
-    from cyberdrop_dl.tui.common import ProgressHook
+    from cyberdrop_dl.tui import TUI, ProgressHook
 
-_P = ParamSpec("_P")
-_R = TypeVar("_R")
+    _P = ParamSpec("_P")
+    _R = TypeVar("_R")
+    _T_downloader = TypeVar("_T_downloader", bound="StreamDownloader", default="StreamDownloader")
 
 logger = logging.getLogger(__name__)
 
 
+_file_locks: aio.WeakAsyncLocks[str] = aio.WeakAsyncLocks()
+_NULL_CONTEXT: contextlib.nullcontext[None] = contextlib.nullcontext()
+_CONTENT_TYPES_OVERRIDES: dict[str, str] = {
+    "text/vnd.trolltech.linguist": "video/MP2T",
+}
+_SLOW_DOWNLOAD_PERIOD: int = 10  # seconds
+_USE_IMPERSONATION: set[str] = {"vsco", "celebforum"}
+_VIDEO_HLS_BATCH_SIZE = 10
+_AUDIO_HLS_BATCH_SIZE = 50
+
+
 def _retry(
-    func: Callable[[Downloader, MediaItem], Coroutine[None, None, _R]],
-) -> Callable[[Downloader, MediaItem], Coroutine[None, None, _R]]:
+    func: Callable[[DownloadManager, MediaItem], Coroutine[None, None, _R]],
+) -> Callable[[DownloadManager, MediaItem], Coroutine[None, None, _R]]:
     @functools.wraps(func)
-    async def wrapper(self: Downloader, media_item: MediaItem) -> _R:
+    async def wrapper(self: DownloadManager, media_item: MediaItem) -> _R:
         while True:
             try:
                 return await func(self, media_item)
@@ -67,17 +76,6 @@ def _retry(
                 logger.info(retry_msg)
 
     return wrapper
-
-
-_file_locks: aio.WeakAsyncLocks[str] = aio.WeakAsyncLocks()
-_NULL_CONTEXT: contextlib.nullcontext[None] = contextlib.nullcontext()
-_CONTENT_TYPES_OVERRIDES: dict[str, str] = {
-    "text/vnd.trolltech.linguist": "video/MP2T",
-}
-_SLOW_DOWNLOAD_PERIOD: int = 10  # seconds
-_USE_IMPERSONATION: set[str] = {"vsco", "celebforum"}
-_VIDEO_HLS_BATCH_SIZE = 10
-_AUDIO_HLS_BATCH_SIZE = 50
 
 
 class ReadableStream(Protocol):
@@ -106,13 +104,19 @@ class StreamDownloader:
         self.tui: TUI = manager.tui
         self.slow_download_threshold: int = manager.config.runtime.slow_download_speed
         self.chunk_size: int = manager.config.rate_limits.chunk_size
-        self.speed_limiter: SpeedLimiter = SpeedLimiter(manager.config.rate_limits.download_speed_limit, time_period=1)
+        self.speed_limiter: SpeedLimiter = SpeedLimiter(
+            manager.config.rate_limits.download_speed_limit,
+            time_period=1,
+        )
 
     @final
     async def download(self, media_item: MediaItem) -> bool:
         """Starts a file download.
 
-        Returns `True` if the file was downloaded successfully. `False` if the file was downloaded but deleted by config options"""
+        Returns `True` if the file was successfully downloaded.
+        `False` if the file was downloaded but deleted by config options
+
+        Exceptions are propagated"""
         if not media_item.is_segment and self.config.download.skip_download_mark_completed:
             logger.info(f"Download skipped {media_item.url} due to mark completed option")
             self.tui.files.add_skipped()
@@ -218,7 +222,7 @@ class StreamDownloader:
                 await check_free_space()
                 n_bytes = len(chunk)
                 await self.speed_limiter.acquire(n_bytes)
-                _ = await f.write(chunk)
+                await f.write(chunk)
                 if empty:
                     empty = not bool(n_bytes)
                 progress_hook.advance(n_bytes)
@@ -289,16 +293,16 @@ class StreamDownloader:
         logger.info(f"Download finished: {media_item.url}")
 
 
-class Downloader:
+class DownloadManager(Generic[_T_downloader]):
     """High level class to handle download retries, slots limiter, and skip by config options"""
 
-    def __init__(self, manager: Manager) -> None:
+    def __init__(self, manager: Manager, stream: _T_downloader) -> None:
         self.manager = manager
         self.client: HTTPClient = manager.client
         self.database: Database = manager.database
         self.config: Config = manager.config
         self.tui: TUI = manager.tui
-        self.stream: StreamDownloader = StreamDownloader(manager)
+        self.stream: _T_downloader = stream  # TODO: decouple stream from download Manager
         self.processed_items: set[str] = set()
 
     @final
@@ -310,7 +314,7 @@ class Downloader:
             if not media_item.is_segment:
                 logger.info(f"Download starting: {media_item.url}")
 
-            return bool(await self._download(media_item))
+            return bool(await self.__download(media_item))
 
     @contextlib.asynccontextmanager
     async def __limiter(self, media_item: MediaItem):
@@ -331,7 +335,7 @@ class Downloader:
             finally:
                 logger.debug(f"Lock for {media_item.filename!r} released")
 
-    async def _check_skip_by_config(self, media_item: MediaItem) -> None:
+    async def __check_skip_by_config(self, media_item: MediaItem) -> None:
         if media_item.is_segment:
             return
 
@@ -352,9 +356,9 @@ class Downloader:
 
     @error_handling_wrapper
     @_retry
-    async def _download(self, media_item: MediaItem) -> bool | None:
+    async def __download(self, media_item: MediaItem) -> bool | None:
         try:
-            await self._check_skip_by_config(media_item)
+            await self.__check_skip_by_config(media_item)
             return await self.stream.download(media_item)
 
         except SkipDownloadError as e:
