@@ -54,24 +54,12 @@ class Manager:
         self.scrape_mapper: ScrapeMapper = ScrapeMapper(self)
         self._states: Events | None = None
         self.logs: LogsManager = LogsManager(config, self.task_group)
-        self._completed_downloads: set[MediaItem] = set()
-        self._completed_downloads_paths: set[Path] = set()
 
     @property
     def states(self) -> Events:
         if self._states is None:
             self._states = Events()
         return self._states
-
-    def add_completed(self, media_item: MediaItem) -> None:
-        if media_item.is_segment:
-            return
-        self._completed_downloads.add(media_item)
-        self._completed_downloads_paths.add(media_item.complete_file)
-
-    @property
-    def completed_downloads(self) -> set[MediaItem]:
-        return self._completed_downloads
 
     @contextlib.asynccontextmanager
     async def _asyncctx_(self) -> AsyncGenerator[Self]:
@@ -89,7 +77,7 @@ class Manager:
             self.log_app_state()
             await self.client.load_cookie_files()
             logger.info("Starting CDL...\n")
-            with self.manager.tui(screen="scraping"):
+            with self.tui(screen="scraping"):
                 yield self
 
     def log_app_state(self) -> None:

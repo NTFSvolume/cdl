@@ -4,10 +4,10 @@ import contextlib
 import copy
 import dataclasses
 import datetime
+import enum
 import logging
 from collections.abc import Generator
 from dataclasses import field
-from enum import Enum
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Self, overload
 
@@ -101,7 +101,13 @@ else:
 logger = logging.getLogger(__name__)
 
 
-class ScrapeItemType(Enum):
+class DownloadProtocol(enum.Enum):
+    HTTP = enum.auto()
+    HLS = enum.auto()
+    MEGA_NZ = enum.auto()
+
+
+class ScrapeItemType(enum.Enum):
     FORUM = 0
     FORUM_POST = 1
     FILE_HOST_PROFILE = 2
@@ -139,6 +145,7 @@ class MediaItem:
     timestamp: int | None = None
     datetime: datetime.datetime | None = field(init=False, default=None)
     hash: str | None = None
+    protocol: DownloadProtocol = DownloadProtocol.HTTP
 
     parents: list[AbsoluteHttpURL] = field(default_factory=list)
     parent_threads: set[AbsoluteHttpURL] = field(default_factory=set)
@@ -148,6 +155,7 @@ class MediaItem:
     headers: dict[str, str] = field(default_factory=dict, compare=False)
     downloaded: bool = False
     metadata: object = field(init=False, default_factory=dict, compare=False)
+    extra_info: dict[str, Any] = field(init=False, default_factory=dict, compare=False)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(domain={self.domain!r}, url={self.url!r}, referer={self.referer!r}, filename={self.filename!r}"

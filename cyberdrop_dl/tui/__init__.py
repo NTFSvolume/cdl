@@ -17,7 +17,7 @@ from rich.text import Text
 
 from cyberdrop_dl.constants import HashAlgorithm
 from cyberdrop_dl.logger import spacer
-from cyberdrop_dl.tio.common import ProgressHook
+from cyberdrop_dl.tui.common import ProgressHook
 from cyberdrop_dl.tui.downloads import DownloadsPanel
 from cyberdrop_dl.tui.errors import DownloadErrors, ScrapeErrors, UIFailure
 from cyberdrop_dl.tui.files import FileStatsPanel
