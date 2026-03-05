@@ -6,12 +6,15 @@ import csv
 import dataclasses
 import logging
 from collections import defaultdict
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Self
 
-from cyberdrop_dl import __version__, appdata, ffmpeg, storage
+from cyberdrop_dl import __version__, ffmpeg, storage
+from cyberdrop_dl.appdata import AppData
 from cyberdrop_dl.clients.http import HTTPClient
 from cyberdrop_dl.config import Config
 from cyberdrop_dl.database import Database
+from cyberdrop_dl.downloader import DownloadManager
 from cyberdrop_dl.exceptions import get_origin
 from cyberdrop_dl.hasher import Hasher
 from cyberdrop_dl.scrape_mapper import ScrapeMapper
@@ -20,11 +23,9 @@ from cyberdrop_dl.utils import filepath, get_system_information, json
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Iterable
-    from pathlib import Path
 
     from yarl import URL
 
-    from cyberdrop_dl.appdata import AppData
     from cyberdrop_dl.data_structures.url_objects import MediaItem, ScrapeItem
 
 
@@ -42,18 +43,19 @@ logger = logging.getLogger(__name__)
 
 
 class Manager:
-    def __init__(self, config: Config | None = None) -> None:
+    def __init__(self, config: Config | None = None, app_data: Path | None = None) -> None:
         config = config or Config()
         self.config: Config = config
-        self.app_data: AppData = appdata.get()
-        self.database: Database = Database(appdata.get().db_file, config.runtime.ignore_history)
+        self.app_data: AppData = AppData((app_data or Path("/app_data")).resolve())
+        self.database: Database = Database(self.app_data.db_file, config.runtime.ignore_history)
         self.client: HTTPClient = HTTPClient.from_config(config)
-        self.hasher: Hasher = Hasher.build(self)
+        self.hasher: Hasher = Hasher.from_manager(self)
         self.tui: TUI = TUI.from_config(config)
         self.task_group: asyncio.TaskGroup = asyncio.TaskGroup()
         self.scrape_mapper: ScrapeMapper = ScrapeMapper(self)
         self._states: Events | None = None
         self.logs: LogsManager = LogsManager(config, self.task_group)
+        self.downloader: DownloadManager = DownloadManager.from_manager(self)
 
     @property
     def states(self) -> Events:

@@ -27,13 +27,13 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.clients.flaresolverr import FlareSolverrSolution
 
-    _ResponseT = TypeVar("_ResponseT", bound=ClientResponse | CurlResponse | None, default=None)
 else:
-    _ResponseT = object
     CurlResponse = object
     FlareSolverrSolution = object
 
 __all__ = ["AbstractResponse"]
+
+_ResponseT = TypeVar("_ResponseT", bound=ClientResponse | CurlResponse | None, default=None)
 
 
 @dataclasses.dataclass(slots=True, eq=False)

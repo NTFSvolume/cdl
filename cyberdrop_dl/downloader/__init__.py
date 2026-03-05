@@ -81,6 +81,10 @@ class DownloadManager:
     _processed: set[MediaID] = dataclasses.field(init=False, default_factory=set)
     _downloaded: list[MediaItem] = dataclasses.field(init=False, default_factory=list)
 
+    @property
+    def successful_downloads(self) -> list[MediaItem]:
+        return self._downloaded
+
     def __post_init__(self) -> None:
         self.speed_limiter = SpeedLimiter(
             self.config.rate_limits.download_speed_limit,
@@ -209,6 +213,7 @@ class DownloadManager:
                 logger.info(retry_msg)
 
     async def __download(self, media_item: MediaItem) -> bool:
+        await asyncio.sleep(self.config.rate_limits.total_download_delay)
         try:
             downloader = _PROTOCOL_MAP[media_item.protocol](self)
             return await downloader.run(media_item)

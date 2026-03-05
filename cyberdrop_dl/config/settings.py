@@ -9,7 +9,16 @@ from pathlib import Path
 from typing import Literal
 
 import aiohttp
-from pydantic import ByteSize, Field, NonNegativeFloat, NonNegativeInt, PositiveFloat, PositiveInt, field_validator
+from pydantic import (
+    ByteSize,
+    Field,
+    NonNegativeFloat,
+    NonNegativeInt,
+    PositiveFloat,
+    PositiveInt,
+    PrivateAttr,
+    field_validator,
+)
 
 from cyberdrop_dl.constants import Browser, HashAlgorithm, Hashing
 from cyberdrop_dl.models import AppriseURL, Settings, SettingsGroup
@@ -95,7 +104,7 @@ class Logs(SettingsGroup):
     scrape_error_urls: LogPath = Path("Scrape_Error_URLs.csv")
     unsupported_urls: LogPath = Path("Unsupported_URLs.csv")
     webhook: AppriseURL | None = None
-    _created_at: datetime = Field(default_factory=datetime.now)
+    _created_at: datetime = PrivateAttr(default_factory=datetime.now)
 
     @property
     def jsonl_file(self):

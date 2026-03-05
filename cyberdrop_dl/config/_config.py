@@ -64,7 +64,7 @@ class Config(ConfigSettings):
         return merge_models(self, other)
 
 
-def load(file: Path) -> Config:
+def load_config(file: Path) -> Config:
     default = Config()
     if not file.is_file():
         config = default

@@ -1,13 +1,10 @@
 from __future__ import annotations
 
 import dataclasses
-from contextvars import ContextVar
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-_appdata: ContextVar[AppData] = ContextVar("_appdata")
 
 
 @dataclasses.dataclass(slots=True)
@@ -33,7 +30,3 @@ class AppData:
     def mkdirs(self) -> None:
         for dir in (self.cookies_dir,):
             dir.mkdir(parents=True, exist_ok=True)
-
-
-def get() -> AppData:
-    return _appdata.get()

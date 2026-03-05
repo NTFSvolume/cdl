@@ -61,10 +61,10 @@ if TYPE_CHECKING:
     from cyberdrop_dl.manager import Manager
     from cyberdrop_dl.tui.common import ProgressHook
 
-    _P = ParamSpec("_P")
-    _R = TypeVar("_R")
-    _T = TypeVar("_T")
-    _T_co = TypeVar("_T_co", covariant=True)
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+_T = TypeVar("_T")
+_T_co = TypeVar("_T_co", covariant=True)
 
 OneOrTuple: TypeAlias = _T | tuple[_T, ...]
 SupportedPaths: TypeAlias = dict[str, OneOrTuple[str]]

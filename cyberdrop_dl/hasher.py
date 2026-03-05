@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 async def hash_directory(manager: Manager, path: Path) -> None:
     # TODO: make db a context manager
     await manager.async_db_hash_startup()
-    await Hasher.build(manager).hash_folder(path)
+    await Hasher.from_manager(manager).hash_folder(path)
     manager.tui.print_dedupe_stats()
     await manager.async_db_close()
 
@@ -85,7 +85,7 @@ class Hasher:
     _hashes: tuple[HashAlgorithm, ...] = dataclasses.field(init=False)
 
     @classmethod
-    def build(cls, manager: Manager) -> Self:
+    def from_manager(cls, manager: Manager) -> Self:
         return cls(manager.tui, manager.config, manager.database)
 
     def __post_init__(self) -> None:

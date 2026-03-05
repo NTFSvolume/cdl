@@ -7,7 +7,7 @@ import datetime
 import logging
 import re
 from collections import defaultdict
-from collections.abc import Generator
+from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Self, TypeVar
 
@@ -26,7 +26,7 @@ from cyberdrop_dl.logger import spacer
 from cyberdrop_dl.utils import best_match, filepath, get_download_path, parse_url, remove_trailing_slash
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, AsyncIterable, Coroutine, Generator, Iterable
+    from collections.abc import AsyncGenerator, Coroutine, Generator, Iterable
 
     import aiosqlite
 
@@ -90,10 +90,11 @@ class ScrapeStats:
             self.groups.append(item.parent_title)
         self.url_count[item.url.host] += 1
 
-    async def wrap(self, source: AsyncIterable[ScrapeItem]) -> AsyncGenerator[ScrapeItem]:
-        async for item in source:
-            self.update(item)
-            yield item
+
+def parse_input(source: Iterable[AbsoluteHttpURL] | Path) -> AsyncGenerator[ScrapeItem]:
+    if isinstance(source, Path):
+        return from_file(source)
+    return from_urls(source)
 
 
 async def from_urls(source: Iterable[AbsoluteHttpURL]) -> AsyncGenerator[ScrapeItem, None]:
@@ -196,13 +197,14 @@ class ScrapeMapper(aio.AsyncContextManagerMixin):
         _ = await asyncio.gather(self.jdownloader.ready(), self.real_debrid.ready(), self.direct_http.ready())
         self._ready = True
 
-    async def run(self, source: AsyncIterable[ScrapeItem]) -> ScrapeStats:
+    async def run(self, source: Iterable[AbsoluteHttpURL] | Path) -> ScrapeStats:
         """Starts the orchestra."""
         await self.ready()
         stats = ScrapeStats()
-        async for item in stats.wrap(source):
+        async for item in parse_input(source):
+            stats.update(item)
             item._children_limits = self.config.download.max_children
-            self._create_task(self.send_to_crawler(item))
+            self._create_task(self.filter_and_send_to_crawler(item))
         return stats
 
     async def filter_and_send_to_crawler(self, scrape_item: ScrapeItem) -> None:
