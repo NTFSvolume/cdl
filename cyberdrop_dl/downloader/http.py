@@ -23,8 +23,6 @@ if TYPE_CHECKING:
     from cyberdrop_dl.clients.http import HTTPClient
     from cyberdrop_dl.config import Config
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
-    from cyberdrop_dl.database import Database
-    from cyberdrop_dl.hasher import Hasher
     from cyberdrop_dl.tui import TUI, ProgressHook
 
 
@@ -32,8 +30,6 @@ logger = logging.getLogger(__name__)
 
 
 _USE_IMPERSONATION: set[str] = {"vsco", "celebforum"}
-_VIDEO_HLS_BATCH_SIZE = 10
-_AUDIO_HLS_BATCH_SIZE = 50
 _CONTENT_TYPES_OVERRIDES: dict[str, str] = {
     "text/vnd.trolltech.linguist": "video/MP2T",
 }
@@ -43,14 +39,12 @@ class HTTPFileDownloader(FileDownloader):
     PROTOCOL: ClassVar[DownloadProtocol] = DownloadProtocol.HTTP
     SUPPORTS_RANGES: ClassVar[bool] = True
 
-    def __init__(self, manager: DownloadManager) -> None:
-        super().__init__(manager)
-        self.config: Config = manager.config
-        self.client: HTTPClient = manager.client
-        self.database: Database = manager.database
-        self.tui: TUI = manager.tui
-        self.chunk_size: int = manager.config.rate_limits.chunk_size
-        self.hasher: Hasher = manager.manager.hasher
+    def __init__(self, dl_manager: DownloadManager) -> None:
+        super().__init__(dl_manager)
+        self.config: Config = dl_manager.config
+        self.client: HTTPClient = dl_manager.client
+        self.tui: TUI = dl_manager.tui
+        self.chunk_size: int = dl_manager.config.rate_limits.chunk_size
 
     @override
     async def run(self, media_item: MediaItem) -> bool:
@@ -60,11 +54,6 @@ class HTTPFileDownloader(FileDownloader):
         `False` if the file was downloaded but deleted by config options
 
         Exceptions are propagated"""
-        if not media_item.is_segment and self.config.download.skip_download_mark_completed:
-            logger.info(f"Download skipped {media_item.url} due to mark completed option")
-            self.tui.files.add_skipped()
-            await self.database.history_table.mark_complete(media_item.domain, media_item)
-            return False
 
         # We need to make the request first to get the file size and create the progress hook for the UI
         # But the hook has to outlive the request itself so we can keep using it later for hashing;
@@ -82,17 +71,14 @@ class HTTPFileDownloader(FileDownloader):
         # TODO: move all the databse updates out of the downloader. Use ctx manager
 
         with progress_hook:
-            _ = await asyncio.gather(
-                aio.move(media_item.partial_file, media_item.complete_file),
-                self.database.history_table.add_filesize(media_item.domain, media_item),
-            )
+            _ = await aio.move(media_item.partial_file, media_item.complete_file)
             media_item.downloaded = True
             try:
                 await self.dl_manager.post_download_check(media_item)
             except ValueError:
                 media_item.downloaded = False
             else:
-                await self.__finalize_download(media_item)
+                await self.dl_manager.finalize_download(media_item)
 
             return media_item.downloaded
 
@@ -185,18 +171,6 @@ class HTTPFileDownloader(FileDownloader):
                 media_item.partial_file.touch()
 
         return asyncio.to_thread(prepare)
-
-    async def __finalize_download(self, media_item: MediaItem) -> None:
-        await aio.chmod(media_item.complete_file, 0o666)
-        if media_item.is_segment:
-            return
-
-        _ = await asyncio.gather(
-            self.hasher.in_place_hash(media_item),
-            self.database.history_table.mark_complete(media_item.domain, media_item),
-        )
-        await self.dl_manager.add_completed(media_item)
-        logger.info(f"Download finished: {media_item.url}")
 
 
 # TODO: This needs a better check to include the actual domain used

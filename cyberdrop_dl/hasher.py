@@ -154,13 +154,13 @@ class Hasher:
         self.tui.hashing.add_hashed(hash_algo)
         return HashResult(HashValue(hash), f_size, f_mtime)
 
-    async def in_place_hash(self, media_item: MediaItem) -> None:
+    async def hash_in_place(self, media_item: MediaItem) -> None:
         if self.config.dedupe.hashing is not Hashing.IN_PLACE:
             return
         await self._sem.acquire()
         await self._hash_item(media_item)
 
-    async def post_download_hash(self, downloads: Iterable[MediaItem]) -> None:
+    async def hash_post_download(self, downloads: Iterable[MediaItem]) -> None:
         if self.config.dedupe.hashing is not Hashing.POST_DOWNLOAD:
             return
 

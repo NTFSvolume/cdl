@@ -126,6 +126,11 @@ class HlsSegment(NamedTuple):
     url: AbsoluteHttpURL
 
 
+class MediaID(NamedTuple):
+    domain: str
+    path: str
+
+
 @dataclasses.dataclass(unsafe_hash=True, slots=True, kw_only=True)
 class MediaItem:
     url: AbsoluteHttpURL
@@ -176,6 +181,10 @@ class MediaItem:
     @property
     def partial_file(self) -> Path:
         return self.complete_file.with_suffix(self.complete_file.suffix + ".part")
+
+    @property
+    def id(self) -> MediaID:
+        return MediaID(self.domain, self.db_path)
 
     @staticmethod
     def from_item(

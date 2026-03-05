@@ -3,42 +3,30 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
-import functools
 import logging
 import os
 import time
 from abc import ABC, abstractmethod
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any, ClassVar, ParamSpec, final
+from typing import TYPE_CHECKING, Any, ClassVar, Self, final
 
 from aiohttp import ClientConnectorError, ClientError, ClientResponseError
 from aiolimiter import AsyncLimiter
-from typing_extensions import TypeVar
 
 from cyberdrop_dl import aio, constants, ffmpeg
-from cyberdrop_dl.exceptions import (
-    DownloadError,
-    DurationError,
-    InvalidContentTypeError,
-    RestrictedDateRangeError,
-    RestrictedFiletypeError,
-    SkipDownloadError,
-    SlowDownloadError,
-)
+from cyberdrop_dl.exceptions import DownloadError, InvalidContentTypeError, SlowDownloadError
 from cyberdrop_dl.utils import dates, error_handling_wrapper
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Coroutine
+    from collections.abc import AsyncGenerator, Callable
 
     from cyberdrop_dl.clients.http import HTTPClient
     from cyberdrop_dl.config import Config
-    from cyberdrop_dl.data_structures.url_objects import DownloadProtocol, MediaItem
+    from cyberdrop_dl.data_structures.url_objects import DownloadProtocol, MediaID, MediaItem
     from cyberdrop_dl.database import Database
+    from cyberdrop_dl.hasher import Hasher
     from cyberdrop_dl.manager import Manager
     from cyberdrop_dl.tui import TUI, ProgressHook
-
-    _P = ParamSpec("_P")
-    _R = TypeVar("_R")
 
 
 logger = logging.getLogger(__name__)
@@ -50,29 +38,6 @@ _SLOW_DOWNLOAD_PERIOD: int = 10  # seconds
 _PROTOCOL_MAP: dict[DownloadProtocol, type[FileDownloader]] = {}
 
 
-def _retry(
-    func: Callable[[DownloadManager, MediaItem], Coroutine[None, None, _R]],
-) -> Callable[[DownloadManager, MediaItem], Coroutine[None, None, _R]]:
-    @functools.wraps(func)
-    async def wrapper(self: DownloadManager, media_item: MediaItem) -> _R:
-        while True:
-            try:
-                return await func(self, media_item)
-            except DownloadError as e:
-                if not e.retry:
-                    raise
-
-                media_item.attempts += 1
-                logger.error(f"Download failed: {media_item.url} with error: {e!s}")
-                if media_item.attempts >= self.config.rate_limits.download_attempts:
-                    raise
-
-                retry_msg = f"Retrying download: {media_item.url}, attempt: {media_item.attempts + 1}"
-                logger.info(retry_msg)
-
-    return wrapper
-
-
 @dataclasses.dataclass(slots=True)
 class FileDownloader(ABC):
     """Low level class to that performs the actual download"""
@@ -81,7 +46,7 @@ class FileDownloader(ABC):
     dl_manager: DownloadManager
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
-        super().__init__(**kwargs)
+        super().__init_subclass__(**kwargs)
         existing_proto = _PROTOCOL_MAP.get(cls.PROTOCOL)
         assert existing_proto is None, (
             f"[{cls.__name__}] A downloader for protocol {cls.PROTOCOL} already exists {existing_proto}"
@@ -101,22 +66,41 @@ class SpeedLimiter(AsyncLimiter):
         await super().acquire(amount)
 
 
+@dataclasses.dataclass(slots=True, eq=False)
 class DownloadManager:
     """High level class to handle download retries, slots limiter, and skip by config options"""
 
-    def __init__(self, manager: Manager) -> None:
-        self.manager: Manager = manager
-        self.client: HTTPClient = manager.client
-        self.database: Database = manager.database
-        self.config: Config = manager.config
-        self.tui: TUI = manager.tui
-        self.processed_items: set[str] = set()
-        self.speed_limiter: SpeedLimiter = SpeedLimiter(
-            manager.config.rate_limits.download_speed_limit,
+    manager: Manager  # need to handle errors
+    client: HTTPClient
+    database: Database
+    config: Config
+    tui: TUI
+    hasher: Hasher
+
+    speed_limiter: SpeedLimiter = dataclasses.field(init=False)
+    _processed: set[MediaID] = dataclasses.field(init=False, default_factory=set)
+    _downloaded: list[MediaItem] = dataclasses.field(init=False, default_factory=list)
+
+    def __post_init__(self) -> None:
+        self.speed_limiter = SpeedLimiter(
+            self.config.rate_limits.download_speed_limit,
             time_period=1,
         )
-        self._completed_downloads: list[MediaItem] = []
-        self.slow_download_threshold: int = manager.config.runtime.slow_download_speed
+
+    @property
+    def slow_download_threshold(self) -> int:
+        return self.config.runtime.slow_download_speed
+
+    @classmethod
+    def from_manager(cls, manager: Manager) -> Self:
+        return cls(
+            manager,
+            manager.client,
+            manager.database,
+            manager.config,
+            manager.tui,
+            manager.hasher,
+        )
 
     @final
     async def add_completed(self, media_item: MediaItem) -> None:
@@ -124,22 +108,34 @@ class DownloadManager:
             return
         if not self.config.download.disable_file_timestamps:
             await _set_file_datetime(media_item)
-        self._completed_downloads.append(media_item)
+        await self.database.history_table.mark_complete(media_item.domain, media_item)
+        await self.database.history_table.add_filesize(media_item.domain, media_item)
+        self._downloaded.append(media_item)
         self.tui.files.add_completed()
 
     @final
+    async def finalize_download(self, media_item: MediaItem) -> None:
+        await aio.chmod(media_item.complete_file, 0o666)
+        if media_item.is_segment:
+            return
+
+        await self.hasher.hash_in_place(media_item)
+        await self.add_completed(media_item)
+        logger.info(f"Download finished: {media_item.url}")
+
+    @final
     async def run(self, media_item: MediaItem) -> bool:
-        if media_item.url.path in self.processed_items and not self.config.runtime.ignore_history:
+        if await self.__should_skip_by_config(media_item):
             return False
 
         async with self.__limiter(media_item):
             if not media_item.is_segment:
                 logger.info(f"Download starting: {media_item.url}")
 
-            return bool(await self.__download(media_item))
+            return await self.__download_w_retries(media_item)
 
     @contextlib.asynccontextmanager
-    async def __limiter(self, media_item: MediaItem):
+    async def __limiter(self, media_item: MediaItem) -> AsyncGenerator[None]:
         if media_item.is_segment:
             yield
             return
@@ -151,65 +147,71 @@ class DownloadManager:
             _LOCKS[media_item.filename],
         ):
             logger.debug(f"Lock for {media_item.filename!r} acquired")
-            self.processed_items.add(media_item.db_path)
+            self._processed.add(media_item.id)
             try:
                 yield
             finally:
                 logger.debug(f"Lock for {media_item.filename!r} released")
 
-    async def __check_skip_by_config(self, media_item: MediaItem) -> None:
+    def __log_skipped(self, media_item: MediaItem, reason: object) -> None:
+        logger.info(f"Download skipped {media_item.url}: {reason}")
+        self.tui.files.add_skipped()
+
+    async def __should_skip_by_config(self, media_item: MediaItem) -> bool:
         if media_item.is_segment:
-            return
+            return False
+
+        if not self.config.runtime.ignore_history and media_item.id in self._processed:
+            return True
 
         if media_item.duration is None:
             media_item.duration = await self.database.history_table.get_duration(media_item.domain, media_item)
-        if media_item.duration is None:
-            media_item.duration = await _probe_duration(media_item)
 
-        if _filter_by_extension(media_item, self.config):
-            raise RestrictedFiletypeError(origin=media_item)
-        if _filter_by_duration(media_item, self.config):
-            raise DurationError(origin=media_item)
-        if _filter_by_date(media_item, self.config):
-            raise RestrictedDateRangeError(origin=media_item)
-        if _filter_by_filesize(media_item, self.config):
-            msg = f"File size({media_item.filesize}s) out of config range"
-            raise SkipDownloadError("Filesize Not Allowed", message=msg, origin=media_item)
-
-    async def post_download_check(self, media_item: MediaItem) -> None:
-        if (await aio.get_size(media_item.partial_file)) == 0:
-            await aio.unlink(media_item.partial_file)
-            raise DownloadError(HTTPStatus.INTERNAL_SERVER_ERROR, "File is empty")
-
-        if media_item.is_segment:
-            return
-
-        if media_item.duration is None:
-            media_item.duration = await _probe_duration(media_item)
-
-        if _filter_by_duration(media_item, self.config):
-            msg = f"Download deleted {media_item.url} due to duration restrictions ({media_item.duration})"
+        if self.config.download.skip_download_mark_completed:
+            reason = "due to --mark-completed option"
+            await self.database.history_table.mark_complete(media_item.domain, media_item)
+        elif _filter_by_extension(media_item, self.config):
+            reason = f"File extension ({media_item.ext}) ignored by config options"
+        elif _filter_by_duration(media_item, self.config):
+            reason = f"File duration ({media_item.duration}s) out of config range"
+        elif _filter_by_date(media_item, self.config):
+            reason = f"File upload date ({media_item.datetime}) out of config range"
         elif _filter_by_filesize(media_item, self.config):
-            msg = f"Download deleted {media_item.url} due to filesize restrictions ({media_item.filesize})"
+            reason = f"File size({media_item.filesize}s) out of config range"
         else:
-            return
+            return False
 
-        await aio.unlink(media_item.complete_file)
-        logger.warning(msg)
-        self.tui.files.add_skipped()
-        raise ValueError
+        self.__log_skipped(media_item, reason)
+        return True
 
     @error_handling_wrapper
-    @_retry
-    async def __download(self, media_item: MediaItem) -> bool | None:
+    async def __download_w_retries(self, media_item: MediaItem) -> bool:
+        if media_item.duration is None:
+            media_item.duration = await _probe_duration(media_item)
+        if _filter_by_duration(media_item, self.config):
+            reason = f"File duration ({media_item.duration}s) out of config range"
+            self.__log_skipped(media_item, reason)
+            return False
+
+        while True:
+            try:
+                return await self.__download(media_item)
+            except DownloadError as e:
+                if not e.retry:
+                    raise
+
+                logger.error(f"Download failed: {media_item.url} with error: {e!s}")
+                if media_item.attempts >= self.config.rate_limits.download_attempts:
+                    raise
+
+                media_item.attempts += 1
+                retry_msg = f"Retrying download: {media_item.url}, attempt: {media_item.attempts + 1}"
+                logger.info(retry_msg)
+
+    async def __download(self, media_item: MediaItem) -> bool:
         try:
-            await self.__check_skip_by_config(media_item)
             downloader = _PROTOCOL_MAP[media_item.protocol](self)
             return await downloader.run(media_item)
-
-        except SkipDownloadError as e:
-            logger.info(f"Download skipped {media_item.url}: {e}")
-            self.tui.files.add_skipped()
 
         except (DownloadError, ClientResponseError, InvalidContentTypeError):
             raise
@@ -244,6 +246,29 @@ class DownloadManager:
                 raise SlowDownloadError
 
         return check_download_speed
+
+    async def post_download_check(self, media_item: MediaItem) -> None:
+        if (await aio.get_size(media_item.partial_file)) == 0:
+            await aio.unlink(media_item.partial_file)
+            raise DownloadError(HTTPStatus.INTERNAL_SERVER_ERROR, "File is empty")
+
+        if media_item.is_segment:
+            return
+
+        if media_item.duration is None:
+            media_item.duration = await _probe_duration(media_item)
+
+        if _filter_by_duration(media_item, self.config):
+            msg = f"Download deleted {media_item.url} due to duration restrictions ({media_item.duration})"
+        elif _filter_by_filesize(media_item, self.config):
+            msg = f"Download deleted {media_item.url} due to filesize restrictions ({media_item.filesize})"
+        else:
+            return
+
+        await aio.unlink(media_item.complete_file)
+        logger.warning(msg)
+        self.tui.files.add_skipped()
+        raise ValueError
 
 
 def _filter_by_extension(media_item: MediaItem, config: Config) -> bool:

@@ -84,7 +84,7 @@ async def _post_runtime(manager: Manager) -> None:
     """Actions to complete after the main scrape process"""
     logger.info(spacer())
     logger.info("Running Post-Download Processes", extra={"color": "green"})
-    await manager.hasher.post_download_hash(manager.completed_downloads)
+    await manager.hasher.hash_post_download(manager.completed_downloads)
     await manager.hasher.dedupe()
 
     if manager.config.sorting.sort_downloads:
