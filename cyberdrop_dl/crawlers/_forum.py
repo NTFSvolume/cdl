@@ -208,7 +208,7 @@ class MessageBoardCrawler(Crawler, is_abc=True):
     @final
     @property
     def scrape_single_forum_post(self) -> bool:
-        return config.get().download.scrape_single_forum_post
+        return False
 
     @final
     @property

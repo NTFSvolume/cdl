@@ -43,13 +43,13 @@ class Sorter:
     def from_config(cls, tui: TUI, config: config.Config) -> Sorter:
         return cls(
             tui=tui,
-            input_dir=config.sorting.scan_folder or config.files.download_folder,
-            output_dir=config.sorting.sort_folder,
-            incrementer_format=config.sorting.sort_incrementer_format,
-            audio_format=config.sorting.sorted_audio,
-            image_format=config.sorting.sorted_image,
-            video_format=config.sorting.sorted_video,
-            other_format=config.sorting.sorted_other,
+            input_dir=config.filesystem.download_folder,
+            output_dir=config.sort.output,
+            incrementer_format=config.sort.incrementer_format,
+            audio_format=config.sort.audio_format,
+            image_format=config.sort.image_format,
+            video_format=config.sort.video_format,
+            other_format=config.sort.other_format,
         )
 
     async def run(self) -> None:

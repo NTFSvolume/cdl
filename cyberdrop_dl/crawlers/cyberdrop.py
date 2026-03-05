@@ -83,8 +83,7 @@ class CyberdropCrawler(Crawler):
         name: str = info["name"]
         filename, ext = self.get_filename_and_ext(name)
         link = self.parse_url(auth["url"])
-        if self.config.download.remove_generated_id_from_filenames:
-            filename = remove_file_id(filename, ext)
+        filename = remove_file_id(filename, ext)
 
         await self.handle_file(link, scrape_item, name, ext, custom_filename=filename)
 

@@ -239,7 +239,7 @@ class ScrapeMapper(aio.AsyncContextManagerMixin):
 
             try:
                 download_folder = get_download_path(self.manager, scrape_item, "jdownloader")
-                relative_download_dir = download_folder.relative_to(self.config.files.download_folder)
+                relative_download_dir = download_folder.relative_to(self.config.filesystem.download_folder)
                 await self.jdownloader.send(
                     scrape_item.url,
                     scrape_item.parent_title,

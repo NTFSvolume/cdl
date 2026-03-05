@@ -176,7 +176,7 @@ class Hasher:
 
         with self.tui(screen="hashing"):  # TODO: Add a new screen for "removing_hashing"
             czkawka = Czkawka(
-                send_to_trash_bin=self.config.dedupe.send_deleted_to_trash,
+                send_to_trash_bin=self.config.dedupe.delete_to_trash,
                 concurrency=self.concurrency,
                 on_delete=self.tui.hashing.add_removed,
             )

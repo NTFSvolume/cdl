@@ -5,7 +5,6 @@ import logging
 import sys
 import time
 from collections.abc import Callable, Coroutine, Iterable
-from enum import StrEnum, auto
 from pathlib import Path
 from typing import Annotated, Literal, ParamSpec, TypeVar
 
@@ -32,13 +31,6 @@ _R = TypeVar("_R")
 
 
 logger = logging.getLogger(__name__)
-
-
-class UIOptions(StrEnum):
-    DISABLED = auto()
-    ACTIVITY = auto()
-    SIMPLE = auto()
-    FULLSCREEN = auto()
 
 
 def _task_group_error_wrapper(
@@ -100,7 +92,7 @@ async def _post_runtime(manager: Manager) -> None:
     await manager.hasher.hash_post_download(manager.downloader.successful_downloads)
     await manager.hasher.dedupe()
 
-    if manager.config.sorting.sort_downloads:
+    if manager.config.sort.enabled:
         sorter = Sorter.from_config(manager.tui, manager.config)
         await sorter.run()
 
@@ -145,7 +137,13 @@ async def download(
     ] = None,
     /,
     *,
-    input_file: Path | None = None,
+    input_file: Annotated[
+        Path | None,
+        Parameter(
+            alias="i",
+            help="The path to the text file containing the URLs you want to download. Each line should be a single URL",
+        ),
+    ] = None,
     appdata_folder: Path | None = None,
     config: Path | None = None,
     impersonate: (
@@ -159,7 +157,6 @@ async def download(
         ]
         | None
     ) = None,
-    portrait: bool = False,
     print_stats: bool = False,
     config_settings: Config = Config(),  # noqa: B008
 ):
@@ -172,8 +169,6 @@ async def download(
         pass
     if print_stats:
         pass
-    if portrait:
-        pass
 
     manager = Manager(config_settings, appdata_folder)
     with asyncio.Runner(loop_factory=_loop_factory) as runner:
@@ -181,7 +176,7 @@ async def download(
 
 
 @app.command()
-def show_supported_sites() -> None:
+def show() -> None:
     """Show a list of all supported sites"""
     from cyberdrop_dl.markdown import get_crawlers_info_as_rich_table
 
@@ -198,6 +193,7 @@ def retry(
     completed_before: datetime.date | None = None,
     max_items_retry: int = 0,
 ):
+    "Retry downloads from the database"
     return
 
 

@@ -172,8 +172,8 @@ class HTTPClient(aio.AsyncContextManagerMixin):
             config=config,
             ssl_context=_create_ssl_ctx(config),
             download_limiter=DownloadLimiter(
-                config.rate_limits.max_simultaneous_downloads_per_domain,
-                config.rate_limits.max_simultaneous_downloads,
+                config.rate_limits.max_downloads_per_domain,
+                config.rate_limits.max_downloads,
             ),
             rate_limiter=RateLimiter(config.rate_limits.rate_limit),
         )

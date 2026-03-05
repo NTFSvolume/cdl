@@ -135,13 +135,13 @@ class LogsManager:
 
     def write_unsupported(self, url: URL, origin: ScrapeItem | URL | None = None) -> None:
         _ = self.task_group.create_task(
-            self._write_to_csv(self.config.logs.unsupported_urls, url=url, origin=get_origin(origin))
+            self._write_to_csv(self.config.logs.unsupported, url=url, origin=get_origin(origin))
         )
 
     def write_download_error(self, media_item: MediaItem, error_message: str) -> None:
         _ = self.task_group.create_task(
             self._write_to_csv(
-                self.config.logs.download_error_urls,
+                self.config.logs.download_errors,
                 url=media_item.url,
                 error=error_message,
                 referer=media_item.referer,
@@ -152,7 +152,7 @@ class LogsManager:
     def write_scrape_error(self, url: URL | str, error_message: str, origin: URL | Path | None = None) -> None:
         _ = self.task_group.create_task(
             self._write_to_csv(
-                self.config.logs.scrape_error_urls,
+                self.config.logs.scrape_errors,
                 url=url,
                 error=error_message,
                 origin=origin,

@@ -4,14 +4,17 @@ import logging
 import random
 import re
 from datetime import date, datetime, timedelta
+from enum import auto
 from functools import cached_property
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 import aiohttp
+from cyclopts import validators
+from cyclopts.group import Group
+from cyclopts.parameter import Parameter
 from pydantic import (
     ByteSize,
-    Field,
     NonNegativeFloat,
     NonNegativeInt,
     PositiveFloat,
@@ -20,6 +23,7 @@ from pydantic import (
     field_validator,
 )
 
+from cyberdrop_dl.compat import CIStrEnum
 from cyberdrop_dl.constants import Browser, HashAlgorithm, Hashing
 from cyberdrop_dl.models import AppriseURL, Settings, SettingsGroup
 from cyberdrop_dl.models.types import (
@@ -56,7 +60,7 @@ _SORTING_COMMON_FIELDS = {
 }
 
 
-class FormatValidator:
+class _FormatValidator:
     @classmethod
     def _validate_format(cls, value: str, valid_keys: set[str]) -> None:
         from cyberdrop_dl.utils.strings import validate_format_string
@@ -64,20 +68,74 @@ class FormatValidator:
         validate_format_string(value, valid_keys)
 
 
-class Downloads(FormatValidator, SettingsGroup):
-    block_download_sub_folders: bool = False
-    disable_file_timestamps: bool = False
-    include_album_id_in_folder_name: bool = False
-    include_thread_id_in_folder_name: bool = False
+_cookies = Group(
+    "Cookies (choose one)",
+    default_parameter=Parameter(negative=""),
+    validator=validators.mutually_exclusive,
+)
+
+
+@Parameter(name="*", group=_cookies)
+class Cookies(Settings):
+    cookies: Path | None = None
+    "A Netscape formatted file to read cookies from"
+    cookies_from: Browser | None = None
+    "Automatically extract cookies from this browser"
+
+    @property
+    def auto_import(self) -> bool:
+        return bool(self.cookies_from)
+
+
+@Parameter(name="*")
+class Dedupe(SettingsGroup):
+    auto_dedupe: bool = True
+    "Delete duplicate files after downloads"
+    hashes: tuple[HashAlgorithm, ...] = (HashAlgorithm.xxh128,)
+    "List of hash algorithms to compute and use to compare duplicates"
+    hashing: Hashing = Hashing.IN_PLACE
+    """OFF: do not compute any hash,
+    IN_PLACE: compute hash immediately after each download,
+    POST_DOWNLOAD: compute all hashes concurrently after all downloads finish"""
+
+    delete_to_trash: bool = True
+    "Deduped files are sent to the trash bin instead of being permanently deleted"
+
+    @field_validator("hashes", mode="after")
+    @classmethod
+    def unique_list(cls, hashes: list[HashAlgorithm]) -> tuple[HashAlgorithm, ...]:
+        extras = sorted(set(hashes).difference({HashAlgorithm.xxh128}))
+        return HashAlgorithm.xxh128, *extras
+
+
+@Parameter(name="*")
+class Downloads(SettingsGroup, _FormatValidator):
+    sub_folders: bool = True
+    "Allow creating nested subfolders while downloading"
+    mtime: bool = True
+    "Set file upload date as its modification time "
+    include_album_id: bool = False
+    "Include the album ID (random alphanumeric string) of the album in its folder name"
+    include_thread_id: bool = False
+    "Include the thread ID of the forum in its folder name"
+    include_domain: bool = True
+    "Include the domain of website of each download in its folder name"
+
     max_children: ListNonNegativeInt = []
-    remove_domains_from_folder_names: bool = False
-    remove_generated_id_from_filenames: bool = False
-    scrape_single_forum_post: bool = False
+
     separate_posts_format: NonEmptyStr = "{default}"
+    "fstring format for the directory created when using --separate-posts"
     separate_posts: bool = False
-    skip_download_mark_completed: bool = False
+    "Create a subfolder for each post on sites that have the concept of 'posts'. ex: forums, tiktok, coomer"
+
+    skip_download: bool = False
+    "Do not download any actual files"
+    mark_completed: bool = False
+    "Mark skipped files as completed on the database"
     max_thread_depth: NonNegativeInt = 0
+    "Restricts how many levels deep the scraper is allowed to go while crawling a thread"
     max_thread_folder_depth: NonNegativeInt | None = None
+    "Restricts the max number of nested folders CDL will create when maximum_thread_depth is greater that 0"
 
     @field_validator("separate_posts_format", mode="after")
     @classmethod
@@ -87,27 +145,32 @@ class Downloads(FormatValidator, SettingsGroup):
         return value
 
 
-class Files(SettingsGroup):
-    download_folder: Path = Field(default=_DEFAULT_DOWNLOAD_STORAGE, validation_alias="d")
-    dump_json: bool = Field(default=False, validation_alias="j")
-    input_file: Path = Field(default=_DEFAULT_APP_STORAGE / "Configs/{config}/URLs.txt", validation_alias="i")
-    save_pages_html: bool = False
+@Parameter(name="*")
+class Filesystem(SettingsGroup):
+    download_folder: Annotated[Path, Parameter(alias=("--output", "-o", "-d"))] = _DEFAULT_DOWNLOAD_STORAGE
+    dump_json: Annotated[bool, Parameter(alias="-j")] = False
+    "Create a json lines files with the information about every processed file (skipped, failed or downloaded)"
+    write_pages: bool = False
+    "Save to disk a copy of every request as an html file (pages) or json (API requests)"
 
 
 class Logs(SettingsGroup):
-    download_error_urls: LogPath = Path("Download_Error_URLs.csv")
-    last_forum_post: LogPath = Path("Last_Scraped_Forum_Posts.csv")
-    log_folder: Path = _DEFAULT_APP_STORAGE / "logs"
-    logs_expire_after: timedelta | None = None
-    main_log: MainLogPath = Path("downloader.log")
-    rotate_logs: bool = False
-    scrape_error_urls: LogPath = Path("Scrape_Error_URLs.csv")
-    unsupported_urls: LogPath = Path("Unsupported_URLs.csv")
-    webhook: AppriseURL | None = None
+    download_errors: LogPath = Path("download_errors.csv")
+    main_log: MainLogPath = Path("cdl.log")
+    scrape_errors: LogPath = Path("scrape_errors.csv")
+    unsupported: LogPath = Path("unsupported_URLs.csv")
+
+    folder: Path = _DEFAULT_APP_STORAGE / "logs"
+    expire_after: timedelta | None = None
+
+    rotate: bool = False
+    webhook: Annotated[AppriseURL | None, Parameter(n_tokens=1, accepts_keys=False)] = None
+    """The URL of a webhook that you want to send download stats to (Ex: Discord).
+    You can add the optional tag attach_logs= as a prefix to include a copy of the main log as an attachment"""
     _created_at: datetime = PrivateAttr(default_factory=datetime.now)
 
     @property
-    def jsonl_file(self):
+    def jsonl_file(self) -> Path:
         return self.main_log.with_suffix(".results.jsonl")
 
     @field_validator("webhook", mode="before")
@@ -115,7 +178,7 @@ class Logs(SettingsGroup):
     def handle_falsy(cls, value: str) -> str | None:
         return falsy_as_none(value)
 
-    @field_validator("logs_expire_after", mode="before")
+    @field_validator("expire_after", mode="before")
     @staticmethod
     def parse_logs_duration(input_date: timedelta | str | int | None) -> timedelta | str | None:
         if value := falsy_as_none(input_date):
@@ -125,30 +188,30 @@ class Logs(SettingsGroup):
         self._resolve_filenames()
 
     def _resolve_filenames(self) -> None:
-        object.__setattr__(self, "log_folder", self.log_folder.expanduser().resolve().absolute())
+        object.__setattr__(self, "log_folder", self.folder.expanduser().resolve().absolute())
         now_file_iso: str = self._created_at.strftime(_LOGS_DATETIME_FORMAT)
         now_folder_iso: str = self._created_at.strftime(_LOGS_DATE_FORMAT)
         for name, log_file in vars(self).items():
             if name == "log_folder" or not isinstance(log_file, Path) or log_file.suffix not in (".csv", ".log"):
                 continue
 
-            log_file = self.log_folder / log_file
+            log_file = self.folder / log_file
 
-            if self.rotate_logs:
+            if self.rotate:
                 file_name = f"{log_file.stem}_{now_file_iso}{log_file.suffix}"
                 log_file = log_file.parent / now_folder_iso / file_name
 
             object.__setattr__(self, name, log_file)
 
     def delete_old_logs_and_folders(self) -> None:
-        if not self.logs_expire_after:
+        if not self.expire_after:
             return
 
-        for file in self.log_folder.rglob("*"):
+        for file in self.folder.rglob("*"):
             if file.suffix.lower() not in (".log", ".csv"):
                 continue
 
-            if (self._created_at - datetime.fromtimestamp(file.stat().st_ctime)) > self.logs_expire_after:
+            if (self._created_at - datetime.fromtimestamp(file.stat().st_ctime)) > self.expire_after:
                 file.unlink()
 
 
@@ -172,6 +235,7 @@ class FileSizeRanges:
     other: Range
 
 
+@Parameter(name="*")
 class FileSizeLimits(SettingsGroup):
     max_image_size: ByteSizeSerilized = ByteSize(0)
     max_other_size: ByteSizeSerilized = ByteSize(0)
@@ -204,6 +268,7 @@ class MediaDurationRanges:
     audio: Range
 
 
+@Parameter(name="*")
 class MediaDurationLimits(SettingsGroup):
     max_video_duration: timedelta = timedelta(seconds=0)
     max_audio_duration: timedelta = timedelta(seconds=0)
@@ -229,21 +294,35 @@ class MediaDurationLimits(SettingsGroup):
         return to_timedelta(input_date)
 
 
+@Parameter(name="*")
 class Ignore(SettingsGroup):
     exclude_after: date | None = None
+    "Do not download files uploaded after this date"
     exclude_before: date | None = None
+    "Do not download files uploaded before this date"
 
     exclude_files_with_no_extension: bool = True
+    """Do not download files without an extension. If disabled, files without an extension are asummed to be .mp4 files
+    That means any config option that applies to videos also applies to them"""
     exclude_audio: bool = False
+    "Do not download audio files"
     exclude_images: bool = False
+    "Do not download images"
     exclude_other: bool = False
+    "Do not download non media files"
     exclude_videos: bool = False
+    "Do not download videos"
 
     filename_regex_filter: NonEmptyStrOrNone = None
+    "Any download with a filename that matches this regex expression will be skipped"
     ignore_coomer_ads: bool = False
+    "Skip posts with the tag #ad on Kemono like sites (Nekohouse, Kemono and Coomer)"
     ignore_coomer_post_content: bool = True
+    "Ignore URL found inside the text of posts on Kemono like sites (Nekohouse, Kemono and Coomer)."
     only_hosts: ListNonEmptyStr = []
+    "Only scrape/download from sites which host partially matches any of these hosts"
     skip_hosts: ListNonEmptyStr = []
+    "Do not scrape/download from sites which host partially matches any of these hosts"
 
     @field_validator("filename_regex_filter")
     @classmethod
@@ -257,36 +336,45 @@ class Ignore(SettingsGroup):
         return value
 
 
-class Jdownloader(Settings):
-    enabled: bool = False
+class Jdownloader(SettingsGroup):
+    enabled: Annotated[bool, Parameter(name="--jdownloader")] = False
+    "Send unsupported URLs to jdownloader"
     autostart: bool = False
+    "Automatically start downloads of URLs send to jdownloader"
     download_dir: PathOrNone = None
+    """The base download_dir jdownloader will use for download.
+    A null value (the default) will use the cdl's config download_dir"""
     whitelist: ListNonEmptyStr = []
+    """List of domain names. An unsupported URL will only be sent to jdownloader if its host is found on the list.
+    An empty whitelist (the default) will send any unsupported URL to jdownloader."""
 
 
+@Parameter(name="*")
 class Runtime(SettingsGroup):
     log_level: NonNegativeInt = logging.DEBUG
+    "Defines the logging level for messages, according to Python logging levels"
     console_log_level: NonNegativeInt = 100
+    "Same as log_level but it controls which messages are shown on the console."
     deep_scrape: bool = False
     ignore_history: bool = False
-    jdownloader: Jdownloader = Jdownloader()
+    "Ignore database history, allowing downloads of previouly downloaded files"
     delete_empty_folders: bool = True
     delete_partial_files: bool = False
     slow_download_speed: ByteSizeSerilized = ByteSize(0)
-    update_last_forum_post: bool = True
+    "Downloads with a speed lower than this value for more than 10 seconds will be skipped. Set to 0 to disable"
 
 
-class Sorting(FormatValidator, SettingsGroup):
-    scan_folder: PathOrNone = None
-    sort_downloads: bool = False
-    sort_folder: Path = _DEFAULT_DOWNLOAD_STORAGE / "Cyberdrop-DL Sorted Downloads"
-    sort_incrementer_format: NonEmptyStr = " ({i})"
-    sorted_audio: NonEmptyStrOrNone = "{sort_dir}/{base_dir}/Audio/{filename}{ext}"
-    sorted_image: NonEmptyStrOrNone = "{sort_dir}/{base_dir}/Images/{filename}{ext}"
-    sorted_other: NonEmptyStrOrNone = "{sort_dir}/{base_dir}/Other/{filename}{ext}"
-    sorted_video: NonEmptyStrOrNone = "{sort_dir}/{base_dir}/Videos/{filename}{ext}"
+class Sorting(SettingsGroup, _FormatValidator):
+    enabled: Annotated[bool, Parameter(name="--sort-downloads")] = False
+    output: Path = Path("cdl_sorted_downloads")
+    "This is the path to the folder you'd like sorted downloads to be stored in"
+    incrementer_format: NonEmptyStr = " ({i})"
+    audio_format: NonEmptyStrOrNone = "{sort_dir}/{base_dir}/Audio/{filename}{ext}"
+    image_format: NonEmptyStrOrNone = "{sort_dir}/{base_dir}/Images/{filename}{ext}"
+    other_format: NonEmptyStrOrNone = "{sort_dir}/{base_dir}/Other/{filename}{ext}"
+    video_format: NonEmptyStrOrNone = "{sort_dir}/{base_dir}/Videos/{filename}{ext}"
 
-    @field_validator("sort_incrementer_format", mode="after")
+    @field_validator("incrementer_format", mode="after")
     @classmethod
     def valid_sort_incrementer_format(cls, value: str | None) -> str | None:
         if value is not None:
@@ -294,7 +382,7 @@ class Sorting(FormatValidator, SettingsGroup):
             cls._validate_format(value, valid_keys)
         return value
 
-    @field_validator("sorted_audio", mode="after")
+    @field_validator("audio_format", mode="after")
     @classmethod
     def valid_sorted_audio(cls, value: str | None) -> str | None:
         if value is not None:
@@ -302,7 +390,7 @@ class Sorting(FormatValidator, SettingsGroup):
             cls._validate_format(value, valid_keys)
         return value
 
-    @field_validator("sorted_image", mode="after")
+    @field_validator("image_format", mode="after")
     @classmethod
     def valid_sorted_image(cls, value: str | None) -> str | None:
         if value is not None:
@@ -310,7 +398,7 @@ class Sorting(FormatValidator, SettingsGroup):
             cls._validate_format(value, valid_keys)
         return value
 
-    @field_validator("sorted_other", mode="after")
+    @field_validator("other_format", mode="after")
     @classmethod
     def valid_sorted_other(cls, value: str | None) -> str | None:
         if value is not None:
@@ -318,7 +406,7 @@ class Sorting(FormatValidator, SettingsGroup):
             cls._validate_format(value, valid_keys)
         return value
 
-    @field_validator("sorted_video", mode="after")
+    @field_validator("video_format", mode="after")
     @classmethod
     def valid_sorted_video(cls, value: str | None) -> str | None:
         if value is not None:
@@ -335,45 +423,22 @@ class Sorting(FormatValidator, SettingsGroup):
         return value
 
 
-class Cookies(SettingsGroup):
-    cookies: Path | None = None
-    cookies_from: Browser | None = None
-
-    @property
-    def auto_import(self) -> bool:
-        return bool(self.cookies_from)
-
-
-class Dedupe(SettingsGroup):
-    add_md5_hash: bool = False
-    add_sha256_hash: bool = False
-    auto_dedupe: bool = True
-    hashing: Hashing = Hashing.IN_PLACE
-    send_deleted_to_trash: bool = True
-    hashes: tuple[HashAlgorithm, ...] = (HashAlgorithm.xxh128,)
-
-    @property
-    def additional_hashes(self) -> tuple[HashAlgorithm, ...]:
-        return tuple(sorted(set(self.hashes).difference({HashAlgorithm.xxh128})))
-
-    @field_validator("hashes", mode="after")
-    @classmethod
-    def unique_list(cls, value: list[HashAlgorithm]) -> tuple[HashAlgorithm, ...]:
-        return tuple(sorted(set(value) | {HashAlgorithm.xxh128}))
-
-
-# ruff: noqa: RUF012
-
-
+@Parameter(name="*")
 class General(SettingsGroup):
     ssl_context: Literal["truststore", "certifi", "truststore+certifi"] | None = "truststore+certifi"
     disable_crawlers: ListNonEmptyStr = []
+    "List of crawlers to disable for the current run"
     flaresolverr: HttpURL | None = None
+    "HTTP URL of a flaresolverr instance to bypass Cloudflare and DDoS-Guard protection. Ex: http://192.168.1.44:4000"
     max_file_name_length: PositiveInt = 95
+    "Maximum number of characters a filename should have. Longer filenames will be truncated"
     max_folder_name_length: PositiveInt = 60
+    "Maximum number of characters a folder should have. Longer filenames will be truncated"
     proxy: HttpURL | None = None
     required_free_space: ByteSizeSerilized = _DEFAULT_REQUIRED_FREE_SPACE
-    user_agent: NonEmptyStr = _DEFAULT_USER_AGENT
+    f"""This is the minimum amount of free space require to start new downloads.
+    Values lower that {_MIN_REQUIRED_FREE_SPACE.human_readable()} will be overriden to {_MIN_REQUIRED_FREE_SPACE.human_readable()}"""
+    user_agent: Annotated[NonEmptyStr, Parameter(alias="--ua")] = _DEFAULT_USER_AGENT
 
     @field_validator("ssl_context", mode="before")
     @classmethod
@@ -398,17 +463,31 @@ class General(SettingsGroup):
         return max(value, _MIN_REQUIRED_FREE_SPACE)
 
 
+@Parameter(name="*")
+class DownloadLimits(Settings):
+    retries: Annotated[PositiveInt, Parameter(alias=("-R"))] = 2
+    "The number of download attempts per file. Some conditions are never retried (such as a 404 HTTP status)"
+    delay: NonNegativeFloat = 0.0
+    "Number of seconds to wait between downloads to the same domain."
+    max_speed: ByteSizeSerilized = ByteSize(0)
+    "Throttle downloads to make sure the combined speed does not exceed this rate (in MB/s). Set to 0 to disable"
+
+
+@Parameter(name="*")
 class RateLimiting(SettingsGroup):
-    download_attempts: PositiveInt = 2
-    download_delay: NonNegativeFloat = 0.0
-    download_speed_limit: ByteSizeSerilized = ByteSize(0)
+    downloads: DownloadLimits = DownloadLimits()
     jitter: NonNegativeFloat = 0
-    max_simultaneous_downloads_per_domain: PositiveInt = 5
-    max_simultaneous_downloads: PositiveInt = 15
+    "Before downloads, wait an additional random number of seconds in between 0 and <jitter>"
+    max_downloads_per_domain: PositiveInt = 5
+    max_downloads: PositiveInt = 15
     rate_limit: PositiveFloat = 25
+    "Global reate limit. Maximum number of requests (per second) to any site"
 
     connection_timeout: PositiveFloat = 15
+    "Number of seconds to wait while connecting to a website before timing out"
     read_timeout: PositiveFloat | None = 300
+    """Number of seconds to wait while reading data from a website before timing out.
+    A null value will make CDL keep the socket connection open indefinitely, even if the server is not sending data anymore"""
 
     @field_validator("read_timeout", mode="before")
     @classmethod
@@ -429,24 +508,35 @@ class RateLimiting(SettingsGroup):
 
     @property
     def chunk_size(self) -> int:
-        if not self.download_speed_limit:
+        if not self.downloads.max_speed:
             return _DEFAULT_CHUNK_SIZE
-        return min(_DEFAULT_CHUNK_SIZE, self.download_speed_limit)
+        return min(_DEFAULT_CHUNK_SIZE, self.downloads.max_speed)
 
     @property
     def total_download_delay(self) -> NonNegativeFloat:
         """download_delay + jitter"""
-        return self.download_delay + self.get_jitter()
+        return self.downloads.delay + self.get_jitter()
 
     def get_jitter(self) -> NonNegativeFloat:
         """Get a random number in the range [0, self.jitter]"""
         return random.uniform(0, self.jitter)
 
 
-class UIOptions(SettingsGroup):
-    refresh_rate: PositiveInt = 10
+class UIMode(CIStrEnum):
+    DISABLED = auto()
+    ACTIVITY = auto()
+    SIMPLE = auto()
+    FULLSCREEN = auto()
 
 
+class UIOptions(SettingsGroup, name="UI"):
+    refresh_rate: Annotated[PositiveInt, Parameter(name="--refresh-rate")] = 10
+    mode: UIMode = UIMode.FULLSCREEN
+    portrait: Annotated[bool, Parameter(name="--portrait", negative_bool=[])] = False
+    "Force a portrait layout for the UI (default is to auto rotate)"
+
+
+@Parameter(name="*")
 class GenericCrawlerInstances(SettingsGroup):
     wordpress_media: ListPydanticURL = []
     wordpress_html: ListPydanticURL = []
@@ -454,18 +544,20 @@ class GenericCrawlerInstances(SettingsGroup):
     chevereto: ListPydanticURL = []
 
 
+@Parameter(name="*")
 class ConfigSettings(Settings):
     cookies: Cookies = Cookies()
-    download: Downloads = Downloads()
     dedupe: Dedupe = Dedupe()
+    download: Downloads = Downloads()
     file_size_limits: FileSizeLimits = FileSizeLimits()
-    files: Files = Files()
+    filesystem: Filesystem = Filesystem()
     general: General = General()
     generic_crawlers_instances: GenericCrawlerInstances = GenericCrawlerInstances()
     ignore: Ignore = Ignore()
+    jdownloader: Jdownloader = Jdownloader()
     logs: Logs = Logs()
     media_duration_limits: MediaDurationLimits = MediaDurationLimits()
     rate_limits: RateLimiting = RateLimiting()
     runtime: Runtime = Runtime()
-    sorting: Sorting = Sorting()
-    ui_options: UIOptions = UIOptions()
+    sort: Sorting = Sorting()
+    ui: UIOptions = UIOptions()

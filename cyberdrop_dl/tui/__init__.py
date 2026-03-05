@@ -63,7 +63,7 @@ class TUI:
     @classmethod
     def from_config(cls, config: Config) -> Self:
         return cls(
-            refresh_rate=config.ui_options.refresh_rate,
+            refresh_rate=config.ui.refresh_rate,
             enabled_hashes=config.dedupe.hashes,
         )
 

@@ -110,8 +110,8 @@ class DownloadManager:
     async def add_completed(self, media_item: MediaItem) -> None:
         if media_item.is_segment:
             return
-        if not self.config.download.disable_file_timestamps:
-            await _set_file_datetime(media_item)
+        if self.config.download.mtime:
+            await _set_file_modtime(media_item)
         await self.database.history_table.mark_complete(media_item.domain, media_item)
         await self.database.history_table.add_filesize(media_item.domain, media_item)
         self._downloaded.append(media_item)
@@ -157,9 +157,12 @@ class DownloadManager:
             finally:
                 logger.debug(f"Lock for {media_item.filename!r} released")
 
-    def __log_skipped(self, media_item: MediaItem, reason: object) -> None:
+    async def _skip_download(self, media_item: MediaItem, reason: object) -> None:
         logger.info(f"Download skipped {media_item.url}: {reason}")
         self.tui.files.add_skipped()
+        if self.config.download.mark_completed:
+            logger.info(f"Skipped download {media_item.url} marked as completed on the database")
+            await self.database.history_table.mark_complete(media_item.domain, media_item)
 
     async def __should_skip_by_config(self, media_item: MediaItem) -> bool:
         if media_item.is_segment:
@@ -171,9 +174,8 @@ class DownloadManager:
         if media_item.duration is None:
             media_item.duration = await self.database.history_table.get_duration(media_item.domain, media_item)
 
-        if self.config.download.skip_download_mark_completed:
-            reason = "due to --mark-completed option"
-            await self.database.history_table.mark_complete(media_item.domain, media_item)
+        if self.config.download.skip_download:
+            reason = "due to --skip-download option"
         elif _filter_by_extension(media_item, self.config):
             reason = f"File extension ({media_item.ext}) ignored by config options"
         elif _filter_by_duration(media_item, self.config):
@@ -185,7 +187,7 @@ class DownloadManager:
         else:
             return False
 
-        self.__log_skipped(media_item, reason)
+        await self._skip_download(media_item, reason)
         return True
 
     @error_handling_wrapper
@@ -194,7 +196,7 @@ class DownloadManager:
             media_item.duration = await _probe_duration(media_item)
         if _filter_by_duration(media_item, self.config):
             reason = f"File duration ({media_item.duration}s) out of config range"
-            self.__log_skipped(media_item, reason)
+            await self._skip_download(media_item, reason)
             return False
 
         while True:
@@ -205,7 +207,7 @@ class DownloadManager:
                     raise
 
                 logger.error(f"Download failed: {media_item.url} with error: {e!s}")
-                if media_item.attempts >= self.config.rate_limits.download_attempts:
+                if media_item.attempts >= self.config.rate_limits.download_retries:
                     raise
 
                 media_item.attempts += 1
@@ -347,7 +349,7 @@ def _filter_by_filesize(item: MediaItem, config: Config) -> bool:
     return item.filesize not in limits.other
 
 
-async def _set_file_datetime(item: MediaItem) -> None:
+async def _set_file_modtime(item: MediaItem) -> None:
     if not item.timestamp:
         logger.warning(f"Unable to parse upload date for {item.url}, using current datetime as file datetime")
         return

@@ -58,12 +58,12 @@ def test_hash_directory_scanner(manager: Manager, expected_results: set[tuple[st
     config.get().dedupe.add_md5_hash = "md5" in algos
     config.get().dedupe.add_sha256_hash = "sha256" in algos
 
-    config.get().files.download_folder.mkdir(parents=True)
+    config.get().filesystem.download_folder.mkdir(parents=True)
     db_path = appdata.get().db_file
-    hash_directory_scanner(manager, config.get().files.download_folder)
+    hash_directory_scanner(manager, config.get().filesystem.download_folder)
     assert not get_hashes(db_path)
-    create_files(config.get().files.download_folder, n_files)
-    hash_directory_scanner(manager, config.get().files.download_folder)
+    create_files(config.get().filesystem.download_folder, n_files)
+    hash_directory_scanner(manager, config.get().filesystem.download_folder)
     results = get_hashes(db_path)
     assert len(results) == len(expected_results)
     assert results == expected_results

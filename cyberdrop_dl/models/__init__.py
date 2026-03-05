@@ -14,7 +14,6 @@ _ModelT = TypeVar("_ModelT", bound=BaseModel)
 class AliasModel(BaseModel, populate_by_name=True, defer_build=True): ...
 
 
-@Parameter(name="*")
 class Settings(AliasModel): ...
 
 

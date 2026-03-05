@@ -68,7 +68,7 @@ logger = logging.getLogger(__name__)
 
 def get_download_path(manager: Manager, scrape_item: ScrapeItem, domain: str) -> Path:
     """Returns the path to the download folder."""
-    download_dir = config.get().files.download_folder
+    download_dir = config.get().filesystem.download_folder
 
     return download_dir / scrape_item.create_download_path(domain)
 
@@ -217,7 +217,7 @@ def best_match(host: str, domains: dict[str, _T]) -> _T | None:
 
 def check_partials_and_empty_folders(config: config.Config) -> None:
     """Checks for partial downloads, deletes partial files and empty folders."""
-    download_folder = config.files.download_folder
+    download_folder = config.filesystem.download_folder
     _check_for_partial_files(download_folder)
     if config.runtime.delete_partial_files:
         logger.info("Deleting partial downloads...")
@@ -230,8 +230,8 @@ def check_partials_and_empty_folders(config: config.Config) -> None:
     logger.info("Deleting empty files and folders...")
     _ = delete_empty_files_and_folders(download_folder)
 
-    if config.sorting.sort_downloads and not config.sorting.sort_folder.is_relative_to(download_folder):
-        _ = delete_empty_files_and_folders(config.sorting.sort_folder)
+    if config.sort.enabled and not config.sort.output.is_relative_to(download_folder):
+        _ = delete_empty_files_and_folders(config.sort.output)
 
 
 def delete_empty_files_and_folders(dir: Path | str) -> bool:

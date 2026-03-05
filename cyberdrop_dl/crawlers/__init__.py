@@ -333,7 +333,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
             self.client.json_resp_checkers[host] = self._json_resp_check_
 
     async def __write_to_jsonl(self, media_item: MediaItem) -> None:
-        if not self.config.files.dump_json:
+        if not self.config.filesystem.dump_json:
             return
 
         data = [media_item.as_dict()]
@@ -667,13 +667,13 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
             title = "Untitled"
 
         title = title.strip()
-        if album_id and self.config.download.include_album_id_in_folder_name:
+        if album_id and self.config.download.include_album_id:
             title = f"{title} {album_id}"
 
-        if thread_id and self.config.download.include_thread_id_in_folder_name:
+        if thread_id and self.config.download.include_thread_id:
             title = f"{title} {thread_id}"
 
-        if not self.config.download.remove_domains_from_folder_names:
+        if self.config.download.include_domain:
             title = f"{title} ({self.FOLDER_DOMAIN})"
 
         # Remove double spaces
