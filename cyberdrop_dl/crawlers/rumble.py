@@ -4,12 +4,13 @@ import dataclasses
 import itertools
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 
+from cyberdrop_dl import aio
 from cyberdrop_dl.compat import IntEnum
 from cyberdrop_dl.crawlers import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.mediaprops import Resolution, Subtitle
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DownloadError, ScrapeError
-from cyberdrop_dl.utils import aio, css, error_handling_wrapper, m3u8, parse_url
+from cyberdrop_dl.utils import css, error_handling_wrapper, m3u8, parse_url
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable

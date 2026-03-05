@@ -46,7 +46,7 @@ class FileDownloader(ABC):
     dl_manager: DownloadManager
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
-        super().__init_subclass__(**kwargs)
+        super(FileDownloader, cls).__init_subclass__(**kwargs)
         existing_proto = _PROTOCOL_MAP.get(cls.PROTOCOL)
         assert existing_proto is None, (
             f"[{cls.__name__}] A downloader for protocol {cls.PROTOCOL} already exists {existing_proto}"

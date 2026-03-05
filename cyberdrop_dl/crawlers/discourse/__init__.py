@@ -9,6 +9,6 @@ from ._discourse import DiscourseCrawler
 _DISCOURSES_SITES = ["https://forums.plex.tv"]
 
 
-DISCOURSE_CRAWLERS: set[type[DiscourseCrawler]] = create_crawlers(_DISCOURSES_SITES, DiscourseCrawler)
+DISCOURSE_CRAWLERS: set[type[DiscourseCrawler]] = create_crawlers(DiscourseCrawler, *_DISCOURSES_SITES)
 
 __all__ = ["DISCOURSE_CRAWLERS", "DiscourseCrawler"]

@@ -19,7 +19,7 @@ from pydantic import BaseModel
 from cyberdrop_dl.crawlers import Crawler
 from cyberdrop_dl.data_structures.url_objects import DatetimeRange
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import css, error_handling_wrapper, open_graph, unique
+from cyberdrop_dl.utils import css, error_handling_wrapper, open_graph
 from cyberdrop_dl.utils.dates import to_timestamp
 
 from .models import HTML, Category, CategorySequence, ColletionType, Post, PostSequence, Tag, TagSequence
@@ -177,7 +177,7 @@ class WordPressBaseCrawler(Crawler, is_abc=True):
 
     @final
     def iter_parse_url(self, iterable: Iterable[str]) -> Iterable[AbsoluteHttpURL]:
-        for link_str in unique(iterable):
+        for link_str in dict.fromkeys(iterable):
             try:
                 yield self.parse_url(link_str)
             except Exception:

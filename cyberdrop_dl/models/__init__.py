@@ -1,9 +1,10 @@
+from collections.abc import Iterator, Sequence
 from pathlib import Path
-from typing import Any, ClassVar, Final, TypeVar
+from typing import Any, ClassVar, TypeVar
 
 import pydantic_core
 from cyclopts import Parameter
-from pydantic import BaseModel, Secret, SerializationInfo, ValidationError, model_serializer, model_validator
+from pydantic import BaseModel, RootModel, Secret, SerializationInfo, ValidationError, model_serializer, model_validator
 
 from .types import HttpURL
 
@@ -23,11 +24,25 @@ class SettingsGroup(Settings):
         return super().__init_subclass__(**kwargs)
 
 
+class SequenceModel(RootModel[list[_ModelT]], Sequence[_ModelT]):
+    def __len__(self) -> int:
+        return len(self.root)
+
+    def __iter__(self) -> Iterator[_ModelT]:
+        yield from self.root
+
+    def __getitem__(self, index: int) -> _ModelT:
+        return self.root[index]
+
+    def __bool__(self) -> bool:
+        return bool(len(self))
+
+
 class AppriseURL(AliasModel):
     url: Secret[HttpURL]
     tags: set[str] = set()
 
-    _OS_URLS: ClassVar[Final] = "windows://", "macosx://", "dbus://", "qt://", "glib://", "kde://"
+    _OS_URLS: ClassVar[tuple[str, ...]] = "windows://", "macosx://", "dbus://", "qt://", "glib://", "kde://"
     _VALID_TAGS: ClassVar[set[str]] = {"no_logs", "attach_logs", "simplified"}
 
     def model_post_init(self, *_) -> None:

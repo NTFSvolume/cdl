@@ -101,7 +101,7 @@ else:
 logger = logging.getLogger(__name__)
 
 
-class DownloadProtocol(enum.Enum):
+class DownloadProtocol(enum.StrEnum):
     HTTP = enum.auto()
     HLS = enum.auto()
     MEGA_NZ = enum.auto()
