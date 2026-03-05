@@ -6,7 +6,6 @@ import logging
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any, ClassVar
 
-import aiofiles
 from aiohttp import hdrs
 from typing_extensions import override
 
@@ -156,7 +155,7 @@ class HTTPFileDownloader(FileDownloader):
 
         await check_free_space()
 
-        async with aiofiles.open(media_item.partial_file, mode="ab") as f:
+        async with aio.open(media_item.partial_file, mode="ab") as f:
             async for chunk in resp.iter_chunked(self.chunk_size):
                 await check_free_space()
                 n_bytes = len(chunk)

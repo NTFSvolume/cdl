@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
-import aiofiles
 from mega.chunker import MegaChunker, get_chunks
 
+from cyberdrop_dl import aio
 from cyberdrop_dl.data_structures.url_objects import DownloadProtocol
 from cyberdrop_dl.downloader.http import HTTPFileDownloader
 
@@ -31,7 +31,7 @@ class MegaNzFileDownloader(HTTPFileDownloader):
 
         chunk_decryptor = MegaChunker(crypto.key, crypto.iv, crypto.meta_mac)
 
-        async with aiofiles.open(media_item.partial_file, mode="ab") as f:
+        async with aio.open(media_item.partial_file, mode="ab") as f:
             for _, chunk_size in get_chunks(file_size):
                 raw_chunk = await content.readexactly(chunk_size)
                 chunk = chunk_decryptor.read(raw_chunk)
