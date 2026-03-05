@@ -59,10 +59,12 @@ class HTTPFileDownloader(FileDownloader):
         # But the hook has to outlive the request itself so we can keep using it later for hashing;
         # hashing while the request is still active would tie up a socket
 
-        async with self.__request_download(media_item) as (stream, progress_hook):
-            await self._pre_download_check(media_item)
+        # TODO: Add a repare hook for hashing
+
+        async with self.__request_download(media_item) as (resp, progress_hook):
             try:
-                await self.__read_stream(media_item, stream, progress_hook)
+                await self._prepare_download(media_item)
+                await self._perform_download(media_item, resp, progress_hook)
             except Exception:
                 progress_hook.done()
                 raise
@@ -92,7 +94,7 @@ class HTTPFileDownloader(FileDownloader):
         else:
             resume_point = 0
 
-        async with self.__request_context(media_item.real_url, media_item.domain, media_item.headers) as resp:
+        async with self.__request(media_item.real_url, media_item.domain, media_item.headers) as resp:
             await self.__check_resp(media_item, resp)
             media_item.filesize = resume_point + int(resp.headers.get(hdrs.CONTENT_LENGTH, 0))
             if media_item.is_segment:
@@ -128,10 +130,9 @@ class HTTPFileDownloader(FileDownloader):
         _check_content_length(resp.headers)
 
     @contextlib.asynccontextmanager
-    async def __request_context(
+    async def __request(
         self, url: AbsoluteHttpURL, domain: str, headers: dict[str, str]
     ) -> AsyncGenerator[AbstractResponse[Any]]:
-        await asyncio.sleep(self.config.rate_limits.total_download_delay)
         async with self.client.rate_limiter.acquire(domain):
             if domain in _USE_IMPERSONATION:
                 resp = await self.client.curl_session.get(str(url), stream=True, headers=headers)
@@ -144,7 +145,7 @@ class HTTPFileDownloader(FileDownloader):
             async with self.client.aiohttp_session.get(url, headers=headers) as resp:
                 yield AbstractResponse.from_resp(resp)
 
-    async def __read_stream(
+    async def _perform_download(
         self,
         media_item: MediaItem,
         resp: AbstractResponse[Any],
@@ -164,11 +165,16 @@ class HTTPFileDownloader(FileDownloader):
                 progress_hook.advance(n_bytes)
                 check_speed()
 
-    def _pre_download_check(self, media_item: MediaItem) -> Coroutine[None, None, None]:
+    def _prepare_download(self, media_item: MediaItem) -> Coroutine[None, None, None]:
+        file = media_item.partial_file
+
         def prepare() -> None:
-            media_item.partial_file.parent.mkdir(parents=True, exist_ok=True)
-            if not media_item.partial_file.is_file():
-                media_item.partial_file.touch()
+            file.parent.mkdir(parents=True, exist_ok=True)
+            if not self.SUPPORTS_RANGES:
+                file.unlink(missing_ok=True)
+                file.touch()
+            elif not file.is_file():
+                file.touch()
 
         return asyncio.to_thread(prepare)
 

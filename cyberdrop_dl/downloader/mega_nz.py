@@ -1,30 +1,22 @@
 from __future__ import annotations
 
-import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, ClassVar
 
 import aiofiles
 from mega.chunker import MegaChunker, get_chunks
 
-from cyberdrop_dl.clients.download_client import StreamDownloader
-from cyberdrop_dl.downloader import DownloadManager
+from cyberdrop_dl.data_structures.url_objects import DownloadProtocol
+from cyberdrop_dl.downloader.http import HTTPFileDownloader
 
 if TYPE_CHECKING:
-    from collections.abc import Coroutine
-
     import aiohttp
-    from mega.data_structures import Crypto
-    from yarl import URL
 
     from cyberdrop_dl.data_structures.url_objects import MediaItem
-    from cyberdrop_dl.manager import Manager
 
 
-class MegaDownloadClient(StreamDownloader):
-    def __init__(self, manager: Manager) -> None:
-        super().__init__(manager, manager.client)
-        self._decrypt_mapping: dict[URL, tuple[Crypto, int]] = {}
-        self.SUPPORT_RANGES = False
+class MegaNzFileDownloader(HTTPFileDownloader):
+    PROTOCOL: ClassVar[DownloadProtocol] = DownloadProtocol.MEGA_NZ
+    SUPPORT_RANGES: ClassVar[bool] = False
 
     async def _append_content(self, media_item: MediaItem, content: aiohttp.StreamReader) -> None:
         """Appends content to a file."""
@@ -35,7 +27,8 @@ class MegaDownloadClient(StreamDownloader):
         await check_free_space()
         await self._pre_download_check(media_item)
 
-        crypto, file_size = self._decrypt_mapping.pop(media_item.url)
+        crypto, file_size = media_item.extra_info[self.PROTOCOL]["decrypt_mapping"].pop(media_item.url)
+
         chunk_decryptor = MegaChunker(crypto.key, crypto.iv, crypto.meta_mac)
 
         async with aiofiles.open(media_item.partial_file, mode="ab") as f:
@@ -45,34 +38,10 @@ class MegaDownloadClient(StreamDownloader):
                 await check_free_space()
                 chunk_size = len(chunk)
 
-                await self.http_client.speed_limiter.acquire(chunk_size)
+                await self.dl_manager.speed_limiter.acquire(chunk_size)
                 await f.write(chunk)
                 self.manager.tui.downloads.advance_file(media_item.task_id, chunk_size)
                 check_download_speed()
 
         await self._check_file_duration(media_item)
         chunk_decryptor.check_integrity()
-
-    def _pre_download_check(self, media_item: MediaItem) -> Coroutine[Any, Any, None]:
-        def prepare() -> None:
-            media_item.partial_file.parent.mkdir(parents=True, exist_ok=True)
-            media_item.partial_file.unlink(missing_ok=True)  # We can't resume
-            media_item.partial_file.touch()
-
-        return asyncio.to_thread(prepare)
-
-
-class MegaDownloader(DownloadManager):
-    client: MegaDownloadClient
-
-    @property
-    def max_attempts(self):
-        return 1
-
-    def startup(self) -> None:
-        """Starts the downloader."""
-        self.client = MegaDownloadClient(self.manager)  # type: ignore[reportIncompatibleVariableOverride]
-        self._semaphore = asyncio.Semaphore(self.manager.client.get_download_slots(self.domain))
-
-    def register(self, url: URL, crypto: Crypto, file_size: int) -> None:
-        self.client._decrypt_mapping[url] = crypto, file_size
