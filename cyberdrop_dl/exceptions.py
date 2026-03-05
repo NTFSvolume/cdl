@@ -148,34 +148,6 @@ class InsufficientFreeSpaceError(CDLBaseError):
         super().__init__(ui_failure, origin=origin)
 
 
-class SkipDownloadError(CDLBaseError):
-    """Throw this when a download is not allowed by config options"""
-
-
-class RestrictedFiletypeError(SkipDownloadError):
-    def __init__(self, origin: MediaItem) -> None:
-        """This error will be thrown when has a filetype not allowed by config."""
-        ui_failure = "Restricted File Ext"
-        message = f"File extension ({origin.ext}) ignored config options"
-        super().__init__(ui_failure, message=message, origin=origin)
-
-
-class DurationError(SkipDownloadError):
-    def __init__(self, origin: MediaItem) -> None:
-        """This error will be thrown when the file duration is not allowed by the config."""
-        ui_failure = "Duration Not Allowed"
-        message = f"File duration ({origin.duration}s) out of config range"
-        super().__init__(ui_failure, message=message, origin=origin)
-
-
-class RestrictedDateRangeError(SkipDownloadError):
-    def __init__(self, origin: MediaItem) -> None:
-        """This error will be thrown when the publication date of the media item is not allowed by config."""
-        ui_failure = "Restricted DateRange"
-        message = f"File upload date ({origin.datetime}) out of config range"
-        super().__init__(ui_failure, message=message, origin=origin)
-
-
 class ScrapeError(CDLBaseError):
     def __init__(
         self, status: str | int, message: str | None = None, origin: ScrapeItem | MediaItem | URL | None = None
