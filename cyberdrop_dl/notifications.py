@@ -163,9 +163,9 @@ def _prepare_diff_text(stats: Text) -> str:
 
 async def send_notifications(manager: Manager, stats: Text) -> None:
     main_log = manager.config.logs.main_log
-    if webhook := manager.config.logs.webhook:
+    if webhook := manager.config.notifications.webhook:
         async with manager.client.create_aiohttp_session() as session:
             await _notify_w_webhook(session, _prepare_diff_text(stats), main_log, webhook)
 
-    if urls := manager.config.logs.apprise_urls:
+    if urls := manager.config.notifications.apprise_urls:
         await _notify_w_apprise(stats.plain, main_log, urls)
