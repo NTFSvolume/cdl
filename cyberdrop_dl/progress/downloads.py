@@ -23,7 +23,7 @@ from rich.table import Column
 from rich.text import Text
 from typing_extensions import override
 
-from cyberdrop_dl.tui.common import ColumnsType, DictProgress, OverflowPanel, ProgressHook, Random, create_live
+from cyberdrop_dl.progress.common import ColumnsType, DictProgress, OverflowPanel, ProgressHook, Random, create_live
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable

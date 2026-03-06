@@ -17,14 +17,14 @@ from rich.text import Text
 
 from cyberdrop_dl.constants import HashAlgorithm
 from cyberdrop_dl.logger import spacer
-from cyberdrop_dl.tui.common import ProgressHook
-from cyberdrop_dl.tui.downloads import DownloadsPanel
-from cyberdrop_dl.tui.errors import DownloadErrors, ScrapeErrors, UIFailure
-from cyberdrop_dl.tui.files import FileStatsPanel
-from cyberdrop_dl.tui.hashing import HashingPanel
-from cyberdrop_dl.tui.scrape import ScrapingPanel, StatusMessage
-from cyberdrop_dl.tui.screens import AppScreens, Screen
-from cyberdrop_dl.tui.sorting import SortingPanel
+from cyberdrop_dl.progress.common import ProgressHook
+from cyberdrop_dl.progress.downloads import DownloadsPanel
+from cyberdrop_dl.progress.errors import DownloadErrors, ScrapeErrors, UIFailure
+from cyberdrop_dl.progress.files import FileStatsPanel
+from cyberdrop_dl.progress.hashing import HashingPanel
+from cyberdrop_dl.progress.scraping import ScrapingPanel, StatusMessage
+from cyberdrop_dl.progress.screens import AppScreens, Screen
+from cyberdrop_dl.progress.sorting import SortingPanel
 
 if TYPE_CHECKING:
     from collections.abc import Generator

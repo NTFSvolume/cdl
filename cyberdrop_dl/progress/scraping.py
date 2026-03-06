@@ -7,7 +7,7 @@ from rich.columns import Columns
 from rich.progress import Progress, SpinnerColumn, Task
 
 from cyberdrop_dl import __version__
-from cyberdrop_dl.tui.common import ColumnsType, OverflowPanel, UIComponent
+from cyberdrop_dl.progress.common import ColumnsType, OverflowPanel, UIComponent
 
 if TYPE_CHECKING:
     from collections.abc import Generator

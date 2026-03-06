@@ -6,7 +6,7 @@ from rich.panel import Panel
 from rich.progress import BarColumn, Progress
 from typing_extensions import override
 
-from cyberdrop_dl.tui.common import ColumnsType, TaskCounter, UIComponent
+from cyberdrop_dl.progress.common import ColumnsType, TaskCounter, UIComponent
 
 
 class FileStatsPanel(UIComponent):

@@ -5,7 +5,7 @@ import shutil
 from typing import TYPE_CHECKING, TypedDict
 
 from cyberdrop_dl import env
-from cyberdrop_dl.tui.common import RichProxy
+from cyberdrop_dl.progress.common import RichProxy
 
 if TYPE_CHECKING:
     from rich.console import RenderableType

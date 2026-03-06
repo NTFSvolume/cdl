@@ -16,8 +16,8 @@ from cyberdrop_dl.database import Database
 from cyberdrop_dl.downloader import DownloadManager
 from cyberdrop_dl.exceptions import get_origin
 from cyberdrop_dl.hasher import Hasher
+from cyberdrop_dl.progress import TUI
 from cyberdrop_dl.scrape_mapper import ScrapeMapper
-from cyberdrop_dl.tui import TUI
 from cyberdrop_dl.utils import get_system_information, json
 
 if TYPE_CHECKING:

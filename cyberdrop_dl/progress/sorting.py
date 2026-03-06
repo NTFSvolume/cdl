@@ -5,7 +5,7 @@ from typing import ClassVar
 from rich.progress import BarColumn, SpinnerColumn
 from typing_extensions import override
 
-from cyberdrop_dl.tui.common import ColumnsType, OverflowPanel
+from cyberdrop_dl.progress.common import ColumnsType, OverflowPanel
 
 
 class SortingPanel(OverflowPanel):

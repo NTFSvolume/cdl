@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import MediaItem
     from cyberdrop_dl.database import Database
     from cyberdrop_dl.manager import Manager
-    from cyberdrop_dl.tui import TUI
+    from cyberdrop_dl.progress import TUI
 
 _HASHERS: Final = {
     HashAlgorithm.md5: hashlib.md5,

@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from cyberdrop_dl.database import Database
     from cyberdrop_dl.hasher import Hasher
     from cyberdrop_dl.manager import Manager
-    from cyberdrop_dl.tui import TUI, ProgressHook
+    from cyberdrop_dl.progress import TUI, ProgressHook
 
 
 logger = logging.getLogger(__name__)

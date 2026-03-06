@@ -15,7 +15,7 @@ from cyberdrop_dl import ddos_guard
 from cyberdrop_dl.compat import StrEnum
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError
-from cyberdrop_dl.tui import show_msg
+from cyberdrop_dl.progress import show_msg
 
 if TYPE_CHECKING:
     from collections.abc import Callable

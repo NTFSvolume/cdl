@@ -17,7 +17,7 @@ from cyberdrop_dl.utils import delete_empty_files_and_folders, strings
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from cyberdrop_dl.tui import TUI
+    from cyberdrop_dl.progress import TUI
 
 logger = logging.getLogger(__name__)
 

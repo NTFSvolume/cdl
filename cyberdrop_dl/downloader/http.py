@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from cyberdrop_dl.client import HTTPClient
     from cyberdrop_dl.config import Config
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
-    from cyberdrop_dl.tui import TUI, ProgressHook
+    from cyberdrop_dl.progress import TUI, ProgressHook
 
 
 logger = logging.getLogger(__name__)
