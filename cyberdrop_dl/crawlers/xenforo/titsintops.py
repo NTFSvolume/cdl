@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.utils import css
 
 from .xenforo import XenforoCrawler
@@ -23,7 +23,7 @@ class TitsInTopsCrawler(XenforoCrawler):
         text = css.get_text(link_obj)
         if "view attachment" in text.lower():
             return True
-        title = css.get_attr_or_none(link_obj, "title")
+        title = css._get_attr(link_obj, "title")
         if title and "permanent link" in title.lower():
             return True
         return super().is_username_or_attachment(link_obj)

@@ -7,16 +7,15 @@ import time
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl import env
-from cyberdrop_dl.crawlers.crawler import Crawler, DBPathBuilder, SupportedPaths, auto_task_id
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.crawlers import Crawler, SupportedPaths, auto_task_id
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import css, dates
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import css, dates, error_handling_wrapper
 
 if TYPE_CHECKING:
     from collections.abc import Generator
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 SUPPORTED_FORMATS = "mp3-320", "mp3", "aac-hi", "wav", "flac", "vorbis", "aiff", "alas"  # Ordered by compatibility
 USE_FORMATS = tuple(dict.fromkeys((env.BANDCAMP_FORMATS).split(","))) if env.BANDCAMP_FORMATS else SUPPORTED_FORMATS
@@ -41,7 +40,6 @@ class BandcampCrawler(Crawler):
     }
     DOMAIN: ClassVar[str] = "bandcamp"
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://bandcamp.com")
-    create_db_path = staticmethod(DBPathBuilder.path_qs_frag)
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
@@ -82,7 +80,7 @@ class BandcampCrawler(Crawler):
     _song_task = auto_task_id(song)
 
     async def _track(self, scrape_item: ScrapeItem, track: dict[str, Any]) -> None:
-        scrape_item.possible_datetime = dates.parse_http(track["publish_date"])
+        scrape_item.timestamp = dates.parse_http(track["publish_date"])
         best_format = await self._get_best_format(track.pop("free_download"), track["file"])
         full_name = f"{track['artist']} - {track['title']}{best_format.ext}"
         filename, ext = self.get_filename_and_ext(full_name)

@@ -6,15 +6,19 @@ import re
 from hashlib import sha256
 from typing import TYPE_CHECKING, ClassVar, Literal, NotRequired, TypedDict, TypeGuard
 
-from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths
-from cyberdrop_dl.data_structures.url_objects import FILE_HOST_ALBUM, AbsoluteHttpURL, ScrapeItem
+from typing_extensions import override
+
+from cyberdrop_dl.crawlers import Crawler, RateLimit, SupportedPaths
+from cyberdrop_dl.data_structures import FILE_HOST_ALBUM, AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.exceptions import PasswordProtectedError, ScrapeError
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import error_handling_wrapper
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Iterable
 
     from typing_extensions import ReadOnly
+
+    from cyberdrop_dl.client.response import AbstractResponse
 
 
 _API_ENTRYPOINT = AbsoluteHttpURL("https://api.gofile.io")
@@ -98,14 +102,15 @@ class GoFileCrawler(Crawler):
     def __post_init__(self) -> None:
         self.headers: dict[str, str] = {}
 
+    @override
     @classmethod
-    def _json_response_check(cls, json_resp: Response) -> None:
+    def _json_resp_check_(cls, json_resp: Response, resp: AbstractResponse) -> None:
         if not isinstance(json_resp, dict):
             return
         if "notFound" in json_resp["status"]:
             raise ScrapeError(404)
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         await self._get_credentials(_API_ENTRYPOINT)
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
@@ -206,10 +211,10 @@ class GoFileCrawler(Crawler):
             return
 
         if file.get("isFrozen"):
-            self.log(f"{link} is marked as frozen, download may fail", 30)
+            self.logger(f"{link} is marked as frozen, download may fail", 30)
 
         filename, ext = self.get_filename_and_ext(file["name"], mime_type=file.get("mimetype"))
-        scrape_item.possible_datetime = file["createTime"]
+        scrape_item.timestamp = file["createTime"]
         await self.handle_file(link, scrape_item, file["name"], ext, custom_filename=filename, metadata=file)
 
     @error_handling_wrapper
@@ -221,7 +226,7 @@ class GoFileCrawler(Crawler):
             self.update_cookies({"accountToken": api_key})
 
     async def _get_api_key(self) -> str:
-        if key := self.manager.auth_config.gofile.api_key:
+        if key := self.manager.config.auth.gofile.api_key:
             return key
 
         api_url = _API_ENTRYPOINT / "accounts"
@@ -237,6 +242,9 @@ class GoFileCrawler(Crawler):
             return match.group(1)
 
         raise ScrapeError(401, "Couldn't generate GoFile websiteToken", origin=_GLOBAL_JS_URL)
+
+    def _get_download_headers(self, referer: AbsoluteHttpURL) -> dict[str, str]:
+        return super()._headers_(referer) | self.headers
 
 
 def _check_node_is_accessible(node: Node) -> TypeGuard[File | Folder]:

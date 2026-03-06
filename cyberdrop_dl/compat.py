@@ -42,10 +42,10 @@ else:
     StrEnum = enum.StrEnum
 
 
-class MayBeUpperStrEnum(StrEnum):
+class CIStrEnum(StrEnum):
     @classmethod
-    def _missing_(cls, value: object):
-        try:
-            return cls[str(value).upper()]
-        except KeyError as e:
-            raise e
+    def _missing_(cls, value: object) -> CIStrEnum | None:
+        value = str(value)
+        for member in cls:
+            if member.name.casefold() == value:
+                return member

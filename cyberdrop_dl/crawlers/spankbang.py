@@ -3,19 +3,18 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths
+from cyberdrop_dl.crawlers import Crawler, RateLimit, SupportedPaths
+from cyberdrop_dl.data_structures import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.data_structures.mediaprops import Resolution
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import css, json
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_text_between
+from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, json
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator
 
     from bs4 import BeautifulSoup
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 
 class Selector:
@@ -63,7 +62,7 @@ class SpankBangCrawler(Crawler):
     _IMPERSONATE: ClassVar[str | bool | None] = True
     _RATE_LIMIT: ClassVar[RateLimit] = 2, 5
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         self.update_cookies({"country": "US", "age_pass": 1})
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
@@ -96,7 +95,7 @@ class SpankBangCrawler(Crawler):
     async def web_pager(
         self, url: AbsoluteHttpURL, next_page_selector: str | None = None, *, cffi: bool = False, **kwargs: Any
     ) -> AsyncGenerator[BeautifulSoup]:
-        async for soup in super()._web_pager(url, next_page_selector, cffi=True, **kwargs):
+        async for soup in super().web_pager(url, next_page_selector, impersonate=True, **kwargs):
             yield soup
 
     @error_handling_wrapper
@@ -173,7 +172,7 @@ def _parse_video(soup: BeautifulSoup, display_id: str) -> Video:
         url=url,
         stream_id=get_text_between(stream_js_text, "ana_video_id = ", ";").strip("'"),
         stream_key=css.select(soup, "[data-streamkey]", "data-streamkey"),
-        title=css.get_attr_or_none(title_tag, "title") or css.get_text(title_tag),
+        title=css._get_attr(title_tag, "title") or css.get_text(title_tag),
     )
 
 

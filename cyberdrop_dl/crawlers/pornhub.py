@@ -6,16 +6,15 @@ import json
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, NamedTuple, TypedDict
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.crawlers import Crawler, SupportedPaths
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_text_between
+from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between
 
 if TYPE_CHECKING:
     from bs4 import BeautifulSoup
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 PRIMARY_URL = AbsoluteHttpURL("https://www.pornhub.com")
 MP4_NOT_AVAILABLE_SINCE = datetime.datetime(2025, 6, 25).timestamp()
@@ -129,7 +128,7 @@ class PornHubCrawler(Crawler):
     def __post_init__(self) -> None:
         self.seen_profiles: set[Profile] = set()
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         keys = ("age_verified", "accessPH", "accessAgeDisclaimerPH", "accessAgeDisclaimerUK", "expiredEnterModalShown")
         self.update_cookies(dict.fromkeys(keys, 1))
 
@@ -217,7 +216,7 @@ class PornHubCrawler(Crawler):
         soup = await self.request_soup(scrape_item.url)
         attributes = "data-mp4", "data-fallback", "data-webm"
         gif_tag = css.select(soup, _SELECTORS.GIF)
-        link_str = next(value for attr in attributes if (value := css.get_attr_or_none(gif_tag, attr)))
+        link_str = next(value for attr in attributes if (value := css._get_attr(gif_tag, attr)))
         link = self.parse_url(link_str)
         await self._process_photo(scrape_item, link)
 
@@ -229,7 +228,7 @@ class PornHubCrawler(Crawler):
         original_name = link.name.rsplit(")")[-1]
         name = original_name.removeprefix("original_")
         canonical_url = link.with_name(name)
-        if self.check_album_results(canonical_url, results):
+        if self.check_complete_by_album_results(canonical_url, results):
             return
         custom_filename, ext = self.get_filename_and_ext(name, assume_ext=".jpg")
         await self.handle_file(
@@ -260,14 +259,14 @@ class PornHubCrawler(Crawler):
         formats = [Format.new(media) for media in get_media_list(soup)]
         best_hls = max(f for f in formats if f.format == "hls")
         debrid_link = m3u8 = best_format = None
-        scrape_item.possible_datetime = date = self.parse_iso_date(get_upload_date_str(soup))
+        scrape_item.timestamp = date = self.parse_iso_date(get_upload_date_str(soup))
         assert date
         use_hls = date >= MP4_NOT_AVAILABLE_SINCE
 
         if not use_hls:
             best_format = await self.get_best_mp4_format(formats)
             if best_format is None:
-                self.log(
+                self.logger(
                     f"[{self.FOLDER_DOMAIN}] Video {video_id} has no mp4 formats available. Falling back to HLS", 30
                 )
 

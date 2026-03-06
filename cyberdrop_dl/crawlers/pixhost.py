@@ -2,13 +2,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.crawlers import Crawler, SupportedPaths
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
+from cyberdrop_dl.utils import css, error_handling_wrapper
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 
 class Selectors:
@@ -61,7 +60,7 @@ class PixHostCrawler(Crawler):
         for thumb, web_url in self.iter_tags(soup, _SELECTORS.GALLERY_IMAGES):
             assert thumb
             src = _thumbnail_to_src(thumb)
-            if not self.check_album_results(src, results):
+            if not self.check_complete_by_album_results(src, results):
                 new_scrape_item = scrape_item.create_child(web_url)
                 self.create_task(self.direct_file(new_scrape_item, src))
             scrape_item.add_children()

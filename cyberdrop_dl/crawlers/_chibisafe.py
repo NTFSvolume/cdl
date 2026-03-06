@@ -15,14 +15,14 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from pydantic import Field
 
-from cyberdrop_dl.crawlers.crawler import Crawler
+from cyberdrop_dl.crawlers import Crawler
 from cyberdrop_dl.models import AliasModel
+from cyberdrop_dl.utils import error_handling_wrapper, type_adapter
 from cyberdrop_dl.utils.dates import to_timestamp
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, type_adapter
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.crawlers.crawler import SupportedPaths
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.crawlers import SupportedPaths
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 
 @dataclasses.dataclass(slots=True)
@@ -77,7 +77,7 @@ class ChibiSafeCrawler(Crawler, is_abc=True):
 
         for file in album.files:
             url = self.parse_url(file.url.removeprefix("null"))
-            if self.check_album_results(url, results):
+            if self.check_complete_by_album_results(url, results):
                 continue
             new_scrape_item = scrape_item.create_child(url)
             self._handle_file(new_scrape_item, file)
@@ -85,8 +85,8 @@ class ChibiSafeCrawler(Crawler, is_abc=True):
 
     @error_handling_wrapper
     def _handle_file(self, scrape_item: ScrapeItem, file: File) -> None:
-        if scrape_item.possible_datetime is None and file.createdAt:
-            scrape_item.possible_datetime = to_timestamp(file.createdAt)
+        if scrape_item.timestamp is None and file.createdAt:
+            scrape_item.timestamp = to_timestamp(file.createdAt)
         name = file.original or file.name
         filename, ext = self.get_filename_and_ext(name)
         self.create_task(

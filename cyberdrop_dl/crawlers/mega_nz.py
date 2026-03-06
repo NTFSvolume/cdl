@@ -9,21 +9,19 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
-from mega.api import MegaAPI
-from mega.core import MegaCore
 from mega.crypto import b64_to_a32
 from mega.data_structures import Crypto
 
-from cyberdrop_dl.crawlers.crawler import Crawler, DBPathBuilder, SupportedDomains, SupportedPaths, auto_task_id
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.downloader.mega_nz import MegaDownloader
+from cyberdrop_dl.crawlers import Crawler, SupportedDomains, SupportedPaths, auto_task_id
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import LoginError, ScrapeError
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import error_handling_wrapper
 
 if TYPE_CHECKING:
+    from mega.core import MegaCore
     from mega.filesystem import FileSystem
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 
 class MegaNzCrawler(Crawler):
@@ -46,26 +44,18 @@ class MegaNzCrawler(Crawler):
     DOMAIN: ClassVar[str] = "mega.nz"
     FOLDER_DOMAIN: ClassVar[str] = "MegaNz"
     OLD_DOMAINS: ClassVar[tuple[str, ...]] = ("mega.co.nz",)
-    create_db_path = staticmethod(DBPathBuilder.path_qs_frag)
 
     core: MegaCore
-    downloader: MegaDownloader
 
     @property
     def user(self) -> str | None:
-        return self.manager.auth_config.meganz.email or None
+        return self.manager.config.auth.meganz.email or None
 
     @property
     def password(self) -> str | None:
-        return self.manager.auth_config.meganz.password or None
+        return self.manager.config.auth.meganz.password or None
 
-    def _init_downloader(self) -> MegaDownloader:
-        self.core = MegaCore(MegaAPI(self.manager.client_manager._session))
-        self.downloader = dl = MegaDownloader(self.manager, self.DOMAIN)  # type: ignore[reportIncompatibleVariableOverride]
-        dl.startup()
-        return dl
-
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         await self.login(self.PRIMARY_URL)
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
@@ -140,7 +130,7 @@ class MegaNzCrawler(Crawler):
             if await self.check_complete_from_referer(canonical_url):
                 continue
 
-            child_item = scrape_item.create_child(canonical_url, possible_datetime=file.created_at)
+            child_item = scrape_item.create_child(canonical_url, timestamp=file.created_at)
             for part in path.parent.parts[1:]:
                 child_item.add_to_parent_title(part)
 

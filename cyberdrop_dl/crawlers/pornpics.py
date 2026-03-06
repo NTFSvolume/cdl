@@ -3,17 +3,16 @@ from __future__ import annotations
 import itertools
 from typing import TYPE_CHECKING, ClassVar
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.crawlers import Crawler, SupportedPaths
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
+from cyberdrop_dl.utils import css, error_handling_wrapper
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
     from bs4 import BeautifulSoup
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 COLLECTION_PARTS = "search", "channel", "pornstar", "tag", "category"
 IMAGE_SELECTOR = "div#main a.rel-link"
@@ -85,7 +84,7 @@ class PornPicsCrawler(Crawler):
         scrape_item.setup_as_album(title, album_id=gallery_id)
 
         for _, new_scrape_item in self.iter_children(scrape_item, soup, IMAGE_SELECTOR):
-            if not self.check_album_results(new_scrape_item.url, results):
+            if not self.check_complete_by_album_results(new_scrape_item.url, results):
                 filename, ext = self.get_filename_and_ext(new_scrape_item.url.name)
                 await self.handle_file(new_scrape_item.url, new_scrape_item, filename, ext)
 

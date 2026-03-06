@@ -5,13 +5,14 @@ from collections import Counter
 from typing import TYPE_CHECKING
 
 import pytest
+from cyberdrop_dl.client.hash_client import hash_directory_scanner
 
-from cyberdrop_dl.clients.hash_client import hash_directory_scanner
+from cyberdrop_dl import appdata, config
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.manager import Manager
 
 
 def get_hashes(path: Path) -> set[tuple[str, str]]:
@@ -54,15 +55,15 @@ def test_hash_directory_scanner(manager: Manager, expected_results: set[tuple[st
     n_files = max(count.values())
     algos = count.keys()
     assert len(expected_results) == len(algos) * n_files
-    manager.config.dupe_cleanup_options.add_md5_hash = "md5" in algos
-    manager.config.dupe_cleanup_options.add_sha256_hash = "sha256" in algos
+    config.get().dedupe.add_md5_hash = "md5" in algos
+    config.get().dedupe.add_sha256_hash = "sha256" in algos
 
-    manager.path_manager.download_folder.mkdir(parents=True)
-    db_path = manager.path_manager.history_db
-    hash_directory_scanner(manager, manager.path_manager.download_folder)
+    config.get().filesystem.download_folder.mkdir(parents=True)
+    db_path = appdata.get().db_file
+    hash_directory_scanner(manager, config.get().filesystem.download_folder)
     assert not get_hashes(db_path)
-    create_files(manager.path_manager.download_folder, n_files)
-    hash_directory_scanner(manager, manager.path_manager.download_folder)
+    create_files(config.get().filesystem.download_folder, n_files)
+    hash_directory_scanner(manager, config.get().filesystem.download_folder)
     results = get_hashes(db_path)
     assert len(results) == len(expected_results)
     assert results == expected_results

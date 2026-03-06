@@ -3,7 +3,7 @@ from typing import LiteralString
 
 import pytest
 
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import InvalidURLError
 from cyberdrop_dl.utils import m3u8
 

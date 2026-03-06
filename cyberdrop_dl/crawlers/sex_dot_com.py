@@ -3,14 +3,14 @@ from __future__ import annotations
 import itertools
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.crawlers import Crawler, SupportedPaths
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
+from cyberdrop_dl.utils import error_handling_wrapper
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 
 PRIMARY_URL = AbsoluteHttpURL("https://sex.com")
@@ -73,7 +73,7 @@ class SexDotComCrawler(Crawler):
         else:
             return
 
-        scrape_item.possible_datetime = self.parse_date(real_item["createdAt"])
+        scrape_item.timestamp = self.parse_date(real_item["createdAt"])
         scrape_item.url = canonical_url
         await self.handle_file(media_url, scrape_item, filename, ext)
         scrape_item.add_children()

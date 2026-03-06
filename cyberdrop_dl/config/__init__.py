@@ -1,177 +1,134 @@
 from __future__ import annotations
 
 import dataclasses
-import shutil
+from contextvars import ContextVar, Token
 from pathlib import Path
-from time import sleep
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated, ClassVar, Self
 
-from cyberdrop_dl import constants, env
-from cyberdrop_dl.utils.apprise import get_apprise_urls
+from cyclopts.bind import normalize_tokens
+from cyclopts.core import App
+from cyclopts.parameter import Parameter
+from pydantic import BaseModel
 
-from .auth_model import AuthSettings
-from .config_model import ConfigSettings
-from .global_model import GlobalSettings
+from cyberdrop_dl import yaml
+from cyberdrop_dl.config.auth import AuthSettings
+from cyberdrop_dl.config.settings import ConfigSettings
+from cyberdrop_dl.models import get_model_fields, merge_models
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.cli import ParsedArgs
-    from cyberdrop_dl.utils.apprise import AppriseURL
+    from collections.abc import Iterable
 
-__all__ = [
-    "AuthSettings",
-    "ConfigSettings",
-    "GlobalSettings",
-]
+    from cyclopts.argument import ArgumentCollection
 
-deep_scrape: bool = False
-
-current_config: Config
-cli: ParsedArgs
-appdata: AppData
-
-# re-export current config values for easy access
-auth: AuthSettings
-settings: ConfigSettings
-global_settings: GlobalSettings
+_config: ContextVar[Config] = ContextVar("_config")
 
 
-def startup() -> None:
-    global appdata, cli
-    from cyberdrop_dl.cli import parse_args
+class Config(ConfigSettings):
+    auth: Annotated[AuthSettings, Parameter(show=False)] = AuthSettings()
+    _source: Path | None = None
 
-    cli = parse_args()
+    _token: Token[Config] | None = None
+    _resolved: bool = False
 
-    if env.RUNNING_IN_IDE and Path.cwd().name == "cyberdrop_dl":
-        """This is for testing purposes only"""
-        constants.DEFAULT_APP_STORAGE = Path("../AppData")
-        constants.DEFAULT_DOWNLOAD_STORAGE = Path("../Downloads")
+    @property
+    def source(self) -> Path | None:
+        return self._source
 
-    appdata_path = cli.cli_only_args.appdata_folder or constants.DEFAULT_APP_STORAGE
-    appdata = AppData(appdata_path.resolve())
-    appdata.mkdirs()
-    # cache.startup(appdata.cache_file)
-    load_config(get_default_config())
-    settings.logs._delete_old_logs_and_folders(constants.STARTUP_TIME)
+    def __enter__(self) -> Self:
+        self._token = _config.set(self)
+        return self
+
+    def __exit__(self, *_) -> None:
+        assert self._token is not None
+        _config.reset(self._token)
+
+    def save(self, file: Path) -> None:
+        yaml.dump(file, self)
+
+    def resolve_paths(self) -> None:
+        if self._resolved:
+            return
+        self._resolve_paths(self)
+        self.logs.delete_old_logs_and_folders()
+        self._resolved = True
+
+    @classmethod
+    def _resolve_paths(cls, model: BaseModel) -> None:
+        for name, value in vars(model).items():
+            if isinstance(value, Path):
+                setattr(model, name, value.expanduser().resolve().absolute())
+
+            elif isinstance(value, BaseModel):
+                cls._resolve_paths(value)
+
+    def update(self, other: Self) -> Self:
+        return merge_models(self, other)
+
+    @classmethod
+    def load(cls, file: Path) -> Config:
+        default = cls()
+        if not file.is_file():
+            config = default
+            overwrite = True
+
+        else:
+            all_fields = get_model_fields(default, exclude_unset=False)
+            config = cls.model_validate(yaml.load(file))
+            set_fields = get_model_fields(config)
+            overwrite = all_fields != set_fields
+
+        if overwrite:
+            config.save(file)
+
+        config._source = file
+        return config
 
 
-class AppData(Path):
-    def __init__(self, app_data_path: Path) -> None:
-        self.configs_dir = app_data_path / "Configs"
-        self.cache_dir = app_data_path / "Cache"
-        self.cookies_dir = app_data_path / "Cookies"
-        self.cache_file = self.cache_dir / "cache.yaml"
-        self.default_auth_config_file = self.configs_dir / "authentication.yaml"
-        self.global_config_file = self.configs_dir / "global_settings.yaml"
-        self.cache_db = self.cache_dir / "request_cache.db"
-        self.history_db = self.cache_dir / "cyberdrop.db"
+def get() -> Config:
+    return _config.get()
 
-    def mkdirs(self) -> None:
-        for dir in (self.configs_dir, self.cache_dir, self.cookies_dir):
-            dir.mkdir(parents=True, exist_ok=True)
+
+def add_or_remove_lists(cli_values: list[str], config_values: list[str]) -> None:
+    exclude = {"+", "-"}
+    if cli_values:
+        if cli_values[0] == "+":
+            new_values_set = set(config_values + cli_values)
+            cli_values.clear()
+            cli_values.extend(sorted(new_values_set - exclude))
+        elif cli_values[0] == "-":
+            new_values_set = set(config_values) - set(cli_values)
+            cli_values.clear()
+            cli_values.extend(sorted(new_values_set - exclude))
+
+
+def _coerce(*, config: Config) -> Config:
+    return config
 
 
 @dataclasses.dataclass(slots=True)
-class Config:
-    """Helper class to group a single config, not necessarily the current config"""
+class _ConfigParser:
+    app: App = dataclasses.field(init=False)
+    args: ArgumentCollection = dataclasses.field(init=False)
 
-    folder: Path
+    _instance: ClassVar[_ConfigParser | None] = None
 
-    apprise_file: Path
-    config_file: Path
+    def __new__(cls) -> _ConfigParser:
+        if cls._instance is None:
+            cls._instance = self = super().__new__(cls)
+            self.app = App(print_error=False, exit_on_error=False)
+            _ = self.app.command(name="coerce")(_coerce)
+            self.args = self.app.assemble_argument_collection()
+        return cls._instance
 
-    auth_config_file: Path
-
-    auth: AuthSettings
-    settings: ConfigSettings
-    global_settings: GlobalSettings
-    apprise_urls: list[AppriseURL]
-
-    def __init__(self, name: str) -> None:
-        self.apprise_urls = []
-        self.folder = appdata.configs_dir / name
-        self.apprise_file = self.folder / "apprise.txt"
-        self.config_file = self.folder / "settings.yaml"
-        auth_override = self.folder / "authentication.yaml"
-        if auth_override.is_file():
-            self.auth_config_file = auth_override
-        else:
-            self.auth_config_file = appdata.default_auth_config_file
-
-    @staticmethod
-    def build(name: str, auth: AuthSettings, settings: ConfigSettings, global_settings: GlobalSettings) -> Config:
-        self = Config(name)
-        self.auth = auth
-        self.settings = settings
-        self.global_settings = global_settings
-        self.apprise_urls = get_apprise_urls(file=self.apprise_file)
-        return self
-
-    @staticmethod
-    def new_empty_config(name: str) -> Config:
-        assert name not in get_all_configs()
-        self = Config(name)
-        self._load()
-        return self
-
-    def _load(self) -> None:
-        """Read each config module from their respective files
-
-        If a files does not exists, uses the default config and creates it"""
-        self.auth = AuthSettings.load_file(self.auth_config_file, "socialmediagirls_username:")
-        self.settings = ConfigSettings.load_file(self.config_file, "download_error_urls_filename:")
-        self.global_settings = GlobalSettings.load_file(appdata.global_config_file, "Dupe_Cleanup_Options:")
-        self.apprise_urls = get_apprise_urls(file=self.apprise_file)
-
-    def _resolve_all_paths(self) -> None:
-        self.auth.resolve_paths()
-        self.settings.resolve_paths()
-        self.global_settings.resolve_paths()
-
-    def _all_settings(self) -> tuple[ConfigSettings, AuthSettings, GlobalSettings]:
-        return self.settings, self.auth, self.global_settings
-
-    def write_updated_config(self) -> None:
-        """Writes config to disk."""
-        self.auth.save_to_file(self.auth_config_file)
-        self.settings.save_to_file(self.config_file)
-        self.global_settings.save_to_file(appdata.global_config_file)
+    def __call__(self, tokens: str | Iterable[str]) -> Config:
+        fn, bound, *_ = self.app.parse_args(["coerce", *normalize_tokens(tokens)])  # pyright: ignore[reportUnknownMemberType]
+        assert fn is _coerce
+        return _coerce(*bound.args, **bound.kwargs)
 
 
-def get_default_config() -> str:
-    ...
-    # return cache.get(cache.DEFAULT_CONFIG_KEY) or "Default"
+def parse_args(tokens: str | Iterable[str]) -> Config:
+    return _ConfigParser()(tokens)
 
 
-def get_all_configs() -> list:
-    return sorted(config.name for config in appdata.configs_dir.iterdir() if config.is_dir())
-
-
-def set_default_config(config_name: str) -> None:
-    ...
-    # cache.save(cache.DEFAULT_CONFIG_KEY, config_name)
-
-
-def delete_config(config_name: str) -> None:
-    all_configs = get_all_configs()
-    assert config_name in all_configs
-    assert len(all_configs) > 1
-    assert config_name != current_config.folder.name
-    all_configs.remove(config_name)
-
-    # if cache.get(cache.DEFAULT_CONFIG_KEY) == config_name:
-    #    set_default_config(all_configs[0])
-
-    config_path = appdata.configs_dir / config_name
-    shutil.rmtree(config_path)
-
-
-def load_config(config_name: str) -> None:
-    global current_config, auth, global_settings, settings
-    assert config_name
-    current_config = Config(config_name)
-    current_config._load()
-    current_config._resolve_all_paths()
-    settings, auth, global_settings = current_config._all_settings()
-    settings.logs._set_output_filenames(constants.STARTUP_TIME)
-
-    sleep(1)
+def generate_cli_command() -> tuple[str, ...]:
+    return tuple(a.name for a in _ConfigParser().args)

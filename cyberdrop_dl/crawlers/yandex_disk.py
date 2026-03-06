@@ -6,18 +6,17 @@ from dataclasses import asdict, dataclass, fields
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.crawlers import Crawler, SupportedDomains, SupportedPaths
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, ScrapeError
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import css, error_handling_wrapper
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator
 
     from bs4 import BeautifulSoup
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
     from cyberdrop_dl.downloader.mega_nz import AnyDict
 
 
@@ -157,8 +156,8 @@ class YandexDiskCrawler(Crawler):
         if error:
             raise ScrapeError(422, message=json.dumps(json_resp)[:50])
 
-        self.log_debug(json_resp)
-        scrape_item.possible_datetime = file.modified
+        self.logger.debug(json_resp)
+        scrape_item.timestamp = file.modified
         link_str: str = json_resp["data"]["url"]
         link = self.parse_url(link_str)
 

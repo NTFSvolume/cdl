@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
     import yarl
 
-    from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+    from cyberdrop_dl.data_structures import AbsoluteHttpURL
 
 
 VIDEO_CODECS = "avc1", "avc2", "avc3", "avc4", "av1", "hevc", "hev1", "hev2", "hvc1", "hvc2", "vp8", "vp9", "vp10"

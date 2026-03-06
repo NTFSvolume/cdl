@@ -3,11 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
+from cyberdrop_dl.crawlers import Crawler, SupportedPaths
+from cyberdrop_dl.data_structures import AbsoluteHttpURL, MediaItem
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
     from cyberdrop_dl.utils import m3u8
 
 
@@ -42,7 +42,6 @@ class TwimgCrawler(Crawler):
         await self.handle_file(link, scrape_item, filename, ext)
 
     async def handle_media_item(self, media_item: MediaItem, m3u8: m3u8.RenditionGroup | None = None) -> None:
-        _, *media_item.fallbacks = list(_make_download_urls(media_item.url))
         if media_item.referer == media_item.url and media_item.parents:
             media_item.referer = media_item.parents[0]
         await super().handle_media_item(media_item, m3u8)

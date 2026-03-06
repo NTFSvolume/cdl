@@ -3,10 +3,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers._kvs import KernelVideoSharingCrawler
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
+from cyberdrop_dl.data_structures import AbsoluteHttpURL, ScrapeItem
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.crawlers.crawler import SupportedPaths
+    from cyberdrop_dl.crawlers import SupportedPaths
 
 
 class XasiatCrawler(KernelVideoSharingCrawler):

@@ -2,15 +2,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.crawlers import Crawler, SupportedPaths
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import error_handling_wrapper
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 _BASE_QUERY = "nsfw[]=0&nsfw[]=1&nsfw[]=2&nsfw[]=3&nsfw[]=4"
 _TYPES_QUERY = "types[]=image&types[]=video&types[]=gallery"
@@ -103,7 +103,7 @@ class NsfwXXXCrawler(Crawler):
         data: dict[str, Any] = post["data"]
         type_: str = content["type"]
 
-        scrape_item.possible_datetime = date = self.parse_date(post["publishedAt"])
+        scrape_item.timestamp = date = self.parse_date(post["publishedAt"])
         title = self.create_separate_post_title(content["title"], str(content["id"]), date)
         scrape_item.setup_as_album(self.create_title(title), album_id=str(content["id"]))
 

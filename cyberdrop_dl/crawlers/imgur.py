@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.crawlers import Crawler, SupportedPaths
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_text_between
+from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.client.response import AbstractResponse
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 _API_ENTRYPOINT = AbsoluteHttpURL("https://api.imgur.com/3/")
 _IMAGE_CDN = AbsoluteHttpURL("https://i.imgur.com")
@@ -32,11 +32,11 @@ class ImgurCrawler(Crawler):
         self.client_id: str = ""
 
     @classmethod
-    def _json_response_check(cls, json_resp: dict[str, Any]) -> None:
+    def _json_resp_check_(cls, json_resp: dict[str, Any], resp: AbstractResponse) -> None:
         if data := json_resp.get("data"):
             raise ScrapeError(json_resp["status"], data["error"])
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         await self._get_client_id(self.PRIMARY_URL)
 
     # TODO: cache this
@@ -90,7 +90,7 @@ class ImgurCrawler(Crawler):
         results = await self.get_album_results(album_id)
         for image in album["images"]:
             link = self.parse_url(image["link"])
-            if self.check_album_results(link, results):
+            if self.check_complete_by_album_results(link, results):
                 continue
             web_url = self.PRIMARY_URL / image["id"]
             new_scrape_item = scrape_item.create_child(web_url)
@@ -106,7 +106,7 @@ class ImgurCrawler(Crawler):
 
     @error_handling_wrapper
     async def _image(self, scrape_item: ScrapeItem, image: dict[str, Any]) -> None:
-        scrape_item.possible_datetime = image["datetime"]
+        scrape_item.timestamp = image["datetime"]
         url = self.parse_url(image["link"])
         filename, ext = self.get_filename_and_ext(url.name)
         await self.handle_file(url, scrape_item, filename, ext, metadata=image)

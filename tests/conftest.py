@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from cyberdrop_dl.managers.manager import Manager
-from cyberdrop_dl.scraper import scrape_mapper
+from cyberdrop_dl import scrape_mapper
+from cyberdrop_dl.manager import Manager
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -69,16 +69,13 @@ def post_startup_manager(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Man
     downloads = str(tmp_path / "Downloads")
     monkeypatch.chdir(tmp_path)
     bare_manager = Manager(("--appdata-folder", appdata, "-d", downloads, "--download-tiktok-audios"))
-    bare_manager.startup()
-    bare_manager.path_manager.startup()
-    bare_manager.log_manager.startup()
     return bare_manager
 
 
 @pytest.fixture(scope="function")
 async def running_manager(manager: Manager) -> AsyncGenerator[Manager]:
     scrape_mapper.existing_crawlers.clear()
-    await manager.async_startup()
+    await manager
     manager.states.RUNNING.set()
     yield manager
     manager.states.RUNNING.clear()

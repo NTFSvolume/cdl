@@ -4,16 +4,15 @@ import itertools
 import json
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.crawlers import Crawler, SupportedPaths
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils.logger import log_debug
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import error_handling_wrapper
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 
 GRAPHQL_URL = AbsoluteHttpURL("https://members.luscious.net/graphql/nobatch/")
@@ -62,7 +61,6 @@ class LusciousCrawler(Crawler):
             filters = [{"name": i, "value": v} for i, v in query.items() if i not in ("page", "display", "q")]
             data["variables"] = {"input": {"display": sorting, "filters": filters, "page": page}}
 
-        log_debug(data)
         return json.dumps(data)
 
     @error_handling_wrapper
@@ -79,7 +77,7 @@ class LusciousCrawler(Crawler):
         async for albums in self._pager(scrape_item, is_album=True):
             for album in albums:
                 link = self.parse_url(album["url_to_original"])
-                if not self.check_album_results(link, results):
+                if not self.check_complete_by_album_results(link, results):
                     filename, ext = self.get_filename_and_ext(link.name)
                     await self.handle_file(link, scrape_item, filename, ext)
                 scrape_item.add_children()
@@ -118,5 +116,5 @@ class LusciousCrawler(Crawler):
             data=query,
             headers={"Content-Type": "application/json"},
         )
-        log_debug(json_resp)
+
         return json_resp

@@ -6,13 +6,14 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 from pydantic import BaseModel
 
-from cyberdrop_dl import env
-from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedDomains, SupportedPaths, auto_task_id
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl import config, env
+from cyberdrop_dl.crawlers import Crawler, RateLimit, SupportedDomains, SupportedPaths, auto_task_id
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
+from cyberdrop_dl.utils import error_handling_wrapper
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.client.response import AbstractResponse
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 
 _PRIMARY_URL = AbsoluteHttpURL("https://pixeldrain.com")
@@ -105,14 +106,14 @@ class PixelDrainCrawler(Crawler):
 
     def __post_init__(self) -> None:
         self._headers: dict[str, str] = {}
-        if api_key := self.manager.auth_config.pixeldrain.api_key:
-            self._headers["Authorization"] = self.manager.client_manager.basic_auth(
+        if api_key := config.get().auth.pixeldrain.api_key:
+            self._headers["Authorization"] = self.manager.client.basic_auth(
                 "Cyberdrop-DL",
                 api_key,
             )
 
     @classmethod
-    def _json_response_check(cls, json_resp: dict[str, Any]) -> None:
+    def _json_resp_check_(cls, json_resp: dict[str, Any], resp: AbstractResponse) -> None:
         # TODO: pass the resp obj to the json check functions
         return
         if not json_resp["success"]:
@@ -163,11 +164,11 @@ class PixelDrainCrawler(Crawler):
                 files = [files[item_idx]]
             except (ValueError, IndexError):
                 msg = f"Unable to parse item index in folder {scrape_item.url}. Falling back to downloading the entire folder"
-                self.log(msg, 30)
+                self.logger(msg, 30)
 
         results = await self.get_album_results(list_id)
         for file in files:
-            if self.check_album_results(file.download_url, results):
+            if self.check_complete_by_album_results(file.download_url, results):
                 continue
 
             url = origin / "u" / file.id
@@ -204,7 +205,7 @@ class PixelDrainCrawler(Crawler):
                 scrape_item.add_children(0)
                 await walk_filesystem(fs)
             except Exception as e:
-                self.raise_exc(new_scrape_item, e)
+                self.handle_error(new_scrape_item, e)
 
         async def walk_filesystem(fs: FileSystem) -> None:
             for node in fs.children:
@@ -215,7 +216,7 @@ class PixelDrainCrawler(Crawler):
                 new_scrape_item = scrape_item.create_child(url)
 
                 if node.type == "file":
-                    if self.check_album_results(node.download_url, results):
+                    if self.check_complete_by_album_results(node.download_url, results):
                         continue
 
                     for part in node.path.split("/")[2:-1]:
@@ -227,7 +228,7 @@ class PixelDrainCrawler(Crawler):
                     self.create_task(walk_task(new_scrape_item, node.path))
 
                 else:
-                    self.raise_exc(new_scrape_item, f"Unknown node type: {node.type}")
+                    self.handle_error(new_scrape_item, f"Unknown node type: {node.type}")
 
                 scrape_item.add_children()
 
@@ -262,7 +263,7 @@ class PixelDrainCrawler(Crawler):
             return await self._text(scrape_item, file)
 
         filename, ext = self.get_filename_and_ext(file.name, mime_type=file.mime_type)
-        scrape_item.possible_datetime = self.parse_iso_date(file.date_upload)
+        scrape_item.timestamp = self.parse_iso_date(file.date_upload)
         await self.handle_file(link, scrape_item, file.name, ext, debrid_link=debrid_link, custom_filename=filename)
 
     @error_handling_wrapper
@@ -282,3 +283,6 @@ class PixelDrainCrawler(Crawler):
             scrape_item.add_children()
 
     _file_task = auto_task_id(_file)
+
+    def _get_download_headers(self, referer: AbsoluteHttpURL) -> dict[str, str]:
+        return super()._headers_(referer=referer) | self._headers

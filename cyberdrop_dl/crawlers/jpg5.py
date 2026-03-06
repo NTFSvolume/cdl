@@ -3,13 +3,13 @@ from __future__ import annotations
 import base64
 from typing import TYPE_CHECKING, ClassVar, Final
 
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, xor_decrypt
+from cyberdrop_dl.data_structures import AbsoluteHttpURL, ScrapeItem
+from cyberdrop_dl.utils import error_handling_wrapper, xor_decrypt
 
 from ._chevereto import CheveretoCrawler
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.crawlers.crawler import RateLimit, SupportedDomains
+    from cyberdrop_dl.crawlers import RateLimit, SupportedDomains
 
 _CDN: Final = "selti-delivery.ru"
 _DECRYPTION_KEY: Final = b"seltilovessimpcity@simpcityhatesscrapers"

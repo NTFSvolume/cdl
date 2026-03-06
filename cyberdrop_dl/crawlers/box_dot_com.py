@@ -8,15 +8,14 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from pydantic import Field
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.crawlers import Crawler, SupportedDomains, SupportedPaths
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.models import AliasModel
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import css, error_handling_wrapper
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 
 class ItemType(StrEnum):
@@ -131,7 +130,7 @@ class BoxDotComCrawler(Crawler):
         assert file.type == ItemType.file
         filename, ext = self.get_filename_and_ext(file.name)
         link = DOWNLOAD_URL_BASE.update_query(shared_name=shared_name, file_id=file.typed_id)
-        scrape_item.possible_datetime = file.date
+        scrape_item.timestamp = file.date
         await self.handle_file(scrape_item.url, scrape_item, filename, ext, debrid_link=link)
 
     def build_file_system(self, items: list[Item], root_id: str) -> dict[Path, Item]:

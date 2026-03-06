@@ -2,8 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from cyberdrop_dl.main import run
-from cyberdrop_dl.ui.program_ui import ProgramUI
+from cyberdrop_dl.__main__ import run
 
 
 def test_startup(tmp_cwd: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
@@ -13,7 +12,6 @@ def test_startup(tmp_cwd: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.
     def main_ui(*_) -> None:
         print(msg)
 
-    monkeypatch.setattr(ProgramUI, "__init__", main_ui)
     run(())
     captured = capsys.readouterr()
     output = captured.out

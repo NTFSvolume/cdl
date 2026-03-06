@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 
 from .kemono import KemonoBaseCrawler
 
@@ -17,7 +17,7 @@ class NekohouseCrawler(KemonoBaseCrawler):
     DOMAIN: ClassVar[str] = "nekohouse"
     SERVICES = "fanbox", "fantia", "fantia_products", "subscribestar", "twitter"
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         await super().async_startup()
 
         # Only this API endpoint is available

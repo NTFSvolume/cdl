@@ -3,18 +3,17 @@ from __future__ import annotations
 import urllib.parse
 from typing import TYPE_CHECKING, Any, ClassVar, final
 
-from cyberdrop_dl.crawlers.crawler import Crawler
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.crawlers import Crawler
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import PasswordProtectedError
-from cyberdrop_dl.utils import css, json, open_graph
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import css, error_handling_wrapper, json, open_graph
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator
 
     from bs4 import BeautifulSoup
 
-    from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
+    from cyberdrop_dl.data_structures import AbsoluteHttpURL, ScrapeItem
 
 
 class Selector:
@@ -160,7 +159,7 @@ class CheveretoCrawler(Crawler, is_generic=True):
     ) -> None:
         results = results or {}
         for web_url, src_url in self._get_album_files(soup):
-            if self.check_album_results(web_url, results):
+            if self.check_complete_by_album_results(web_url, results):
                 continue
 
             new_scrape_item = scrape_item.create_child(web_url)
@@ -201,7 +200,7 @@ class CheveretoCrawler(Crawler, is_generic=True):
             link_str = Selector.MAIN_IMAGE(soup)
 
         source = self.parse_url(link_str)
-        scrape_item.possible_datetime = self.parse_iso_date(Selector.DATE(soup))
+        scrape_item.timestamp = self.parse_iso_date(Selector.DATE(soup))
         await self.direct_file(scrape_item, source)
 
     def _get_album_files(self, soup: BeautifulSoup) -> Generator[tuple[AbsoluteHttpURL, AbsoluteHttpURL]]:

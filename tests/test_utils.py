@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from cyberdrop_dl.exceptions import InvalidExtensionError, NoExtensionError
-from cyberdrop_dl.utils.utilities import get_filename_and_ext
+from cyberdrop_dl.utils import get_filename_and_ext
 
 
 class TestGetFilenameAndExt:

@@ -3,15 +3,15 @@ from __future__ import annotations
 import itertools
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
+from cyberdrop_dl.crawlers import Crawler, SupportedPaths
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.data_structures.mediaprops import Resolution
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils.utilities import error_handling_context, error_handling_wrapper, get_text_between
+from cyberdrop_dl.utils import error_handling_context, error_handling_wrapper, get_text_between
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 
 class FlickrCrawler(Crawler):
@@ -33,7 +33,7 @@ class FlickrCrawler(Crawler):
             case _:
                 raise ValueError
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         self.api: FlickrAPI = FlickrAPI(self)
         await self.api.get_site_key()
 
@@ -67,7 +67,7 @@ class FlickrCrawler(Crawler):
 
     @error_handling_wrapper
     async def _photo(self, scrape_item: ScrapeItem, photo: dict[str, Any]) -> None:
-        scrape_item.possible_datetime = int(photo.get("dateuploaded") or photo["dateupload"])
+        scrape_item.timestamp = int(photo.get("dateuploaded") or photo["dateupload"])
         title = photo["title"]
         name: str = (title["_content"] if isinstance(title, dict) else title) or photo["media"]
         source = await self._get_source(photo)

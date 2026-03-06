@@ -5,16 +5,15 @@ import dataclasses
 import json
 from typing import TYPE_CHECKING, Any, ClassVar, Final, Literal
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
-from cyberdrop_dl.data_structures import Resolution
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.crawlers import Crawler, SupportedPaths
+from cyberdrop_dl.data_structures import AbsoluteHttpURL, Resolution
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, parse_url
+from cyberdrop_dl.utils import error_handling_wrapper, parse_url
 
 if TYPE_CHECKING:
     from collections.abc import Generator
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
     from cyberdrop_dl.utils import m3u8
     from cyberdrop_dl.utils.m3u8 import M3U8
 
@@ -99,7 +98,7 @@ class TwitchCrawler(Crawler):
         if not date:
             raise ScrapeError(422, "Lives are not supported")
 
-        scrape_item.possible_datetime = self.parse_iso_date(date)
+        scrape_item.timestamp = self.parse_iso_date(date)
         title = video.get("title") or "video"
         access_token = await self.api.access_token(video_id)
         m3u8_url = (_M3U8_BASE / f"vod/{video_id}.m3u8").with_query(
@@ -149,7 +148,7 @@ class TwitchCrawler(Crawler):
             raise ScrapeError(404)
 
         title: str = clip.get("title") or "clip"
-        scrape_item.possible_datetime = self.parse_iso_date(clip["createdAt"])
+        scrape_item.timestamp = self.parse_iso_date(clip["createdAt"])
         access_token: dict[str, str] = clip["playbackAccessToken"]
 
         best = max(ClipFormat.parse(clip["assets"][0]))

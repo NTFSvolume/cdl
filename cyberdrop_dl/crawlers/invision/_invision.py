@@ -13,8 +13,8 @@ from cyberdrop_dl.crawlers.xenforo.xenforo import DEFAULT_XF_POST_SELECTORS, DEF
 from cyberdrop_dl.utils import css
 
 if TYPE_CHECKING:
+    from cyberdrop_dl.crawlers import SupportedPaths
     from cyberdrop_dl.crawlers._forum import MessageBoardSelectors
-    from cyberdrop_dl.crawlers.crawler import SupportedPaths
 
 
 Selector = css.CssAttributeSelector

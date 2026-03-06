@@ -9,16 +9,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
-from cyberdrop_dl.crawlers.crawler import Crawler
+from cyberdrop_dl.crawlers import Crawler
 from cyberdrop_dl.exceptions import InvalidContentTypeError
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import css, error_handling_wrapper
 
 if TYPE_CHECKING:
     from bs4 import Tag
 
-    from cyberdrop_dl.crawlers.crawler import SupportedPaths
-    from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
+    from cyberdrop_dl.crawlers import SupportedPaths
+    from cyberdrop_dl.data_structures import AbsoluteHttpURL, ScrapeItem
 
 
 class Selectors:
@@ -44,8 +43,8 @@ class OneManagerCrawler(Crawler, is_abc=True):
             self.init_item(scrape_item)
         await self.process_path(scrape_item)
 
-    async def async_startup(self) -> None:
-        self.manager.client_manager.download_slots.update({self.DOMAIN: 2})
+    async def _async_post_init_(self) -> None:
+        self.manager.client.download_limiter[self.DOMAIN] = 2
 
     @error_handling_wrapper
     async def process_path(self, scrape_item: ScrapeItem) -> None:
@@ -81,7 +80,7 @@ class OneManagerCrawler(Crawler, is_abc=True):
 
     async def _process_file(self, scrape_item: ScrapeItem, link: AbsoluteHttpURL, datetime: int | None = None) -> None:
         preview_url = link.with_query("preview")  # The query param needs to be `?preview` exactly, with no value or `=`
-        new_scrape_item = scrape_item.create_child(preview_url, possible_datetime=datetime)
+        new_scrape_item = scrape_item.create_child(preview_url, timestamp=datetime)
         filename, ext = self.get_filename_and_ext(link.name)
         await self.handle_file(link, new_scrape_item, filename, ext)
 

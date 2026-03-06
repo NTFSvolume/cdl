@@ -2,13 +2,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import open_graph
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.crawlers import Crawler, SupportedPaths
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
+from cyberdrop_dl.utils import error_handling_wrapper, open_graph
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 
 class Selector:
@@ -44,13 +43,13 @@ class EromeCrawler(Crawler):
     async def profile(self, scrape_item: ScrapeItem, name: str) -> None:
         title = self.create_title(name)
         scrape_item.setup_as_profile(title)
-        await self.crawl_children(scrape_item, Selector.ALBUM)
+        await self.crawl(scrape_item, Selector.ALBUM)
 
     @error_handling_wrapper
     async def search(self, scrape_item: ScrapeItem, query: str) -> None:
         title = self.create_title(f"{query} [search]")
         scrape_item.setup_as_album(title)
-        await self.crawl_children(scrape_item, Selector.ALBUM)
+        await self.crawl(scrape_item, Selector.ALBUM)
 
     @error_handling_wrapper
     async def album(self, scrape_item: ScrapeItem, album_id: str) -> None:

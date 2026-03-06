@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
+from cyberdrop_dl.crawlers import Crawler, SupportedPaths
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.data_structures.mediaprops import Resolution
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 
 PRIMARY_URL = AbsoluteHttpURL("https://beeg.com/")
@@ -47,7 +47,7 @@ class BeegComCrawler(Crawler):
         file: dict[str, Any] = json_resp["file"]
         title: str = next(data for data in file["data"] if data.get("cd_column") == "sf_name")["cd_value"]
         best_format = get_best_format(file["hls_resources"])
-        scrape_item.possible_datetime = self.parse_iso_date(facts.get("fc_created", ""))
+        scrape_item.timestamp = self.parse_iso_date(facts.get("fc_created", ""))
         m3u8 = await self.get_m3u8_from_index_url(best_format.url)
         filename, ext = self.get_filename_and_ext(best_format.url.name)
         custom_filename = self.create_custom_filename(title, ext, file_id=video_id, resolution=best_format.resolution)

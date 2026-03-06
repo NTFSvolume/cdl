@@ -3,15 +3,15 @@ from __future__ import annotations
 import dataclasses
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.crawlers import Crawler, SupportedPaths
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import LoginError, ScrapeError
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, type_adapter
+from cyberdrop_dl.utils import error_handling_wrapper, type_adapter
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 
 _PRIMARY_URL = AbsoluteHttpURL("https://www.dropbox.com")
@@ -44,8 +44,10 @@ class DropboxCrawler(Crawler):
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = _PRIMARY_URL
     DOMAIN: ClassVar[str] = "dropbox"
 
-    async def async_startup(self) -> None:
-        await self._get_web_token(self.PRIMARY_URL)
+    async def _async_post_init_(self) -> None:
+        with self.catch_errors(self.PRIMARY_URL):
+            with self.disable_on_error("Unable to get token from dropbox"):
+                await self._get_web_token()
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
@@ -167,12 +169,10 @@ class DropboxCrawler(Crawler):
                 break
             payload["voucher"] = resp["next_request_voucher"]
 
-    @error_handling_wrapper
-    async def _get_web_token(self, *_):
-        async with self.request(self.PRIMARY_URL, method="HEAD", cache_disabled=True):
+    async def _get_web_token(self) -> None:
+        async with self.request(self.PRIMARY_URL, method="HEAD"):
             token = self.get_cookie_value("t")
             if not token:
-                self.disabled = True
-                msg = "Unable to get token from dropbox. Crawler has been disabled"
+                msg = "Unable to get token from dropbox"
                 raise LoginError(msg)
             self._token = token

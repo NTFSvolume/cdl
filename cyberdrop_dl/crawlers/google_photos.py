@@ -4,17 +4,16 @@ import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths, auto_task_id
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.crawlers import Crawler, SupportedDomains, SupportedPaths, auto_task_id
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
+from cyberdrop_dl.utils import css, error_handling_wrapper
 
 if TYPE_CHECKING:
     from collections.abc import Generator
 
     from bs4 import BeautifulSoup
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 
 @dataclass(slots=True, frozen=True)
@@ -84,7 +83,7 @@ class GooglePhotosCrawler(Crawler):
     @error_handling_wrapper
     async def _image(self, scrape_item: ScrapeItem, image: Image, idx: int) -> None:
         link = self.parse_url(image.base_url + f"=w{image.width}-h{image.height}")
-        scrape_item.possible_datetime = image.date
+        scrape_item.timestamp = image.date
 
         async with self.request(link) as resp:
             filename, ext = self.get_filename_and_ext(image.id, mime_type=resp.content_type)

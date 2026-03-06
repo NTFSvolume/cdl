@@ -8,15 +8,16 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, ClassVar, NamedTuple, Required, TypedDict
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.crawlers import Crawler, SupportedPaths
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_filename_and_ext
+from cyberdrop_dl.utils import error_handling_wrapper
+from cyberdrop_dl.utils.filepath import get_filename_and_ext
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 
 ALLOW_AVIF = False
@@ -157,7 +158,7 @@ class HitomiLaCrawler(Crawler):
         title = self.create_title(f"{gallery['title']} [{gallery['type']}]", gallery["id"])
         scrape_item.setup_as_album(title, album_id=gallery["id"])
         date_str = gallery.get("datepublished") or gallery["date"]
-        scrape_item.possible_datetime = self.parse_iso_date(date_str)
+        scrape_item.timestamp = self.parse_iso_date(date_str)
         await self.process_gallery(scrape_item, gallery)
 
     async def get_gallery(self, gallery_id: str) -> Gallery:
@@ -166,7 +167,7 @@ class HitomiLaCrawler(Crawler):
         return json.loads(js_text.split("=", 1)[-1])
 
     async def get_servers(self) -> Servers:
-        async with self.startup_lock:
+        async with self._startup_lock:
             if self._servers is None or (datetime.now() - self._servers.fetch_datetime > SERVERS_EXPIRE_AFTER):
                 self._servers = await self._get_servers()
         return self._servers
@@ -199,7 +200,7 @@ class HitomiLaCrawler(Crawler):
 
         for index, image in enumerate(gallery["files"], 1):
             img_reader_url = gallery_reader_url.with_fragment(str(index))
-            if self.check_album_results(img_reader_url, results):
+            if self.check_complete_by_album_results(img_reader_url, results):
                 continue
             link = get_image_url(servers, image)
             new_scrape_item = scrape_item.create_child(img_reader_url)

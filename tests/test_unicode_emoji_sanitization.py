@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from cyberdrop_dl.utils.utilities import sanitize_filename, sanitize_unicode_emojis_and_symbols
+from cyberdrop_dl.utils import sanitize_filename, sanitize_unicode_emojis_and_symbols
 
 IS_MACOS = sys.platform == "darwin"
 

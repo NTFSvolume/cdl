@@ -4,14 +4,14 @@ import dataclasses
 import itertools
 from typing import TYPE_CHECKING, Any, ClassVar, Required, TypedDict
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, parse_url
+from cyberdrop_dl.crawlers import Crawler, SupportedPaths
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
+from cyberdrop_dl.utils import error_handling_wrapper, parse_url
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterable
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
     from cyberdrop_dl.utils.dates import TimeStamp
 
 # Primary URL needs `www.` to prevent redirect
@@ -53,7 +53,7 @@ class RedGifsCrawler(Crawler):
     def __post_init__(self) -> None:
         self.headers = {}
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         await self.get_auth_token(API_ENTRYPOINT / "auth/temporary")
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
@@ -113,7 +113,7 @@ class RedGifsCrawler(Crawler):
         await self._handle_gif(scrape_item, gif)
 
     async def _handle_gif(self, scrape_item: ScrapeItem, gif: Gif) -> None:
-        scrape_item.possible_datetime = gif.date
+        scrape_item.timestamp = gif.date
         filename, ext = self.get_filename_and_ext(gif.url.name)
         await self.handle_file(gif.url, scrape_item, filename, ext)
 

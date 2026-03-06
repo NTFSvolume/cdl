@@ -4,13 +4,13 @@ from typing import TYPE_CHECKING, ClassVar, NotRequired, TypedDict, cast
 
 from bs4 import BeautifulSoup
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.crawlers import Crawler, SupportedPaths
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import error_handling_wrapper
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 API_ENTRYPOINT = AbsoluteHttpURL("https://a.4cdn.org/")
 FILES_BASE_URL = AbsoluteHttpURL("https://i.4cdn.org/")
@@ -76,13 +76,13 @@ class FourChanCrawler(Crawler):
                 post = cast("ImagePost", post)
                 file_micro_timestamp, ext = post["tim"], post["ext"]
                 url = FILES_BASE_URL / board / f"{file_micro_timestamp}{ext}"
-                if self.check_album_results(url, results):
+                if self.check_complete_by_album_results(url, results):
                     continue
 
                 custom_filename = self.create_custom_filename(file_stem, ext)
                 filename, _ = self.get_filename_and_ext(url.name)
                 new_scrape_item = scrape_item.copy()
-                new_scrape_item.possible_datetime = post["time"]
+                new_scrape_item.timestamp = post["time"]
                 await self.handle_file(url, new_scrape_item, filename, ext, custom_filename=custom_filename)
                 scrape_item.add_children()
 

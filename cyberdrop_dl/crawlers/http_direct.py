@@ -2,28 +2,33 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
-from cyberdrop_dl.constants import FILE_FORMATS
-from cyberdrop_dl.crawlers.crawler import Crawler
-from cyberdrop_dl.exceptions import NoExtensionError
-from cyberdrop_dl.utils.utilities import get_filename_and_ext
+from typing_extensions import override
+
+from cyberdrop_dl import constants
+from cyberdrop_dl.crawlers import Crawler
+from cyberdrop_dl.exceptions import NoExtensionError, ScrapeError
+from cyberdrop_dl.utils.filepath import get_filename_and_ext
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 
-MEDIA_EXTENSIONS = FILE_FORMATS["Images"] | FILE_FORMATS["Videos"] | FILE_FORMATS["Audio"]
-
-
-class DirectHttpFile(Crawler, is_generic=True):
+class DirectHTTPFile(Crawler, is_generic=True):
     DOMAIN: ClassVar[str] = "no_crawler"
+
+    @override
+    async def ready(self) -> bool:  # pyright: ignore[reportIncompatibleMethodOverride]
+        if not self._ready:
+            self._ready = True
+        return self._ready
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         try:
             filename, ext = get_filename_and_ext(scrape_item.url.name)
         except NoExtensionError:
-            filename, ext = get_filename_and_ext(scrape_item.url.name, forum=True)
+            filename, ext = get_filename_and_ext(scrape_item.url.name, xenforo=True)
 
-        if ext not in MEDIA_EXTENSIONS:
+        if ext not in constants.FileExt.MEDIA:
             raise ValueError
 
         scrape_item.add_to_parent_title("Loose Files")
@@ -35,3 +40,9 @@ class DirectHttpFile(Crawler, is_generic=True):
             ext,
             custom_filename=filename,
         )
+
+    @override
+    def handle_error(self, scrape_item: ScrapeItem, exc: type[Exception] | Exception | str) -> None:  # pyright: ignore[reportIncompatibleMethodOverride]
+        if isinstance(exc, str):
+            exc = ScrapeError(exc)
+        raise exc

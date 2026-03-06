@@ -4,27 +4,26 @@ from typing import TYPE_CHECKING, ClassVar
 
 from mega.transfer_it import TransferItClient
 
-from cyberdrop_dl.crawlers.crawler import Crawler, DBPathBuilder, SupportedPaths
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.crawlers import Crawler, SupportedPaths
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
+from cyberdrop_dl.utils import error_handling_wrapper
 
 if TYPE_CHECKING:
     from mega.data_structures import Node
     from mega.filesystem import FileSystem
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 
 class TransferItCrawler(Crawler):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {"Transfer": "/t/<transfer_id>"}
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://transfer.it")
     DOMAIN: ClassVar[str] = "transfer.it"
-    create_db_path = staticmethod(DBPathBuilder.path_qs_frag)
 
     core: TransferItClient
 
-    async def async_startup(self) -> None:
-        self.core = TransferItClient(self.manager.client_manager._session)
+    async def _async_post_init_(self) -> None:
+        self.core = TransferItClient(self.manager.client.aiohttp_session)
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
@@ -60,5 +59,5 @@ class TransferItCrawler(Crawler):
     async def _file(self, scrape_item: ScrapeItem, file: Node, dl_link: str) -> None:
         link = self.parse_url(dl_link)
         filename, ext = self.get_filename_and_ext(file.attributes.name)
-        scrape_item.possible_datetime = file.created_at
+        scrape_item.timestamp = file.created_at
         await self.handle_file(link, scrape_item, file.attributes.name, ext, custom_filename=filename)

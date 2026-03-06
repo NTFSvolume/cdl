@@ -11,12 +11,12 @@ from m3u8 import M3U8 as _M3U8
 from m3u8 import Media, Playlist
 
 from cyberdrop_dl.data_structures.mediaprops import Codecs, Resolution
-from cyberdrop_dl.utils.utilities import parse_url
+from cyberdrop_dl.utils import parse_url
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
 
-    from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+    from cyberdrop_dl.data_structures import AbsoluteHttpURL
 
 
 class MediaType(StrEnum):
@@ -187,7 +187,7 @@ class VariantM3U8Parser:
         return next(self.get_rendition_groups(only=only, exclude=exclude))
 
 
-def get_best_group_from_playlist(
+def select_best_rendition(
     m3u8_playlist: M3U8, only: Iterable[str] = (), *, exclude: Iterable[str] = ()
 ) -> RenditionGroupDetails:
     return VariantM3U8Parser(m3u8_playlist).get_best_group(only=only, exclude=exclude)

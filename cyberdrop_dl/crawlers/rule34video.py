@@ -3,13 +3,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers._kvs import KernelVideoSharingCrawler
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.data_structures import AbsoluteHttpURL, ScrapeItem
+from cyberdrop_dl.utils import css, error_handling_wrapper
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.crawlers.crawler import SupportedPaths
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.crawlers import SupportedPaths
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 
 class Selector:
@@ -38,7 +37,7 @@ class Rule34VideoCrawler(KernelVideoSharingCrawler):
     DOMAIN: ClassVar[str] = "rule34video"
     FOLDER_DOMAIN: ClassVar[str] = "Rule34Video"
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         self.update_cookies({"kt_rt_popAccess": 1, "kt_tcookie": 1})
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:

@@ -3,18 +3,20 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.crawlers import Crawler, RateLimit
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils.logger import log
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import error_handling_wrapper
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.client.response import AbstractResponse
+    from cyberdrop_dl.data_structures import ScrapeItem
 
+logger = logging.getLogger(__name__)
 _PRIMARY_URL = AbsoluteHttpURL("https://real-debrid.com")
 _API_ENTRYPOINT = AbsoluteHttpURL("https://api.real-debrid.com/rest/1.0")
 _ERROR_CODES = {
@@ -65,7 +67,7 @@ class RealDebridCrawler(Crawler):
     _RATE_LIMIT: ClassVar[RateLimit] = 250, 60
 
     @classmethod
-    def _json_response_check(cls, json_resp: dict[str, Any]) -> None:
+    def _json_resp_check_(cls, json_resp: dict[str, Any], _resp: AbstractResponse) -> None:
         if code := json_resp.get("error_code"):
             code = 7 if code == 16 else code
             msg = _ERROR_CODES.get(code, "Unknown error").capitalize()
@@ -73,11 +75,11 @@ class RealDebridCrawler(Crawler):
             raise ScrapeError(ui_failure, msg)
 
     def __post_init__(self) -> None:
-        token = self.manager.auth_config.realdebrid.api_key
+        token = self.manager.config.auth.realdebrid.api_key
         self.disabled = not bool(token)
         self.api = RealDebridAPI(self, token)
 
-    async def async_startup(self) -> None:
+    async def _async_post_init_(self) -> None:
         await self._get_regexes(_API_ENTRYPOINT)
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
@@ -118,7 +120,7 @@ class RealDebridCrawler(Crawler):
         title = self.create_title(f"files [{url.host}]")
         scrape_item.setup_as_album(title)
         debrid_link = await self.api.unrestrict(url, scrape_item.password)
-        log(f"[{self.FOLDER_DOMAIN}]:\n  Original URL: {url}\n  Debrid URL: {debrid_link}", 10)
+        logger.info(f"[{self.FOLDER_DOMAIN}]:\n  Original URL: {url}\n  Debrid URL: {debrid_link}", 10)
         filename, ext = self.get_filename_and_ext(debrid_link.name)
         await self.handle_file(
             url,

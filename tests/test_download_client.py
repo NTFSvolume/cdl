@@ -2,7 +2,7 @@ from typing import cast
 
 import pytest
 
-from cyberdrop_dl.clients import download_client
+from cyberdrop_dl.client import download_client
 from cyberdrop_dl.data_structures import MediaItem
 
 
