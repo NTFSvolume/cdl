@@ -5,7 +5,7 @@ from collections import Counter
 from typing import TYPE_CHECKING
 
 import pytest
-from cyberdrop_dl.clients.hash_client import hash_directory_scanner
+from cyberdrop_dl.client.hash_client import hash_directory_scanner
 
 from cyberdrop_dl import appdata, config
 

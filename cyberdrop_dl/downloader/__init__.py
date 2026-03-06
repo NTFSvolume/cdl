@@ -20,7 +20,7 @@ from cyberdrop_dl.utils import dates, error_handling_wrapper
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable
 
-    from cyberdrop_dl.clients.http import HTTPClient
+    from cyberdrop_dl.client import HTTPClient
     from cyberdrop_dl.config import Config
     from cyberdrop_dl.data_structures.url_objects import DownloadProtocol, MediaID, MediaItem
     from cyberdrop_dl.database import Database

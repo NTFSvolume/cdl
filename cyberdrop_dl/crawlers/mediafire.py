@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
     from bs4 import BeautifulSoup
 
-    from cyberdrop_dl.clients.response import AbstractResponse
+    from cyberdrop_dl.client.response import AbstractResponse
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
 

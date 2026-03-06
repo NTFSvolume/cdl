@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 from cyberdrop_dl import __version__, ffmpeg
 from cyberdrop_dl.cache import Cache
-from cyberdrop_dl.clients.http import HTTPClient
+from cyberdrop_dl.client import HTTPClient
 from cyberdrop_dl.config import Config
 from cyberdrop_dl.database import Database
 from cyberdrop_dl.downloader import DownloadManager

@@ -8,7 +8,7 @@ from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import error_handling_wrapper
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.clients.response import AbstractResponse
+    from cyberdrop_dl.client.response import AbstractResponse
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
 _PRIMARY_URL = AbsoluteHttpURL("https://wetransfer.com/")

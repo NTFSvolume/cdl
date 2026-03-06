@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from cyberdrop_dl.clients.flaresolverr import FlareSolverr, _Command
+from cyberdrop_dl.client.flaresolverr import FlareSolverr, _Command
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.manager import Manager
 from cyberdrop_dl.scrape_mapper import ScrapeMapper

@@ -20,7 +20,7 @@ from cyberdrop_dl.tui import show_msg
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from cyberdrop_dl.clients.http import HTTPClient
+    from cyberdrop_dl.client import HTTPClient
 
 logger = logging.getLogger(__name__)
 

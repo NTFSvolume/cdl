@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
     from typing_extensions import ReadOnly
 
-    from cyberdrop_dl.clients.response import AbstractResponse
+    from cyberdrop_dl.client.response import AbstractResponse
 
 
 _API_ENTRYPOINT = AbsoluteHttpURL("https://api.gofile.io")

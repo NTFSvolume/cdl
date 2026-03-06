@@ -10,7 +10,7 @@ from aiohttp import hdrs
 from typing_extensions import override
 
 from cyberdrop_dl import aio, constants, storage
-from cyberdrop_dl.clients.response import AbstractResponse
+from cyberdrop_dl.client.response import AbstractResponse
 from cyberdrop_dl.data_structures.url_objects import DownloadProtocol
 from cyberdrop_dl.downloader import DownloadManager, FileDownloader
 from cyberdrop_dl.exceptions import DownloadError, InvalidContentTypeError
@@ -19,7 +19,7 @@ from cyberdrop_dl.utils import dates
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Coroutine, Mapping
 
-    from cyberdrop_dl.clients.http import HTTPClient
+    from cyberdrop_dl.client import HTTPClient
     from cyberdrop_dl.config import Config
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
     from cyberdrop_dl.tui import TUI, ProgressHook

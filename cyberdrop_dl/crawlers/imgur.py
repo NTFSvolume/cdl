@@ -8,7 +8,7 @@ from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.clients.response import AbstractResponse
+    from cyberdrop_dl.client.response import AbstractResponse
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
 _API_ENTRYPOINT = AbsoluteHttpURL("https://api.imgur.com/3/")

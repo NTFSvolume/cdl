@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Self, TypeVar
 
 from cyberdrop_dl import aio, plugins, storage
-from cyberdrop_dl.clients.jdownloader import JDownloader
+from cyberdrop_dl.client.jdownloader import JDownloader
 from cyberdrop_dl.constants import REGEX_LINKS, BlockedDomains
 from cyberdrop_dl.crawlers import create_crawlers
 from cyberdrop_dl.crawlers._chevereto import CheveretoCrawler

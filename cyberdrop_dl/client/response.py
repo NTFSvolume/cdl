@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
     from curl_cffi.requests.models import Response as CurlResponse
 
-    from cyberdrop_dl.clients.flaresolverr import FlareSolverrSolution
+    from cyberdrop_dl.client.flaresolverr import FlareSolverrSolution
 
 else:
     CurlResponse = object

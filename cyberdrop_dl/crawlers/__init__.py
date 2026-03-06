@@ -29,7 +29,7 @@ from typing import (
 from aiolimiter import AsyncLimiter
 
 from cyberdrop_dl.annotations import copy_signature
-from cyberdrop_dl.clients.http import HTTPClient, HTTPClientProxy
+from cyberdrop_dl.client import HTTPClient, HTTPClientProxy
 from cyberdrop_dl.data_structures.mediaprops import ISO639Subtitle, Resolution
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
 from cyberdrop_dl.downloader import DownloadManager
@@ -57,7 +57,7 @@ if TYPE_CHECKING:
     from bs4 import BeautifulSoup, Tag
     from curl_cffi.requests.impersonate import BrowserTypeLiteral
 
-    from cyberdrop_dl.clients.response import AbstractResponse
+    from cyberdrop_dl.client.response import AbstractResponse
     from cyberdrop_dl.manager import Manager
     from cyberdrop_dl.tui.common import ProgressHook
 
