@@ -8,14 +8,14 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl import env
 from cyberdrop_dl.crawlers import Crawler, SupportedPaths, auto_task_id
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import css, dates, error_handling_wrapper
 
 if TYPE_CHECKING:
     from collections.abc import Generator
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 SUPPORTED_FORMATS = "mp3-320", "mp3", "aac-hi", "wav", "flac", "vorbis", "aiff", "alas"  # Ordered by compatibility
 USE_FORMATS = tuple(dict.fromkeys((env.BANDCAMP_FORMATS).split(","))) if env.BANDCAMP_FORMATS else SUPPORTED_FORMATS

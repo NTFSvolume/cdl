@@ -5,13 +5,13 @@ from typing import TYPE_CHECKING, ClassVar
 from mega.chunker import MegaChunker, get_chunks
 
 from cyberdrop_dl import aio
-from cyberdrop_dl.data_structures.url_objects import DownloadProtocol
+from cyberdrop_dl.data_structures import DownloadProtocol
 from cyberdrop_dl.downloader.http import HTTPFileDownloader
 
 if TYPE_CHECKING:
     import aiohttp
 
-    from cyberdrop_dl.data_structures.url_objects import MediaItem
+    from cyberdrop_dl.data_structures import MediaItem
 
 
 class MegaNzFileDownloader(HTTPFileDownloader):

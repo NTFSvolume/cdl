@@ -3,14 +3,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl.crawlers import Crawler, SupportedPaths
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import error_handling_wrapper
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 _BASE_QUERY = "nsfw[]=0&nsfw[]=1&nsfw[]=2&nsfw[]=3&nsfw[]=4"
 _TYPES_QUERY = "types[]=image&types[]=video&types[]=gallery"

@@ -21,7 +21,7 @@ from .models import AvailablePost, PostStream, Topic
 if TYPE_CHECKING:
     from collections.abc import AsyncIterable, Iterable
 
-    from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
+    from cyberdrop_dl.data_structures import AbsoluteHttpURL, ScrapeItem
 
 _T = TypeVar("_T")
 _MAX_POSTS_PER_REQUEST = 50

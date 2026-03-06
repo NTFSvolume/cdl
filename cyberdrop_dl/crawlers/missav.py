@@ -3,13 +3,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers import Crawler, SupportedPaths
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, error_handling_wrapper, open_graph
 
 if TYPE_CHECKING:
     from bs4 import BeautifulSoup, Tag
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 
 _M3U8_SERVER = AbsoluteHttpURL("https://surrit.com/")

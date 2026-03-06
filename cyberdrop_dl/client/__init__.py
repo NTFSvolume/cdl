@@ -23,7 +23,7 @@ from cyberdrop_dl.annotations import copy_signature
 from cyberdrop_dl.client.flaresolverr import FlareSolverr
 from cyberdrop_dl.client.response import AbstractResponse
 from cyberdrop_dl.cookies import extract_cookies, make_simple_cookie, parse_cookie_jar, read_netscape_file
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, ScrapeError
 from cyberdrop_dl.utils import best_match
 

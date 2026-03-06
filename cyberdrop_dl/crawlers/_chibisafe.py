@@ -22,7 +22,7 @@ from cyberdrop_dl.utils.dates import to_timestamp
 
 if TYPE_CHECKING:
     from cyberdrop_dl.crawlers import SupportedPaths
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 
 @dataclasses.dataclass(slots=True)

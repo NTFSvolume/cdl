@@ -5,13 +5,13 @@ import itertools
 from typing import TYPE_CHECKING, Any, ClassVar, Required, TypedDict
 
 from cyberdrop_dl.crawlers import Crawler, SupportedPaths
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.utils import error_handling_wrapper, parse_url
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterable
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
     from cyberdrop_dl.utils.dates import TimeStamp
 
 # Primary URL needs `www.` to prevent redirect

@@ -6,15 +6,14 @@ import json
 from typing import TYPE_CHECKING, Any, ClassVar, Final, Literal
 
 from cyberdrop_dl.crawlers import Crawler, SupportedPaths
-from cyberdrop_dl.data_structures import Resolution
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.data_structures import AbsoluteHttpURL, Resolution
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import error_handling_wrapper, parse_url
 
 if TYPE_CHECKING:
     from collections.abc import Generator
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
     from cyberdrop_dl.utils import m3u8
     from cyberdrop_dl.utils.m3u8 import M3U8
 

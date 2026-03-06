@@ -11,7 +11,7 @@ from typing_extensions import override
 
 from cyberdrop_dl import aio, constants, storage
 from cyberdrop_dl.client.response import AbstractResponse
-from cyberdrop_dl.data_structures.url_objects import DownloadProtocol
+from cyberdrop_dl.data_structures import DownloadProtocol
 from cyberdrop_dl.downloader import DownloadManager, FileDownloader
 from cyberdrop_dl.exceptions import DownloadError, InvalidContentTypeError
 from cyberdrop_dl.utils import dates
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.client import HTTPClient
     from cyberdrop_dl.config import Config
-    from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
+    from cyberdrop_dl.data_structures import AbsoluteHttpURL, MediaItem
     from cyberdrop_dl.progress import TUI, ProgressHook
 
 

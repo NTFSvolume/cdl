@@ -4,15 +4,15 @@ import re
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl.crawlers import Crawler, SupportedPaths
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.data_structures.mediaprops import Resolution
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, json
 
 if TYPE_CHECKING:
     from bs4 import BeautifulSoup
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 _find_video_ids = re.compile("/video/(\\d+)").finditer
 

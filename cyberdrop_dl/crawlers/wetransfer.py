@@ -3,13 +3,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl.crawlers import Crawler, SupportedDomains, SupportedPaths
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import error_handling_wrapper
 
 if TYPE_CHECKING:
     from cyberdrop_dl.client.response import AbstractResponse
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 _PRIMARY_URL = AbsoluteHttpURL("https://wetransfer.com/")
 _API_ENTRYPOINT = _PRIMARY_URL / "api/v4/transfers"

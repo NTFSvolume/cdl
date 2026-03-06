@@ -17,7 +17,7 @@ from bs4 import BeautifulSoup
 from pydantic import BaseModel
 
 from cyberdrop_dl.crawlers import Crawler
-from cyberdrop_dl.data_structures.url_objects import DatetimeRange
+from cyberdrop_dl.data_structures import DatetimeRange
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import css, error_handling_wrapper, open_graph
 from cyberdrop_dl.utils.dates import to_timestamp
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterable, Iterable
 
     from cyberdrop_dl.crawlers import SupportedPaths
-    from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
+    from cyberdrop_dl.data_structures import AbsoluteHttpURL, ScrapeItem
 
 _ModelT = TypeVar("_ModelT", bound=BaseModel)
 _POST_PER_REQUEST = 100

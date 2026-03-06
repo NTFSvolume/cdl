@@ -14,7 +14,7 @@ from pydantic import (
     StringConstraints,
 )
 
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.models.validators import (
     bytesize_to_str,
     change_path_suffix,

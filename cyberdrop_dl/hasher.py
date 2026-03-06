@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from cyberdrop_dl.config import Config
-    from cyberdrop_dl.data_structures.url_objects import MediaItem
+    from cyberdrop_dl.data_structures import MediaItem
     from cyberdrop_dl.database import Database
     from cyberdrop_dl.manager import Manager
     from cyberdrop_dl.progress import TUI

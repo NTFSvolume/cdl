@@ -20,7 +20,7 @@ from cyberdrop_dl.crawlers.discourse import DiscourseCrawler
 from cyberdrop_dl.crawlers.http_direct import DirectHTTPFile
 from cyberdrop_dl.crawlers.realdebrid import RealDebridCrawler
 from cyberdrop_dl.crawlers.wordpress import WordPressHTMLCrawler, WordPressMediaCrawler
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
+from cyberdrop_dl.data_structures import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.exceptions import JDownloaderError, NoExtensionError
 from cyberdrop_dl.logger import spacer
 from cyberdrop_dl.utils import best_match, filepath, get_download_path, parse_url, remove_trailing_slash

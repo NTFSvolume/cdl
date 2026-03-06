@@ -3,11 +3,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, ClassVar, Final
 
 from cyberdrop_dl.crawlers._chevereto import CheveretoCrawler
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 
 if TYPE_CHECKING:
     from cyberdrop_dl.crawlers import SupportedDomains, SupportedPaths
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 
 IMAGES_CDN: Final = "i.ibb.co"

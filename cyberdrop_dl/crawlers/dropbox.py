@@ -4,14 +4,14 @@ import dataclasses
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl.crawlers import Crawler, SupportedPaths
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import LoginError, ScrapeError
 from cyberdrop_dl.utils import error_handling_wrapper, type_adapter
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 
 _PRIMARY_URL = AbsoluteHttpURL("https://www.dropbox.com")

@@ -12,7 +12,7 @@ from aiohttp import ClientConnectorError
 
 from cyberdrop_dl import aio, constants
 from cyberdrop_dl.crawlers import Crawler, RateLimit, SupportedPaths, auto_task_id
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError
 from cyberdrop_dl.utils import css, error_handling_wrapper, open_graph, parse_url, xor_decrypt
 
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
     from bs4 import BeautifulSoup
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 
 _DOWNLOAD_API_ENTRYPOINT = AbsoluteHttpURL("https://apidl.bunkr.ru/api/_001_v2")

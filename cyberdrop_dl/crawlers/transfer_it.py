@@ -5,14 +5,14 @@ from typing import TYPE_CHECKING, ClassVar
 from mega.transfer_it import TransferItClient
 
 from cyberdrop_dl.crawlers import Crawler, SupportedPaths
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.utils import error_handling_wrapper
 
 if TYPE_CHECKING:
     from mega.data_structures import Node
     from mega.filesystem import FileSystem
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 
 class TransferItCrawler(Crawler):

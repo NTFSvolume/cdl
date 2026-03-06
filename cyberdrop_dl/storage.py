@@ -20,7 +20,7 @@ from cyberdrop_dl.exceptions import InsufficientFreeSpaceError
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 
-    from cyberdrop_dl.data_structures.url_objects import MediaItem
+    from cyberdrop_dl.data_structures import MediaItem
 
 
 logger = logging.getLogger(__name__)

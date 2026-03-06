@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from yaml import YAMLError
     from yarl import URL
 
-    from cyberdrop_dl.data_structures.url_objects import MediaItem, ScrapeItem
+    from cyberdrop_dl.data_structures import MediaItem, ScrapeItem
 
 
 def _format_error(ui_failure: str, message: str) -> str:

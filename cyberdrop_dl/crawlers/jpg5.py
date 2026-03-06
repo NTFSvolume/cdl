@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 from typing import TYPE_CHECKING, ClassVar, Final
 
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
+from cyberdrop_dl.data_structures import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.utils import error_handling_wrapper, xor_decrypt
 
 from ._chevereto import CheveretoCrawler

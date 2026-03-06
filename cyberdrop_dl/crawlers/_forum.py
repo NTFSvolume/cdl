@@ -22,7 +22,7 @@ from bs4 import BeautifulSoup, Tag
 from cyberdrop_dl import config
 from cyberdrop_dl.constants import HTTP_REGEX_LINKS
 from cyberdrop_dl.crawlers import Crawler
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import LoginError, MaxChildrenError, ScrapeError
 from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, is_blob_or_svg
 from cyberdrop_dl.utils.dates import TimeStamp, to_timestamp
@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
     from aiohttp import ClientResponse
 
-    from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
+    from cyberdrop_dl.data_structures import AbsoluteHttpURL, ScrapeItem
 
 LINK_TRASH_MAPPING = {".th.": ".", ".md.": ".", "ifr": "watch"}
 

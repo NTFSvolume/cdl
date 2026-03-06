@@ -46,7 +46,7 @@ from . import json
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Generator, Mapping
 
-    from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
+    from cyberdrop_dl.data_structures import AbsoluteHttpURL, MediaItem, ScrapeItem
     from cyberdrop_dl.manager import Manager
 
     _P = ParamSpec("_P")

@@ -8,7 +8,7 @@ from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import error_handling_wrapper
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
+    from cyberdrop_dl.data_structures import AbsoluteHttpURL, ScrapeItem
 
 
 class TubeCorporateCrawler(Crawler, is_abc=True):

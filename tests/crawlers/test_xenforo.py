@@ -9,7 +9,7 @@ from bs4 import BeautifulSoup
 from cyberdrop_dl.crawlers import _forum
 from cyberdrop_dl.crawlers import xenforo as crawlers
 from cyberdrop_dl.crawlers.xenforo import xenforo
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
+from cyberdrop_dl.data_structures import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.manager import Manager
 

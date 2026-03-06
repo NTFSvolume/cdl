@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
     from yarl import URL
 
-    from cyberdrop_dl.data_structures.url_objects import MediaItem, ScrapeItem
+    from cyberdrop_dl.data_structures import MediaItem, ScrapeItem
 
 
 _CSV_DELIMITER = ","

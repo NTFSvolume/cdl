@@ -14,7 +14,7 @@ from pydantic import BeforeValidator, Field
 
 from cyberdrop_dl import config
 from cyberdrop_dl.crawlers import Crawler, SupportedPaths, auto_task_id
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import NoExtensionError, ScrapeError
 from cyberdrop_dl.models import AliasModel
 from cyberdrop_dl.models.validators import falsy_as, falsy_as_none
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
     from bs4 import BeautifulSoup
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
     _P = ParamSpec("_P")
 

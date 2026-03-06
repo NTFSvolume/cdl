@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from bs4 import Tag
 
     from cyberdrop_dl.crawlers import SupportedPaths
-    from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
+    from cyberdrop_dl.data_structures import AbsoluteHttpURL, ScrapeItem
 
 
 class Selectors:

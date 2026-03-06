@@ -5,13 +5,13 @@ import json
 from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
 
 from cyberdrop_dl.crawlers import Crawler, SupportedPaths
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.data_structures.mediaprops import Resolution
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 
 PLAYLIST_SELECTOR = "script:-soup-contains('window.playlist')"

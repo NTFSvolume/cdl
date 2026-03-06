@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.client import HTTPClient
     from cyberdrop_dl.config import Config
-    from cyberdrop_dl.data_structures.url_objects import DownloadProtocol, MediaID, MediaItem
+    from cyberdrop_dl.data_structures import DownloadProtocol, MediaID, MediaItem
     from cyberdrop_dl.database import Database
     from cyberdrop_dl.hasher import Hasher
     from cyberdrop_dl.manager import Manager

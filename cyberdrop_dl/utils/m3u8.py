@@ -16,7 +16,7 @@ from cyberdrop_dl.utils import parse_url
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
 
-    from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+    from cyberdrop_dl.data_structures import AbsoluteHttpURL
 
 
 class MediaType(StrEnum):

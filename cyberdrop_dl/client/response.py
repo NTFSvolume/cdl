@@ -16,7 +16,7 @@ from multidict import CIMultiDict, CIMultiDictProxy
 from propcache import under_cached_property
 from typing_extensions import TypeVar
 
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import InvalidContentTypeError, ScrapeError
 from cyberdrop_dl.utils import parse_url
 

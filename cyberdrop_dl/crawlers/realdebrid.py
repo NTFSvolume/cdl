@@ -8,13 +8,13 @@ import re
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl.crawlers import Crawler, RateLimit
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import error_handling_wrapper
 
 if TYPE_CHECKING:
     from cyberdrop_dl.client.response import AbstractResponse
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 logger = logging.getLogger(__name__)
 _PRIMARY_URL = AbsoluteHttpURL("https://real-debrid.com")

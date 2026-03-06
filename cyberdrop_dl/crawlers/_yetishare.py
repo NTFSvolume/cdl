@@ -10,7 +10,7 @@ from cyberdrop_dl.exceptions import DDOSGuardError, PasswordProtectedError, Scra
 from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 
 class Selector:

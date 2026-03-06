@@ -4,12 +4,12 @@ import asyncio
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers import Crawler, SupportedDomains, SupportedPaths
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, error_handling_wrapper
 from cyberdrop_dl.utils.filepath import remove_file_id
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 _API_ENTRYPOINT = AbsoluteHttpURL("https://api.cyberdrop.cr/api/")
 _PRIMARY_URL = AbsoluteHttpURL("https://cyberdrop.cr/")

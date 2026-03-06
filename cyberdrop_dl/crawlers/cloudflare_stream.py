@@ -9,13 +9,13 @@ import uuid
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers import Crawler, SupportedDomains, SupportedPaths
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import error_handling_wrapper
 from cyberdrop_dl.utils.json import JSONWebToken, is_jwt
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 _DEFAULT_VIDEO_CDN = AbsoluteHttpURL("https://watch.cloudflarestream.com")
 

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, ClassVar, Literal, NotRequired, TypedDict, Typ
 from typing_extensions import override
 
 from cyberdrop_dl.crawlers import Crawler, RateLimit, SupportedPaths
-from cyberdrop_dl.data_structures.url_objects import FILE_HOST_ALBUM, AbsoluteHttpURL, ScrapeItem
+from cyberdrop_dl.data_structures import FILE_HOST_ALBUM, AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.exceptions import PasswordProtectedError, ScrapeError
 from cyberdrop_dl.utils import error_handling_wrapper
 

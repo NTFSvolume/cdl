@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from myjdapi.myjdapi import Jddevice
 
     from cyberdrop_dl.config import Config
-    from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+    from cyberdrop_dl.data_structures import AbsoluteHttpURL
 
 
 logger = logging.getLogger(__name__)

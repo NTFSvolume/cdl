@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from yarl import URL
 
     from cyberdrop_dl.crawlers import Crawler
-    from cyberdrop_dl.data_structures.url_objects import MediaItem
+    from cyberdrop_dl.data_structures import MediaItem
     from cyberdrop_dl.database import Database
 
 

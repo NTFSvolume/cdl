@@ -1,7 +1,7 @@
 import pytest
 
 from cyberdrop_dl.crawlers import realdebrid
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 
 
 @pytest.mark.parametrize(

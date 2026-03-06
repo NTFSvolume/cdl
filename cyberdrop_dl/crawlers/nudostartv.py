@@ -3,12 +3,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers import Crawler, SupportedPaths
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import css, error_handling_wrapper
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 IMAGE_SELECTOR = "div[class=block-video] a img"
 CONTENT_SELECTOR = "div[id=list_videos_common_videos_list_items] div a"

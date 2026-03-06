@@ -9,7 +9,7 @@ from cyberdrop_dl.data_structures import AbsoluteHttpURL, Resolution
 from cyberdrop_dl.utils import css, error_handling_wrapper, filter_query
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 
 _PER_PAGE: int = 1000

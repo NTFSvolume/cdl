@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl.crawlers import Crawler, SupportedDomains, SupportedPaths, auto_task_id
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, error_handling_wrapper
 
 if TYPE_CHECKING:
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
     from bs4 import BeautifulSoup
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 
 @dataclass(slots=True, frozen=True)

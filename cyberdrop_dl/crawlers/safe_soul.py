@@ -4,13 +4,13 @@ import datetime
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers._chibisafe import Album, ChibiSafeCrawler, File
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, error_handling_wrapper
 
 if TYPE_CHECKING:
     import bs4
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.data_structures import ScrapeItem
 
 
 class Selector:
