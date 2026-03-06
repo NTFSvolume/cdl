@@ -176,7 +176,8 @@ class ScrapeMapper(aio.AsyncContextManagerMixin):
             storage.monitor(self.config.general.required_free_space),
         ):
             self.manager.log_app_state()
-            await self.manager.client.load_cookie_files()
+            await self.manager.client.load_cookies()
+            logger.info(spacer())
             logger.info("Starting CDL...\n")
             with self.manager.tui(screen="scraping"):
                 yield self
@@ -401,7 +402,7 @@ def get_unique_crawlers() -> list[type[Crawler]]:
 
 def create_generic_crawlers(config: Config) -> set[type[Crawler]]:
     new_crawlers: set[type[Crawler]] = set()
-    generic_crawlers = config.generic_crawlers_instances
+    generic_crawlers = config.generic_crawlers
 
     for cls, urls in {
         WordPressHTMLCrawler: generic_crawlers.wordpress_html,

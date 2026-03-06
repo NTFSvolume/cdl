@@ -18,14 +18,13 @@ from aiohttp.resolver import AsyncResolver, ThreadedResolver
 from aiolimiter import AsyncLimiter
 from multidict import CIMultiDict
 
-from cyberdrop_dl import aio, appdata, ddos_guard, env
+from cyberdrop_dl import aio, ddos_guard, env
 from cyberdrop_dl.annotations import copy_signature
 from cyberdrop_dl.clients.flaresolverr import FlareSolverr
 from cyberdrop_dl.clients.response import AbstractResponse
-from cyberdrop_dl.cookies import get_cookies_from_browser, make_simple_cookie, read_netscape_files
+from cyberdrop_dl.cookies import extract_cookies, make_simple_cookie, parse_cookie_jar, read_netscape_file
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, ScrapeError
-from cyberdrop_dl.logger import spacer
 from cyberdrop_dl.utils import best_match
 
 _curl_import_error = None
@@ -365,25 +364,21 @@ class HTTPClient(aio.AsyncContextManagerMixin):
             requote_redirect_url=False,
         )
 
-    async def load_cookie_files(self) -> None:
-        if self.config.cookies.auto_import:
-            assert self.config.cookies.cookies_from
-            get_cookies_from_browser(self.config.cookies.cookies_from, "")
-
-        cookie_files = sorted(appdata.get().cookies_dir.glob("*.txt"))
-        if not cookie_files:
+    async def load_cookies(self) -> None:
+        if self.config.cookies.cookies_from:
+            cookies = await extract_cookies(self.config.cookies.cookies_from)
+        elif self.config.cookies.cookies:
+            cookies = await read_netscape_file(self.config.cookies.cookies)
+        else:
+            return
+        if not cookies:
             return
 
-        async for domain, cookie in read_netscape_files(cookie_files):
+        for domain, cookie in parse_cookie_jar(cookies):
             self.cookies.update_cookies(cookie, response_url=AbsoluteHttpURL(f"https://{domain}"))
 
-        logger.info(spacer())
-
     async def check_http_status(self, response: AbstractResponse[Any], *, is_download: bool = False) -> None:
-        """Checks the HTTP status code and raises an exception if it's not acceptable.
-
-        If the response is successful and has valid html, returns soup
-        """
+        """Checks the HTTP status code and raises an exception if it's not acceptable."""
 
         if is_download and (e_tag := response.headers.get("ETag")) in _DOWNLOAD_ERROR_ETAGS:
             raise DownloadError(HTTPStatus.NOT_FOUND, message=_DOWNLOAD_ERROR_ETAGS[e_tag])
@@ -393,7 +388,7 @@ class HTTPClient(aio.AsyncContextManagerMixin):
 
         await self._check_json(response)
         await ddos_guard.check(response)
-        raise DownloadError(status=response.status)
+        raise DownloadError(response.status)
 
     async def _check_json(self, response: AbstractResponse[Any]) -> None:
         if "json" not in response.content_type:

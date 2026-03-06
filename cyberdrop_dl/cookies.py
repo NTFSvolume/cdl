@@ -22,7 +22,7 @@ from http.cookies import SimpleCookie
 from cyberdrop_dl.dependencies import browser_cookie3
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterable, Awaitable, Callable, Iterable
+    from collections.abc import Awaitable, Callable, Generator
     from pathlib import Path
 
     from cyberdrop_dl.constants import Browser
@@ -82,7 +82,7 @@ def cookie_wrapper(func: Callable[_P, Awaitable[_R]]) -> Callable[_P, Awaitable[
 
 
 @cookie_wrapper
-async def get_cookies_from_browser(browser: Browser, *domains_to_filter: str) -> MozillaCookieJar:
+async def extract_cookies(browser: Browser, *domains_to_filter: str) -> MozillaCookieJar:
     extracted_cookies = await _extract_cookies(browser)
     cookie_jar = MozillaCookieJar()
     for cookie in extracted_cookies:
@@ -97,7 +97,7 @@ async def get_cookies_from_browser(browser: Browser, *domains_to_filter: str) ->
 
 
 async def _extract_cookies(browser: Browser) -> CookieJar:
-    extract = _COOKIE_EXTRACTORS[str(browser)]
+    extract = _COOKIE_EXTRACTORS[browser]
     try:
         return await asyncio.to_thread(extract)
     except browser_cookie3.BrowserCookieError as e:
@@ -111,39 +111,32 @@ async def _extract_cookies(browser: Browser) -> CookieJar:
         raise
 
 
-async def read_netscape_files(files: Iterable[Path]) -> AsyncIterable[tuple[str, SimpleCookie]]:
+def parse_cookie_jar(cookie_jar: MozillaCookieJar) -> Generator[tuple[str, SimpleCookie]]:
     now = int(time.time())
-
     domains_seen: set[str] = set()
-    cookie_jars = await asyncio.gather(*map(_read_netscape_file, files))
-
-    for file, cookie_jar in zip(files, cookie_jars, strict=True):
-        if not cookie_jar:
+    domains: set[str] = set()
+    has_expired_cookies: set[str] = set()
+    for cookie in cookie_jar:
+        if not cookie.value:
             continue
 
-        domains: set[str] = set()
-        has_expired_cookies: set[str] = set()
-        for cookie in cookie_jar:
-            if not cookie.value:
-                continue
+        domain = cookie.domain.lstrip(".")
+        if domain not in domains:
+            logger.info(f"Found cookies for {domain}")
+            domains.add(domain)
+            if domain in domains_seen:
+                logger.warning(f"Previous cookies for {domain} detected. They will be overwritten")
 
-            domain = cookie.domain.lstrip(".")
-            if domain not in domains:
-                logger.info(f"Found cookies for {domain} in file '{file}'")
-                domains.add(domain)
-                if domain in domains_seen:
-                    logger.warning(f"Previous cookies for {domain} detected. They will be overwritten")
+        if (domain not in has_expired_cookies) and cookie.is_expired(now):
+            has_expired_cookies.add(domain)
+            logger.info(f"Cookies for {domain} are expired")
 
-            if (domain not in has_expired_cookies) and cookie.is_expired(now):
-                has_expired_cookies.add(domain)
-                logger.info(f"Cookies for {domain} are expired")
-
-            domains_seen.add(domain)
-            simple_cookie = make_simple_cookie(cookie, now)
-            yield cookie.domain, simple_cookie
+        domains_seen.add(domain)
+        simple_cookie = make_simple_cookie(cookie, now)
+        yield cookie.domain, simple_cookie
 
 
-async def _read_netscape_file(file: Path) -> MozillaCookieJar | None:
+async def read_netscape_file(file: Path) -> MozillaCookieJar | None:
     def read():
         cookie_jar = MozillaCookieJar(file)
         try:

@@ -25,7 +25,7 @@ from pydantic import (
 
 from cyberdrop_dl.compat import CIStrEnum
 from cyberdrop_dl.constants import Browser, HashAlgorithm, Hashing
-from cyberdrop_dl.models import AppriseURL, Settings, SettingsGroup
+from cyberdrop_dl.models import AliasModel, AppriseURL, SettingsGroup
 from cyberdrop_dl.models.types import (
     ByteSizeSerilized,
     HttpURL,
@@ -68,31 +68,29 @@ class _FormatValidator:
         validate_format_string(value, valid_keys)
 
 
-_cookies = Group(
-    "Cookies (choose one)",
-    default_parameter=Parameter(negative=""),
-    validator=validators.mutually_exclusive,
-)
-
-
-@Parameter(name="*", group=_cookies)
-class Cookies(Settings):
+@Parameter(name="*")
+class Cookies(
+    SettingsGroup,
+    group=Group(
+        "Cookies (choose one)",
+        default_parameter=Parameter(negative=""),
+        validator=validators.mutually_exclusive,
+    ),
+):
     cookies: Path | None = None
     "A Netscape formatted file to read cookies from"
     cookies_from: Browser | None = None
     "Automatically extract cookies from this browser"
-
-    @property
-    def auto_import(self) -> bool:
-        return bool(self.cookies_from)
 
 
 @Parameter(name="*")
 class Dedupe(SettingsGroup):
     auto_dedupe: bool = True
     "Delete duplicate files after downloads"
+
     hashes: tuple[HashAlgorithm, ...] = (HashAlgorithm.xxh128,)
     "List of hash algorithms to compute and use to compare duplicates"
+
     hashing: Hashing = Hashing.IN_PLACE
     """OFF: do not compute any hash,
     IN_PLACE: compute hash immediately after each download,
@@ -112,12 +110,16 @@ class Dedupe(SettingsGroup):
 class Downloads(SettingsGroup, _FormatValidator):
     sub_folders: bool = True
     "Allow creating nested subfolders while downloading"
+
     mtime: bool = True
     "Set file upload date as its modification time "
+
     include_album_id: bool = False
     "Include the album ID (random alphanumeric string) of the album in its folder name"
+
     include_thread_id: bool = False
     "Include the thread ID of the forum in its folder name"
+
     include_domain: bool = True
     "Include the domain of website of each download in its folder name"
 
@@ -130,10 +132,13 @@ class Downloads(SettingsGroup, _FormatValidator):
 
     skip_download: bool = False
     "Do not download any actual files"
+
     mark_completed: bool = False
     "Mark skipped files as completed on the database"
+
     max_thread_depth: NonNegativeInt = 0
     "Restricts how many levels deep the scraper is allowed to go while crawling a thread"
+
     max_thread_folder_depth: NonNegativeInt | None = None
     "Restricts the max number of nested folders CDL will create when maximum_thread_depth is greater that 0"
 
@@ -148,8 +153,10 @@ class Downloads(SettingsGroup, _FormatValidator):
 @Parameter(name="*")
 class Filesystem(SettingsGroup):
     download_folder: Annotated[Path, Parameter(alias=("--output", "-o", "-d"))] = _DEFAULT_DOWNLOAD_STORAGE
+
     dump_json: Annotated[bool, Parameter(alias="-j")] = False
     "Create a json lines files with the information about every processed file (skipped, failed or downloaded)"
+
     write_pages: bool = False
     "Save to disk a copy of every request as an html file (pages) or json (API requests)"
 
@@ -167,6 +174,7 @@ class Logs(SettingsGroup):
     webhook: Annotated[AppriseURL | None, Parameter(n_tokens=1, accepts_keys=False)] = None
     """The URL of a webhook that you want to send download stats to (Ex: Discord).
     You can add the optional tag attach_logs= as a prefix to include a copy of the main log as an attachment"""
+
     _created_at: datetime = PrivateAttr(default_factory=datetime.now)
 
     @property
@@ -464,7 +472,7 @@ class General(SettingsGroup):
 
 
 @Parameter(name="*")
-class DownloadLimits(Settings):
+class DownloadLimits(AliasModel):
     retries: Annotated[PositiveInt, Parameter(alias=("-R"))] = 2
     "The number of download attempts per file. Some conditions are never retried (such as a 404 HTTP status)"
     delay: NonNegativeFloat = 0.0
@@ -529,7 +537,7 @@ class UIMode(CIStrEnum):
     FULLSCREEN = auto()
 
 
-class UIOptions(SettingsGroup, name="UI"):
+class UIOptions(SettingsGroup, group="UI"):
     refresh_rate: Annotated[PositiveInt, Parameter(name="--refresh-rate")] = 10
     mode: UIMode = UIMode.FULLSCREEN
     portrait: Annotated[bool, Parameter(name="--portrait", negative_bool=[])] = False
@@ -537,7 +545,7 @@ class UIOptions(SettingsGroup, name="UI"):
 
 
 @Parameter(name="*")
-class GenericCrawlerInstances(SettingsGroup):
+class GenericCrawlers(SettingsGroup):
     wordpress_media: ListPydanticURL = []
     wordpress_html: ListPydanticURL = []
     discourse: ListPydanticURL = []
@@ -545,14 +553,14 @@ class GenericCrawlerInstances(SettingsGroup):
 
 
 @Parameter(name="*")
-class ConfigSettings(Settings):
+class ConfigSettings(AliasModel):
     cookies: Cookies = Cookies()
     dedupe: Dedupe = Dedupe()
     download: Downloads = Downloads()
     file_size_limits: FileSizeLimits = FileSizeLimits()
     filesystem: Filesystem = Filesystem()
     general: General = General()
-    generic_crawlers_instances: GenericCrawlerInstances = GenericCrawlerInstances()
+    generic_crawlers: GenericCrawlers = GenericCrawlers()
     ignore: Ignore = Ignore()
     jdownloader: Jdownloader = Jdownloader()
     logs: Logs = Logs()

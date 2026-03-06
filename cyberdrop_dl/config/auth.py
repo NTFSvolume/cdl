@@ -1,4 +1,4 @@
-from cyberdrop_dl.models import AliasModel, Settings
+from cyberdrop_dl.models import AliasModel
 
 
 class Coomer(AliasModel):
@@ -36,7 +36,7 @@ class RealDebrid(AliasModel):
     api_key: str = ""
 
 
-class AuthSettings(Settings):
+class AuthSettings(AliasModel):
     coomer: Coomer = Coomer()
     gofile: GoFile = GoFile()
     imgur: Imgur = Imgur()

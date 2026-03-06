@@ -14,7 +14,7 @@ from cyclopts import Parameter
 
 from cyberdrop_dl import __version__
 from cyberdrop_dl.annotations import copy_signature
-from cyberdrop_dl.config import Config, load_config
+from cyberdrop_dl.config import Config
 from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.dependencies import browser_cookie3
 from cyberdrop_dl.logger import setup_logging, spacer
@@ -145,7 +145,7 @@ async def download(
         ),
     ] = None,
     appdata_folder: Path | None = None,
-    config: Path | None = None,
+    config_file: Annotated[Path | None, Parameter(name="config")] = None,
     impersonate: (
         Literal[
             "chrome",
@@ -158,19 +158,21 @@ async def download(
         | None
     ) = None,
     print_stats: bool = False,
-    config_settings: Config = Config(),  # noqa: B008
+    cli_options: Config = Config(),  # noqa: B008
 ):
     """Scrape and download files from a list of URLs (from a file or stdin)"""
     source = links or input_file or []
-    if config:
-        config_settings = load_config(config).update(config_settings)
+    if config_file:
+        config = Config.load(config_file).update(cli_options)
+    else:
+        config = cli_options
 
     if impersonate:
         pass
     if print_stats:
         pass
 
-    manager = Manager(config_settings, appdata_folder)
+    manager = Manager(config, appdata_folder)
     with asyncio.Runner(loop_factory=_loop_factory) as runner:
         runner.run(scrape(manager, source))
 
@@ -178,7 +180,7 @@ async def download(
 @app.command()
 def show() -> None:
     """Show a list of all supported sites"""
-    from cyberdrop_dl.markdown import get_crawlers_info_as_rich_table
+    from cyberdrop_dl.supported_sites import get_crawlers_info_as_rich_table
 
     table = get_crawlers_info_as_rich_table()
     app.console.print(table)

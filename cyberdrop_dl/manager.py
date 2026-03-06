@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import csv
 import dataclasses
 import logging
 from collections import defaultdict
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Self
+from typing import TYPE_CHECKING, Any
 
-from cyberdrop_dl import __version__, ffmpeg, storage
-from cyberdrop_dl.appdata import AppData
+from cyberdrop_dl import __version__, ffmpeg
+from cyberdrop_dl.cache import Cache
 from cyberdrop_dl.clients.http import HTTPClient
 from cyberdrop_dl.config import Config
 from cyberdrop_dl.database import Database
@@ -19,10 +18,10 @@ from cyberdrop_dl.exceptions import get_origin
 from cyberdrop_dl.hasher import Hasher
 from cyberdrop_dl.scrape_mapper import ScrapeMapper
 from cyberdrop_dl.tui import TUI
-from cyberdrop_dl.utils import filepath, get_system_information, json
+from cyberdrop_dl.utils import get_system_information, json
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Iterable
+    from collections.abc import Iterable
 
     from yarl import URL
 
@@ -30,57 +29,25 @@ if TYPE_CHECKING:
 
 
 _CSV_DELIMITER = ","
-_file_locks: defaultdict[Path, asyncio.Lock] = defaultdict(asyncio.Lock)
-
-
-@dataclasses.dataclass(slots=True)
-class Events:
-    SHUTTING_DOWN: asyncio.Event = dataclasses.field(init=False, default_factory=asyncio.Event)
-    RUNNING: asyncio.Event = dataclasses.field(init=False, default_factory=asyncio.Event)
 
 
 logger = logging.getLogger(__name__)
 
 
 class Manager:
-    def __init__(self, config: Config | None = None, app_data: Path | None = None) -> None:
+    def __init__(self, config: Config | None = None, app_data: AppData | Path | None = None) -> None:
         config = config or Config()
         self.config: Config = config
-        self.app_data: AppData = AppData((app_data or Path("/app_data")).resolve())
+        self.app_data: AppData = AppData((Path(app_data or "/app_data")).resolve())
         self.database: Database = Database(self.app_data.db_file, config.runtime.ignore_history)
         self.client: HTTPClient = HTTPClient.from_config(config)
         self.hasher: Hasher = Hasher.from_manager(self)
         self.tui: TUI = TUI.from_config(config)
         self.task_group: asyncio.TaskGroup = asyncio.TaskGroup()
         self.scrape_mapper: ScrapeMapper = ScrapeMapper(self)
-        self._states: Events | None = None
         self.logs: LogsManager = LogsManager(config, self.task_group)
         self.downloader: DownloadManager = DownloadManager.from_manager(self)
-
-    @property
-    def states(self) -> Events:
-        if self._states is None:
-            self._states = Events()
-        return self._states
-
-    @contextlib.asynccontextmanager
-    async def _asyncctx_(self) -> AsyncGenerator[Self]:
-        """Async startup process for the manager."""
-
-        _ = filepath.MAX_FILE_LEN.set(self.config.general.max_file_name_length)
-        _ = filepath.MAX_FOLDER_LEN.set(self.config.general.max_folder_name_length)
-
-        logger.info("Starting Async Processes...")
-        async with (
-            self.task_group,
-            self.client,  # TODO: with database
-            storage.monitor(self.config.general.required_free_space),
-        ):
-            self.log_app_state()
-            await self.client.load_cookie_files()
-            logger.info("Starting CDL...\n")
-            with self.tui(screen="scraping"):
-                yield self
+        self.cache: Cache = Cache(self.app_data.cache_file)
 
     def log_app_state(self) -> None:
         auth = {site: all(credentials.values()) for site, credentials in self.config.auth.model_dump().items()}
@@ -104,14 +71,17 @@ class LogsManager:
     config: Config
     task_group: asyncio.TaskGroup = dataclasses.field(repr=False)
     _has_headers: set[Path] = dataclasses.field(init=False, default_factory=set)
+    _locks: defaultdict[Path, asyncio.Lock] = dataclasses.field(
+        init=False, default_factory=lambda: defaultdict(asyncio.Lock)
+    )
 
     async def write_jsonl(self, data: Iterable[dict[str, Any]]) -> None:
-        async with _file_locks[self.config.logs.jsonl_file]:
+        async with self._locks[self.config.logs.jsonl_file]:
             await asyncio.to_thread(json.dump_jsonl, data, self.config.logs.jsonl_file)
 
     async def _write_to_csv(self, file: Path, **kwargs: Any) -> None:
         """Write to the specified csv file. kwargs are columns for the CSV."""
-        async with _file_locks[file]:
+        async with self._locks[file]:
             is_first_write = file not in self._has_headers
             self._has_headers.add(file)
 
@@ -129,9 +99,6 @@ class LogsManager:
                     writer.writerow(kwargs)
 
             await asyncio.to_thread(write)
-
-    def write_last_post_log(self, url: URL) -> None:
-        _ = self.task_group.create_task(self._write_to_csv(self.config.logs.last_forum_post, url=url))
 
     def write_unsupported(self, url: URL, origin: ScrapeItem | URL | None = None) -> None:
         _ = self.task_group.create_task(
@@ -158,3 +125,26 @@ class LogsManager:
                 origin=origin,
             )
         )
+
+
+@dataclasses.dataclass(slots=True)
+class AppData:
+    path: Path
+    cache_file: Path = dataclasses.field(init=False)
+    default_config: Path = dataclasses.field(init=False)
+    db_file: Path = dataclasses.field(init=False)
+
+    def __post_init__(self) -> None:
+        self.cache_file = self.path / "cache.yaml"
+        self.default_config = self.path / "config.yaml"
+        self.db_file = self.path / "cyberdrop.db"
+
+    def __fspath__(self) -> str:
+        return str(self)
+
+    def __str__(self) -> str:
+        return str(self.path)
+
+    def mkdirs(self) -> None:
+        for dir in (self.path,):
+            dir.mkdir(parents=True, exist_ok=True)

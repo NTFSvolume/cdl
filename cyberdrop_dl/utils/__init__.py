@@ -200,7 +200,7 @@ def _get_size(path: os.DirEntry[str]) -> int | None:
 
 
 def best_match(host: str, domains: dict[str, _T]) -> _T | None:
-    """Get the value whose key is is the longest substring of `domain`
+    """Get the value whose key is is the longest substring of `host`
 
     If found, a key is added to make the next lookup is O(1)"""
     if found := domains.get(host):

@@ -5,6 +5,8 @@ from contextvars import ContextVar, Token
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, ClassVar, Self
 
+from cyclopts.bind import normalize_tokens
+from cyclopts.core import App
 from cyclopts.parameter import Parameter
 from pydantic import BaseModel
 
@@ -16,7 +18,6 @@ from cyberdrop_dl.models import get_model_fields, merge_models
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from cyclopts import App
     from cyclopts.argument import ArgumentCollection
 
 _config: ContextVar[Config] = ContextVar("_config")
@@ -63,24 +64,24 @@ class Config(ConfigSettings):
     def update(self, other: Self) -> Self:
         return merge_models(self, other)
 
+    @classmethod
+    def load(cls, file: Path) -> Config:
+        default = cls()
+        if not file.is_file():
+            config = default
+            overwrite = True
 
-def load_config(file: Path) -> Config:
-    default = Config()
-    if not file.is_file():
-        config = default
-        overwrite = True
+        else:
+            all_fields = get_model_fields(default, exclude_unset=False)
+            config = cls.model_validate(yaml.load(file))
+            set_fields = get_model_fields(config)
+            overwrite = all_fields != set_fields
 
-    else:
-        all_fields = get_model_fields(default, exclude_unset=False)
-        config = Config.model_validate(yaml.load(file))
-        set_fields = get_model_fields(config)
-        overwrite = all_fields != set_fields
+        if overwrite:
+            config.save(file)
 
-    if overwrite:
-        config.save(file)
-
-    config._source = file  # pyright: ignore[reportPrivateUsage]
-    return config
+        config._source = file
+        return config
 
 
 def get() -> Config:
@@ -100,7 +101,7 @@ def add_or_remove_lists(cli_values: list[str], config_values: list[str]) -> None
             cli_values.extend(sorted(new_values_set - exclude))
 
 
-def coerce(*, config: Config) -> Config:
+def _coerce(*, config: Config) -> Config:
     return config
 
 
@@ -112,21 +113,17 @@ class _ConfigParser:
     _instance: ClassVar[_ConfigParser | None] = None
 
     def __new__(cls) -> _ConfigParser:
-        from cyclopts import App
-
         if cls._instance is None:
             cls._instance = self = super().__new__(cls)
             self.app = App(print_error=False, exit_on_error=False)
-            _ = self.app.default()(coerce)
+            _ = self.app.command(name="coerce")(_coerce)
             self.args = self.app.assemble_argument_collection()
         return cls._instance
 
     def __call__(self, tokens: str | Iterable[str]) -> Config:
-        from cyclopts.bind import normalize_tokens
-
         fn, bound, *_ = self.app.parse_args(["coerce", *normalize_tokens(tokens)])  # pyright: ignore[reportUnknownMemberType]
-        assert fn is coerce
-        return coerce(*bound.args, **bound.kwargs)
+        assert fn is _coerce
+        return _coerce(*bound.args, **bound.kwargs)
 
 
 def parse_args(tokens: str | Iterable[str]) -> Config:

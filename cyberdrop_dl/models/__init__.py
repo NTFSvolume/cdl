@@ -14,13 +14,10 @@ _ModelT = TypeVar("_ModelT", bound=BaseModel)
 class AliasModel(BaseModel, populate_by_name=True, defer_build=True): ...
 
 
-class Settings(AliasModel): ...
-
-
-class SettingsGroup(Settings):
-    def __init_subclass__(cls, name: str | None = None, **kwargs: Any) -> None:
-        _ = Parameter(group=name or cls.__name__)(cls)
-        return super().__init_subclass__(**kwargs)
+class SettingsGroup(AliasModel):
+    def __init_subclass__(cls, group: str | None = None) -> None:
+        _ = Parameter(group=group or cls.__name__)(cls)
+        return super().__init_subclass__()
 
 
 class SequenceModel(RootModel[list[_ModelT]], Sequence[_ModelT]):
