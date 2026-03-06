@@ -174,7 +174,7 @@ class Logs(SettingsGroup):
     webhook: Annotated[AppriseURL | None, Parameter(n_tokens=1, accepts_keys=False)] = None
     """The URL of a webhook that you want to send download stats to (Ex: Discord).
     You can add the optional tag attach_logs= as a prefix to include a copy of the main log as an attachment"""
-
+    apprise_urls: Annotated[list[AppriseURL], Parameter(show=False)] = []
     _created_at: datetime = PrivateAttr(default_factory=datetime.now)
 
     @property

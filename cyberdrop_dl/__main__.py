@@ -15,11 +15,11 @@ from cyberdrop_dl import __version__
 from cyberdrop_dl.annotations import copy_signature
 from cyberdrop_dl.config import Config
 from cyberdrop_dl.data_structures import AbsoluteHttpURL
-from cyberdrop_dl.logger import setup_logging, spacer
+from cyberdrop_dl.logger import capture_logs, setup_logging, spacer
 from cyberdrop_dl.manager import Manager
 from cyberdrop_dl.models import format_validation_error
 from cyberdrop_dl.models.types import HttpURL
-from cyberdrop_dl.notifications import send_apprise_notifications, send_webhook_notification
+from cyberdrop_dl.notifications import send_notifications
 from cyberdrop_dl.sorting import Sorter
 from cyberdrop_dl.updates import check_latest_pypi
 from cyberdrop_dl.utils import check_partials_and_empty_folders
@@ -35,9 +35,8 @@ install(width=200)
 
 async def scrape(manager: Manager, source: Iterable[AbsoluteHttpURL] | Path) -> None:
     manager.config.resolve_paths()
-    main_log = manager.config.logs.main_log
     with setup_logging(
-        main_log,
+        manager.config.logs.main_log,
         level=manager.config.runtime.log_level,
         console_level=manager.config.runtime.log_level,
     ):
@@ -45,9 +44,11 @@ async def scrape(manager: Manager, source: Iterable[AbsoluteHttpURL] | Path) -> 
             await scrapper.run(source)
 
         await _post_runtime(manager)
-        if manager.config.ui.show_stats:
-            manager.tui.show_stats(scrapper.stats)
+        with capture_logs() as export:
+            if manager.config.ui.show_stats:
+                manager.tui.show_stats(scrapper.stats)
 
+        stats = export()
         logger.info(spacer())
 
         async with manager.client.create_aiohttp_session() as session:
@@ -56,9 +57,7 @@ async def scrape(manager: Manager, source: Iterable[AbsoluteHttpURL] | Path) -> 
             logger.info("Closing program...")
             logger.info("Finished downloading. Enjoy :)", extra={"color": "green"})
 
-            if webhook := manager.config.logs.webhook:
-                await send_webhook_notification(session, webhook, main_log)
-            await send_apprise_notifications("TODO: cappture contetx from stats", main_log=main_log)
+        await send_notifications(manager, stats)
 
 
 async def _post_runtime(manager: Manager) -> None:
