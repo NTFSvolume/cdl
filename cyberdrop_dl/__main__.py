@@ -3,7 +3,6 @@ import datetime
 import functools
 import logging
 import sys
-import time
 from collections.abc import Callable, Coroutine, Iterable
 from pathlib import Path
 from typing import Annotated, Literal, ParamSpec, TypeVar
@@ -60,17 +59,17 @@ def _task_group_error_wrapper(
 async def scrape(manager: Manager, source: Iterable[AbsoluteHttpURL] | Path) -> None:
     manager.config.resolve_paths()
     main_log = manager.config.logs.main_log
-    start_time = time.monotonic()
     with setup_logging(
         main_log,
         level=manager.config.runtime.log_level,
         console_level=manager.config.runtime.console_log_level,
     ):
         async with manager.scrape_mapper as scrapper:
-            _stats = await scrapper.run(source)
+            await scrapper.run(source)
 
         await _post_runtime(manager)
-        manager.tui.show_stats(start_time)
+        if manager.config.ui.show_stats:
+            manager.tui.show_stats(scrapper.stats)
 
         logger.info(spacer())
 

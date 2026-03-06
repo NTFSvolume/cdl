@@ -252,7 +252,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         self._ready: bool = False
 
         self.logged_in: bool = False
-        self._scraped_items: set[str] = set()
+        self.scraped_items: set[str] = set()
         self.logger = CrawlerLogger(self)
         self._semaphore = asyncio.Semaphore(20)
         self.__post_init__()
@@ -449,11 +449,11 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
             with scrape_item.track_changes():
                 scrape_item.url = url = self.transform_url(scrape_item.url)
 
-            if url.path_qs in self._scraped_items:
+            if url.path_qs in self.scraped_items:
                 self.logger.info(f"Skipping {url} as it has already been scraped")
                 return
 
-            self._scraped_items.add(url.path_qs)
+            self.scraped_items.add(url.path_qs)
             with self.new_task_id(scrape_item.url):
                 try:
                     if not self.ALLOW_EMPTY_PATH and scrape_item.url.path == "/":

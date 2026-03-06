@@ -537,11 +537,14 @@ class UIMode(CIStrEnum):
     FULLSCREEN = auto()
 
 
+@Parameter(name="*")
 class UIOptions(SettingsGroup, group="UI"):
-    refresh_rate: Annotated[PositiveInt, Parameter(name="--refresh-rate")] = 10
-    mode: UIMode = UIMode.FULLSCREEN
-    portrait: Annotated[bool, Parameter(name="--portrait", negative_bool=[])] = False
+    refresh_rate: PositiveInt = 10
+    mode: Annotated[UIMode, Parameter(name="--ui")] = UIMode.FULLSCREEN
+
+    portrait: Annotated[bool, Parameter(negative_bool=[])] = False
     "Force a portrait layout for the UI (default is to auto rotate)"
+    show_stats: bool
 
 
 @Parameter(name="*")

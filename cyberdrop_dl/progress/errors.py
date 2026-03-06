@@ -40,13 +40,13 @@ class _ErrorsPanel(UIComponent):
     )
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}(error_count={self._error_count!r}, errors={tuple(self._errors)!r})"
+        return f"{type(self).__name__}(error_count={self.error_count!r}, errors={tuple(self._errors)!r})"
 
     def __init__(self) -> None:
         super().__init__()
         self._title: str = type(self).__name__.removesuffix("Errors") + " Failures"
         self._errors: dict[str, TaskID] = {}
-        self._error_count: int = 0
+        self.error_count: int = 0
         self._panel: Panel = Panel(
             self._progress,
             title=self._title,
@@ -60,22 +60,22 @@ class _ErrorsPanel(UIComponent):
 
     @property
     def _subtitle(self) -> str:
-        return f"Total {self._title}: [white]{self._error_count:,}"
+        return f"Total {self._title}: [white]{self.error_count:,}"
 
     def add(self, error: str) -> None:
-        self._error_count += 1
+        self.error_count += 1
         name = _get_pretty_error(error)
         if (task_id := self._errors.get(name)) is not None:
             self._progress.advance(task_id)
         else:
-            self._errors[name] = self._progress.add_task(name, total=self._error_count, completed=1)
+            self._errors[name] = self._progress.add_task(name, total=self.error_count, completed=1)
 
         self._redraw()
 
     def _redraw(self) -> None:
         self._panel.subtitle = self._subtitle
         for task_id in self._errors.values():
-            self._progress.update(task_id, total=self._error_count)
+            self._progress.update(task_id, total=self.error_count)
 
         tasks = self._progress.tasks
         tasks_sorted = sorted(tasks, key=lambda x: x.completed, reverse=True)
@@ -105,15 +105,15 @@ class ScrapeErrors(_ErrorsPanel):
     def __init__(self) -> None:
         super().__init__()
         self._unsupported: int = 0
-        self._sent_to_jdownloader: int = 0
-        self._skipped: int = 0
+        self.sent_to_jdownloader: int = 0
+        self.skipped: int = 0
 
     def add_unsupported(self, *, sent_to_jdownloader: bool = False) -> None:
         self._unsupported += 1
         if sent_to_jdownloader:
-            self._sent_to_jdownloader += 1
+            self.sent_to_jdownloader += 1
         else:
-            self._skipped += 1
+            self.skipped += 1
 
 
 @functools.cache

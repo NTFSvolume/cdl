@@ -6,7 +6,7 @@ from typing_extensions import override
 
 from cyberdrop_dl import constants
 from cyberdrop_dl.crawlers import Crawler
-from cyberdrop_dl.exceptions import NoExtensionError
+from cyberdrop_dl.exceptions import NoExtensionError, ScrapeError
 from cyberdrop_dl.utils.filepath import get_filename_and_ext
 
 if TYPE_CHECKING:
@@ -40,3 +40,9 @@ class DirectHTTPFile(Crawler, is_generic=True):
             ext,
             custom_filename=filename,
         )
+
+    @override
+    def handle_error(self, scrape_item: ScrapeItem, exc: type[Exception] | Exception | str) -> None:  # pyright: ignore[reportIncompatibleMethodOverride]
+        if isinstance(exc, str):
+            exc = ScrapeError(exc)
+        raise exc

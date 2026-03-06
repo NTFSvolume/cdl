@@ -6,7 +6,7 @@ import dataclasses
 import datetime
 import logging
 import re
-from collections import defaultdict
+import time
 from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Self, TypeVar
@@ -14,19 +14,19 @@ from typing import TYPE_CHECKING, Any, Literal, Self, TypeVar
 from cyberdrop_dl import aio, plugins, storage
 from cyberdrop_dl.client.jdownloader import JDownloader
 from cyberdrop_dl.constants import REGEX_LINKS, BlockedDomains
-from cyberdrop_dl.crawlers import create_crawlers
+from cyberdrop_dl.crawlers import Crawler, create_crawlers
 from cyberdrop_dl.crawlers._chevereto import CheveretoCrawler
 from cyberdrop_dl.crawlers.discourse import DiscourseCrawler
 from cyberdrop_dl.crawlers.http_direct import DirectHTTPFile
 from cyberdrop_dl.crawlers.realdebrid import RealDebridCrawler
 from cyberdrop_dl.crawlers.wordpress import WordPressHTMLCrawler, WordPressMediaCrawler
 from cyberdrop_dl.data_structures import AbsoluteHttpURL, ScrapeItem
-from cyberdrop_dl.exceptions import JDownloaderError, NoExtensionError
+from cyberdrop_dl.exceptions import JDownloaderError, NoExtensionError, ScrapeError
 from cyberdrop_dl.logger import spacer
 from cyberdrop_dl.utils import best_match, filepath, get_download_path, parse_url, remove_trailing_slash
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Coroutine, Generator, Iterable
+    from collections.abc import AsyncGenerator, Coroutine, Generator, Iterable, Iterator
 
     import aiosqlite
 
@@ -52,7 +52,7 @@ def filter_by_date(scrape_item: ScrapeItem, before: datetime.date | None, after:
     return after < date < before
 
 
-def filter_by_domain(scrape_item: ScrapeItem, domains: Iterable[str]) -> bool:
+def _filter_by_domain(scrape_item: ScrapeItem, domains: Iterable[str]) -> bool:
     return any(domain in scrape_item.url.host for domain in domains)
 
 
@@ -73,28 +73,36 @@ class CrawlerFactory:
     def get(self, obj: type[CrawlerT]) -> CrawlerT | None:
         return self._instances.get(obj)  # pyright: ignore[reportReturnType]
 
+    def __iter__(self) -> Iterator[Crawler]:
+        return iter(self._instances.values())
+
 
 @dataclasses.dataclass(slots=True)
 class ScrapeStats:
+    source: Path | None = None
     count: int = dataclasses.field(init=False, default=0)
     groups: list[str] = dataclasses.field(init=False, default_factory=list)
-    url_count: dict[str, int] = dataclasses.field(init=False, default_factory=lambda: defaultdict(int))
+    url_count: dict[str, int] = dataclasses.field(init=False, default_factory=dict)
+    start_time: float = dataclasses.field(init=False, default_factory=time.monotonic)
 
     @property
     def unique_groups(self) -> list[str]:
         return list(dict.fromkeys(self.groups))
 
+    @property
+    def domain_stats(self) -> dict[str, int]:
+        return dict(sorted(self.url_count.items(), key=lambda x: x[1]))
+
     def update(self, item: ScrapeItem) -> None:
         self.count += 1
         if item.parent_title:
             self.groups.append(item.parent_title)
-        self.url_count[item.url.host] += 1
 
 
-def parse_input(source: Iterable[AbsoluteHttpURL] | Path) -> AsyncGenerator[ScrapeItem]:
+def parse_input(source: Iterable[AbsoluteHttpURL] | Path) -> tuple[ScrapeStats, AsyncGenerator[ScrapeItem]]:
     if isinstance(source, Path):
-        return from_file(source)
-    return from_urls(source)
+        return ScrapeStats(source), from_file(source)
+    return ScrapeStats(), from_urls(source)
 
 
 async def from_urls(source: Iterable[AbsoluteHttpURL]) -> AsyncGenerator[ScrapeItem, None]:
@@ -157,12 +165,18 @@ class ScrapeMapper(aio.AsyncContextManagerMixin):
         self.manager: Manager = manager
         self.config: Config = manager.config
         self.crawlers: dict[str, type[Crawler]] = {}
-        self.factory: CrawlerFactory = CrawlerFactory(manager)
-        self.direct_http: DirectHTTPFile = DirectHTTPFile(manager)
+        self._factory: CrawlerFactory = CrawlerFactory(manager)
+        self.direct_http: DirectHTTPFile = self._factory[DirectHTTPFile]
         self.jdownloader: JDownloader = JDownloader.from_config(self.config)
         self.crawlers["real-debrid"] = RealDebridCrawler
-        self.real_debrid: RealDebridCrawler = self.factory[RealDebridCrawler]
+        self.real_debrid: RealDebridCrawler = self._factory[RealDebridCrawler]
         self._ready: bool = False
+        self._stats: ScrapeStats
+
+    @property
+    def stats(self) -> ScrapeStats:
+        self._stats.url_count.update((crawler.DOMAIN, len(crawler.scraped_items)) for crawler in self._factory)
+        return self._stats
 
     @contextlib.asynccontextmanager
     async def _asyncctx_(self) -> AsyncGenerator[Self]:
@@ -198,27 +212,29 @@ class ScrapeMapper(aio.AsyncContextManagerMixin):
         _ = await asyncio.gather(self.jdownloader.ready(), self.real_debrid.ready(), self.direct_http.ready())
         self._ready = True
 
-    async def run(self, source: Iterable[AbsoluteHttpURL] | Path) -> ScrapeStats:
+    async def run(self, source: Iterable[AbsoluteHttpURL] | Path) -> None:
         """Starts the orchestra."""
         await self.ready()
-        stats = ScrapeStats()
-        async for item in parse_input(source):
-            stats.update(item)
-            item._children_limits = self.config.download.max_children
-            self._create_task(self.filter_and_send_to_crawler(item))
-        return stats
+        self._stats, items = parse_input(source)
+        try:
+            async for item in items:
+                self._stats.update(item)
+                item._children_limits = self.config.download.max_children
+                self._create_task(self.filter_and_send_to_crawler(item))
+        finally:
+            await items.aclose()
 
     async def filter_and_send_to_crawler(self, scrape_item: ScrapeItem) -> None:
         """Send scrape_item to a supported crawler."""
-        if self.should_scrape(scrape_item):
-            await self.send_to_crawler(scrape_item)
+        if self._should_scrape(scrape_item):
+            await self._send_to_crawler(scrape_item)
 
-    async def send_to_crawler(self, scrape_item: ScrapeItem) -> None:
+    async def _send_to_crawler(self, scrape_item: ScrapeItem) -> None:
         """Maps URLs to their respective handlers."""
         scrape_item.url = remove_trailing_slash(scrape_item.url)
 
         if cls := best_match(scrape_item.url.host, self.crawlers):
-            crawler = self.factory[cls]
+            crawler = self._factory[cls]
             await crawler.ready()
             self._create_task(crawler.run(scrape_item))
             return
@@ -229,28 +245,30 @@ class ScrapeMapper(aio.AsyncContextManagerMixin):
             return
 
         try:
-            await self.direct_http.fetch(scrape_item)
-            return
-
-        except (NoExtensionError, ValueError):
+            await self.direct_http.run(scrape_item)
+        except (NoExtensionError, ValueError, ScrapeError):
             pass
+        else:
+            return
 
         if self.jdownloader.enabled and self.jdownloader.is_whitelisted(scrape_item.url):
             logger.info(f"Sending unsupported URL to JDownloader: {scrape_item.url}")
+            download_folder = get_download_path(self.manager, scrape_item, "jdownloader")
+            relative_download_dir = download_folder.relative_to(self.config.filesystem.download_folder)
 
             try:
-                download_folder = get_download_path(self.manager, scrape_item, "jdownloader")
-                relative_download_dir = download_folder.relative_to(self.config.filesystem.download_folder)
                 await self.jdownloader.send(
                     scrape_item.url,
                     scrape_item.parent_title,
                     relative_download_dir,
                 )
-                success = True
+
             except JDownloaderError as e:
                 logger.error(f"Failed to send {scrape_item.url} to JDownloader\n{e.message}")
                 self.manager.logs.write_unsupported(scrape_item.url, scrape_item)
                 success = False
+            else:
+                success = True
 
             self.manager.tui.scrape_errors.add_unsupported(sent_to_jdownloader=success)
             return
@@ -259,7 +277,7 @@ class ScrapeMapper(aio.AsyncContextManagerMixin):
         self.manager.logs.write_unsupported(scrape_item.url, scrape_item)
         self.manager.tui.scrape_errors.add_unsupported()
 
-    def should_scrape(self, scrape_item: ScrapeItem) -> bool:
+    def _should_scrape(self, scrape_item: ScrapeItem) -> bool:
         """Pre-filter scrape items base on URL."""
 
         if scrape_item.url in _seen_urls:
@@ -268,19 +286,17 @@ class ScrapeMapper(aio.AsyncContextManagerMixin):
         _seen_urls.add(scrape_item.url)
 
         if (
-            filter_by_domain(scrape_item, BlockedDomains.partial_match)
+            _filter_by_domain(scrape_item, BlockedDomains.partial_match)
             or scrape_item.url.host in BlockedDomains.exact_match
         ):
             logger.info(f"Skipping {scrape_item.url} as it is a blocked domain")
             return False
 
-        skip_hosts = self.config.ignore.skip_hosts
-        if skip_hosts and filter_by_domain(scrape_item, skip_hosts):
+        if (skip_hosts := self.config.ignore.skip_hosts) and _filter_by_domain(scrape_item, skip_hosts):
             logger.info(f"Skipping URL by skip_hosts config: {scrape_item.url}")
             return False
 
-        only_hosts = self.config.ignore.only_hosts
-        if only_hosts and not filter_by_domain(scrape_item, only_hosts):
+        if (only_hosts := self.config.ignore.only_hosts) and not _filter_by_domain(scrape_item, only_hosts):
             logger.info(f"Skipping URL by only_hosts config: {scrape_item.url}")
             return False
 
@@ -308,7 +324,7 @@ class ScrapeMapper(aio.AsyncContextManagerMixin):
 
         crawler.disabled = True
         _crawlers_disabled_at_runtime.add(domain)
-        if instance := self.factory.get(crawler):
+        if instance := self._factory.get(crawler):
             instance.disabled = True
         return crawler
 

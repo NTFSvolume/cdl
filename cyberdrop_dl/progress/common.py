@@ -23,10 +23,6 @@ if TYPE_CHECKING:
 _COLOR: str = "plum3"
 
 
-def _truncate(s: str, length: int = 40, placeholder: str = "...") -> str:
-    return f"{s[: length - len(placeholder)]}{placeholder}" if len(s) >= length else s.ljust(length)
-
-
 @dataclasses.dataclass(slots=True, order=True)
 class TaskCounter:
     id: TaskID
@@ -114,7 +110,6 @@ class UIComponent(RichProxy, ABC):
     @classmethod
     def _escape(cls, desc: str) -> str:
         return escape(desc)
-        # return escape(_truncate(desc.encode("ascii", "ignore").decode().strip()))
 
     def _clean_task_description(self, description: object, /) -> object:
         return description

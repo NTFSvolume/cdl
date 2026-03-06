@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import dataclasses
-import itertools
+import json
 import logging
 import time
 from contextvars import ContextVar
@@ -13,7 +13,6 @@ from pydantic import ByteSize
 from rich.console import Group
 from rich.layout import Layout
 from rich.live import Live
-from rich.text import Text
 
 from cyberdrop_dl.constants import HashAlgorithm
 from cyberdrop_dl.logger import spacer
@@ -27,10 +26,11 @@ from cyberdrop_dl.progress.screens import AppScreens, Screen
 from cyberdrop_dl.progress.sorting import SortingPanel
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Generator, Sequence
     from pathlib import Path
 
     from cyberdrop_dl.config import Config
+    from cyberdrop_dl.scrape_mapper import ScrapeStats
 
 __all__ = ["TUI", "ProgressHook"]
 logger = logging.getLogger(__name__)
@@ -92,21 +92,23 @@ class TUI:
                 self._current_screen = ""
                 self._live.stop()
 
-    def show_stats(self, start_time: float) -> None:
+    def show_stats(self, stats: ScrapeStats) -> None:
         """Prints the stats of the program."""
-        # if not self.manager.parsed_args.cli_only_args.print_stats:
-        #    return
 
-        runtime = timedelta(seconds=int(time.monotonic() - start_time))
+        runtime = timedelta(seconds=int(time.monotonic() - stats.start_time))
         total_data_written = ByteSize(self.downloads.total_data_written).human_readable(decimal=True)
 
         logger.info(spacer())
         logger.info("Printing Stats...\n")
         logger.info("Run Stats")
-        # logger.info(f"  Input File: {config.get().source}")
-        # logger.info(f"  Input URLs: {self.manager.scrape_mapper.count:,}")
-        # logger.info(f"  Input URL Groups: {self.manager.scrape_mapper.group_count:,}")
-        # logger.info(f"  Log Folder: {log_folder_text}")
+
+        source = _hyperlink(stats.source) if stats.source else "--links"
+        logger.info(f"  Input File: {source}", extra={"markup": True})
+        logger.info(f"  Input URLs: {stats.count:,}")
+        logger.info(f"  Input URL Groups: {len(stats.unique_groups):,}")
+
+        url_stats = json.dumps(stats.domain_stats, indent=2, ensure_ascii=False)
+        logger.info(f"  Input URL Stats: \n{url_stats:,}")
         logger.info(f"  Total Runtime: {runtime}")
         logger.info(f"  Total Downloaded Data: {total_data_written}")
 
@@ -114,11 +116,11 @@ class TUI:
         logger.info(f"  Downloaded: {self.files.completed_files:,} files")
         logger.info(f"  Skipped (By Config): {self.files.skipped_files:,} files")
         logger.info(f"  Skipped (Previously Downloaded): {self.files.previously_completed:,} files")
-        logger.info(f"  Failed: {self.download_errors._error_count:,} files")
+        logger.info(f"  Failed: {self.download_errors.error_count:,} files")
 
         logger.info("Unsupported URLs Stats:")
-        logger.info(f"  Sent to Jdownloader: {self.scrape_errors._sent_to_jdownloader:,}")
-        logger.info(f"  Skipped: {self.scrape_errors._skipped:,}")
+        logger.info(f"  Sent to Jdownloader: {self.scrape_errors.sent_to_jdownloader:,}")
+        logger.info(f"  Skipped: {self.scrape_errors.skipped:,}")
 
         self.print_dedupe_stats()
 
@@ -135,6 +137,36 @@ class TUI:
         logger.info(f"  Newly Hashed: {self.hashing.hashed_files:,} files")
         logger.info(f"  Previously Hashed: {self.hashing.prev_hashed_files:,} files")
         logger.info(f"  Removed (Downloads): {self.hashing.removed_files:,} files")
+
+
+def _log_errors(scrape_errors: Sequence[UIFailure], download_errors: Sequence[UIFailure]) -> None:
+    error_codes = (error.code for error in (*scrape_errors, *download_errors) if error.code is not None)
+    padding = 2
+    try:
+        padding += len(str(max(error_codes)))
+    except ValueError:
+        pass
+
+    for title, errors in (
+        ("Scrape Failures:", scrape_errors),
+        ("Download Failures:", download_errors),
+    ):
+        logger.info(title)
+        if not errors:
+            logger.info(f"{'None':>{padding}}")
+            return
+
+        for error in scrape_errors:
+            error_code = error.code if error.code is not None else ""
+            logger.info(f"{error_code:>{padding}}{' ' if padding > 2 else ''}{error.msg}: {error.count:,}")
+
+
+def _hyperlink(file_path: Path, text: str | None = None) -> str:
+    return f"[link={file_path.as_uri()}]{text or file_path}[/link]"
+
+
+def show_msg(msg: object):
+    return _tui.get().status(str(msg))
 
 
 def _create_screens(tui: TUI) -> AppScreens:
@@ -164,32 +196,3 @@ def _create_screens(tui: TUI) -> AppScreens:
         hashing=Screen(tui.hashing),
         sorting=Screen(tui.sorting),
     )
-
-
-def _log_errors(scrape_errors: list[UIFailure], download_errors: list[UIFailure]) -> None:
-    error_codes = (error.code for error in itertools.chain(scrape_errors, download_errors) if error.code is not None)
-    try:
-        padding = len(str(max(error_codes)))
-    except ValueError:
-        padding = 0
-
-    def log(name: str, errors: list[UIFailure]) -> None:
-        logger.info(name)
-        if not errors:
-            logger.info(f"  {'None':>{padding}}")
-            return
-
-        for error in scrape_errors:
-            error_code = error.code if error.code is not None else ""
-            logger.info(f"  {error_code:>{padding}}{' ' if padding else ''}{error.msg}: {error.count:,}")
-
-    log("Scrape Failures:", scrape_errors)
-    log("Download Failures:", download_errors)
-
-
-def _create_hyperlink(file_path: Path, text: str | None = None) -> Text:
-    return Text(text or str(file_path), style=f"link {file_path.as_uri()}")
-
-
-def show_msg(msg: object):
-    return _tui.get().status(str(msg))
