@@ -1,21 +1,20 @@
 import asyncio
 import datetime
-import functools
 import logging
 import sys
-from collections.abc import Callable, Coroutine, Iterable
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Annotated, Literal, ParamSpec, TypeVar
 
 import cyclopts
 import pydantic
 from cyclopts import Parameter
+from rich.traceback import install
 
 from cyberdrop_dl import __version__
 from cyberdrop_dl.annotations import copy_signature
 from cyberdrop_dl.config import Config
 from cyberdrop_dl.data_structures import AbsoluteHttpURL
-from cyberdrop_dl.dependencies import browser_cookie3
 from cyberdrop_dl.logger import setup_logging, spacer
 from cyberdrop_dl.manager import Manager
 from cyberdrop_dl.models import format_validation_error
@@ -31,38 +30,16 @@ _R = TypeVar("_R")
 
 logger = logging.getLogger(__name__)
 
-
-def _task_group_error_wrapper(
-    func: Callable[_P, Coroutine[None, None, _R]],
-) -> Callable[_P, Coroutine[None, None, _R | None]]:
-    """Wrapper handles errors from the main UI."""
-
-    @functools.wraps(func)
-    async def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R | None:
-        try:
-            return await func(*args, **kwargs)
-        except* Exception as e:
-            exceptions = e.exceptions
-            if not isinstance(exceptions[0], browser_cookie3.BrowserCookieError):
-                logger.critical(
-                    "An error occurred, please report this to the developer with your logs file:",
-                    extra={"color": "red"},
-                )
-
-            for exc in exceptions:
-                logger.critical(e, exc_info=exc)
-
-    return wrapper
+install(width=200)
 
 
-@_task_group_error_wrapper
 async def scrape(manager: Manager, source: Iterable[AbsoluteHttpURL] | Path) -> None:
     manager.config.resolve_paths()
     main_log = manager.config.logs.main_log
     with setup_logging(
         main_log,
         level=manager.config.runtime.log_level,
-        console_level=manager.config.runtime.console_log_level,
+        console_level=manager.config.runtime.log_level,
     ):
         async with manager.scrape_mapper as scrapper:
             await scrapper.run(source)
@@ -125,7 +102,7 @@ app = App(
 
 
 @app.command()
-async def download(
+def download(
     links: Annotated[
         list[HttpURL] | None,
         Parameter(

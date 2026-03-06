@@ -87,7 +87,7 @@ class DownloadManager:
 
     def __post_init__(self) -> None:
         self.speed_limiter = SpeedLimiter(
-            self.config.rate_limits.download_speed_limit,
+            self.config.rate_limits.downloads.max_speed,
             time_period=1,
         )
 

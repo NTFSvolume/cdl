@@ -171,6 +171,7 @@ def setup_logging(
     console_level: int = logging.CRITICAL + 10,
 ) -> Generator[None]:
     logger.setLevel(level)
+    file.parent.mkdir(parents=True, exist_ok=True)
     with (
         file.open("w+" if os.name == "nt" else "w", encoding="utf8") as fp,
         _lazy_logger(LogHandler(level=console_level)) as console_out,

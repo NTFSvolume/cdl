@@ -90,7 +90,7 @@ class Hasher:
 
     def __post_init__(self) -> None:
         self._sem = asyncio.BoundedSemaphore(self.concurrency)
-        self._hashes = HashAlgorithm.xxh128, *self.config.dedupe.additional_hashes
+        self._hashes = self.config.dedupe.hashes
 
     @property
     def results(self) -> MappingProxyType[Path, XXH128Result]:

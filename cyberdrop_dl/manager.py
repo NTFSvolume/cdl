@@ -38,16 +38,16 @@ class Manager:
     def __init__(self, config: Config | None = None, app_data: AppData | Path | None = None) -> None:
         config = config or Config()
         self.config: Config = config
-        self.app_data: AppData = AppData((Path(app_data or "/app_data")).resolve())
-        self.database: Database = Database(self.app_data.db_file, config.runtime.ignore_history)
-        self.client: HTTPClient = HTTPClient.from_config(config)
-        self.hasher: Hasher = Hasher.from_manager(self)
-        self.tui: TUI = TUI.from_config(config)
         self.task_group: asyncio.TaskGroup = asyncio.TaskGroup()
-        self.scrape_mapper: ScrapeMapper = ScrapeMapper(self)
-        self.logs: LogsManager = LogsManager(config, self.task_group)
-        self.downloader: DownloadManager = DownloadManager.from_manager(self)
+        self.tui: TUI = TUI.from_config(config)
+        self.app_data: AppData = AppData((Path(app_data or "./app_data")).resolve())
+        self.client: HTTPClient = HTTPClient.from_config(config)
         self.cache: Cache = Cache(self.app_data.cache_file)
+        self.logs: LogsManager = LogsManager(config, self.task_group)
+        self.database: Database = Database(self.app_data.db_file, config.runtime.ignore_history)
+        self.hasher: Hasher = Hasher.from_manager(self)
+        self.downloader: DownloadManager = DownloadManager.from_manager(self)
+        self.scrape_mapper: ScrapeMapper = ScrapeMapper(self)
 
     def log_app_state(self) -> None:
         auth = {site: all(credentials.values()) for site, credentials in self.config.auth.model_dump().items()}

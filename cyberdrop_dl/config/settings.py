@@ -196,11 +196,11 @@ class Logs(SettingsGroup):
         self._resolve_filenames()
 
     def _resolve_filenames(self) -> None:
-        object.__setattr__(self, "log_folder", self.folder.expanduser().resolve().absolute())
+        object.__setattr__(self, "folder", self.folder.expanduser().resolve().absolute())
         now_file_iso: str = self._created_at.strftime(_LOGS_DATETIME_FORMAT)
         now_folder_iso: str = self._created_at.strftime(_LOGS_DATE_FORMAT)
         for name, log_file in vars(self).items():
-            if name == "log_folder" or not isinstance(log_file, Path) or log_file.suffix not in (".csv", ".log"):
+            if name == "folder" or not isinstance(log_file, Path) or log_file.suffix not in (".csv", ".log"):
                 continue
 
             log_file = self.folder / log_file
@@ -544,7 +544,7 @@ class UIOptions(SettingsGroup, group="UI"):
 
     portrait: Annotated[bool, Parameter(negative_bool=[])] = False
     "Force a portrait layout for the UI (default is to auto rotate)"
-    show_stats: bool
+    show_stats: bool = True
 
 
 @Parameter(name="*")

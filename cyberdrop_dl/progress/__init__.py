@@ -107,8 +107,9 @@ class TUI:
         logger.info(f"  Input URLs: {stats.count:,}")
         logger.info(f"  Input URL Groups: {len(stats.unique_groups):,}")
 
-        url_stats = json.dumps(stats.domain_stats, indent=2, ensure_ascii=False)
-        logger.info(f"  Input URL Stats: \n{url_stats:,}")
+        stats_ = stats.domain_stats
+        url_stats = json.dumps(stats_, indent=2, ensure_ascii=False) if stats_ else None
+        logger.info(f"  Input URL Stats: {url_stats}")
         logger.info(f"  Total Runtime: {runtime}")
         logger.info(f"  Total Downloaded Data: {total_data_written}")
 
@@ -141,24 +142,24 @@ class TUI:
 
 def _log_errors(scrape_errors: Sequence[UIFailure], download_errors: Sequence[UIFailure]) -> None:
     error_codes = (error.code for error in (*scrape_errors, *download_errors) if error.code is not None)
-    padding = 2
+
     try:
-        padding += len(str(max(error_codes)))
+        padding = len(str(max(error_codes)))
     except ValueError:
-        pass
+        padding = 0
 
     for title, errors in (
         ("Scrape Failures:", scrape_errors),
         ("Download Failures:", download_errors),
     ):
-        logger.info(title)
+        logger.info(title, extra={"color": "red"})
         if not errors:
-            logger.info(f"{'None':>{padding}}")
+            logger.info(f"  {'None':>{padding}}")
             return
 
         for error in scrape_errors:
             error_code = error.code if error.code is not None else ""
-            logger.info(f"{error_code:>{padding}}{' ' if padding > 2 else ''}{error.msg}: {error.count:,}")
+            logger.info(f"  {error_code:>{padding}}{' ' if padding else ''}{error.msg}: {error.count:,}")
 
 
 def _hyperlink(file_path: Path, text: str | None = None) -> str:

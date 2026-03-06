@@ -13,6 +13,10 @@ from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Self, overload
 
 import yarl
 
+from .mediaprops import Resolution
+
+__all__ = ["Resolution"]
+
 if TYPE_CHECKING:
     from collections.abc import Generator, Mapping
 

@@ -175,7 +175,9 @@ class ScrapeMapper(aio.AsyncContextManagerMixin):
 
     @property
     def stats(self) -> ScrapeStats:
-        self._stats.url_count.update((crawler.DOMAIN, len(crawler.scraped_items)) for crawler in self._factory)
+        self._stats.url_count.update(
+            (crawler.DOMAIN, count) for crawler in self._factory if (count := len(crawler.scraped_items))
+        )
         return self._stats
 
     @contextlib.asynccontextmanager

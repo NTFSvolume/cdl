@@ -32,7 +32,6 @@ from cyberdrop_dl.annotations import copy_signature
 from cyberdrop_dl.client import HTTPClient, HTTPClientProxy
 from cyberdrop_dl.data_structures import AbsoluteHttpURL, MediaItem, ScrapeItem
 from cyberdrop_dl.data_structures.mediaprops import ISO639Subtitle, Resolution
-from cyberdrop_dl.downloader import DownloadManager
 from cyberdrop_dl.exceptions import MaxChildrenError, NoExtensionError, ScrapeError
 from cyberdrop_dl.utils import (
     css,
@@ -58,6 +57,7 @@ if TYPE_CHECKING:
     from curl_cffi.requests.impersonate import BrowserTypeLiteral
 
     from cyberdrop_dl.client.response import AbstractResponse
+    from cyberdrop_dl.downloader import DownloadManager
     from cyberdrop_dl.manager import Manager
     from cyberdrop_dl.progress.common import ProgressHook
 
@@ -255,6 +255,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         self.scraped_items: set[str] = set()
         self.logger = CrawlerLogger(self)
         self._semaphore = asyncio.Semaphore(20)
+        self.downloader = manager.downloader
         self.__post_init__()
 
     def __post_init__(self) -> None:
@@ -268,7 +269,6 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
             if self._ready:
                 return
 
-            self.downloader = self._downloader_()
             self.__register_rate_limits()
             self.__register_json_checks()
             try:
@@ -292,10 +292,6 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
             "User-Agent": self.config.general.user_agent,
             "Referer": str(referer),
         }
-
-    def _downloader_(self) -> DownloadManager:
-        self.downloader = dl = DownloadManager(self.manager, self.DOMAIN)
-        return dl
 
     @classmethod
     def _json_resp_check_(cls, json: Any, resp: AbstractResponse[Any], /) -> None:

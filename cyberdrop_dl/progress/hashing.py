@@ -25,6 +25,8 @@ _base_dir: ContextVar[Path] = ContextVar("_base_dir")
 class HashingPanel(OverflowPanel):
     """Class that keeps track of hashed files."""
 
+    unit: ClassVar[str] = "files"
+
     columns: ClassVar[ColumnsType] = ("{task.description}",)
 
     def __init__(self, *hashes: HashAlgorithm) -> None:
