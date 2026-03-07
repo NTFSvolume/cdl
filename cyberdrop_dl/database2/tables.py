@@ -1,94 +1,165 @@
-# ruff: noqa: C408
-from __future__ import annotations
-
 import dataclasses
+import datetime
 import logging
-from typing import TYPE_CHECKING, ClassVar, TypeAlias
+from collections.abc import Iterable
+from typing import Any, ClassVar, Self, get_args
+
+import aiosqlite
 
 logger = logging.getLogger(__name__)
 
 
-if TYPE_CHECKING:
-    from collections.abc import Iterable, Iterator, Mapping
+@dataclasses.dataclass(slots=True)
+class Reference:
+    table: str
+    column: str
+    on_delete: str
+
+    def __str__(self) -> str:
+        return f"REFERENCES {self.table}({self.column}) ON DELETE {self.on_delete}"
 
 
-Properties: TypeAlias = tuple[str, ...]
+PK = {"PK": True}
+AUTOINCREMENT = {"AUTOINCREMENT": True}
+UNIQUE = {"UNIQUE": True}
+
+
+def REFERENCE(table: str, column: str, on_delete: str = "CASCADE") -> dict[str, Reference]:  # noqa: N802
+    return {"REFERENCE": Reference(table, column, on_delete)}
+
+
+_type_map: dict[type[Any], str] = {
+    int: "INTEGER",
+    str: "TEXT",
+    datetime.datetime: "TIMESTAMP",
+}
+
+
+def _now() -> datetime.datetime:
+    return datetime.datetime.now(datetime.UTC)
 
 
 @dataclasses.dataclass(slots=True)
 class Table:
-    name: ClassVar[str]
-    columns: ClassVar[Mapping[str, Properties]]
-    column_names: ClassVar[set[str]]
-    primary_keys: ClassVar[set[str]]
-    foreign: ClassVar[Mapping[str, Properties]] = {}
+    __table_name__: ClassVar[str]
+    COLUMNS: ClassVar[set[str]]
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}(name={self.name!r}, columns={self.columns!r}, foreign={self.foreign!r})"
+        return f"{type(self).__name__}(name={self.__table_name__!r}, columns={self.COLUMNS!r})"
 
-    def __init_subclass__(cls, *, name: str | None = None, **_) -> None:
-        cls.name = name or cls.__name__.casefold()
-        cls.columns = {k: tuple(map(str.upper, v)) for k, v in cls.columns.items()}
-        cls.column_names = set(cls.columns.keys())
-        cls.primary_keys = {k for k, v in cls.columns.items() if "PRIMARY KEY" in v}
+    def __init_subclass__(cls) -> None:
+        cls.__table_name__ = getattr(cls, "__table_name__", None) or cls.__name__.casefold()
+        cls.COLUMNS = {f.name for f in dataclasses.fields(cls)}
 
     def check_columns(self, other: Iterable[str]) -> None:
-        assert self.column_names.issuperset(other), f"Invalid keys for table {self.name}. {tuple(other)}"
+        assert self.COLUMNS.issuperset(other), f"Invalid keys for table {self.__table_name__}. {tuple(other)}"
+
+    @classmethod
+    def from_row(cls, row: aiosqlite.Row) -> Self:
+        return cls(**{name: row[name] for name in cls.COLUMNS})
+
+    @classmethod
+    def to_sql_schema(cls) -> str:
+        columns, unique = cls._parse_columns()
+        joined_columns = ",\n".join(columns)
+        sql = f"CREATE TABLE IF NOT EXISTS {cls.__table_name__} (\n{joined_columns}"
+        if unique:
+            sql += f"\nUNIQUE({', '.join(unique)})"
+        return sql + "\n);"
+
+    @classmethod
+    def _parse_columns(cls) -> tuple[list[str], list[str]]:
+        unique: list[str] = []
+        columns: list[str] = []
+        for f in dataclasses.fields(cls):
+            # This only work if we do not use __future__ annotations
+            if isinstance(f.type, type):
+                python_type = f.type
+            else:
+                python_type, *_ = get_args(f.type)
+
+            sql_type = _type_map[python_type]
+            column = f"{f.name} {sql_type}"
+
+            if f.metadata.get("PK"):
+                column += " PRIMARY KEY"
+
+            elif f.default is not None:
+                column += " NOT NULL"
+
+            if f.metadata.get("AUTOINCREMENT"):
+                column += " AUTOINCREMENT"
+
+            if reference := f.metadata.get("REFERENCE"):
+                column += f" {reference}"
+
+            if f.default_factory is _now:
+                column += " DEFAULT CURRENT_TIMESTAMP"
+
+            columns.append(column)
+
+            if f.metadata.get("UNIQUE"):
+                unique.append(f.name)
+
+        return columns, unique
 
 
-class History(Table, name="media"):
-    columns: ClassVar[Mapping[str, Properties]] = dict(
-        domain=("TEXT", "PRIMARY KEY", "NOT NULL"),
-        url_path=("TEXT", "PRIMARY KEY", "NOT NULL"),
-        referer=("TEXT", "NOT NULL"),
-        album_id=("TEXT",),
-        download_path=("TEXT", "NOT NULL"),
-        download_filename=("TEXT", "NOT NULL"),
-        original_filename=("TEXT", "PRIMARY KEY", "NOT NULL"),
-        file_size=("INT",),
-        duration=("FLOAT",),
-        completed=("INTEGER", "NOT NULL", "DEFAULT 0"),
-        created_at=("TIMESTAMP", "NOT NULL", "DEFAULT CURRENT_TIMESTAMP"),
-        completed_at=("TIMESTAMP",),
-    )
+@dataclasses.dataclass(slots=True)
+class History(Table):
+    __table_name__: ClassVar[str] = "media"
+    id: str = dataclasses.field(metadata=PK | AUTOINCREMENT)
+    domain: str = dataclasses.field(metadata=UNIQUE)
+    url_path: str = dataclasses.field(metadata=UNIQUE)
+    referer: str
+    name: str
+    album_id: str | None = None
+    size: int | None = None
+    duration: int | None = None
+    created_at: datetime.datetime = dataclasses.field(default_factory=_now)
 
 
+@dataclasses.dataclass(slots=True)
+class Downloads(Table):
+    id: str = dataclasses.field(metadata=PK | AUTOINCREMENT)
+    media_id: int = dataclasses.field(metadata=REFERENCE("media", "id", "CASCADE"))
+    folder: str
+    file_name: str
+    original_file_name: str
+    created_at: datetime.datetime = dataclasses.field(default_factory=_now)
+    completed_at: datetime.datetime | None = None
+
+
+@dataclasses.dataclass(slots=True)
 class Files(Table):
-    columns: ClassVar[Mapping[str, Properties]] = dict(
-        folder=("TEXT", "NOT NULL", "PRIMARY KEY"),
-        download_filename=("TEXT", "NOT NULL", "PRIMARY KEY"),
-        original_filename=("TEXT", "NOT NULL"),
-        file_size=("INT",),
-        referer=("TEXT", "NOT NULL"),
-        date=("TIMESTAMP",),
-    )
+    """Table of files that exists on disk"""
+
+    id: str = dataclasses.field(metadata=PK | AUTOINCREMENT)
+    folder: str = dataclasses.field(metadata=UNIQUE)
+    name: str = dataclasses.field(metadata=UNIQUE)
+    size: int
+    modtime: datetime.datetime | None = None
+    created_at: datetime.datetime = dataclasses.field(default_factory=_now)
 
 
+@dataclasses.dataclass(slots=True)
 class Hash(Table):
-    columns: ClassVar[Mapping[str, Properties]] = dict(
-        folder=("TEXT", "NOT NULL", "PRIMARY KEY"),
-        download_filename=("TEXT", "NOT NULL", "PRIMARY KEY"),
-        hash_type=("TEXT", "NOT NULL", "PRIMARY KEY"),
-        hash=("TEXT", "NOT NULL"),
-    )
-    foreign: ClassVar[Mapping[str, Properties]] = dict(
-        files=("folder", "download_filename"),
-    )
+    id: str = dataclasses.field(metadata=PK | AUTOINCREMENT)
+    file_id: int = dataclasses.field(metadata=REFERENCE("files", "id", "CASCADE"))
+    algorithm: str
+    hash: str
+    created_at: datetime.datetime = dataclasses.field(default_factory=_now)
 
 
-class Schema(Table, name="schema_version"):
-    columns: ClassVar[Mapping[str, Properties]] = dict(
-        version=("VARCHAR(50)", "PRIMARY KEY", "UNIQUE", "NOT NULL"),
-        applied_on=("TIMESTAMP", "NOT NULL", "DEFAULT CURRENT_TIMESTAMP"),
-    )
+@dataclasses.dataclass(slots=True)
+class Schema(Table):
+    __table_name__: ClassVar[str] = "schema_version"
+    version: str = dataclasses.field(metadata=PK)
+    applied_on: datetime.datetime = dataclasses.field(default_factory=_now)
 
 
-@dataclasses.dataclass(slots=True, frozen=True)
-class Tables:
-    history: History = dataclasses.field(default_factory=History)
-    files: Files = dataclasses.field(default_factory=Files)
-    hash: Hash = dataclasses.field(default_factory=Hash)
-    schema: Schema = dataclasses.field(default_factory=Schema)
+TABLES = (History, Downloads, Files, Hash, Schema)
 
-    def __iter__(self) -> Iterator[Table]:
-        return iter(dataclasses.astuple(self))
+if __name__ == "__main__":
+    for table in TABLES:
+        print("")  # noqa: T201
+        print(table.to_sql_schema())  # noqa: T201
