@@ -26,7 +26,7 @@ class StatusMessage(UIComponent):
 
     def __init__(self, description: str = f"Running Cyberdrop-DL: v{__version__}") -> None:
         super().__init__()
-        self.activity: Progress = Progress(*self.columns)
+        self.activity: Progress = Progress(*self.columns, transient=True, expand=True)
         _ = self.activity.add_task(description)
         task_id = self._progress.add_task("", total=100, completed=0, visible=False)
         self._task: Task = self._progress[task_id]
