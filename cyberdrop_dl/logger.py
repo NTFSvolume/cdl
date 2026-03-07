@@ -189,17 +189,12 @@ def capture_logs() -> Generator[Callable[[], Text]]:
 
 
 @contextlib.contextmanager
-def setup_logging(
-    file: Path,
-    /,
-    level: int = logging.DEBUG,
-    console_level: int = logging.CRITICAL + 10,
-) -> Generator[None]:
+def setup_logging(file: Path, /, level: int = logging.DEBUG) -> Generator[None]:
     logger.setLevel(level)
     file.parent.mkdir(parents=True, exist_ok=True)
     with (
         file.open("w+" if os.name == "nt" else "w", encoding="utf8") as fp,
-        _lazy_logger(LogHandler(level=console_level)) as console_out,
+        _lazy_logger(LogHandler(level=level)) as console_out,
         _lazy_logger(
             main_logger := LogHandler(
                 level=level,

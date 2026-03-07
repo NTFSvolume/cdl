@@ -1,9 +1,10 @@
 import datetime
 import logging
-from collections.abc import Iterable
+from collections.abc import AsyncGenerator, Callable, Iterable
 from pathlib import Path
 from typing import Annotated, Literal, ParamSpec, TypeVar
 
+import aiosqlite
 import cyclopts
 import pydantic
 from cyclopts import Parameter
@@ -12,7 +13,7 @@ from rich.traceback import install
 from cyberdrop_dl import __version__, aio
 from cyberdrop_dl.annotations import copy_signature
 from cyberdrop_dl.config import Config
-from cyberdrop_dl.data_structures import AbsoluteHttpURL
+from cyberdrop_dl.data_structures import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.logger import capture_logs, setup_logging, spacer
 from cyberdrop_dl.manager import Manager
 from cyberdrop_dl.models import format_validation_error
@@ -31,13 +32,11 @@ logger = logging.getLogger(__name__)
 install(width=200)
 
 
-async def scrape(manager: Manager, source: Iterable[AbsoluteHttpURL] | Path) -> None:
+async def scrape(
+    manager: Manager, source: Iterable[AbsoluteHttpURL] | Path | Callable[[], AsyncGenerator[ScrapeItem]]
+) -> None:
     manager.config.resolve_paths()
-    with setup_logging(
-        manager.config.logs.main_log,
-        level=manager.config.runtime.log_level,
-        console_level=manager.config.runtime.log_level,
-    ):
+    with setup_logging(manager.config.logs.main_log, level=manager.config.runtime.log_level):
         async with manager.scrape_mapper as scrapper:
             await scrapper.run(source)
 
@@ -51,9 +50,10 @@ async def scrape(manager: Manager, source: Iterable[AbsoluteHttpURL] | Path) -> 
 
         async with manager.client.create_aiohttp_session() as session:
             await check_latest_pypi(session)
-            logger.info(spacer())
-            logger.info("Closing program...")
-            logger.info("Finished downloading. Enjoy :)", extra={"color": "green"})
+
+        logger.info(spacer())
+        logger.info("Closing program...")
+        logger.info("Finished downloading. Enjoy :)", extra={"color": "green"})
 
         await send_notifications(manager, stats)
 
@@ -70,6 +70,25 @@ async def _post_runtime(manager: Manager) -> None:
         await sorter.run()
 
     check_partials_and_empty_folders(manager.config)
+
+
+def _filter_by_date(scrape_item: ScrapeItem, before: datetime.date, after: datetime.date) -> bool:
+    item_date = scrape_item.completed_at or scrape_item.created_at
+    if not item_date:
+        return False
+    date = datetime.datetime.fromtimestamp(item_date).date()
+    return after < date < before
+
+
+def _create_item_from_row(row: aiosqlite.Row) -> ScrapeItem:
+    referer: str = row["referer"]
+    url = AbsoluteHttpURL(referer, encoded="%" in referer)
+    item = ScrapeItem(url=url, retry_path=Path(row["download_path"]), part_of_album=True)
+    if completed_at := row["completed_at"]:
+        item.completed_at = int(datetime.datetime.fromisoformat(completed_at).timestamp())
+    if created_at := row["created_at"]:
+        item.created_at = int(datetime.datetime.fromisoformat(created_at).timestamp())
+    return item
 
 
 class App(cyclopts.App):
@@ -139,12 +158,45 @@ def retry(
     choice: Literal["all", "failed", "maintenance"],
     /,
     *,
-    completed_after: datetime.date | None = None,
-    completed_before: datetime.date | None = None,
-    max_items_retry: int = 0,
+    completed_after: datetime.date = datetime.date.min,
+    completed_before: datetime.date = datetime.date.max,
+    max_items_retry: int | None = None,
+    appdata_folder: Path | None = None,
+    config_file: Annotated[Path | None, Parameter(name="config")] = None,
+    cli_options: Config = Config(),  # noqa: B008
 ):
     "Retry downloads from the database"
-    return
+
+    if config_file:
+        config = Config.load(config_file).update(cli_options)
+    else:
+        config = cli_options
+
+    manager = Manager(config, appdata_folder)
+
+    async def load_items() -> AsyncGenerator[ScrapeItem]:
+        """Loads failed links from database."""
+        n_retries = 0
+        if choice == "failed":
+            gen = manager.database.history_table.get_failed_items()
+        elif choice == "all":
+            gen = manager.database.history_table.get_all_items(completed_after, completed_before)
+        else:
+            gen = manager.database.history_table.get_all_bunkr_failed()
+        try:
+            async for rows in gen:
+                for row in rows:
+                    item = _create_item_from_row(row)
+                    if _filter_by_date(item, completed_before, completed_after):
+                        continue
+                    yield item
+                    n_retries += 1
+                    if max_items_retry and n_retries > max_items_retry:
+                        return
+        finally:
+            await gen.aclose()
+
+    aio.run(scrape(manager, load_items))
 
 
 def main() -> None:

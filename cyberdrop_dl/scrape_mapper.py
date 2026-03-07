@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
-import datetime
 import logging
 import re
 import time
@@ -26,13 +25,10 @@ from cyberdrop_dl.logger import spacer
 from cyberdrop_dl.utils import best_match, filepath, get_download_path, parse_url, remove_trailing_slash
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Coroutine, Generator, Iterable, Iterator
-
-    import aiosqlite
+    from collections.abc import AsyncGenerator, Callable, Coroutine, Generator, Iterable, Iterator
 
     from cyberdrop_dl.config import Config
     from cyberdrop_dl.crawlers import Crawler
-    from cyberdrop_dl.database import Database
     from cyberdrop_dl.manager import Manager
 
     CrawlerT = TypeVar("CrawlerT", bound=Crawler)
@@ -41,15 +37,6 @@ _seen_urls: set[AbsoluteHttpURL] = set()
 _crawlers_disabled_at_runtime: set[str] = set()
 
 logger = logging.getLogger(__name__)
-
-
-def filter_by_date(scrape_item: ScrapeItem, before: datetime.date | None, after: datetime.date | None) -> bool:
-    item_date = scrape_item.completed_at or scrape_item.created_at
-    if not item_date:
-        return False
-    date = datetime.datetime.fromtimestamp(item_date).date()
-    before, after = before or datetime.date.max, after or datetime.date.min
-    return after < date < before
 
 
 def _filter_by_domain(scrape_item: ScrapeItem, domains: Iterable[str]) -> bool:
@@ -99,9 +86,13 @@ class ScrapeStats:
             self.groups.append(item.parent_title)
 
 
-def parse_input(source: Iterable[AbsoluteHttpURL] | Path) -> tuple[ScrapeStats, AsyncGenerator[ScrapeItem]]:
+def parse_input(
+    source: Iterable[AbsoluteHttpURL] | Path | Callable[[], AsyncGenerator[ScrapeItem]],
+) -> tuple[ScrapeStats, AsyncGenerator[ScrapeItem]]:
     if isinstance(source, Path):
         return ScrapeStats(source), from_file(source)
+    elif callable(source):
+        return ScrapeStats(), source()
     return ScrapeStats(), from_urls(source)
 
 
@@ -142,20 +133,6 @@ async def _parse_input_file_groups(input_file: Path) -> AsyncGenerator[tuple[str
             block_quote = not block_quote if line == "#\n" else block_quote
             if not block_quote:
                 yield (None, list(regex_links(line)))
-
-
-async def load_failed_links(database: Database) -> AsyncGenerator[ScrapeItem]:
-    """Loads failed links from database."""
-    async for rows in database.history_table.get_failed_items():
-        for row in rows:
-            yield _create_item_from_row(row)
-
-
-async def load_bunkr_fails_via_hash(database: Database) -> AsyncGenerator[ScrapeItem]:
-    """Loads all bunkr links with maintenance hash."""
-    async for rows in database.history_table.get_all_bunkr_failed():
-        for row in rows:
-            yield _create_item_from_row(row)
 
 
 class ScrapeMapper(aio.AsyncContextManagerMixin):
@@ -214,7 +191,7 @@ class ScrapeMapper(aio.AsyncContextManagerMixin):
         _ = await asyncio.gather(self.jdownloader.ready(), self.real_debrid.ready(), self.direct_http.ready())
         self._ready = True
 
-    async def run(self, source: Iterable[AbsoluteHttpURL] | Path) -> None:
+    async def run(self, source: Iterable[AbsoluteHttpURL] | Path | Callable[[], AsyncGenerator[ScrapeItem]]) -> None:
         """Starts the orchestra."""
         await self.ready()
         self._stats, items = parse_input(source)
@@ -347,17 +324,6 @@ def regex_links(line: str) -> Generator[AbsoluteHttpURL]:
             yield parse_url(link)
         except Exception as e:
             logger.error(f"Unable to parse URL from input file: {link} {e:!r}")
-
-
-def _create_item_from_row(row: aiosqlite.Row) -> ScrapeItem:
-    referer: str = row["referer"]
-    url = AbsoluteHttpURL(referer, encoded="%" in referer)
-    item = ScrapeItem(url=url, retry_path=Path(row["download_path"]), part_of_album=True)
-    if completed_at := row["completed_at"]:
-        item.completed_at = int(datetime.datetime.fromisoformat(completed_at).timestamp())
-    if created_at := row["created_at"]:
-        item.created_at = int(datetime.datetime.fromisoformat(created_at).timestamp())
-    return item
 
 
 def get_crawlers_mapping(include_generics: bool = False) -> dict[str, type[Crawler]]:
