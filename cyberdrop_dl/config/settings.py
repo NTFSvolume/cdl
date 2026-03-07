@@ -453,6 +453,7 @@ class General(SettingsGroup):
     f"""This is the minimum amount of free space require to start new downloads.
     Values lower that {_MIN_REQUIRED_FREE_SPACE.human_readable()} will be overriden to {_MIN_REQUIRED_FREE_SPACE.human_readable()}"""
     user_agent: Annotated[NonEmptyStr, Parameter(alias="--ua")] = _DEFAULT_USER_AGENT
+    impersonate: Literal["chrome", "edge", "safari", "safari_ios", "chrome_android", "firefox"] | None = None
 
     @field_validator("ssl_context", mode="before")
     @classmethod

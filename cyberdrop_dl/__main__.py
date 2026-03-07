@@ -1,7 +1,5 @@
-import asyncio
 import datetime
 import logging
-import sys
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Annotated, Literal, ParamSpec, TypeVar
@@ -11,7 +9,7 @@ import pydantic
 from cyclopts import Parameter
 from rich.traceback import install
 
-from cyberdrop_dl import __version__
+from cyberdrop_dl import __version__, aio
 from cyberdrop_dl.annotations import copy_signature
 from cyberdrop_dl.config import Config
 from cyberdrop_dl.data_structures import AbsoluteHttpURL
@@ -74,13 +72,6 @@ async def _post_runtime(manager: Manager) -> None:
     check_partials_and_empty_folders(manager.config)
 
 
-def _loop_factory() -> asyncio.AbstractEventLoop:
-    loop = asyncio.new_event_loop()
-    if sys.version_info > (3, 12):
-        loop.set_task_factory(asyncio.eager_task_factory)
-    return loop
-
-
 class App(cyclopts.App):
     @copy_signature(cyclopts.App._parse_known_args)
     def _parse_known_args(self, *args, **kwargs):
@@ -121,18 +112,6 @@ def download(
     ] = None,
     appdata_folder: Path | None = None,
     config_file: Annotated[Path | None, Parameter(name="config")] = None,
-    impersonate: (
-        Literal[
-            "chrome",
-            "edge",
-            "safari",
-            "safari_ios",
-            "chrome_android",
-            "firefox",
-        ]
-        | None
-    ) = None,
-    print_stats: bool = False,
     cli_options: Config = Config(),  # noqa: B008
 ):
     """Scrape and download files from a list of URLs (from a file or stdin)"""
@@ -142,14 +121,8 @@ def download(
     else:
         config = cli_options
 
-    if impersonate:
-        pass
-    if print_stats:
-        pass
-
     manager = Manager(config, appdata_folder)
-    with asyncio.Runner(loop_factory=_loop_factory) as runner:
-        runner.run(scrape(manager, source))
+    aio.run(scrape(manager, source))
 
 
 @app.command()

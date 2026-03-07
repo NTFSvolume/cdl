@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import dataclasses
 import shutil
+import sys
 import tempfile
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable, Coroutine, Iterable, Iterator
@@ -238,3 +239,14 @@ class AsyncContextManagerMixin(ABC):
 
     @abstractmethod
     def _asyncctx_(self) -> AbstractAsyncContextManager[object, bool | None]: ...
+
+
+def run(main: Coroutine[Any, Any, _T]) -> _T:
+    def _loop_factory() -> asyncio.AbstractEventLoop:
+        loop = asyncio.new_event_loop()
+        if sys.version_info > (3, 12):
+            loop.set_task_factory(asyncio.eager_task_factory)
+        return loop
+
+    with asyncio.Runner(loop_factory=_loop_factory) as runner:
+        return runner.run(main)
