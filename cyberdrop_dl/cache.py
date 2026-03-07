@@ -16,7 +16,7 @@ class Cache(Mapping[str, Any]):
     _cache: dict[str, Any] = dataclasses.field(init=False)
     _in_ctx: bool = dataclasses.field(init=False)
 
-    def __post_init__(self) -> None:
+    def load(self) -> None:
         self._cache = yaml.load(self.file, create=True)
 
     def __getitem__(self, key: str) -> Any:

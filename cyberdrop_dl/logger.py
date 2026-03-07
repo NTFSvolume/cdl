@@ -7,7 +7,6 @@ import logging
 import os
 import queue
 import sys
-from collections.abc import Generator
 from contextvars import ContextVar
 from logging.handlers import QueueHandler, QueueListener
 from pathlib import Path
@@ -43,6 +42,8 @@ if TYPE_CHECKING:
 
 
 _LOCK: threading.RLock = cast("threading.RLock", logging._lock)  # pyright: ignore[ reportAttributeAccessIssue]
+
+_capture_logs: ContextVar[bool] = ContextVar("_capture_logs", default=False)
 
 
 class LogsTooBigError(RuntimeError):
@@ -94,18 +95,19 @@ class LogHandler(RichHandler):
     """Rich Handler with default settings, custom log render to remove padding in files and `color` extra"""
 
     def __init__(self, level: int = logging.DEBUG, console: Console | None = None) -> None:
-        is_file = bool(console)
+        self.is_file: bool = bool(console)
+        self._buffer: list[Text] = []
         super().__init__(
             level,
             console,
-            show_time=is_file,
+            show_time=self.is_file,
             rich_tracebacks=True,
             tracebacks_show_locals=_SHOW_LOCALS,
             locals_max_string=_DEFAULT_CONSOLE_WIDTH,
             tracebacks_extra_lines=2,
             locals_max_length=20,
         )
-        if is_file:
+        if self.is_file:
             self._log_render = NoPaddingLogRender(show_level=True)
 
     def render_message(self, record: logging.LogRecord, message: str) -> ConsoleRenderable:
@@ -124,7 +126,20 @@ class LogHandler(RichHandler):
         if self.keywords:
             _ = message_text.highlight_words(self.keywords, "logging.keyword")
 
+        if self.is_file and _capture_logs.get():
+            self._buffer.append(message_text)
+
         return message_text
+
+    def export_text(self) -> Text:
+        assert self.lock is not None
+        output = Text("")
+        with self.lock:
+            lines = self._buffer[:]
+            self._buffer.clear()
+        for line in lines:
+            output.append_text(line.append("\n"))
+        return output
 
 
 class BareQueueHandler(QueueHandler):
@@ -164,17 +179,22 @@ def _lazy_logger(log_handler: LogHandler) -> Generator[BareQueueHandler]:
 
 
 @contextlib.contextmanager
-def setup_logging(
-    file: Path,
-    /,
-    level: int = logging.DEBUG,
-    console_level: int = logging.CRITICAL + 10,
-) -> Generator[None]:
+def capture_logs() -> Generator[Callable[[], Text]]:
+    token = _capture_logs.set(True)
+    logger = _MAIN_LOGGER.get()
+    try:
+        yield logger.export_text
+    finally:
+        _capture_logs.reset(token)
+
+
+@contextlib.contextmanager
+def setup_logging(file: Path, /, level: int = logging.DEBUG) -> Generator[None]:
     logger.setLevel(level)
     file.parent.mkdir(parents=True, exist_ok=True)
     with (
         file.open("w+" if os.name == "nt" else "w", encoding="utf8") as fp,
-        _lazy_logger(LogHandler(level=console_level)) as console_out,
+        _lazy_logger(LogHandler(level=level)) as console_out,
         _lazy_logger(
             main_logger := LogHandler(
                 level=level,

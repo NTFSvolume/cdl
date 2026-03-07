@@ -1,25 +1,24 @@
-import asyncio
 import datetime
 import logging
-import sys
-from collections.abc import Iterable
+from collections.abc import AsyncGenerator, Callable, Iterable
 from pathlib import Path
 from typing import Annotated, Literal, ParamSpec, TypeVar
 
+import aiosqlite
 import cyclopts
 import pydantic
 from cyclopts import Parameter
 from rich.traceback import install
 
-from cyberdrop_dl import __version__
+from cyberdrop_dl import __version__, aio
 from cyberdrop_dl.annotations import copy_signature
 from cyberdrop_dl.config import Config
-from cyberdrop_dl.data_structures import AbsoluteHttpURL
-from cyberdrop_dl.logger import setup_logging, spacer
+from cyberdrop_dl.data_structures import AbsoluteHttpURL, ScrapeItem
+from cyberdrop_dl.logger import capture_logs, setup_logging, spacer
 from cyberdrop_dl.manager import Manager
 from cyberdrop_dl.models import format_validation_error
 from cyberdrop_dl.models.types import HttpURL
-from cyberdrop_dl.notifications import send_apprise_notifications, send_webhook_notification
+from cyberdrop_dl.notifications import send_notifications
 from cyberdrop_dl.sorting import Sorter
 from cyberdrop_dl.updates import check_latest_pypi
 from cyberdrop_dl.utils import check_partials_and_empty_folders
@@ -33,32 +32,30 @@ logger = logging.getLogger(__name__)
 install(width=200)
 
 
-async def scrape(manager: Manager, source: Iterable[AbsoluteHttpURL] | Path) -> None:
+async def scrape(
+    manager: Manager, source: Iterable[AbsoluteHttpURL] | Path | Callable[[], AsyncGenerator[ScrapeItem]]
+) -> None:
     manager.config.resolve_paths()
-    main_log = manager.config.logs.main_log
-    with setup_logging(
-        main_log,
-        level=manager.config.runtime.log_level,
-        console_level=manager.config.runtime.log_level,
-    ):
+    with setup_logging(manager.config.logs.main_log, level=manager.config.runtime.log_level):
         async with manager.scrape_mapper as scrapper:
             await scrapper.run(source)
 
         await _post_runtime(manager)
-        if manager.config.ui.show_stats:
-            manager.tui.show_stats(scrapper.stats)
+        with capture_logs() as export:
+            if manager.config.ui.show_stats:
+                manager.tui.show_stats(scrapper.stats)
 
+        stats = export()
         logger.info(spacer())
 
         async with manager.client.create_aiohttp_session() as session:
             await check_latest_pypi(session)
-            logger.info(spacer())
-            logger.info("Closing program...")
-            logger.info("Finished downloading. Enjoy :)", extra={"color": "green"})
 
-            if webhook := manager.config.logs.webhook:
-                await send_webhook_notification(session, webhook, main_log)
-            await send_apprise_notifications("TODO: cappture contetx from stats", main_log=main_log)
+        logger.info(spacer())
+        logger.info("Closing program...")
+        logger.info("Finished downloading. Enjoy :)", extra={"color": "green"})
+
+        await send_notifications(manager, stats)
 
 
 async def _post_runtime(manager: Manager) -> None:
@@ -75,11 +72,23 @@ async def _post_runtime(manager: Manager) -> None:
     check_partials_and_empty_folders(manager.config)
 
 
-def _loop_factory() -> asyncio.AbstractEventLoop:
-    loop = asyncio.new_event_loop()
-    if sys.version_info > (3, 12):
-        loop.set_task_factory(asyncio.eager_task_factory)
-    return loop
+def _filter_by_date(scrape_item: ScrapeItem, before: datetime.date, after: datetime.date) -> bool:
+    item_date = scrape_item.completed_at or scrape_item.created_at
+    if not item_date:
+        return False
+    date = datetime.datetime.fromtimestamp(item_date).date()
+    return after < date < before
+
+
+def _create_item_from_row(row: aiosqlite.Row) -> ScrapeItem:
+    referer: str = row["referer"]
+    url = AbsoluteHttpURL(referer, encoded="%" in referer)
+    item = ScrapeItem(url=url, retry_path=Path(row["download_path"]), part_of_album=True)
+    if completed_at := row["completed_at"]:
+        item.completed_at = int(datetime.datetime.fromisoformat(completed_at).timestamp())
+    if created_at := row["created_at"]:
+        item.created_at = int(datetime.datetime.fromisoformat(created_at).timestamp())
+    return item
 
 
 class App(cyclopts.App):
@@ -122,18 +131,6 @@ def download(
     ] = None,
     appdata_folder: Path | None = None,
     config_file: Annotated[Path | None, Parameter(name="config")] = None,
-    impersonate: (
-        Literal[
-            "chrome",
-            "edge",
-            "safari",
-            "safari_ios",
-            "chrome_android",
-            "firefox",
-        ]
-        | None
-    ) = None,
-    print_stats: bool = False,
     cli_options: Config = Config(),  # noqa: B008
 ):
     """Scrape and download files from a list of URLs (from a file or stdin)"""
@@ -143,14 +140,8 @@ def download(
     else:
         config = cli_options
 
-    if impersonate:
-        pass
-    if print_stats:
-        pass
-
     manager = Manager(config, appdata_folder)
-    with asyncio.Runner(loop_factory=_loop_factory) as runner:
-        runner.run(scrape(manager, source))
+    aio.run(scrape(manager, source))
 
 
 @app.command()
@@ -167,12 +158,45 @@ def retry(
     choice: Literal["all", "failed", "maintenance"],
     /,
     *,
-    completed_after: datetime.date | None = None,
-    completed_before: datetime.date | None = None,
-    max_items_retry: int = 0,
+    completed_after: datetime.date = datetime.date.min,
+    completed_before: datetime.date = datetime.date.max,
+    max_items_retry: int | None = None,
+    appdata_folder: Path | None = None,
+    config_file: Annotated[Path | None, Parameter(name="config")] = None,
+    cli_options: Config = Config(),  # noqa: B008
 ):
     "Retry downloads from the database"
-    return
+
+    if config_file:
+        config = Config.load(config_file).update(cli_options)
+    else:
+        config = cli_options
+
+    manager = Manager(config, appdata_folder)
+
+    async def load_items() -> AsyncGenerator[ScrapeItem]:
+        """Loads failed links from database."""
+        n_retries = 0
+        if choice == "failed":
+            gen = manager.database.history_table.get_failed_items()
+        elif choice == "all":
+            gen = manager.database.history_table.get_all_items(completed_after, completed_before)
+        else:
+            gen = manager.database.history_table.get_all_bunkr_failed()
+        try:
+            async for rows in gen:
+                for row in rows:
+                    item = _create_item_from_row(row)
+                    if _filter_by_date(item, completed_before, completed_after):
+                        continue
+                    yield item
+                    n_retries += 1
+                    if max_items_retry and n_retries > max_items_retry:
+                        return
+        finally:
+            await gen.aclose()
+
+    aio.run(scrape(manager, load_items))
 
 
 def main() -> None:

@@ -161,6 +161,21 @@ class Filesystem(SettingsGroup):
     "Save to disk a copy of every request as an html file (pages) or json (API requests)"
 
 
+@Parameter(name="*", show=False)
+class Notifications(SettingsGroup):
+    enabled: Annotated[bool, Parameter(name="notify", show=True)] = True
+    """After a successful run, send a report with stats to the targets in the config file"""
+    webhook: AppriseURL | None = None
+    """The URL of a webhook that you want to send download stats to (Ex: Discord).
+    You can add the optional tag attach_logs= as a prefix to include a copy of the main log as an attachment"""
+    apprise_urls: list[AppriseURL] = []
+
+    @field_validator("webhook", mode="before")
+    @classmethod
+    def handle_falsy(cls, value: str) -> str | None:
+        return falsy_as_none(value)
+
+
 class Logs(SettingsGroup):
     download_errors: LogPath = Path("download_errors.csv")
     main_log: MainLogPath = Path("cdl.log")
@@ -171,20 +186,11 @@ class Logs(SettingsGroup):
     expire_after: timedelta | None = None
 
     rotate: bool = False
-    webhook: Annotated[AppriseURL | None, Parameter(n_tokens=1, accepts_keys=False)] = None
-    """The URL of a webhook that you want to send download stats to (Ex: Discord).
-    You can add the optional tag attach_logs= as a prefix to include a copy of the main log as an attachment"""
-
     _created_at: datetime = PrivateAttr(default_factory=datetime.now)
 
     @property
     def jsonl_file(self) -> Path:
         return self.main_log.with_suffix(".results.jsonl")
-
-    @field_validator("webhook", mode="before")
-    @classmethod
-    def handle_falsy(cls, value: str) -> str | None:
-        return falsy_as_none(value)
 
     @field_validator("expire_after", mode="before")
     @staticmethod
@@ -447,6 +453,7 @@ class General(SettingsGroup):
     f"""This is the minimum amount of free space require to start new downloads.
     Values lower that {_MIN_REQUIRED_FREE_SPACE.human_readable()} will be overriden to {_MIN_REQUIRED_FREE_SPACE.human_readable()}"""
     user_agent: Annotated[NonEmptyStr, Parameter(alias="--ua")] = _DEFAULT_USER_AGENT
+    impersonate: Literal["chrome", "edge", "safari", "safari_ios", "chrome_android", "firefox"] | None = None
 
     @field_validator("ssl_context", mode="before")
     @classmethod
@@ -572,3 +579,4 @@ class ConfigSettings(AliasModel):
     runtime: Runtime = Runtime()
     sort: Sorting = Sorting()
     ui: UIOptions = UIOptions()
+    notifications: Notifications = Notifications()

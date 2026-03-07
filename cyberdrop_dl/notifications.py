@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any, Final
 from aiohttp.formdata import FormData
 from pydantic import ValidationError
 
-from cyberdrop_dl import aio, constants
+from cyberdrop_dl import aio
 from cyberdrop_dl.dependencies import apprise
 from cyberdrop_dl.logger import adopt_logger, get_logs_content, spacer
 from cyberdrop_dl.models import AppriseURL, format_validation_error
@@ -19,6 +19,9 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     import aiohttp
+    from rich.text import Text
+
+    from cyberdrop_dl.manager import Manager
 
 logger = logging.getLogger(__name__)
 
@@ -56,10 +59,7 @@ def parse_apprise_url(*urls: str) -> tuple[AppriseURL, ...]:
         sys.exit(1)
 
 
-async def send_apprise_notifications(content: str, *urls: AppriseURL, main_log: Path) -> None:
-    if not urls:
-        return
-
+async def _notify_w_apprise(content: str, main_log: Path, urls: list[AppriseURL]) -> None:
     logger.info("Sending Apprise notifications.. ")
     apprise_obj = apprise.Apprise()
     attach_logs: bool = False
@@ -100,23 +100,27 @@ async def _temp_copy_of_main_log(main_log: Path) -> AsyncGenerator[Path | None]:
             yield
 
 
-async def _prepare_form(diff_text: str, main_log: Path | None = None) -> FormData:
+async def _prepare_form(content: str, main_log: Path | None = None) -> FormData:
     form = FormData()
-    if main_log and (content := await get_logs_content(main_log)):
-        form.add_field("file", content, filename=main_log.name)
+    if main_log and (logs := await get_logs_content(main_log)):
+        form.add_field("file", logs, filename=main_log.name)
 
     form.add_fields(
-        ("content", f"```diff\n{diff_text}```"),
+        ("content", content),
         ("username", "cyberdrop-dl"),
     )
     return form
 
 
-async def send_webhook_notification(session: aiohttp.ClientSession, webhook: AppriseURL, main_log: Path) -> None:
+async def _notify_w_webhook(
+    session: aiohttp.ClientSession,
+    content: str,
+    main_log: Path,
+    webhook: AppriseURL,
+) -> None:
     logger.info("Sending webhook notifications.. ")
     url = webhook.url.get_secret_value()
-    diff_text = _prepare_diff_text()
-    form = await _prepare_form(diff_text, main_log if webhook.attach_logs else None)
+    form = await _prepare_form(content, main_log if webhook.attach_logs else None)
 
     logger.info(spacer())
     error: dict[str, Any] | None = None
@@ -139,11 +143,12 @@ async def send_webhook_notification(session: aiohttp.ClientSession, webhook: App
         logger.log(level, f"Webhook notifications result: {result}")
 
 
-def _prepare_diff_text() -> str:
-    """Returns the `rich.text` in the current log buffer as a plain str with diff syntax."""
+def _prepare_diff_text(stats: Text) -> str:
+    """Turns `rich.text` as a plain str with diff syntax."""
 
     def prepare_lines():
-        for text_line in constants.LOG_OUTPUT_TEXT.split(allow_blank=True):
+        yield "```diff\n"
+        for text_line in stats.split(allow_blank=True):
             line_str = text_line.plain.rstrip("\n")
             first_span = text_line.spans[0] if text_line.spans else None
             style: str = str(first_span.style) if first_span else ""
@@ -151,5 +156,16 @@ def _prepare_diff_text() -> str:
             color = style.split(" ")[0] or "black"  # remove console hyperlink markup (if any)
             line_format: str = _STYLE_TO_DIFF_MAP.get(color) or _DEFAULT_DIFF_LINE_FORMAT
             yield line_format.format(line_str)
+        yield "```"
 
     return "\n".join(prepare_lines())
+
+
+async def send_notifications(manager: Manager, stats: Text) -> None:
+    main_log = manager.config.logs.main_log
+    if webhook := manager.config.notifications.webhook:
+        async with manager.client.create_aiohttp_session() as session:
+            await _notify_w_webhook(session, _prepare_diff_text(stats), main_log, webhook)
+
+    if urls := manager.config.notifications.apprise_urls:
+        await _notify_w_apprise(stats.plain, main_log, urls)
