@@ -12,7 +12,6 @@ import aiosqlite
 from packaging.version import Version
 
 from cyberdrop_dl.database2 import query
-from cyberdrop_dl.database2.tables import Table, Tables
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +22,7 @@ if TYPE_CHECKING:
     from sqlite3 import Row
 
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
+    from cyberdrop_dl.database2.tables import Table
 
 
 Properties: TypeAlias = tuple[str, ...]
@@ -44,7 +44,6 @@ class Database:
     ignore_history: bool
 
     conn: aiosqlite.Connection = dataclasses.field(init=False)
-    tables: Tables = dataclasses.field(default_factory=Tables)
 
     async def connect(self) -> None:
         exists = self.db_path.exists()

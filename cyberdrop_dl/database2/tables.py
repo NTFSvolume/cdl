@@ -30,8 +30,9 @@ def REFERENCE(table: str, column: str, on_delete: str = "CASCADE") -> dict[str, 
 
 _type_map: dict[type[Any], str] = {
     int: "INTEGER",
+    float: "FLOAT",
     str: "TEXT",
-    datetime.datetime: "TIMESTAMP",
+    datetime.datetime: "DATETIME",
 }
 
 
@@ -64,42 +65,42 @@ class Table:
         joined_columns = ",\n".join(columns)
         sql = f"CREATE TABLE IF NOT EXISTS {cls.__table_name__} (\n{joined_columns}"
         if unique:
-            sql += f"\nUNIQUE({', '.join(unique)})"
+            sql += f",\nUNIQUE({', '.join(unique)})"
         return sql + "\n);"
 
     @classmethod
     def _parse_columns(cls) -> tuple[list[str], list[str]]:
         unique: list[str] = []
         columns: list[str] = []
-        for f in dataclasses.fields(cls):
+        for field in dataclasses.fields(cls):
             # This only work if we do not use __future__ annotations
-            if isinstance(f.type, type):
-                python_type = f.type
+            if isinstance(field.type, type):
+                python_type = field.type
             else:
-                python_type, *_ = get_args(f.type)
+                python_type, *_ = get_args(field.type)
 
             sql_type = _type_map[python_type]
-            column = f"{f.name} {sql_type}"
+            column = f"{field.name} {sql_type}"
 
-            if f.metadata.get("PK"):
+            if field.metadata.get("PK"):
                 column += " PRIMARY KEY"
 
-            elif f.default is not None:
+            elif field.default is not None:
                 column += " NOT NULL"
 
-            if f.metadata.get("AUTOINCREMENT"):
+            if field.metadata.get("AUTOINCREMENT"):
                 column += " AUTOINCREMENT"
 
-            if reference := f.metadata.get("REFERENCE"):
+            if reference := field.metadata.get("REFERENCE"):
                 column += f" {reference}"
 
-            if f.default_factory is _now:
-                column += " DEFAULT CURRENT_TIMESTAMP"
+            if field.default_factory is _now:
+                column += " DEFAULT (datetime('now'))"
 
             columns.append(column)
 
-            if f.metadata.get("UNIQUE"):
-                unique.append(f.name)
+            if field.metadata.get("UNIQUE"):
+                unique.append(field.name)
 
         return columns, unique
 
@@ -107,20 +108,20 @@ class Table:
 @dataclasses.dataclass(slots=True)
 class History(Table):
     __table_name__: ClassVar[str] = "media"
-    id: str = dataclasses.field(metadata=PK | AUTOINCREMENT)
+    id: int = dataclasses.field(metadata=PK | AUTOINCREMENT)
     domain: str = dataclasses.field(metadata=UNIQUE)
     url_path: str = dataclasses.field(metadata=UNIQUE)
     referer: str
     name: str
     album_id: str | None = None
     size: int | None = None
-    duration: int | None = None
+    duration: float | None = None
     created_at: datetime.datetime = dataclasses.field(default_factory=_now)
 
 
 @dataclasses.dataclass(slots=True)
 class Downloads(Table):
-    id: str = dataclasses.field(metadata=PK | AUTOINCREMENT)
+    id: int = dataclasses.field(metadata=PK | AUTOINCREMENT)
     media_id: int = dataclasses.field(metadata=REFERENCE("media", "id", "CASCADE"))
     folder: str
     file_name: str
@@ -133,21 +134,19 @@ class Downloads(Table):
 class Files(Table):
     """Table of files that exists on disk"""
 
-    id: str = dataclasses.field(metadata=PK | AUTOINCREMENT)
+    id: int = dataclasses.field(metadata=PK | AUTOINCREMENT)
     folder: str = dataclasses.field(metadata=UNIQUE)
     name: str = dataclasses.field(metadata=UNIQUE)
     size: int
     modtime: datetime.datetime | None = None
-    created_at: datetime.datetime = dataclasses.field(default_factory=_now)
 
 
 @dataclasses.dataclass(slots=True)
 class Hash(Table):
-    id: str = dataclasses.field(metadata=PK | AUTOINCREMENT)
+    id: int = dataclasses.field(metadata=PK | AUTOINCREMENT)
     file_id: int = dataclasses.field(metadata=REFERENCE("files", "id", "CASCADE"))
     algorithm: str
     hash: str
-    created_at: datetime.datetime = dataclasses.field(default_factory=_now)
 
 
 @dataclasses.dataclass(slots=True)
