@@ -1,7 +1,7 @@
 import dataclasses
 import datetime
 import logging
-from collections.abc import Iterable
+from collections.abc import Generator, Iterable
 from typing import Any, ClassVar, Self, get_args
 
 import aiosqlite
@@ -21,7 +21,6 @@ class Reference:
 
 PK = {"PK": True}
 AUTOINCREMENT = {"AUTOINCREMENT": True}
-UNIQUE = {"UNIQUE": True}
 
 
 def REFERENCE(table: str, column: str, on_delete: str = "CASCADE") -> dict[str, Reference]:  # noqa: N802
@@ -44,12 +43,13 @@ def _now() -> datetime.datetime:
 class Table:
     __table_name__: ClassVar[str]
     COLUMNS: ClassVar[set[str]]
+    UNIQUE: ClassVar[tuple[str, ...]] = ()
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(name={self.__table_name__!r}, columns={self.COLUMNS!r})"
 
     def __init_subclass__(cls) -> None:
-        cls.__table_name__ = getattr(cls, "__table_name__", None) or cls.__name__.casefold()
+        cls.__table_name__ = getattr(cls, "__table_name__", None) or cls.__name__.lower()
         cls.COLUMNS = {f.name for f in dataclasses.fields(cls)}
 
     def check_columns(self, other: Iterable[str]) -> None:
@@ -61,17 +61,14 @@ class Table:
 
     @classmethod
     def to_sql_schema(cls) -> str:
-        columns, unique = cls._parse_columns()
-        joined_columns = ",\n".join(columns)
+        joined_columns = ",\n".join(cls._parse_columns())
         sql = f"CREATE TABLE IF NOT EXISTS {cls.__table_name__} (\n{joined_columns}"
-        if unique:
-            sql += f",\nUNIQUE({', '.join(unique)})"
+        if cls.UNIQUE:
+            sql += f",\nUNIQUE({', '.join(cls.UNIQUE)})"
         return sql + "\n);"
 
     @classmethod
-    def _parse_columns(cls) -> tuple[list[str], list[str]]:
-        unique: list[str] = []
-        columns: list[str] = []
+    def _parse_columns(cls) -> Generator[str]:
         for field in dataclasses.fields(cls):
             # This only work if we do not use __future__ annotations
             if isinstance(field.type, type):
@@ -97,26 +94,22 @@ class Table:
             if field.default_factory is _now:
                 column += " DEFAULT (datetime('now'))"
 
-            columns.append(column)
-
-            if field.metadata.get("UNIQUE"):
-                unique.append(field.name)
-
-        return columns, unique
+            yield column
 
 
 @dataclasses.dataclass(slots=True)
-class History(Table):
-    __table_name__: ClassVar[str] = "media"
+class Media(Table):
     id: int = dataclasses.field(metadata=PK | AUTOINCREMENT)
-    domain: str = dataclasses.field(metadata=UNIQUE)
-    url_path: str = dataclasses.field(metadata=UNIQUE)
+    domain: str
+    url_path: str
     referer: str
     name: str
     album_id: str | None = None
     size: int | None = None
     duration: float | None = None
     created_at: datetime.datetime = dataclasses.field(default_factory=_now)
+
+    UNIQUE: ClassVar[tuple[str, ...]] = "domain", "url_path"
 
 
 @dataclasses.dataclass(slots=True)
@@ -135,18 +128,21 @@ class Files(Table):
     """Table of files that exists on disk"""
 
     id: int = dataclasses.field(metadata=PK | AUTOINCREMENT)
-    folder: str = dataclasses.field(metadata=UNIQUE)
-    name: str = dataclasses.field(metadata=UNIQUE)
+    folder: str
+    name: str
     size: int
     modtime: datetime.datetime | None = None
+
+    UNIQUE: ClassVar[tuple[str, ...]] = "folder", "name"
 
 
 @dataclasses.dataclass(slots=True)
 class Hash(Table):
-    id: int = dataclasses.field(metadata=PK | AUTOINCREMENT)
     file_id: int = dataclasses.field(metadata=REFERENCE("files", "id", "CASCADE"))
     algorithm: str
     hash: str
+
+    UNIQUE: ClassVar[tuple[str, ...]] = "file_id", "algorithm", "hash"
 
 
 @dataclasses.dataclass(slots=True)
@@ -155,8 +151,10 @@ class Schema(Table):
     version: str = dataclasses.field(metadata=PK)
     applied_on: datetime.datetime = dataclasses.field(default_factory=_now)
 
+    UNIQUE: ClassVar[tuple[str, ...]] = ("version",)
 
-TABLES = (History, Downloads, Files, Hash, Schema)
+
+TABLES = (Media, Downloads, Files, Hash, Schema)
 
 if __name__ == "__main__":
     for table in TABLES:

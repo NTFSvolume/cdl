@@ -205,11 +205,11 @@ def transfer(db_path: Path, output_path: Path, /) -> None:
     """Transfer an old database file (v8.10) to the newer v10 format"""
     with setup_logging(Path("cdl_transfer.log"), level=logging.DEBUG):
         logger.warning(
-            "Make sure the old database is from version 8.10. Otherwise the migration may fail. Press any key to continue"
+            " Make sure the old database is from version 8.10. Otherwise the migration may fail. Press any key to continue"
         )
         from cyberdrop_dl.database2.transfer import migrate
 
-        with StatusMessage("Database transfer in process").activity:
+        with StatusMessage("Database transfer in progress...").activity:
             migrate(db_path, output_path)
 
 

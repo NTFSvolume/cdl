@@ -5,7 +5,7 @@ import sqlite3
 import sys
 from pathlib import Path
 
-from cyberdrop_dl.database2.tables import Downloads, Files, Hash, History
+from cyberdrop_dl.database2.tables import Downloads, Files, Hash, Media
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ INSERT INTO
     completed_at
   )
 SELECT
-  m.id,
+  media.id,
   old.download_path AS folder,
   COALESCE(
     NULLIF(old.download_filename, ''),
@@ -33,19 +33,19 @@ SELECT
   old.completed_at AS completed_at
 FROM
   old.media AS OLD
-  JOIN media AS m ON m.domain = old.domain
-  AND m.url_path = old.url_path
+  JOIN media ON media.domain = old.domain
+  AND media.url_path = old.url_path
 WHERE
   old.download_filename IS NOT NULL
   AND old.download_path IS NOT NULL
 ORDER BY
-  m.id,
+  media.id,
   COALESCE(old.created_at, ''),
   old.rowid;
 """
 
 _transfer_media = f"""
-{History.to_sql_schema()}
+{Media.to_sql_schema()}
 
 INSERT INTO
   media (
@@ -134,15 +134,15 @@ _transfer_hash = f"""
 INSERT INTO
   hash (file_id, algorithm, hash)
 SELECT
-  f.id AS file_id,
-  ohb.hash_type AS algorithm,
-  ohb.hash AS hash
+  files.id AS file_id,
+  old_hash.hash_type AS algorithm,
+  old_hash.hash AS hash
 FROM
-  old.hash AS ohb
-  JOIN files AS f ON f.folder = ohb.folder
-  AND f.name = ohb.download_filename
+  old.hash AS old_hash
+  JOIN files ON files.folder = old_hash.folder
+  AND files.name = old_hash.download_filename
 ORDER BY
-  f.id;
+  files.id;
 """
 
 
@@ -150,7 +150,7 @@ def migrate(old_db: Path, new_db: Path) -> None:
     if not old_db.is_file():
         raise FileNotFoundError(old_db)
 
-    now = datetime.datetime.now(datetime.UTC).replace(microsecond=0).strftime("%Y%m%d_%H%M%S")
+    now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     backup = old_db.parent / f"{old_db.stem}_{now}.bak{old_db.suffix}"
     logger.info(f"Created backup at '{backup}'")
     __ = shutil.copy2(old_db, backup)
@@ -173,9 +173,10 @@ def migrate(old_db: Path, new_db: Path) -> None:
             conn.executescript(_transfer_hash)
             conn.execute("DETACH DATABASE old;")
             conn.execute("PRAGMA foreign_keys = ON;")
-    except Exception:
+    except BaseException:
+        logger.warning("Transfer cancelled")
         conn.close()
-        new_db.unlink()
+        new_db.unlink(missing_ok=True)
         raise
     else:
         conn.close()

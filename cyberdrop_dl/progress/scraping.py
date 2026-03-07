@@ -22,7 +22,7 @@ class ScrapingPanel(OverflowPanel):
 
 
 class StatusMessage(UIComponent):
-    columns: ClassVar[ColumnsType] = (SpinnerColumn(), "[progress.description]{task.description}")
+    columns: ClassVar[ColumnsType] = (SpinnerColumn("dots6"), "[progress.description]{task.description}")
 
     def __init__(self, description: str = f"Running Cyberdrop-DL: v{__version__}") -> None:
         super().__init__()
