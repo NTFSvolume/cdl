@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import asyncio
 import itertools
-import re
+import time
 from hashlib import sha256
 from typing import TYPE_CHECKING, ClassVar, Literal, NotRequired, TypedDict, TypeGuard
 
@@ -18,9 +17,7 @@ if TYPE_CHECKING:
 
 
 _API_ENTRYPOINT = AbsoluteHttpURL("https://api.gofile.io")
-_GLOBAL_JS_URL = AbsoluteHttpURL("https://gofile.io/dist/js/config.js")
 _PRIMARY_URL = AbsoluteHttpURL("https://gofile.io")
-_PER_PAGE: int = 1000
 
 
 class Response(TypedDict):
@@ -96,7 +93,18 @@ class GoFileCrawler(Crawler):
     _RATE_LIMIT: ClassVar[RateLimit] = 4, 10
 
     def __post_init__(self) -> None:
-        self.headers: dict[str, str] = {}
+        self._api_key: str = ""
+
+    @property
+    def headers(self) -> dict[str, str]:
+        return {
+            "User-Agent": (ua := self.manager.global_config.general.user_agent),
+            "Authorization": f"Bearer {self._api_key}",
+            "X-BL": (lang := "en-US"),
+            "X-Website-Token": _generate_website_token(ua, self._api_key, lang),
+            "Origin": (origin := str(self.PRIMARY_URL)),
+            "Referer": origin + "/",
+        }
 
     @classmethod
     def _json_response_check(cls, json_resp: Response) -> None:
@@ -178,7 +186,13 @@ class GoFileCrawler(Crawler):
         self.create_task(coro)
 
     async def _folder_pager(self, content_id: str, password: str | None = None) -> AsyncGenerator[Folder]:
-        api_url = (_API_ENTRYPOINT / "contents" / content_id).with_query(pageSize=_PER_PAGE)
+        api_url = (_API_ENTRYPOINT / "contents" / content_id).with_query(
+            contentFilter="",
+            page=1,
+            sortField="name",
+            sortDirection=1,
+            pageSize=1_000,
+        )
 
         if password:
             sha256_password = sha256(password.encode()).hexdigest()
@@ -215,28 +229,21 @@ class GoFileCrawler(Crawler):
     @error_handling_wrapper
     async def _get_credentials(self, _) -> None:
         """Gets the token for the API."""
-        with self.disable_on_error("Unable to get website token"):
-            api_key, token = await asyncio.gather(self._get_api_key(), self._get_website_token())
-            self.headers = {"Authorization": f"Bearer {api_key}", "X-Website-Token": token}
-            self.update_cookies({"accountToken": api_key})
+        with self.disable_on_error("Unable to get api_key"):
+            if key := self.manager.auth_config.gofile.api_key:
+                self._api_key = key
+            else:
+                self._api_key = await self._create_temp_account()
+            self.update_cookies({"accountToken": self._api_key})
 
-    async def _get_api_key(self) -> str:
-        if key := self.manager.auth_config.gofile.api_key:
-            return key
-
+    async def _create_temp_account(self) -> str:
+        self.log("Creating temp Gofile account")
         api_url = _API_ENTRYPOINT / "accounts"
         json_resp = await self.request_json(api_url, method="POST", data={})
         if json_resp["status"] != "ok":
             raise ScrapeError(401, "Couldn't generate GoFile API token", origin=api_url)
 
         return json_resp["data"]["token"]
-
-    async def _get_website_token(self) -> str:
-        text = await self.request_text(_GLOBAL_JS_URL)
-        if match := re.search(r'appdata\.wt\s=\s"([^"]+)"', text):
-            return match.group(1)
-
-        raise ScrapeError(401, "Couldn't generate GoFile websiteToken", origin=_GLOBAL_JS_URL)
 
 
 def _check_node_is_accessible(node: Node) -> TypeGuard[File | Folder]:
@@ -262,3 +269,9 @@ def _check_node_is_accessible(node: Node) -> TypeGuard[File | Folder]:
 
 def _has_single_not_nested_file(scrape_item: ScrapeItem, folder: Folder) -> bool:
     return folder["childrenCount"] == 1 and folder["name"] == folder["code"] and scrape_item.type != FILE_HOST_ALBUM
+
+
+def _generate_website_token(ua: str, api_key: str, lang: str = "en-US") -> str:
+    # https://gofile.io/dist/js/wt.obf.js
+    data = f"{ua}::{lang}::{api_key}::{int(time.time() / 14400)}::gf2026x"
+    return sha256(data.encode()).hexdigest()
