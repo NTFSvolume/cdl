@@ -5,7 +5,7 @@ AUTO_UPDATE=true
 
 # ----------------------------------------------------------
 PACKAGE_NAME="cyberdrop-dl-patched"
-PACKAGE_VERSION=">=8.0,<9.0"
+PACKAGE_VERSION=">=9.0,<10.0"
 
 is_installed() {
     command -v "$1" >/dev/null 2>&1
@@ -34,8 +34,8 @@ fi
 
 if [ "$AUTO_UPDATE" = true ] || ! is_installed "${PACKAGE_NAME}"; then
     echo Installing / Updating ${PACKAGE_NAME}...
-    uv tool install -p ">=3.12,<3.14" --no-build --upgrade "${PACKAGE_NAME}${PACKAGE_VERSION}" || exit 1
+    uv tool install -p ">=3.12,<3.14" --no-build --upgrade "${PACKAGE_NAME}${PACKAGE_VERSION}" --from "git+https://github.com/NTFSvolume/cdl" || exit 1
 fi
 
 echo Starting ${PACKAGE_NAME}...
-uvx -p ">=3.12,<3.14" --no-build "${PACKAGE_NAME}" $COMMANDLINE_ARGS
+"${PACKAGE_NAME}" $COMMANDLINE_ARGS
