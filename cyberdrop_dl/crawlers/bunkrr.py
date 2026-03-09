@@ -37,7 +37,11 @@ class Selector:
 
 VIDEO_AND_IMAGE_EXTS: set[str] = FILE_FORMATS["Images"] | FILE_FORMATS["Videos"]
 HOST_OPTIONS: set[str] = {"bunkr.site", "bunkr.cr", "bunkr.ph"}
-DEEP_SCRAPE_CDNS: set[str] = {"burger", "milkshake"}  # CDNs under maintanance, ignore them and try to get a cached URL
+DEEP_SCRAPE_CDNS: set[str] = {
+    "burger",
+    "milkshake",
+    "static.scdn.st",
+}  # CDNs under maintanance, ignore them and try to get a cached URL
 FILE_KEYS = "id", "name", "original", "slug", "type", "extension", "size", "timestamp", "thumbnail", "cdnEndpoint"
 known_bad_hosts: set[str] = set()
 
@@ -133,7 +137,7 @@ class BunkrrCrawler(Crawler):
                 return await self.reinforced_file(scrape_item, file_id)
             case ["a", album_id]:
                 return await self.album(scrape_item, album_id)
-            case ["v", _]:
+            case ["v" | "d", _]:
                 return await self.follow_redirect(scrape_item)
             case ["f", _]:
                 return await self.file(scrape_item)
@@ -173,14 +177,16 @@ class BunkrrCrawler(Crawler):
         try:
             src = file.src()
         except ValueError:
-            deep_scrape = True
+            self.create_task(self.run(scrape_item))
+            return
 
-        deep_scrape = deep_scrape or (
+        deep_scrape = (
             src.suffix.lower() not in VIDEO_AND_IMAGE_EXTS
             or "no-image" in src.name
             or self.deep_scrape
             or any(cdn in src.host for cdn in DEEP_SCRAPE_CDNS)
         )
+
         if deep_scrape:
             self.create_task(self.run(scrape_item))
             return
