@@ -182,7 +182,7 @@ class PixelDrainCrawler(Crawler):
         origin = scrape_item.url.origin()
 
         async def request_fs(path: str) -> FileSystem:
-            api_url = (origin / "api/filesystem" / path).with_query("stat")
+            api_url = (origin / "api/filesystem" / path.removeprefix("/")).with_query("stat")
             content = await self._api_request(api_url)
             return FileSystem.model_validate_json(content)
 
