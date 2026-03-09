@@ -188,7 +188,6 @@ class GoFileCrawler(Crawler):
     async def _folder_pager(self, content_id: str, password: str | None = None) -> AsyncGenerator[Folder]:
         api_url = (_API_ENTRYPOINT / "contents" / content_id).with_query(
             contentFilter="",
-            page=1,
             sortField="name",
             sortDirection=1,
             pageSize=1_000,
