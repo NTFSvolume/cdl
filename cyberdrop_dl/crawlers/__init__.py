@@ -30,7 +30,7 @@ from aiolimiter import AsyncLimiter
 
 from cyberdrop_dl.annotations import copy_signature
 from cyberdrop_dl.client import HTTPClient, HTTPClientProxy
-from cyberdrop_dl.data_structures import AbsoluteHttpURL, MediaItem, ScrapeItem
+from cyberdrop_dl.data_structures import AbsoluteHttpURL, Download, ScrapeItem
 from cyberdrop_dl.data_structures.mediaprops import ISO639Subtitle, Resolution
 from cyberdrop_dl.exceptions import MaxChildrenError, NoExtensionError, ScrapeError
 from cyberdrop_dl.utils import (
@@ -328,7 +328,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         for host in (self.DOMAIN, self.PRIMARY_URL.host):
             self.client.json_resp_checkers[host] = self._json_resp_check_
 
-    async def __write_to_jsonl(self, media_item: MediaItem) -> None:
+    async def __write_to_jsonl(self, media_item: Download) -> None:
         if not self.config.filesystem.dump_json:
             return
 
@@ -487,7 +487,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         filename = f"{name}.metadata"  # we won't write to fs, so we skip name sanitization
         download_folder = get_download_path(self.manager, scrape_item, self.FOLDER_DOMAIN)
         url = scrape_item.url.with_scheme("metadata")
-        media_item = MediaItem.from_item(
+        media_item = Download.from_item(
             scrape_item,
             url,  # pyright: ignore[reportArgumentType]
             self.DOMAIN,
@@ -513,7 +513,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         """Finishes handling the file and hands it off to the downloader."""
         ext = ext or Path(filename).suffix
         download_folder = get_download_path(self.manager, scrape_item, self.FOLDER_DOMAIN)
-        media_item = MediaItem.from_item(
+        media_item = Download.from_item(
             scrape_item,
             url,
             self.DOMAIN,
@@ -524,13 +524,13 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
             ext=ext,
         )
         media_item.debrid_url = debrid_link
-        media_item.headers = self._headers_(media_item.referer)
+        media_item.headers = self._headers_(media_item.media.referer)
         if metadata is not None:
             media_item.metadata = metadata
         await self.handle_media_item(media_item, m3u8)
 
     @final
-    async def _download(self, media_item: MediaItem, m3u8: RenditionGroup | None) -> None:
+    async def _download(self, media_item: Download, m3u8: RenditionGroup | None) -> None:
         try:
             if m3u8:
                 await self.downloader.download_hls(media_item, m3u8)  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
@@ -540,13 +540,15 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         finally:
             await self.__write_to_jsonl(media_item)
 
-    async def handle_media_item(self, media_item: MediaItem, m3u8: RenditionGroup | None = None) -> None:
-        if media_item.timestamp and not isinstance(media_item.timestamp, int):
-            msg = f"Invalid datetime from '{self.FOLDER_DOMAIN}' crawler . Got {media_item.timestamp!r}, expected int."
+    async def handle_media_item(self, media_item: Download, m3u8: RenditionGroup | None = None) -> None:
+        if media_item.uploaded_at and not isinstance(media_item.uploaded_at, int):
+            msg = (
+                f"Invalid datetime from '{self.FOLDER_DOMAIN}' crawler . Got {media_item.uploaded_at!r}, expected int."
+            )
             self.logger.error(msg)
 
         if await self.check_complete(media_item.url, media_item.referer):
-            if media_item.album_id:
+            if media_item.media.album_id:
                 await self.manager.database.history_table.set_album_id(self.DOMAIN, media_item)
             return
 
@@ -557,7 +559,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         await self._download(media_item, m3u8)
 
     @final
-    async def check_skip_by_config(self, media_item: MediaItem) -> bool:
+    async def check_skip_by_config(self, media_item: Download) -> bool:
         media_host = media_item.url.host
 
         if (hosts := self.config.ignore.skip_hosts) and any(host in media_host for host in hosts):

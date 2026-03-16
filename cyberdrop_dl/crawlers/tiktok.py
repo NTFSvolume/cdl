@@ -5,7 +5,7 @@ import dataclasses
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl.crawlers import Crawler, SupportedPaths, auto_task_id
-from cyberdrop_dl.data_structures import AbsoluteHttpURL, MediaItem
+from cyberdrop_dl.data_structures import AbsoluteHttpURL, Download
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import error_handling_wrapper, type_adapter
 
@@ -263,8 +263,8 @@ class TikTokCrawler(Crawler):
         )
         scrape_item.add_children()
 
-    async def handle_media_item(self, media_item: MediaItem, m3u8: m3u8.RenditionGroup | None = None) -> None:
+    async def handle_media_item(self, media_item: Download, m3u8: m3u8.RenditionGroup | None = None) -> None:
         if media_item.ext == ".mp3":
-            media_item.download_folder = media_item.download_folder / "Audios"
+            media_item.folder = media_item.folder / "Audios"
 
         await super().handle_media_item(media_item, m3u8)

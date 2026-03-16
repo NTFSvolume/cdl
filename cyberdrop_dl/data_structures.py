@@ -6,19 +6,18 @@ import dataclasses
 import datetime
 import enum
 import logging
-from collections.abc import Generator
+import re
 from dataclasses import field
+from fractions import Fraction
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Self, overload
+from typing import TYPE_CHECKING, Any, Final, Literal, NamedTuple, Self, overload
 
 import yarl
 
-from .mediaprops import Resolution
-
-__all__ = ["Resolution"]
+from cyberdrop_dl.exceptions import ScrapeError
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Mapping
+    from collections.abc import Callable, Generator, Iterable, Mapping
 
     from cyberdrop_dl.annotations import copy_signature
 
@@ -130,97 +129,96 @@ class HlsSegment(NamedTuple):
     url: AbsoluteHttpURL
 
 
-class MediaID(NamedTuple):
+def _now() -> datetime.datetime:
+    return datetime.datetime.now(datetime.UTC)
+
+
+@dataclasses.dataclass(slots=True, kw_only=True)
+class Media:
+    id: int
     domain: str
-    path: str
+    db_path: str
+    referer: AbsoluteHttpURL
+    name: str
+    uploaded_at: int | None = None
+    album_id: str | None = None
+    size: int | None = None
+    duration: float | None = None
+    created_at: datetime.datetime = field(default_factory=_now)
+    upload_date: datetime.datetime | None = field(init=False, default=None)
+
+    def __post_init__(self) -> None:
+        if self.uploaded_at:
+            assert isinstance(self.uploaded_at, int), f"Invalid {self.uploaded_at =!r} from {self.referer}"
+            self.upload_date = datetime.datetime.fromtimestamp(self.uploaded_at, tz=datetime.UTC)
 
 
 @dataclasses.dataclass(unsafe_hash=True, slots=True, kw_only=True)
-class MediaItem:
+class Download:
+    media: Media
     url: AbsoluteHttpURL
-    domain: str
     referer: AbsoluteHttpURL
-    download_folder: Path
+    folder: Path
     filename: str
-    original_filename: str
-    download_filename: str | None = None
-    filesize: int | None = None
-    ext: str
-    db_path: str
+
+    ext: str = ""
     debrid_url: AbsoluteHttpURL | None = None
-    duration: float | None = None
-    is_segment: bool = False
-    album_id: str | None = None
-    timestamp: int | None = None
-    datetime: datetime.datetime | None = field(init=False, default=None)
     hash: str | None = None
-    protocol: DownloadProtocol = DownloadProtocol.HTTP
-
+    path: Path = field(init=False)
     parents: list[AbsoluteHttpURL] = field(default_factory=list)
-    parent_threads: set[AbsoluteHttpURL] = field(default_factory=set)
-    attempts: int = field(init=False, default=0)
-    complete_file: Path = field(init=False)
 
-    headers: dict[str, str] = field(default_factory=dict, compare=False)
-    downloaded: bool = False
+    _attempts: int = field(init=False, default=0)
+    _is_segment: bool = field(init=False, default=False)
+    _headers: dict[str, str] = field(default_factory=dict, compare=False)
+    _downloaded: bool = False
+    _protocol: DownloadProtocol = DownloadProtocol.HTTP
     metadata: object = field(init=False, default_factory=dict, compare=False)
     extra_info: dict[str, Any] = field(init=False, default_factory=dict, compare=False)
 
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}(domain={self.domain!r}, url={self.url!r}, referer={self.referer!r}, filename={self.filename!r}"
+    @property
+    def uploaded_at(self) -> int | None:
+        return self.media.uploaded_at
+
+    @property
+    def domain(self) -> str:
+        return self.media.domain
 
     def __post_init__(self) -> None:
-        if self.url.scheme == "metadata":
-            self.db_path = ""
-
-        self.complete_file = self.download_folder / self.filename
-        if self.timestamp:
-            assert isinstance(self.timestamp, int), f"Invalid {self.timestamp =!r} from {self.referer}"
-            self.datetime = datetime.datetime.fromtimestamp(self.timestamp, tz=datetime.UTC)
+        self.ext = self.ext or Path(self.filename).suffix
+        self.path = self.folder / self.filename
 
     @property
     def real_url(self) -> AbsoluteHttpURL:
         return self.debrid_url or self.url
 
     @property
-    def partial_file(self) -> Path:
-        return self.complete_file.with_suffix(self.complete_file.suffix + ".part")
-
-    @property
-    def id(self) -> MediaID:
-        return MediaID(self.domain, self.db_path)
+    def temp_file(self) -> Path:
+        return self.path.with_suffix(self.path.suffix + ".part")
 
     @staticmethod
     def from_item(
-        origin: ScrapeItem | MediaItem,
+        media: Media,
+        origin: ScrapeItem | Download,
         url: AbsoluteHttpURL,
-        domain: str,
         /,
         *,
         download_folder: Path,
         filename: str,
-        db_path: str,
-        original_filename: str | None = None,
         ext: str | None = None,
-    ) -> MediaItem:
-        return MediaItem(
+    ) -> Download:
+        return Download(
+            media=media,
             url=url,
-            domain=domain,
-            download_folder=download_folder,
+            folder=download_folder,
             filename=filename,
-            db_path=db_path,
             referer=origin.url,
-            album_id=origin.album_id,
             ext=ext or Path(filename).suffix,
-            original_filename=original_filename or filename,
             parents=origin.parents.copy(),
-            timestamp=origin.timestamp,
-            parent_threads=origin.parent_threads.copy(),
         )
 
     def as_dict(self) -> dict[str, Any]:
         me = dataclasses.asdict(self)
-        me["partial_file"] = self.partial_file
+        me["partial_file"] = self.temp_file
         if self.hash:
             me["hash"] = f"xxh128:{self.hash}"
         for name in ("is_segment",):
@@ -422,3 +420,161 @@ class DatetimeRange:
     def _extract(query: Mapping[str, str], name: str) -> datetime.datetime | None:
         if value := query.get(name):
             return datetime.datetime.fromisoformat(value).astimezone(datetime.UTC)
+
+
+_VIDEO_CODECS = "avc1", "avc2", "avc3", "avc4", "av1", "hevc", "hev1", "hev2", "hvc1", "hvc2", "vp8", "vp9", "vp10"
+_AUDIO_CODECS = "ac-3", "ec-3", "mp3", "mp4a", "opus", "vorbis"
+
+
+class Codecs(NamedTuple):
+    video: str | None
+    audio: str | None
+
+    @staticmethod
+    def parse(codecs: str | None) -> Codecs:
+        if not codecs:
+            return Codecs(None, None)
+        video_codec = audio_codec = None
+
+        def match_codec(codec: str, lookup_array: Iterable[str]) -> str | None:
+            codec, *_ = codec.split(".")
+            clean_codec = codec[:-1].replace("0", "") + codec[-1]
+            return next((key for key in lookup_array if clean_codec.startswith(key)), None)
+
+        for codec in codecs.split(","):
+            if not video_codec and (found := match_codec(codec, _VIDEO_CODECS)):
+                video_codec = found
+            elif not audio_codec and (found := match_codec(codec, _AUDIO_CODECS)):
+                audio_codec = found
+            if video_codec and audio_codec:
+                break
+
+        assert video_codec
+        if "avc" in video_codec:
+            video_codec = "avc1"
+        elif "hev" in video_codec or "hvc" in video_codec:
+            video_codec = "hevc"
+        return Codecs(video_codec, audio_codec)
+
+
+class Resolution(NamedTuple):
+    width: int
+    height: int
+
+    @property
+    def name(self) -> str:
+        if 7600 < self.width < 8200:
+            return "8K"
+        if 3800 < self.width < 4100:
+            return "4K"
+        return f"{self.height}p"
+
+    @property
+    def aspect_ratio(self) -> Fraction:
+        return Fraction(self.width, self.height)
+
+    @staticmethod
+    def parse(url_number_or_string: yarl.URL | str | int | None, /) -> Resolution:
+        if url_number_or_string is None:
+            return UNKNOWN_RESOLUTION
+
+        if isinstance(url_number_or_string, int):
+            return Resolution._from_height(url_number_or_string)
+
+        if not isinstance(url_number_or_string, str):
+            for resolution in COMMON_RESOLUTIONS:
+                if str(resolution.height) in url_number_or_string.parts:
+                    return resolution
+
+            url_number_or_string = url_number_or_string.path
+
+        # "1080p", "720i", "480P", the most common case
+        if (height := url_number_or_string.rstrip("pPiI")).isdecimal():
+            return Resolution._from_height(height)
+
+        # "1920x1080", "1280X720" or "640,480"
+        if match := re.search(r"(?P<width>\d+)[xX,](?P<height>\d+)", url_number_or_string):
+            return Resolution(
+                width=int(match.group("width")),
+                height=int(match.group("height")),
+            )
+
+        #  "1080p", "720i", "480P" w regex, slower but works with substrings
+        if match := re.search(r"(?<![a-zA-Z0-9])(\d+)[pPiI](?![a-zA-Z0-9])", url_number_or_string):
+            return Resolution._from_height(match.group(1))
+
+        # "2K", "4K", "8K"
+        if match := re.search(r"\b([248])[kK]\b", url_number_or_string):
+            height = {"2": 1440, "4": 2160, "8": 4320}[match.group(1)]
+            return Resolution._from_height(height)
+
+        raise ValueError(f"Unable to parse resolution from {url_number_or_string}")
+
+    @staticmethod
+    def _from_height(height: str | int, aspect_ratio: float = 16 / 9) -> Resolution:
+        height = int(height)
+        width = round(height * aspect_ratio)
+        return Resolution(width, height)
+
+    @staticmethod
+    def unknown() -> Resolution:
+        return UNKNOWN_RESOLUTION
+
+    @staticmethod
+    def highest() -> Resolution:
+        return HIGHEST_RESOLUTION
+
+    @staticmethod
+    def make_parser() -> Callable[[yarl.URL | str | int | None], Resolution]:
+        """Returns a callable wrapper around `Resolution.parse` that can return `Resolution.unknown()`
+
+        Raises `ScrapeError` if more that 1 unknown resolution is parsed"""
+
+        default_res: Resolution | None = None
+
+        def parse(quality: yarl.URL | str | int | None, /) -> Resolution:
+            nonlocal default_res
+            try:
+                return Resolution.parse(quality)
+            except ValueError as e:
+                if default_res is not None:
+                    msg = "Unable to select best quality. Resource has more that 1 unknown resolution"
+                    raise ScrapeError(422, msg) from e
+
+                default_res = Resolution.unknown()
+                return default_res
+
+        return parse
+
+
+UNKNOWN_RESOLUTION = Resolution.parse(0)
+HIGHEST_RESOLUTION = Resolution(9999, 9999)
+
+
+COMMON_RESOLUTIONS: Final = tuple(
+    Resolution(*resolution)  # Best to worst
+    for resolution in (
+        (7680, 4320),
+        (3840, 2160),
+        (2560, 1440),
+        (1920, 1080),
+        (1280, 720),
+        (640, 480),
+        (640, 360),
+        (480, 320),
+        (426, 240),
+        (320, 240),
+        (256, 144),
+    )
+)
+
+
+class ISO639Subtitle(NamedTuple):
+    """`lang_code` MUST be a valid ISO639 code (ex: en, eng, fra)"""
+
+    url: AbsoluteHttpURL | str
+    lang_code: str
+    name: str | None = None
+
+
+Subtitle = ISO639Subtitle

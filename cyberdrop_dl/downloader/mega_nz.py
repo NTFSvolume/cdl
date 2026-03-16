@@ -11,14 +11,14 @@ from cyberdrop_dl.downloader.http import HTTPFileDownloader
 if TYPE_CHECKING:
     import aiohttp
 
-    from cyberdrop_dl.data_structures import MediaItem
+    from cyberdrop_dl.data_structures import Download
 
 
 class MegaNzFileDownloader(HTTPFileDownloader):
     PROTOCOL: ClassVar[DownloadProtocol] = DownloadProtocol.MEGA_NZ
     SUPPORT_RANGES: ClassVar[bool] = False
 
-    async def _append_content(self, media_item: MediaItem, content: aiohttp.StreamReader) -> None:
+    async def _append_content(self, media_item: Download, content: aiohttp.StreamReader) -> None:
         """Appends content to a file."""
 
         assert media_item.task_id is not None
@@ -31,7 +31,7 @@ class MegaNzFileDownloader(HTTPFileDownloader):
 
         chunk_decryptor = MegaChunker(crypto.key, crypto.iv, crypto.meta_mac)
 
-        async with aio.open(media_item.partial_file, mode="ab") as f:
+        async with aio.open(media_item.temp_file, mode="ab") as f:
             for _, chunk_size in get_chunks(file_size):
                 raw_chunk = await content.readexactly(chunk_size)
                 chunk = chunk_decryptor.read(raw_chunk)

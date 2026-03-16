@@ -20,7 +20,7 @@ from cyberdrop_dl.exceptions import InsufficientFreeSpaceError
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 
-    from cyberdrop_dl.data_structures import MediaItem
+    from cyberdrop_dl.data_structures import Download
 
 
 logger = logging.getLogger(__name__)
@@ -102,10 +102,10 @@ async def has_sufficient_space(folder: Path) -> bool:
     return free_space == -1 or free_space > _required_free_space.get()
 
 
-async def check(media_item: MediaItem) -> None:
+async def check(media_item: Download) -> None:
     """Checks if there is enough free space to download this item."""
 
-    if not await has_sufficient_space(media_item.download_folder):
+    if not await has_sufficient_space(media_item.folder):
         raise InsufficientFreeSpaceError(media_item)
 
 
@@ -129,7 +129,7 @@ def is_fuse_fs(path: Path) -> bool:
     return False
 
 
-def create_free_space_checker(media_item: MediaItem, *, frecuency: int = 5) -> Callable[[], Awaitable[None]]:
+def create_free_space_checker(media_item: Download, *, frecuency: int = 5) -> Callable[[], Awaitable[None]]:
     current_chunk = 0
 
     async def checker() -> None:
