@@ -46,7 +46,7 @@ from . import json
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Generator, Mapping
 
-    from cyberdrop_dl.data_structures import AbsoluteHttpURL, MediaItem, ScrapeItem
+    from cyberdrop_dl.data_structures import AbsoluteHttpURL, Download, ScrapeItem
     from cyberdrop_dl.manager import Manager
 
     _P = ParamSpec("_P")
@@ -60,7 +60,7 @@ if TYPE_CHECKING:
         manager: Manager
 
     _HasManagerT = TypeVar("_HasManagerT", bound=_HasManager)
-    Origin = TypeVar("Origin", bound=ScrapeItem | MediaItem | URL)
+    Origin = TypeVar("Origin", bound=ScrapeItem | Download | URL)
 
 
 logger = logging.getLogger(__name__)
@@ -74,7 +74,7 @@ def get_download_path(manager: Manager, scrape_item: ScrapeItem, domain: str) ->
 
 
 @contextlib.contextmanager
-def error_handling_context(self: _HasManager, item: ScrapeItem | MediaItem | URL) -> Generator[None]:
+def error_handling_context(self: _HasManager, item: ScrapeItem | Download | URL) -> Generator[None]:
     link: URL = item if isinstance(item, URL) else item.url
     error_log_msg = origin = exc_info = None
     link_to_show: URL | str = ""
@@ -143,7 +143,7 @@ def error_handling_context(self: _HasManager, item: ScrapeItem | MediaItem | URL
     link_to_show = link_to_show or link
     origin = origin or get_origin(item)
     if is_media_item:
-        item = cast("MediaItem", item)
+        item = cast("Download", item)
         msg = f"Download Failed: {item.url} ({error_log_msg.main_log_msg}) \n -> Referer: {item.referer}"
         logger.error(msg, exc_info=exc_info)
         self.manager.logs.write_download_error(item, error_log_msg.csv_log_msg)

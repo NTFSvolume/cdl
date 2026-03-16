@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from cyberdrop_dl.config import Config
-    from cyberdrop_dl.data_structures import MediaItem
+    from cyberdrop_dl.data_structures import Download
     from cyberdrop_dl.database import Database
     from cyberdrop_dl.manager import Manager
     from cyberdrop_dl.progress import TUI
@@ -119,17 +119,17 @@ class Hasher:
         finally:
             self._sem.release()
 
-    async def _hash_item(self, media_item: MediaItem) -> None:
-        if media_item.is_segment or media_item.complete_file.suffix in constants.TempExt:
+    async def _hash_item(self, media_item: Download) -> None:
+        if media_item.is_segment or media_item.path.suffix in constants.TempExt:
             return
 
-        results = await self._hash_file(media_item.complete_file)
+        results = await self._hash_file(media_item.path)
         if not results:
             return
 
         xxh128_result = XXH128Result(results[HashAlgorithm.xxh128])
         media_item.hash = xxh128_result.hash
-        self._xxh128_hashes[media_item.complete_file] = xxh128_result
+        self._xxh128_hashes[media_item.path] = xxh128_result
         # TODO: save results to the database
 
     async def _get_hash_or_compute(self, file: Path, hash_algo: HashAlgorithm) -> HashResult:
@@ -154,13 +154,13 @@ class Hasher:
         self.tui.hashing.add_hashed(hash_algo)
         return HashResult(HashValue(hash), f_size, f_mtime)
 
-    async def hash_in_place(self, media_item: MediaItem) -> None:
+    async def hash_in_place(self, media_item: Download) -> None:
         if self.config.dedupe.hashing is not Hashing.IN_PLACE:
             return
         await self._sem.acquire()
         await self._hash_item(media_item)
 
-    async def hash_post_download(self, downloads: Iterable[MediaItem]) -> None:
+    async def hash_post_download(self, downloads: Iterable[Download]) -> None:
         if self.config.dedupe.hashing is not Hashing.POST_DOWNLOAD:
             return
 

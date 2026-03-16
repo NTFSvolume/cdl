@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from yarl import URL
 
     from cyberdrop_dl.crawlers import Crawler
-    from cyberdrop_dl.data_structures import MediaItem
+    from cyberdrop_dl.data_structures import Download
     from cyberdrop_dl.database import Database
 
 
@@ -115,11 +115,11 @@ class HistoryTable:
         rows = await cursor.fetchall()
         return {row[0]: row[1] for row in rows}
 
-    async def set_album_id(self, domain: str, media_item: MediaItem) -> None:
+    async def set_album_id(self, domain: str, media_item: Download) -> None:
         """Sets an album_id in the database."""
 
         query = "UPDATE media SET album_id = ? WHERE domain = ? and url_path = ?"
-        await self.db_conn.execute(query, (media_item.album_id, domain, media_item.db_path))
+        await self.db_conn.execute(query, (media_item.media.album_id, domain, media_item.media.db_path))
         await self.db_conn.commit()
 
     async def check_complete_by_referer(self, domain: str | None, referer: URL) -> bool:
@@ -144,15 +144,15 @@ class HistoryTable:
             rows = [row]
         return bool(rows and any(row[0] != 0 for row in rows))
 
-    async def insert_incompleted(self, domain: str, media_item: MediaItem) -> None:
+    async def insert_incompleted(self, domain: str, media_item: Download) -> None:
         """Inserts an uncompleted file into the database."""
 
-        url_path = media_item.db_path
+        url_path = media_item.media.db_path
         download_filename = media_item.download_filename or ""
         cursor = await self.db_conn.cursor()
         query = "UPDATE media SET domain = ?, album_id = ? WHERE domain = 'no_crawler' and url_path = ? and referer = ?"
         try:
-            await cursor.execute(query, (domain, media_item.album_id, url_path, str(media_item.referer)))
+            await cursor.execute(query, (domain, media_item.media.album_id, url_path, str(media_item.media.referer)))
         except IntegrityError:
             delete_query = "DELETE FROM media WHERE domain = 'no_crawler' and url_path = ?"
             await cursor.execute(delete_query, (url_path,))
@@ -168,11 +168,11 @@ class HistoryTable:
             (
                 domain,
                 url_path,
-                str(media_item.referer),
-                media_item.album_id,
-                str(media_item.download_folder),
+                str(media_item.media.referer),
+                media_item.media.album_id,
+                str(media_item.folder),
                 download_filename,
-                media_item.original_filename,
+                media_item.media.name,
                 0,
             ),
         )
@@ -181,45 +181,45 @@ class HistoryTable:
             await cursor.execute(query, (download_filename, domain, url_path))
         await self.db_conn.commit()
 
-    async def mark_complete(self, domain: str, media_item: MediaItem) -> None:
+    async def mark_complete(self, domain: str, media_item: Download) -> None:
         """Mark a download as completed in the database."""
 
-        url_path = media_item.db_path
+        url_path = media_item.media.db_path
         query = "UPDATE media SET completed = 1, completed_at = CURRENT_TIMESTAMP WHERE domain = ? and url_path = ?"
         await self.db_conn.execute(query, (domain, url_path))
         await self.db_conn.commit()
 
-    async def add_filesize(self, domain: str, media_item: MediaItem) -> None:
+    async def add_filesize(self, domain: str, media_item: Download) -> None:
         """Adds the file size to the db."""
 
-        url_path = media_item.db_path
-        file_size = media_item.complete_file.stat().st_size
+        url_path = media_item.media.db_path
+        file_size = media_item.path.stat().st_size
         query = """UPDATE media SET file_size=? WHERE domain = ? and url_path = ?"""
         await self.db_conn.execute(query, (file_size, domain, url_path))
         await self.db_conn.commit()
 
-    async def add_duration(self, domain: str, media_item: MediaItem) -> None:
+    async def add_duration(self, domain: str, media_item: Download) -> None:
         """Adds the duration to the db."""
 
-        url_path = media_item.db_path
+        url_path = media_item.media.db_path
         query = "UPDATE media SET duration=? WHERE domain = ? and url_path = ?"
-        await self.db_conn.execute(query, (media_item.duration, domain, url_path))
+        await self.db_conn.execute(query, (media_item.media.duration, domain, url_path))
         await self.db_conn.commit()
 
-    async def get_duration(self, domain: str, media_item: MediaItem) -> float | None:
+    async def get_duration(self, domain: str, media_item: Download) -> float | None:
         """Returns the duration from the database."""
         if media_item.is_segment:
             return
 
-        url_path = media_item.db_path
+        url_path = media_item.media.db_path
         query = "SELECT duration FROM media WHERE domain = ? and url_path = ?"
         cursor = await self.db_conn.execute(query, (domain, url_path))
         if row := await cursor.fetchone():
             return row[0]
 
-    async def add_download_filename(self, domain: str, media_item: MediaItem) -> None:
+    async def add_download_filename(self, domain: str, media_item: Download) -> None:
         """Add the download_filename to the db."""
-        url_path = media_item.db_path
+        url_path = media_item.media.db_path
         query = "UPDATE media SET download_filename=? WHERE domain = ? and url_path = ? and download_filename = ''"
         await self.db_conn.execute(query, (media_item.download_filename, domain, url_path))
         await self.db_conn.commit()
@@ -232,13 +232,13 @@ class HistoryTable:
         # TODO: this is a bug. It should check the first index
         return row == 1
 
-    async def get_downloaded_filename(self, domain: str, media_item: MediaItem) -> str | None:
+    async def get_downloaded_filename(self, domain: str, media_item: Download) -> str | None:
         """Returns the downloaded filename from the database."""
 
         if media_item.is_segment:
-            return media_item.filename
+            return media_item.media.name
 
-        url_path = media_item.db_path
+        url_path = media_item.media.db_path
         query = "SELECT download_filename FROM media WHERE domain = ? and url_path = ?"
         cursor = await self.db_conn.execute(query, (domain, url_path))
         if row := await cursor.fetchone():

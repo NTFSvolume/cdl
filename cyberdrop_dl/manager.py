@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
     from yarl import URL
 
-    from cyberdrop_dl.data_structures import MediaItem, ScrapeItem
+    from cyberdrop_dl.data_structures import Download, ScrapeItem
 
 
 _CSV_DELIMITER = ","
@@ -105,13 +105,13 @@ class LogsManager:
             self._write_to_csv(self.config.logs.unsupported, url=url, origin=get_origin(origin))
         )
 
-    def write_download_error(self, media_item: MediaItem, error_message: str) -> None:
+    def write_download_error(self, media_item: Download, error_message: str) -> None:
         _ = self.task_group.create_task(
             self._write_to_csv(
                 self.config.logs.download_errors,
                 url=media_item.url,
                 error=error_message,
-                referer=media_item.referer,
+                referer=media_item.media.referer,
                 origin=get_origin(media_item),
             )
         )

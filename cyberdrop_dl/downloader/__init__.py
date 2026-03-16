@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.client import HTTPClient
     from cyberdrop_dl.config import Config
-    from cyberdrop_dl.data_structures import DownloadProtocol, MediaID, MediaItem
+    from cyberdrop_dl.data_structures import Download, DownloadProtocol, MediaID
     from cyberdrop_dl.database import Database
     from cyberdrop_dl.hasher import Hasher
     from cyberdrop_dl.manager import Manager
@@ -54,7 +54,7 @@ class FileDownloader(ABC):
         _PROTOCOL_MAP[cls.PROTOCOL] = cls
 
     @abstractmethod
-    async def run(self, media_item: MediaItem) -> bool: ...
+    async def run(self, media_item: Download) -> bool: ...
 
 
 class SpeedLimiter(AsyncLimiter):
@@ -79,10 +79,10 @@ class DownloadManager:
 
     speed_limiter: SpeedLimiter = dataclasses.field(init=False)
     _processed: set[MediaID] = dataclasses.field(init=False, default_factory=set)
-    _downloaded: list[MediaItem] = dataclasses.field(init=False, default_factory=list)
+    _downloaded: list[Download] = dataclasses.field(init=False, default_factory=list)
 
     @property
-    def successful_downloads(self) -> list[MediaItem]:
+    def successful_downloads(self) -> list[Download]:
         return self._downloaded
 
     def __post_init__(self) -> None:
@@ -107,7 +107,7 @@ class DownloadManager:
         )
 
     @final
-    async def add_completed(self, media_item: MediaItem) -> None:
+    async def add_completed(self, media_item: Download) -> None:
         if media_item.is_segment:
             return
         if self.config.download.mtime:
@@ -118,8 +118,8 @@ class DownloadManager:
         self.tui.files.add_completed()
 
     @final
-    async def finalize_download(self, media_item: MediaItem) -> None:
-        await aio.chmod(media_item.complete_file, 0o666)
+    async def finalize_download(self, media_item: Download) -> None:
+        await aio.chmod(media_item.path, 0o666)
         if media_item.is_segment:
             return
 
@@ -128,7 +128,7 @@ class DownloadManager:
         logger.info(f"Download finished: {media_item.url}")
 
     @final
-    async def run(self, media_item: MediaItem) -> bool:
+    async def run(self, media_item: Download) -> bool:
         if await self.__should_skip_by_config(media_item):
             return False
 
@@ -139,7 +139,7 @@ class DownloadManager:
             return await self.__download_w_retries(media_item)
 
     @contextlib.asynccontextmanager
-    async def __limiter(self, media_item: MediaItem) -> AsyncGenerator[None]:
+    async def __limiter(self, media_item: Download) -> AsyncGenerator[None]:
         if media_item.is_segment:
             yield
             return
@@ -151,39 +151,39 @@ class DownloadManager:
             _LOCKS[media_item.filename],
         ):
             logger.debug(f"Lock for {media_item.filename!r} acquired")
-            self._processed.add(media_item.id)
+            self._processed.add(media_item.media.id)
             try:
                 yield
             finally:
                 logger.debug(f"Lock for {media_item.filename!r} released")
 
-    async def _skip_download(self, media_item: MediaItem, reason: object) -> None:
+    async def _skip_download(self, media_item: Download, reason: object) -> None:
         logger.info(f"Download skipped {media_item.url}: {reason}")
         self.tui.files.add_skipped()
         if self.config.download.mark_completed:
             logger.info(f"Skipped download {media_item.url} marked as completed on the database")
             await self.database.history_table.mark_complete(media_item.domain, media_item)
 
-    async def __should_skip_by_config(self, media_item: MediaItem) -> bool:
+    async def __should_skip_by_config(self, media_item: Download) -> bool:
         if media_item.is_segment:
             return False
 
-        if not self.config.runtime.ignore_history and media_item.id in self._processed:
+        if not self.config.runtime.ignore_history and media_item.media.id in self._processed:
             return True
 
-        if media_item.duration is None:
-            media_item.duration = await self.database.history_table.get_duration(media_item.domain, media_item)
+        if media_item.media.duration is None:
+            media_item.media.duration = await self.database.history_table.get_duration(media_item.domain, media_item)
 
         if self.config.download.skip_download:
             reason = "due to --skip-download option"
         elif _filter_by_extension(media_item, self.config):
             reason = f"File extension ({media_item.ext}) ignored by config options"
         elif _filter_by_duration(media_item, self.config):
-            reason = f"File duration ({media_item.duration}s) out of config range"
+            reason = f"File duration ({media_item.media.duration}s) out of config range"
         elif _filter_by_date(media_item, self.config):
-            reason = f"File upload date ({media_item.datetime}) out of config range"
+            reason = f"File upload date ({media_item.media.upload_date}) out of config range"
         elif _filter_by_filesize(media_item, self.config):
-            reason = f"File size({media_item.filesize}s) out of config range"
+            reason = f"File size({media_item.media.size}s) out of config range"
         else:
             return False
 
@@ -191,11 +191,11 @@ class DownloadManager:
         return True
 
     @error_handling_wrapper
-    async def __download_w_retries(self, media_item: MediaItem) -> bool:
-        if media_item.duration is None:
-            media_item.duration = await _probe_duration(media_item)
+    async def __download_w_retries(self, media_item: Download) -> bool:
+        if media_item.media.duration is None:
+            media_item.media.duration = await _probe_duration(media_item)
         if _filter_by_duration(media_item, self.config):
-            reason = f"File duration ({media_item.duration}s) out of config range"
+            reason = f"File duration ({media_item.media.duration}s) out of config range"
             await self._skip_download(media_item, reason)
             return False
 
@@ -207,17 +207,17 @@ class DownloadManager:
                     raise
 
                 logger.error(f"Download failed: {media_item.url} with error: {e!s}")
-                if media_item.attempts >= self.config.rate_limits.download_retries:
+                if media_item._attempts >= self.config.rate_limits.download_retries:
                     raise
 
-                media_item.attempts += 1
-                retry_msg = f"Retrying download: {media_item.url}, attempt: {media_item.attempts + 1}"
+                media_item._attempts += 1
+                retry_msg = f"Retrying download: {media_item.url}, attempt: {media_item._attempts + 1}"
                 logger.info(retry_msg)
 
-    async def __download(self, media_item: MediaItem) -> bool:
+    async def __download(self, media_item: Download) -> bool:
         await asyncio.sleep(self.config.rate_limits.total_download_delay)
         try:
-            downloader = _PROTOCOL_MAP[media_item.protocol](self)
+            downloader = _PROTOCOL_MAP[media_item._protocol](self)
             return await downloader.run(media_item)
 
         except (DownloadError, ClientResponseError, InvalidContentTypeError):
@@ -254,31 +254,31 @@ class DownloadManager:
 
         return check_download_speed
 
-    async def post_download_check(self, media_item: MediaItem) -> None:
-        if (await aio.get_size(media_item.partial_file)) == 0:
-            await aio.unlink(media_item.partial_file)
+    async def post_download_check(self, media_item: Download) -> None:
+        if (await aio.get_size(media_item.temp_file)) == 0:
+            await aio.unlink(media_item.temp_file)
             raise DownloadError(HTTPStatus.INTERNAL_SERVER_ERROR, "File is empty")
 
         if media_item.is_segment:
             return
 
-        if media_item.duration is None:
-            media_item.duration = await _probe_duration(media_item)
+        if media_item.media.duration is None:
+            media_item.media.duration = await _probe_duration(media_item)
 
         if _filter_by_duration(media_item, self.config):
-            msg = f"Download deleted {media_item.url} due to duration restrictions ({media_item.duration})"
+            msg = f"Download deleted {media_item.url} due to duration restrictions ({media_item.media.duration})"
         elif _filter_by_filesize(media_item, self.config):
-            msg = f"Download deleted {media_item.url} due to filesize restrictions ({media_item.filesize})"
+            msg = f"Download deleted {media_item.url} due to filesize restrictions ({media_item.media.size})"
         else:
             return
 
-        await aio.unlink(media_item.complete_file)
+        await aio.unlink(media_item.path)
         logger.warning(msg)
         self.tui.files.add_skipped()
         raise ValueError
 
 
-def _filter_by_extension(media_item: MediaItem, config: Config) -> bool:
+def _filter_by_extension(media_item: Download, config: Config) -> bool:
     options = config.ignore
     ext = media_item.ext
 
@@ -290,11 +290,11 @@ def _filter_by_extension(media_item: MediaItem, config: Config) -> bool:
     )
 
 
-def _filter_by_date(media_item: MediaItem, config: Config) -> bool:
-    if not media_item.datetime:
+def _filter_by_date(media_item: Download, config: Config) -> bool:
+    if not media_item.media.upload_date:
         return False
 
-    date = media_item.datetime.date()
+    date = media_item.media.upload_date.date()
     options = config.ignore
     return bool(
         (options.exclude_before and date < options.exclude_before)
@@ -302,16 +302,16 @@ def _filter_by_date(media_item: MediaItem, config: Config) -> bool:
     )
 
 
-async def _probe_duration(media_item: MediaItem) -> float | None:
+async def _probe_duration(media_item: Download) -> float | None:
     is_video = media_item.ext in constants.FileExt.VIDEO
     is_audio = media_item.ext in constants.FileExt.AUDIO
     if not (is_video or is_audio):
         return
 
-    if media_item.downloaded:
-        properties = await ffmpeg.probe(media_item.complete_file)
+    if media_item._downloaded:
+        properties = await ffmpeg.probe(media_item.path)
     else:
-        properties = await ffmpeg.probe(media_item.url, headers=media_item.headers)
+        properties = await ffmpeg.probe(media_item.url, headers=media_item._headers)
 
     if properties.format.duration:
         return properties.format.duration
@@ -321,48 +321,48 @@ async def _probe_duration(media_item: MediaItem) -> float | None:
         return properties.audio.duration
 
 
-def _filter_by_duration(media_item: MediaItem, config: Config) -> bool:
+def _filter_by_duration(media_item: Download, config: Config) -> bool:
     """Checks the file runtime against the config runtime limits."""
 
-    if media_item.duration is None:
+    if media_item.media.duration is None:
         return False
 
     limits = config.media_duration_limits.ranges
     if media_item.ext in constants.FileExt.VIDEO:
-        return media_item.duration not in limits.video
+        return media_item.media.duration not in limits.video
     if media_item.ext in constants.FileExt.AUDIO:
-        return media_item.duration not in limits.audio
+        return media_item.media.duration not in limits.audio
     return False
 
 
-def _filter_by_filesize(item: MediaItem, config: Config) -> bool:
+def _filter_by_filesize(item: Download, config: Config) -> bool:
     """Checks if the file size is within the limits."""
 
-    if item.filesize is None:
+    if item.media.size is None:
         return False
 
     limits = config.file_size_limits.ranges
     if item.ext in constants.FileExt.IMAGE:
-        return item.filesize not in limits.image
+        return item.media.size not in limits.image
     if item.ext in constants.FileExt.VIDEO:
-        return item.filesize not in limits.video
-    return item.filesize not in limits.other
+        return item.media.size not in limits.video
+    return item.media.size not in limits.other
 
 
-async def _set_file_modtime(item: MediaItem) -> None:
-    if not item.timestamp:
-        logger.warning(f"Unable to parse upload date for {item.url}, using current datetime as file datetime")
+async def _set_file_modtime(download: Download) -> None:
+    if not download.media.uploaded_at:
+        logger.warning(f"Unable to parse upload date for {download.url}, using current datetime as file datetime")
         return
 
     # 1. try setting creation date
     try:
-        await dates.set_creation_time(item.complete_file, item.timestamp)
+        await dates.set_creation_time(download.path, download.media.uploaded_at)
 
     except (OSError, ValueError):
         pass
 
     # 2. try setting modification and access date
     try:
-        await asyncio.to_thread(os.utime, item.complete_file, (item.timestamp, item.timestamp))
+        await asyncio.to_thread(os.utime, download.path, (download.media.uploaded_at, download.media.uploaded_at))
     except OSError:
         pass

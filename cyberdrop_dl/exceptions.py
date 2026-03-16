@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from yaml import YAMLError
     from yarl import URL
 
-    from cyberdrop_dl.data_structures import MediaItem, ScrapeItem
+    from cyberdrop_dl.data_structures import Download, ScrapeItem
 
 
 def _format_error(ui_failure: str, message: str) -> str:
@@ -60,7 +60,7 @@ class CDLBaseError(Exception):
         *,
         message: str | None = None,
         status: str | int | None = None,
-        origin: ScrapeItem | MediaItem | URL | Path | None = None,
+        origin: ScrapeItem | Download | URL | Path | None = None,
     ) -> None:
         self.ui_failure = ui_failure
         self.message = message or ui_failure
@@ -75,28 +75,28 @@ class CDLBaseError(Exception):
 
 
 class InvalidContentTypeError(CDLBaseError):
-    def __init__(self, *, message: str | None = None, origin: ScrapeItem | MediaItem | URL | None = None) -> None:
+    def __init__(self, *, message: str | None = None, origin: ScrapeItem | Download | URL | None = None) -> None:
         """This error will be thrown when the content type isn't as expected."""
         ui_failure = "Invalid Content Type"
         super().__init__(ui_failure, message=message, origin=origin)
 
 
 class NoExtensionError(CDLBaseError):
-    def __init__(self, filename: str | None = None, *, origin: ScrapeItem | MediaItem | URL | None = None) -> None:
+    def __init__(self, filename: str | None = None, *, origin: ScrapeItem | Download | URL | None = None) -> None:
         """This error will be thrown when no extension is given for a file."""
         ui_failure = "No File Extension"
         super().__init__(ui_failure, message=filename, origin=origin)
 
 
 class InvalidExtensionError(NoExtensionError):
-    def __init__(self, filename: str | None = None, *, origin: ScrapeItem | MediaItem | URL | None = None) -> None:
+    def __init__(self, filename: str | None = None, *, origin: ScrapeItem | Download | URL | None = None) -> None:
         """This error will be thrown when no extension is given for a file."""
         super().__init__(filename=filename, origin=origin)
         self.ui_failure = "Invalid File Extension"
 
 
 class PasswordProtectedError(CDLBaseError):
-    def __init__(self, message: str | None = None, *, origin: ScrapeItem | MediaItem | URL | None = None) -> None:
+    def __init__(self, message: str | None = None, *, origin: ScrapeItem | Download | URL | None = None) -> None:
         """This error will be thrown when a file is password protected."""
         ui_failure = "Password Protected"
         msg = message or "File/Folder is password protected"
@@ -104,7 +104,7 @@ class PasswordProtectedError(CDLBaseError):
 
 
 class MaxChildrenError(CDLBaseError):
-    def __init__(self, message: str | None = None, *, origin: ScrapeItem | MediaItem | URL | None = None) -> None:
+    def __init__(self, message: str | None = None, *, origin: ScrapeItem | Download | URL | None = None) -> None:
         """This error will be thrown when an scrape item reaches its max number or children."""
         ui_failure = "Max Children Reached"
         msg = message or "Max number of children reached"
@@ -112,7 +112,7 @@ class MaxChildrenError(CDLBaseError):
 
 
 class DDOSGuardError(CDLBaseError):
-    def __init__(self, message: str | None = None, *, origin: ScrapeItem | MediaItem | URL | None = None) -> None:
+    def __init__(self, message: str | None = None, *, origin: ScrapeItem | Download | URL | None = None) -> None:
         """This error will be thrown when DDoS-Guard is detected."""
         ui_failure = "DDoS-Guard"
         msg = message or "DDoS-Guard detected"
@@ -124,7 +124,7 @@ class DownloadError(CDLBaseError):
         self,
         status: str | int,
         message: str | None = None,
-        origin: ScrapeItem | MediaItem | URL | None = None,
+        origin: ScrapeItem | Download | URL | None = None,
         retry: bool = False,
     ) -> None:
         """This error will be thrown when a download fails."""
@@ -135,14 +135,14 @@ class DownloadError(CDLBaseError):
 
 
 class SlowDownloadError(DownloadError):
-    def __init__(self, origin: ScrapeItem | MediaItem | URL | None = None) -> None:
+    def __init__(self, origin: ScrapeItem | Download | URL | None = None) -> None:
         """This error will be thrown when a file will be skipped do to a low download speed."""
         ui_failure = "Slow Download"
         super().__init__(ui_failure, origin=origin)
 
 
 class InsufficientFreeSpaceError(CDLBaseError):
-    def __init__(self, origin: ScrapeItem | MediaItem | URL | None = None) -> None:
+    def __init__(self, origin: ScrapeItem | Download | URL | None = None) -> None:
         """This error will be thrown when no enough storage is available."""
         ui_failure = "Insufficient Free Space"
         super().__init__(ui_failure, origin=origin)
@@ -150,7 +150,7 @@ class InsufficientFreeSpaceError(CDLBaseError):
 
 class ScrapeError(CDLBaseError):
     def __init__(
-        self, status: str | int, message: str | None = None, origin: ScrapeItem | MediaItem | URL | None = None
+        self, status: str | int, message: str | None = None, origin: ScrapeItem | Download | URL | None = None
     ) -> None:
         """This error will be thrown when a scrape fails."""
         ui_failure = create_error_msg(status)
@@ -159,7 +159,7 @@ class ScrapeError(CDLBaseError):
 
 class InvalidURLError(ScrapeError):
     def __init__(
-        self, message: str | None = None, origin: ScrapeItem | MediaItem | URL | None = None, url: URL | str = ""
+        self, message: str | None = None, origin: ScrapeItem | Download | URL | None = None, url: URL | str = ""
     ) -> None:
         """This error will be thrown when parsed URL is not valid."""
         ui_failure = "Invalid URL"
@@ -168,7 +168,7 @@ class InvalidURLError(ScrapeError):
 
 
 class LoginError(CDLBaseError):
-    def __init__(self, message: str | None = None, *, origin: ScrapeItem | MediaItem | URL | None = None) -> None:
+    def __init__(self, message: str | None = None, *, origin: ScrapeItem | Download | URL | None = None) -> None:
         """This error will be thrown when the login fails for a site."""
         ui_failure = "Failed Login"
         super().__init__(ui_failure, message=message, origin=origin)
@@ -210,7 +210,7 @@ def create_error_msg(error: int | str) -> str:
     return f"Unknown ({error})"
 
 
-def get_origin(origin: ScrapeItem | Path | MediaItem | URL | None = None) -> Path | URL | None:
+def get_origin(origin: ScrapeItem | Path | Download | URL | None = None) -> Path | URL | None:
     from yarl import URL
 
     if origin and not isinstance(origin, URL | Path):

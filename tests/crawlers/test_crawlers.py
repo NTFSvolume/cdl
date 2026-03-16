@@ -12,7 +12,7 @@ import pytest
 from pydantic import TypeAdapter
 from typing_extensions import TypedDict
 
-from cyberdrop_dl.data_structures import AbsoluteHttpURL, MediaItem, ScrapeItem
+from cyberdrop_dl.data_structures import AbsoluteHttpURL, Download, ScrapeItem
 from cyberdrop_dl.scrape_mapper import ScrapeMapper
 from cyberdrop_dl.utils import parse_url
 
@@ -109,7 +109,7 @@ async def test_crawler(running_manager: Manager, crawler_test_case: CrawlerTestC
             item = ScrapeItem(url=crawler.parse_url(test_case.input_url))
             await crawler.run(item)
 
-    results: list[MediaItem] = sorted((call.args[0] for call in func.call_args_list), key=lambda x: str(x.url))
+    results: list[Download] = sorted((call.args[0] for call in func.call_args_list), key=lambda x: str(x.url))
     total = test_case.total or len(test_case.results)
     _assert_n_results(test_case, len(results))
     if total:
@@ -125,7 +125,7 @@ def _assert_n_results(test_case: CrawlerTestCase, n_results: int) -> None:
         assert total == n_results
 
 
-def _validate_results(crawler: Crawler, test_case: CrawlerTestCase, results: list[MediaItem]) -> None:
+def _validate_results(crawler: Crawler, test_case: CrawlerTestCase, results: list[Download]) -> None:
     expected_results = sorted(test_case.results, key=lambda x: x["url"])
     origin = getattr(crawler, "PRIMARY_URL", AbsoluteHttpURL("https://google.com"))
     for index, (expected, media_item) in enumerate(zip(expected_results, results, strict=False), 1):
@@ -177,6 +177,6 @@ async def test_direct_http_crawler(running_manager: Manager, url: str, filename:
             item = ScrapeItem(url=parse_url(test_case.input_url))
             await crawler.fetch(item)
 
-    results: list[MediaItem] = sorted((call.args[0] for call in func.call_args_list), key=lambda x: str(x.url))
+    results: list[Download] = sorted((call.args[0] for call in func.call_args_list), key=lambda x: str(x.url))
     func.assert_awaited()
     _validate_results(crawler, test_case, results)

@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.client import HTTPClient
     from cyberdrop_dl.config import Config
-    from cyberdrop_dl.data_structures import AbsoluteHttpURL, MediaItem
+    from cyberdrop_dl.data_structures import AbsoluteHttpURL, Download
     from cyberdrop_dl.progress import TUI, ProgressHook
 
 
@@ -46,7 +46,7 @@ class HTTPFileDownloader(FileDownloader):
         self.chunk_size: int = dl_manager.config.rate_limits.chunk_size
 
     @override
-    async def run(self, media_item: MediaItem) -> bool:
+    async def run(self, media_item: Download) -> bool:
         """Starts a file download.
 
         Returns `True` if the file was successfully downloaded.
@@ -72,59 +72,59 @@ class HTTPFileDownloader(FileDownloader):
         # TODO: move all the databse updates out of the downloader. Use ctx manager
 
         with progress_hook:
-            _ = await aio.move(media_item.partial_file, media_item.complete_file)
-            media_item.downloaded = True
+            _ = await aio.move(media_item.temp_file, media_item.path)
+            media_item._downloaded = True
             try:
                 await self.dl_manager.post_download_check(media_item)
             except ValueError:
-                media_item.downloaded = False
+                media_item._downloaded = False
             else:
                 await self.dl_manager.finalize_download(media_item)
 
-            return media_item.downloaded
+            return media_item._downloaded
 
     @contextlib.asynccontextmanager
     async def __request_download(
-        self, media_item: MediaItem
+        self, media_item: Download
     ) -> AsyncGenerator[tuple[AbstractResponse[Any], ProgressHook]]:
-        if self.SUPPORTS_RANGES and (size := await aio.get_size(media_item.partial_file)):
+        if self.SUPPORTS_RANGES and (size := await aio.get_size(media_item.temp_file)):
             resume_point = size
-            media_item.headers[hdrs.RANGE] = f"bytes={size}-"
+            media_item._headers[hdrs.RANGE] = f"bytes={size}-"
         else:
             resume_point = 0
 
-        async with self.__request(media_item.real_url, media_item.domain, media_item.headers) as resp:
+        async with self.__request(media_item.real_url, media_item.domain, media_item._headers) as resp:
             await self.__check_resp(media_item, resp)
-            media_item.filesize = resume_point + int(resp.headers.get(hdrs.CONTENT_LENGTH, 0))
+            media_item.media.size = resume_point + int(resp.headers.get(hdrs.CONTENT_LENGTH, 0))
             if media_item.is_segment:
                 progress_hook = self.tui.downloads.new_hls_seg_task()
             else:
-                progress_hook = self.tui.downloads.new_task(media_item.filename, media_item.filesize)
+                progress_hook = self.tui.downloads.new_task(media_item.filename, media_item.media.size)
             if resume_point:
                 progress_hook.advance(resume_point)
 
             yield resp, progress_hook
 
-    async def __check_resp(self, media_item: MediaItem, resp: AbstractResponse[Any]) -> None:
+    async def __check_resp(self, media_item: Download, resp: AbstractResponse[Any]) -> None:
         if resp.status == HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE:
-            await aio.unlink(media_item.partial_file)
+            await aio.unlink(media_item.temp_file)
 
         await self.client.check_http_status(resp, is_download=True)
         if not media_item.is_segment:
             _check_content_type(media_item.ext, resp.headers)
 
         if resp.status != HTTPStatus.PARTIAL_CONTENT:
-            await aio.unlink(media_item.partial_file, missing_ok=True)
+            await aio.unlink(media_item.temp_file, missing_ok=True)
 
         if (
             not media_item.is_segment
-            and not media_item.timestamp
+            and not media_item.media.uploaded_at
             and (last_modified := _get_last_modified(resp.headers))
         ):
             logger.warning(
                 f"Unable to parse upload date for {media_item.url}, using `Last-Modified` header as file datetime"
             )
-            media_item.timestamp = last_modified
+            media_item.media.uploaded_at = last_modified
 
         _check_content_length(resp.headers)
 
@@ -146,7 +146,7 @@ class HTTPFileDownloader(FileDownloader):
 
     async def _perform_download(
         self,
-        media_item: MediaItem,
+        media_item: Download,
         resp: AbstractResponse[Any],
         progress_hook: ProgressHook,
     ) -> None:
@@ -155,7 +155,7 @@ class HTTPFileDownloader(FileDownloader):
 
         await check_free_space()
 
-        async with aio.open(media_item.partial_file, mode="ab") as f:
+        async with aio.open(media_item.temp_file, mode="ab") as f:
             async for chunk in resp.iter_chunked(self.chunk_size):
                 await check_free_space()
                 n_bytes = len(chunk)
@@ -164,8 +164,8 @@ class HTTPFileDownloader(FileDownloader):
                 progress_hook.advance(n_bytes)
                 check_speed()
 
-    def _prepare_download(self, media_item: MediaItem) -> Coroutine[None, None, None]:
-        file = media_item.partial_file
+    def _prepare_download(self, media_item: Download) -> Coroutine[None, None, None]:
+        file = media_item.temp_file
 
         def prepare() -> None:
             file.parent.mkdir(parents=True, exist_ok=True)
