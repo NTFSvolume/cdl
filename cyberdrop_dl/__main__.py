@@ -19,6 +19,7 @@ from cyberdrop_dl.manager import Manager
 from cyberdrop_dl.models import format_validation_error
 from cyberdrop_dl.models.types import HttpURL
 from cyberdrop_dl.notifications import send_notifications
+from cyberdrop_dl.progress.scraping import StatusMessage
 from cyberdrop_dl.sorting import Sorter
 from cyberdrop_dl.updates import check_latest_pypi
 from cyberdrop_dl.utils import check_partials_and_empty_folders
@@ -197,6 +198,19 @@ def retry(
             await gen.aclose()
 
     aio.run(scrape(manager, load_items))
+
+
+@app.command()
+def transfer(db_path: Path, output_path: Path, /) -> None:
+    """Transfer an old database file (v8.10) to the newer v10 format"""
+    with setup_logging(Path("cdl_transfer.log"), level=logging.DEBUG):
+        logger.warning(
+            " Make sure the old database is from version 8.10. Otherwise the migration may fail. Press any key to continue"
+        )
+        from cyberdrop_dl.database2.transfer import migrate
+
+        with StatusMessage("Database transfer in progress...").activity:
+            migrate(db_path, output_path)
 
 
 def main() -> None:
