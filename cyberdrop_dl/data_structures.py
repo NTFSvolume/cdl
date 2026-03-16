@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Final, Literal, NamedTuple, Self, overload
 
 import yarl
+from typing_extensions import Sentinel
 
 from cyberdrop_dl.exceptions import ScrapeError
 
@@ -104,6 +105,29 @@ else:
 logger = logging.getLogger(__name__)
 
 
+_FIELDS_CACHE: dict[type, tuple[str, ...]] = {}
+_MISSING = Sentinel("_MISSING")
+
+
+def _fields(cls: type) -> tuple[str, ...]:
+    if fields := _FIELDS_CACHE.get(cls):
+        return fields
+    fields = _FIELDS_CACHE[cls] = tuple(f.name for f in dataclasses.fields(cls))
+    return fields
+
+
+class _DictDataclass:
+    __dataclass_fields__: ClassVar[dict[str, dataclasses.Field[Any]]]
+
+    @classmethod
+    def filter_dict(cls, data: Mapping[str, Any], /) -> dict[str, Any]:
+        return {k: v for k in _fields(cls) if (v := data.get(k, _MISSING)) is not _MISSING}
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any], /) -> Self:
+        return cls(**cls.filter_dict(data))
+
+
 class DownloadProtocol(enum.StrEnum):
     HTTP = enum.auto()
     HLS = enum.auto()
@@ -123,30 +147,8 @@ class HlsSegment(NamedTuple):
     url: AbsoluteHttpURL
 
 
-_FIELDS_CACHE: dict[type, tuple[str, ...]] = {}
-
-
-def _fields(cls: type) -> tuple[str, ...]:
-    if fields := _FIELDS_CACHE.get(cls):
-        return fields
-    fields = _FIELDS_CACHE[cls] = tuple(f.name for f in dataclasses.fields(cls))
-    return fields
-
-
-class _DictParser:
-    __dataclass_fields__: ClassVar[dict[str, dataclasses.Field[Any]]]
-
-    @classmethod
-    def _filter_dict(cls, data: Mapping[str, Any], /) -> dict[str, Any]:
-        return {k: v for k, v in data.items() if k in _fields(cls)}
-
-    @classmethod
-    def from_dict(cls, data: Mapping[str, Any], /) -> Self:
-        return cls(**cls._filter_dict(data))
-
-
 @dataclasses.dataclass(slots=True, kw_only=True)
-class Media(_DictParser):
+class Media(_DictDataclass):
     id: int
     domain: str
     db_path: str
@@ -164,7 +166,7 @@ class Media(_DictParser):
             self.upload_date = datetime.datetime.fromtimestamp(self.uploaded_at, tz=datetime.UTC)
 
 
-@dataclasses.dataclass(unsafe_hash=True, slots=True, kw_only=True)
+@dataclasses.dataclass(slots=True, kw_only=True)
 class Download:
     media: Media
     url: AbsoluteHttpURL
@@ -176,7 +178,7 @@ class Download:
     debrid_url: AbsoluteHttpURL | None = None
     hash: str | None = None
     path: Path = field(init=False)
-    parents: list[AbsoluteHttpURL] = field(default_factory=list)
+    parents: tuple[AbsoluteHttpURL, ...] = ()
 
     _attempts: int = field(init=False, default=0)
     is_segment: bool = field(init=False, default=False)
@@ -220,7 +222,7 @@ class Download:
             filename=filename,
             referer=origin.url,
             ext=ext or Path(filename).suffix,
-            parents=origin.parents.copy(),
+            parents=tuple(origin.parents),
         )
 
     def as_dict(self) -> dict[str, Any]:
