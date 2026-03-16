@@ -208,7 +208,7 @@ class HistoryTable:
 
     async def get_duration(self, domain: str, media_item: Download) -> float | None:
         """Returns the duration from the database."""
-        if media_item._is_segment:
+        if media_item.is_segment:
             return
 
         url_path = media_item.media.db_path
@@ -235,7 +235,7 @@ class HistoryTable:
     async def get_downloaded_filename(self, domain: str, media_item: Download) -> str | None:
         """Returns the downloaded filename from the database."""
 
-        if media_item._is_segment:
+        if media_item.is_segment:
             return media_item.media.name
 
         url_path = media_item.media.db_path

@@ -541,12 +541,6 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
             await self.__write_to_jsonl(media_item)
 
     async def handle_media_item(self, media_item: Download, m3u8: RenditionGroup | None = None) -> None:
-        if media_item.uploaded_at and not isinstance(media_item.uploaded_at, int):
-            msg = (
-                f"Invalid datetime from '{self.FOLDER_DOMAIN}' crawler . Got {media_item.uploaded_at!r}, expected int."
-            )
-            self.logger.error(msg)
-
         if await self.check_complete(media_item.url, media_item.referer):
             if media_item.media.album_id:
                 await self.manager.database.history_table.set_album_id(self.DOMAIN, media_item)

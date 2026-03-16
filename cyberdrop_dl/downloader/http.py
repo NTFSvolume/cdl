@@ -96,7 +96,7 @@ class HTTPFileDownloader(FileDownloader):
         async with self.__request(media_item.real_url, media_item.domain, media_item._headers) as resp:
             await self.__check_resp(media_item, resp)
             media_item.media.size = resume_point + int(resp.headers.get(hdrs.CONTENT_LENGTH, 0))
-            if media_item._is_segment:
+            if media_item.is_segment:
                 progress_hook = self.tui.downloads.new_hls_seg_task()
             else:
                 progress_hook = self.tui.downloads.new_task(media_item.filename, media_item.media.size)
@@ -110,21 +110,21 @@ class HTTPFileDownloader(FileDownloader):
             await aio.unlink(media_item.temp_file)
 
         await self.client.check_http_status(resp, is_download=True)
-        if not media_item._is_segment:
+        if not media_item.is_segment:
             _check_content_type(media_item.ext, resp.headers)
 
         if resp.status != HTTPStatus.PARTIAL_CONTENT:
             await aio.unlink(media_item.temp_file, missing_ok=True)
 
         if (
-            not media_item._is_segment
-            and not media_item.uploaded_at
+            not media_item.is_segment
+            and not media_item.media.uploaded_at
             and (last_modified := _get_last_modified(resp.headers))
         ):
             logger.warning(
                 f"Unable to parse upload date for {media_item.url}, using `Last-Modified` header as file datetime"
             )
-            media_item.uploaded_at = last_modified
+            media_item.media.uploaded_at = last_modified
 
         _check_content_length(resp.headers)
 

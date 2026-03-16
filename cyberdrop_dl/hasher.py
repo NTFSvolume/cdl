@@ -120,7 +120,7 @@ class Hasher:
             self._sem.release()
 
     async def _hash_item(self, media_item: Download) -> None:
-        if media_item._is_segment or media_item.path.suffix in constants.TempExt:
+        if media_item.is_segment or media_item.path.suffix in constants.TempExt:
             return
 
         results = await self._hash_file(media_item.path)

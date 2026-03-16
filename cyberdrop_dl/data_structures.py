@@ -10,7 +10,7 @@ import re
 from dataclasses import field
 from fractions import Fraction
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final, Literal, NamedTuple, Self, overload
+from typing import TYPE_CHECKING, Any, ClassVar, Final, Literal, NamedTuple, Self, overload
 
 import yarl
 
@@ -117,34 +117,45 @@ class ScrapeItemType(enum.Enum):
     FILE_HOST_ALBUM = 3
 
 
-FORUM = ScrapeItemType.FORUM
-FORUM_POST = ScrapeItemType.FORUM_POST
-FILE_HOST_PROFILE = ScrapeItemType.FILE_HOST_PROFILE
-FILE_HOST_ALBUM = ScrapeItemType.FILE_HOST_ALBUM
-
-
 class HlsSegment(NamedTuple):
     part: str
     name: str
     url: AbsoluteHttpURL
 
 
-def _now() -> datetime.datetime:
-    return datetime.datetime.now(datetime.UTC)
+_FIELDS_CACHE: dict[type, tuple[str, ...]] = {}
+
+
+def _fields(cls: type) -> tuple[str, ...]:
+    if fields := _FIELDS_CACHE.get(cls):
+        return fields
+    fields = _FIELDS_CACHE[cls] = tuple(f.name for f in dataclasses.fields(cls))
+    return fields
+
+
+class _DictParser:
+    __dataclass_fields__: ClassVar[dict[str, dataclasses.Field[Any]]]
+
+    @classmethod
+    def _filter_dict(cls, data: Mapping[str, Any], /) -> dict[str, Any]:
+        return {k: v for k, v in data.items() if k in _fields(cls)}
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any], /) -> Self:
+        return cls(**cls._filter_dict(data))
 
 
 @dataclasses.dataclass(slots=True, kw_only=True)
-class Media:
+class Media(_DictParser):
     id: int
     domain: str
     db_path: str
     referer: AbsoluteHttpURL
     name: str
-    uploaded_at: int | None = None
     album_id: str | None = None
     size: int | None = None
     duration: float | None = None
-    created_at: datetime.datetime = field(default_factory=_now)
+    uploaded_at: int | None = None
     upload_date: datetime.datetime | None = field(init=False, default=None)
 
     def __post_init__(self) -> None:
@@ -168,16 +179,12 @@ class Download:
     parents: list[AbsoluteHttpURL] = field(default_factory=list)
 
     _attempts: int = field(init=False, default=0)
-    _is_segment: bool = field(init=False, default=False)
+    is_segment: bool = field(init=False, default=False)
     _headers: dict[str, str] = field(default_factory=dict, compare=False)
     _downloaded: bool = False
     _protocol: DownloadProtocol = DownloadProtocol.HTTP
     metadata: object = field(init=False, default_factory=dict, compare=False)
     extra_info: dict[str, Any] = field(init=False, default_factory=dict, compare=False)
-
-    @property
-    def uploaded_at(self) -> int | None:
-        return self.media.uploaded_at
 
     @property
     def domain(self) -> str:
@@ -343,16 +350,16 @@ class ScrapeItem:
         self.add_to_parent_title(title)
 
     def setup_as_album(self, title: str, /, album_id: str | None = None) -> None:
-        return self.setup_as(title, FILE_HOST_ALBUM, album_id=album_id)
+        return self.setup_as(title, ScrapeItemType.FILE_HOST_ALBUM, album_id=album_id)
 
     def setup_as_profile(self, title: str, /, album_id: str | None = None) -> None:
-        return self.setup_as(title, FILE_HOST_PROFILE, album_id=album_id)
+        return self.setup_as(title, ScrapeItemType.FILE_HOST_PROFILE, album_id=album_id)
 
     def setup_as_forum(self, title: str, /, album_id: str | None = None) -> None:
-        return self.setup_as(title, FORUM, album_id=album_id)
+        return self.setup_as(title, ScrapeItemType.FORUM, album_id=album_id)
 
     def setup_as_post(self, title: str, /, album_id: str | None = None) -> None:
-        return self.setup_as(title, FORUM_POST, album_id=album_id)
+        return self.setup_as(title, ScrapeItemType.FORUM_POST, album_id=album_id)
 
     @property
     def origin(self) -> AbsoluteHttpURL | None:

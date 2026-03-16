@@ -108,7 +108,7 @@ class DownloadManager:
 
     @final
     async def add_completed(self, media_item: Download) -> None:
-        if media_item._is_segment:
+        if media_item.is_segment:
             return
         if self.config.download.mtime:
             await _set_file_modtime(media_item)
@@ -120,7 +120,7 @@ class DownloadManager:
     @final
     async def finalize_download(self, media_item: Download) -> None:
         await aio.chmod(media_item.path, 0o666)
-        if media_item._is_segment:
+        if media_item.is_segment:
             return
 
         await self.hasher.hash_in_place(media_item)
@@ -133,14 +133,14 @@ class DownloadManager:
             return False
 
         async with self.__limiter(media_item):
-            if not media_item._is_segment:
+            if not media_item.is_segment:
                 logger.info(f"Download starting: {media_item.url}")
 
             return await self.__download_w_retries(media_item)
 
     @contextlib.asynccontextmanager
     async def __limiter(self, media_item: Download) -> AsyncGenerator[None]:
-        if media_item._is_segment:
+        if media_item.is_segment:
             yield
             return
 
@@ -165,7 +165,7 @@ class DownloadManager:
             await self.database.history_table.mark_complete(media_item.domain, media_item)
 
     async def __should_skip_by_config(self, media_item: Download) -> bool:
-        if media_item._is_segment:
+        if media_item.is_segment:
             return False
 
         if not self.config.runtime.ignore_history and media_item.media.id in self._processed:
@@ -259,7 +259,7 @@ class DownloadManager:
             await aio.unlink(media_item.temp_file)
             raise DownloadError(HTTPStatus.INTERNAL_SERVER_ERROR, "File is empty")
 
-        if media_item._is_segment:
+        if media_item.is_segment:
             return
 
         if media_item.media.duration is None:
@@ -349,20 +349,20 @@ def _filter_by_filesize(item: Download, config: Config) -> bool:
     return item.media.size not in limits.other
 
 
-async def _set_file_modtime(item: Download) -> None:
-    if not item.uploaded_at:
-        logger.warning(f"Unable to parse upload date for {item.url}, using current datetime as file datetime")
+async def _set_file_modtime(download: Download) -> None:
+    if not download.media.uploaded_at:
+        logger.warning(f"Unable to parse upload date for {download.url}, using current datetime as file datetime")
         return
 
     # 1. try setting creation date
     try:
-        await dates.set_creation_time(item.path, item.uploaded_at)
+        await dates.set_creation_time(download.path, download.media.uploaded_at)
 
     except (OSError, ValueError):
         pass
 
     # 2. try setting modification and access date
     try:
-        await asyncio.to_thread(os.utime, item.path, (item.uploaded_at, item.uploaded_at))
+        await asyncio.to_thread(os.utime, download.path, (download.media.uploaded_at, download.media.uploaded_at))
     except OSError:
         pass
