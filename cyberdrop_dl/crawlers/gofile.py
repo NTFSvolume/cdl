@@ -61,20 +61,6 @@ class Folder(UnlockedNode):
     # isRoot: NotRequired[bool]
 
 
-class FolderMetadata(TypedDict):
-    hasNextPage: bool
-
-    # totalCount: int
-    # totalPages: int
-    # page: int
-    # pageSize: int
-
-
-class FolderResponse(Response):
-    data: Folder
-    metadata: FolderMetadata
-
-
 class GoFileCrawler(Crawler):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "Folder / File": "/d/<content_id>",
@@ -92,8 +78,8 @@ class GoFileCrawler(Crawler):
     FOLDER_DOMAIN: ClassVar[str] = "GoFile"
     _RATE_LIMIT: ClassVar[RateLimit] = 4, 10
 
-    _SALT: str = "f4s58gs6"
-    _BROWSER_LANG: str = "en-US"
+    _SALT: ClassVar[str] = "f4s58gs6"
+    _BROWSER_LANG: ClassVar[str] = "en-US"
 
     def __post_init__(self) -> None:
         self._api_key: str = ""
@@ -178,15 +164,14 @@ class GoFileCrawler(Crawler):
             self._handle_children(scrape_item, children.values())
 
     def _handle_children(self, scrape_item: ScrapeItem, children: Iterable[Node]) -> None:
-        def get_website_url(node: Node) -> AbsoluteHttpURL:
+        def web_url(node: Node) -> AbsoluteHttpURL:
             node_id = node["id"]
             if node["type"] == "folder":
                 return _PRIMARY_URL / "d" / (node.get("code") or node_id)
             return scrape_item.url.with_fragment(node_id)
 
         for node in children:
-            web_url = get_website_url(node)
-            new_scrape_item = scrape_item.create_new(web_url, add_parent=True)
+            new_scrape_item = scrape_item.create_new(web_url(node), add_parent=True)
             self._handle_node(new_scrape_item, node)
             scrape_item.add_children()
 
@@ -240,7 +225,6 @@ class GoFileCrawler(Crawler):
 
     @error_handling_wrapper
     async def _get_credentials(self, _) -> None:
-        """Gets the token for the API."""
         with self.disable_on_error("Unable to get api_key"):
             if key := self.manager.auth_config.gofile.api_key:
                 self._api_key = key
