@@ -92,19 +92,32 @@ class GoFileCrawler(Crawler):
     FOLDER_DOMAIN: ClassVar[str] = "GoFile"
     _RATE_LIMIT: ClassVar[RateLimit] = 4, 10
 
+    _SALT: str = "f4s58gs6"
+    _BROWSER_LANG: str = "en-US"
+
     def __post_init__(self) -> None:
         self._api_key: str = ""
 
     @property
     def headers(self) -> dict[str, str]:
-        return {
+        headers = {
             "User-Agent": (ua := self.manager.global_config.general.user_agent),
-            "Authorization": f"Bearer {self._api_key}",
-            "X-BL": (lang := "en-US"),
-            "X-Website-Token": _generate_website_token(ua, self._api_key, lang),
-            "Origin": (origin := str(self.PRIMARY_URL)),
-            "Referer": origin + "/",
+            "Origin": "https://gofile.io",
+            "Referer": "https://gofile.io/",
         }
+        if self._api_key:
+            headers |= {
+                "Authorization": f"Bearer {self._api_key}",
+                "X-BL": self._BROWSER_LANG,
+                "X-Website-Token": _create_web_token(
+                    ua,
+                    self._BROWSER_LANG,
+                    self._api_key,
+                    self._SALT,
+                ),
+            }
+
+        return headers
 
     @classmethod
     def _json_response_check(cls, json_resp: Response) -> None:
@@ -238,7 +251,7 @@ class GoFileCrawler(Crawler):
     async def _create_temp_account(self) -> str:
         self.log("Creating temp Gofile account")
         api_url = _API_ENTRYPOINT / "accounts"
-        json_resp = await self.request_json(api_url, method="POST", data={})
+        json_resp = await self.request_json(api_url, method="POST", data={}, headers=self.headers)
         if json_resp["status"] != "ok":
             raise ScrapeError(401, "Couldn't generate GoFile API token", origin=api_url)
 
@@ -270,7 +283,8 @@ def _has_single_not_nested_file(scrape_item: ScrapeItem, folder: Folder) -> bool
     return folder["childrenCount"] == 1 and folder["name"] == folder["code"] and scrape_item.type != FILE_HOST_ALBUM
 
 
-def _generate_website_token(ua: str, api_key: str, lang: str = "en-US") -> str:
-    # https://gofile.io/dist/js/wt.obf.js
-    data = f"{ua}::{lang}::{api_key}::{int(time.time() / 14400)}::gf2026x"
-    return sha256(data.encode()).hexdigest()
+def _create_web_token(user_agent: str, brower_lang: str, api_key: str, salt: str) -> str:
+    # "https://gofile.io/dist/js/wt.obf.js"
+    # TODO: Get the salt automatically from the JS code
+    token = f"{user_agent}::{brower_lang}::{api_key}::{int(time.time() // 14400)}::{salt}"
+    return sha256(token.encode()).hexdigest()
