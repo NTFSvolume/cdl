@@ -88,7 +88,7 @@ class ForumPost:
         except Exception:
             date = None
 
-        id_str = css.get_attr(article, selectors.id.attribute)
+        id_str = css.attr(article, selectors.id.attribute)
         post_id = int(id_str.rsplit("-", 1)[-1])
         return ForumPost(post_id, date, article, content)
 
@@ -532,7 +532,7 @@ class HTMLMessageBoardCrawler(MessageBoardCrawler, is_abc=True):
     def _lazy_load_embeds(self, post: ForumPostProtocol) -> Iterable[str]:
         selector = self.SELECTORS.posts.lazy_load_embeds
         for lazy_media in css.iselect(post.content, selector.element):
-            yield get_text_between(css.get_attr(lazy_media, selector.attribute), "loadMedia(this, '", "')")
+            yield get_text_between(css.attr(lazy_media, selector.attribute), "loadMedia(this, '", "')")
 
     async def thread_pager(self, scrape_item: ScrapeItem) -> AsyncGenerator[BeautifulSoup]:
         async for soup in self._web_pager(scrape_item.url, self.get_next_page):
@@ -582,7 +582,7 @@ class HTMLMessageBoardCrawler(MessageBoardCrawler, is_abc=True):
         if not confirm_button:
             return
 
-        link_str: str = css.get_attr(confirm_button, selector.attribute)
+        link_str: str = css.attr(confirm_button, selector.attribute)
         link_str = link_str.split('" class="link link--internal', 1)[0]
         new_link = self.parse_url(link_str)
         return await self.get_absolute_link(new_link)
@@ -599,7 +599,7 @@ class HTMLMessageBoardCrawler(MessageBoardCrawler, is_abc=True):
         if link_obj.select_one(".username"):
             return True
         try:
-            if link_str := css.get_attr(link_obj, self.SELECTORS.posts.links.element):
+            if link_str := css.attr(link_obj, self.SELECTORS.posts.links.element):
                 return self.is_attachment(link_str)
         except Exception:
             pass
@@ -609,7 +609,7 @@ class HTMLMessageBoardCrawler(MessageBoardCrawler, is_abc=True):
 def iter_links(links: Iterable[Tag], attribute: str) -> Iterable[str]:
     for link_tag in links:
         try:
-            yield css.get_attr(link_tag, attribute)
+            yield css.attr(link_tag, attribute)
         except Exception:
             continue
 
@@ -677,7 +677,7 @@ def get_post_title(soup: BeautifulSoup, selectors: MessageBoardSelectors) -> str
     except (AttributeError, AssertionError, css.SelectorError) as e:
         raise ScrapeError(429, message="Invalid response from forum. You may have been rate limited") from e
 
-    if title := " ".join(css.get_text(title_block).split()):
+    if title := " ".join(css.text(title_block).split()):
         return title
     raise ScrapeError(422)
 

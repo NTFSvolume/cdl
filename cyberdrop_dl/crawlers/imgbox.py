@@ -47,7 +47,7 @@ class ImgBoxCrawler(Crawler):
         scrape_item.setup_as_album(title, album_id=album_id)
 
         for link in soup.select(IMAGES_SELECTOR):
-            link_str: str = css.get_attr(link, "src").replace("thumbs", "images").replace("_b", "_o")
+            link_str: str = css.attr(link, "src").replace("thumbs", "images").replace("_b", "_o")
             link = self.parse_url(link_str)
             filename, ext = self.get_filename_and_ext(link.name)
             await self.handle_file(link, scrape_item, filename, ext)

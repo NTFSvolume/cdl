@@ -69,7 +69,7 @@ class MissAVCrawler(Crawler):
         if date_str:
             scrape_item.possible_datetime = self.parse_iso_date(date_str)
         elif date_tag := soup.select_one(Selector.DATE):
-            scrape_item.possible_datetime = self.parse_iso_date(css.get_attr(date_tag, "datetime"))
+            scrape_item.possible_datetime = self.parse_iso_date(css.attr(date_tag, "datetime"))
         else:
             _ = self.parse_date("")  # Trigger warning
 
@@ -89,7 +89,7 @@ def _get_uuid(soup: BeautifulSoup) -> str:
 
 
 def _fix_title(title: str, dvd_code_tag: Tag) -> str:
-    dvd_code = css.get_text(dvd_code_tag).upper()
+    dvd_code = css.text(dvd_code_tag).upper()
     uncensored = "UNCENSORED" in dvd_code
     leak = "LEAK" in dvd_code
     for trash in ("-UNCENSORED", "-LEAK"):

@@ -149,7 +149,7 @@ def parse_login_form(resp_text: str) -> dict[str, str]:
     data = {
         name: value
         for elem in inputs
-        if (name := css.get_attr_or_none(elem, "name")) and (value := css.get_attr_or_none(elem, "value"))
+        if (name := css.get_attr(elem, "name")) and (value := css.get_attr(elem, "value"))
     }
     if data:
         return data

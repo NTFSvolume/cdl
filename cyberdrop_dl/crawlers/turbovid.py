@@ -61,7 +61,7 @@ class TurboVidCrawler(Crawler):
         scrape_item.setup_as_album(title, album_id=album_id)
 
         for row in soup.select(Selector.ALBUM_FILES):
-            file_id = css.get_attr(row, "data-id")
+            file_id = css.attr(row, "data-id")
             web_url = self.PRIMARY_URL / "d" / file_id
             new_scrape_item = scrape_item.create_child(web_url)
             self.create_task(self.run(new_scrape_item))

@@ -172,7 +172,7 @@ class MotherlessCrawler(Crawler):
             title_tag = soup.select_one(GROUP_TITLE_SELECTOR)
 
         if title_tag:
-            parent_title: str = css.get_attr(title_tag, "title") if from_gallery else title_tag.get_text(strip=True)
+            parent_title: str = css.attr(title_tag, "title") if from_gallery else title_tag.get_text(strip=True)
 
         parent_path = parent_id if from_gallery else f"g/{parent_id}"
         parent_url = PRIMARY_URL / parent_path
@@ -195,7 +195,7 @@ def check_soup(soup: BeautifulSoup) -> None:
 
 def get_media_info(soup: BeautifulSoup) -> MediaInfo:
     media_js = soup.select_one(MEDIA_INFO_JS_SELECTOR)
-    js_text = css.get_text(media_js) if media_js else None
+    js_text = css.text(media_js) if media_js else None
     if not js_text:
         return MediaInfo("gallery", "")
     media_type = js_text.split("__mediatype", 1)[-1].split("=", 1)[-1].split(",", 1)[0].strip()

@@ -154,13 +154,13 @@ class AShemaleTubeCrawler(Crawler):
     @error_handling_wrapper
     async def proccess_image(self, scrape_item: ScrapeItem, img_tag: Tag) -> None:
         if image := img_tag.select_one("img"):
-            link_str: str = css.get_attr(image, "src")
+            link_str: str = css.attr(image, "src")
         else:
             style: str = css.select(img_tag, "a", "style")
             link_str = get_text_between(style, "url('", "');")
         url = self.parse_url(link_str).with_query(None)
         filename, ext = self.get_filename_and_ext(url.name)
-        custom_filename = self.create_custom_filename(filename, ext, file_id=css.get_attr(img_tag, "data-image-id"))
+        custom_filename = self.create_custom_filename(filename, ext, file_id=css.attr(img_tag, "data-image-id"))
         await self.handle_file(url, scrape_item, filename, ext, custom_filename=custom_filename)
 
     @error_handling_wrapper
@@ -183,7 +183,7 @@ class AShemaleTubeCrawler(Crawler):
             debrid_link = best_format.url
 
         if video_object := soup.select_one(_SELECTORS.VIDEO_PROPS_JS):
-            json_data = json.loads(css.get_text(video_object))
+            json_data = json.loads(css.text(video_object))
             scrape_item.possible_datetime = self.parse_iso_date(json_data.get("uploadDate", ""))
 
         title = css.select_text(soup, "title").split("- aShemaletube.com")[0].strip()

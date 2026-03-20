@@ -62,7 +62,7 @@ class VideoSource:
 
     @staticmethod
     def parse(tag: Tag) -> VideoSource:
-        link_str: str = css.get_attr(tag, "href")
+        link_str: str = css.attr(tag, "href")
         name = tag.get_text(strip=True).removeprefix("Download")
         details = name.split("(", 1)[1].removesuffix(")").split(",")
         res, codec, size = [d.strip() for d in details]

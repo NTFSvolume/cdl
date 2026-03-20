@@ -41,7 +41,7 @@ class ToonilyCrawler(Crawler):
 
         title_tag = css.select(soup, Selector.SERIES_TITLE)
         css.decompose(title_tag, "*")
-        series_title = self.create_title(css.get_text(title_tag))
+        series_title = self.create_title(css.text(title_tag))
         scrape_item.setup_as_profile(series_title)
         for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.CHAPTER):
             self.create_task(self.run(new_scrape_item))

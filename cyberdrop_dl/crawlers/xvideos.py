@@ -114,7 +114,7 @@ class XVideosCrawler(Crawler):
 
         soup = await self._get_soup(scrape_item.url)
         if error := soup.select_one(Selectors.DELETED_VIDEO):
-            raise ScrapeError(404, css.get_text(error))
+            raise ScrapeError(404, css.text(error))
 
         title = css.page_title(soup, self.DOMAIN)
         scrape_item.possible_datetime = self.parse_iso_date(css.json_ld(soup)["uploadDate"])
@@ -174,7 +174,7 @@ class XVideosCrawler(Crawler):
                 title_tag = css.select(soup, Selectors.GALLERY_TITLE)
                 for tag in title_tag.select("*"):
                     tag.decompose()
-                title = self.create_title(css.get_text(title_tag).split(">", 1)[-1].strip(), album_id)
+                title = self.create_title(css.text(title_tag).split(">", 1)[-1].strip(), album_id)
                 scrape_item.setup_as_album(title, album_id=album_id)
 
             for _, src in self.iter_tags(soup, Selectors.GALLERY_IMG, results=results):

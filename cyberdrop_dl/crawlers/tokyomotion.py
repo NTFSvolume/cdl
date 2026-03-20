@@ -89,7 +89,7 @@ class TokioMotionCrawler(Crawler):
             raise ScrapeError(422, "Couldn't find video source")
 
         scrape_item.possible_datetime = self.parse_date(css.select_text(soup, _SELECTORS.VIDEO_DATE))
-        link_str = css.get_attr(src, "src")
+        link_str = css.attr(src, "src")
         link = self.parse_url(link_str)
         title = css.select_text(soup, "title").rsplit(" - TOKYO Motion")[0].strip()
         filename, ext = f"{video_id}.mp4", ".mp4"
@@ -109,7 +109,7 @@ class TokioMotionCrawler(Crawler):
                 raise ScrapeError(401, "Private Photo")
             raise ScrapeError(422, "Couldn't find image source")
 
-        link_str: str = css.get_attr(img, "src")
+        link_str: str = css.attr(img, "src")
         link = self.parse_url(link_str)
         filename, ext = self.get_filename_and_ext(link.name)
         await self.handle_file(link, scrape_item, filename, ext)

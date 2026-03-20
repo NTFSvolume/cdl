@@ -138,8 +138,8 @@ class PkmncardsCrawler(Crawler):
         async for soup in self.web_pager(page_url):
             for thumb in soup.select(_SELECTORS.CARD):
                 link_str = css.select(thumb, "img", "src")
-                card_page_url_str = css.get_attr(thumb, "href")
-                title = css.get_attr(thumb, "title")
+                card_page_url_str = css.attr(thumb, "href")
+                title = css.attr(thumb, "title")
                 card_page_url = self.parse_url(card_page_url_str)
                 download_url = self.parse_url(link_str)
                 simple_card = create_simple_card(title, download_url)

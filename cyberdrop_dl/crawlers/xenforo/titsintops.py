@@ -20,10 +20,10 @@ class TitsInTopsCrawler(XenforoCrawler):
         return super().parse_url(fix_link(link))
 
     def is_username_or_attachment(self, link_obj: Tag) -> bool:
-        text = css.get_text(link_obj)
+        text = css.text(link_obj)
         if "view attachment" in text.lower():
             return True
-        title = css.get_attr_or_none(link_obj, "title")
+        title = css.get_attr(link_obj, "title")
         if title and "permanent link" in title.lower():
             return True
         return super().is_username_or_attachment(link_obj)

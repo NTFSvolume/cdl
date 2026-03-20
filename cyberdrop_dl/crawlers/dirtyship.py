@@ -68,7 +68,7 @@ class DirtyShipCrawler(Crawler):
         if not scrape_item.url.suffix == ".jpg":
             soup = await self.request_soup(scrape_item.url)
             url = self.parse_url(
-                next(css.get_attr(a, "href") for a in soup.select(_SELECTORS.SINGLE_PHOTO) if "full" in a.get_text())
+                next(css.attr(a, "href") for a in soup.select(_SELECTORS.SINGLE_PHOTO) if "full" in a.get_text())
             )
         else:
             url = scrape_item.url
@@ -96,9 +96,9 @@ class DirtyShipCrawler(Crawler):
 
             for img in thumbnails:
                 url = (
-                    css.get_attr(img, "src")
+                    css.attr(img, "src")
                     if img.get("decoding") == "async"
-                    else get_highest_resolution_picture(css.get_attr(img, "srcset"))
+                    else get_highest_resolution_picture(css.attr(img, "srcset"))
                 )
                 if not url:
                     raise ScrapeError(404)
@@ -129,10 +129,10 @@ class DirtyShipCrawler(Crawler):
 
         def get_formats():
             for video in videos:
-                link_str: str = css.get_attr(video, "src")
+                link_str: str = css.attr(video, "src")
                 if link_str.startswith("type="):
                     continue
-                res: str = css.get_attr(video, "title")
+                res: str = css.attr(video, "title")
                 link = self.parse_url(link_str)
                 yield (Format(int(res), link))
 
@@ -149,7 +149,7 @@ class DirtyShipCrawler(Crawler):
 
     def get_flowplayer_sources(self, soup: BeautifulSoup) -> set[Format]:
         flow_player = soup.select_one(_SELECTORS.FLOWPLAYER_VIDEO)
-        data_item: str | None = css.get_attr_or_none(flow_player, "data-item") if flow_player else None
+        data_item: str | None = css.get_attr(flow_player, "data-item") if flow_player else None
         if not data_item:
             return set()
         data_item = data_item.replace(r"\/", "/")

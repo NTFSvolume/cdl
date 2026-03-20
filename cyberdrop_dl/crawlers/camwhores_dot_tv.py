@@ -53,7 +53,7 @@ class CamwhoresTVCrawler(KernelVideoSharingCrawler):
         soup = await self.request_soup(url)
 
         try:
-            last_page = int(css.get_text(soup.select(LAST_PAGE_SELECTOR)[-1]))
+            last_page = int(css.text(soup.select(LAST_PAGE_SELECTOR)[-1]))
         except IndexError:
             return
 

@@ -83,8 +83,8 @@ class TNAFlixCrawler(Crawler):
 def _get_best_format(soup: BeautifulSoup) -> Format:
     def parse():
         for src in soup.select(Selector.VIDEO_SRC):
-            url = css.get_attr(src, "src")
-            resolution = Resolution.parse(css.get_attr(src, "size"))
+            url = css.attr(src, "src")
+            resolution = Resolution.parse(css.attr(src, "size"))
             yield Format(resolution, url)
 
     return max(parse())

@@ -205,8 +205,8 @@ class PornHubCrawler(Crawler):
         link_str: str = css.select(soup, _SELECTORS.PHOTO, "src")
         link = self.parse_url(link_str)
         album_tag = css.select(soup, _SELECTORS.ALBUM_FROM_PHOTO)
-        album_name = css.get_text(album_tag)
-        album_link_str: str = css.get_attr(album_tag, "href")
+        album_name = css.text(album_tag)
+        album_link_str: str = css.attr(album_tag, "href")
         album_id: str = album_link_str.split("/")[-1]
         title = self.create_title(album_name, album_id)
         scrape_item.setup_as_album(title, album_id=album_id)
@@ -217,7 +217,7 @@ class PornHubCrawler(Crawler):
         soup = await self.request_soup(scrape_item.url)
         attributes = "data-mp4", "data-fallback", "data-webm"
         gif_tag = css.select(soup, _SELECTORS.GIF)
-        link_str = next(value for attr in attributes if (value := css.get_attr_or_none(gif_tag, attr)))
+        link_str = next(value for attr in attributes if (value := css.get_attr(gif_tag, attr)))
         link = self.parse_url(link_str)
         await self._process_photo(scrape_item, link)
 

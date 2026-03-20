@@ -109,8 +109,8 @@ class YetiShareCrawler(Crawler, is_abc=True):
                 total_pages = int(css.select(ajax_soup, Selector.FOLDER_TOTAL_PAGES, "value"))
 
             for file in ajax_soup.select(Selector.FILES):
-                file_url = self.parse_url(css.get_attr(file, "dtfullurl"))
-                content_id = int(css.get_attr(file, "fileid"))
+                file_url = self.parse_url(css.attr(file, "dtfullurl"))
+                content_id = int(css.attr(file, "fileid"))
                 new_scrape_item = scrape_item.create_child(file_url)
                 new_scrape_item.part_of_album = not is_shared
                 self.create_task(self._handle_content_id_task(new_scrape_item, content_id))
@@ -157,7 +157,7 @@ class YetiShareCrawler(Crawler, is_abc=True):
 
         # Manually parse link. Some URLs are invalid. ex: https://cyberfile.me/7cfu
         # For the download URL, the slug does not actually matter. It can be anything
-        raw_link = get_text_between(css.get_attr(download_tag, "onclick"), "('", "');")
+        raw_link = get_text_between(css.attr(download_tag, "onclick"), "('", "');")
         token = raw_link.rpartition("?download_token=")[-1]
         link = self.parse_url(raw_link).with_query(download_token=token)
 

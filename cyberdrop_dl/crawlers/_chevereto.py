@@ -207,7 +207,7 @@ class CheveretoCrawler(Crawler, is_generic=True):
     def _get_album_files(self, soup: BeautifulSoup) -> Generator[tuple[AbsoluteHttpURL, AbsoluteHttpURL]]:
         for item in soup.select(".list-item[data-object]"):
             web_url = self.parse_url(css.select(item, "a.image-container", "href"))
-            encoded_data = css.get_attr(item, "data-object")
+            encoded_data = css.attr(item, "data-object")
             data = json.loads(urllib.parse.unquote(encoded_data))
             src_url = self.parse_url(data["image"]["url"])
             yield self.transform_url(web_url), src_url

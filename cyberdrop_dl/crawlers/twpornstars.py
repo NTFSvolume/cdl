@@ -59,10 +59,10 @@ class TwPornstarsCrawler(TwimgCrawler):
             return
         soup = await self.request_soup(scrape_item.url)
         if url := soup.select_one(_SELECTORS.PHOTO):
-            url = self.parse_url(css.get_attr(url, "src").replace(":large", ""))
+            url = self.parse_url(css.attr(url, "src").replace(":large", ""))
             await self.photo(scrape_item, url)
         elif url := soup.select_one(_SELECTORS.VIDEO):
-            url = self.parse_url(css.get_attr(url, "src")).with_query(None)
+            url = self.parse_url(css.attr(url, "src")).with_query(None)
             await self.direct_file(scrape_item, url)
         else:
             raise ScrapeError(404)

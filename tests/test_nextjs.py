@@ -4,14 +4,14 @@ import aiohttp
 import pytest
 from bs4 import BeautifulSoup
 
-from cyberdrop_dl.utils import css, next_js
+from cyberdrop_dl.utils import next_js
 
 
 @pytest.fixture(name="soup", scope="module")
 async def onepace_soup() -> AsyncGenerator[BeautifulSoup]:
     async with aiohttp.ClientSession() as session:
         resp = await session.get("https://onepace.net/en/watch")
-        yield css.make_soup(await resp.text())
+        yield BeautifulSoup(await resp.text(), "html.parser")
 
 
 def test_next_js_parser(soup: BeautifulSoup) -> None:

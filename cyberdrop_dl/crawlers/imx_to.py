@@ -64,8 +64,8 @@ class ImxToCrawler(Crawler):
             data={"imgContinue": "Continue+to+image+...+"},
         )
         image = css.select(soup, Selector.IMAGES)
-        name = css.get_attr(image, "alt")
-        link = self.parse_url(css.get_attr(image, "src"))
+        name = css.attr(image, "alt")
+        link = self.parse_url(css.attr(image, "src"))
         filename, ext = self.get_filename_and_ext(name)
         await self.handle_file(link, scrape_item, name, ext, custom_filename=filename)
 

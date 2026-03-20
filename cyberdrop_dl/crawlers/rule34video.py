@@ -57,7 +57,7 @@ class Rule34VideoCrawler(KernelVideoSharingCrawler):
             if not title:
                 title_tag = css.select(soup, Selector.TITLE)
                 css.decompose(title_tag, "span")
-                title = css.get_text(title_tag)
+                title = css.text(title_tag)
                 for trash in ("Videos for: ", "Tagged with "):
                     title = title.removeprefix(trash)
 

@@ -40,10 +40,10 @@ class Episode:
     @staticmethod
     def from_tag(ep_tag: bs4.Tag) -> Episode:
         return Episode(
-            title=css.get_attr(ep_tag, "title"),
-            number=int(css.get_attr(ep_tag, "data-number")),
-            id=int(css.get_attr(ep_tag, "data-id")),
-            path_qs=css.get_attr(ep_tag, "href"),
+            title=css.attr(ep_tag, "title"),
+            number=int(css.attr(ep_tag, "data-number")),
+            id=int(css.attr(ep_tag, "data-id")),
+            path_qs=css.attr(ep_tag, "href"),
         )
 
 
@@ -169,5 +169,5 @@ def _parse_server_resp(html: str):
     soup = bs4.BeautifulSoup(html, "html.parser")
     for server_type in ("sub", "dub", "raw"):
         if server_tag := soup.select_one(f"div[data-type={server_type}]:-soup-contains('HD-1')"):
-            server_id = css.get_attr(server_tag, "data-id")
+            server_id = css.attr(server_tag, "data-id")
             yield server_type, server_id

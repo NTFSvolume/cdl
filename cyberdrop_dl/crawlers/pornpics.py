@@ -108,7 +108,7 @@ class PornPicsCrawler(Crawler):
             if not offset:  # offset == 0 does not return JSON
                 soup = await self.request_soup(current_page)
                 items = soup.select(IMAGE_SELECTOR)
-                return soup, tuple(self.parse_url(css.get_attr(image, "href")) for image in items)
+                return soup, tuple(self.parse_url(css.attr(image, "href")) for image in items)
 
             # The response is JSON but the "content-type" is wrong
             async with self.request(current_page) as resp:

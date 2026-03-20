@@ -578,7 +578,7 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
                 PostSelectors.ATTACHMENTS,
             ):
                 for file in soup.select(selector):
-                    yield self.parse_url(css.get_attr(file, "href"))
+                    yield self.parse_url(css.attr(file, "href"))
 
         post = UserPost(
             user_id=user_id,

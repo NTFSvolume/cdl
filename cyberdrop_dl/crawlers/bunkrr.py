@@ -205,7 +205,7 @@ class BunkrrCrawler(Crawler):
         soup = await self._request_soup_lenient(scrape_item.url)
         src = None
         if image := soup.select_one(Selector.IMAGE_PREVIEW):
-            src = self.parse_url(css.get_attr(image, "src"))
+            src = self.parse_url(css.attr(image, "src"))
             if len(src.parts) > 2:
                 src = None
 

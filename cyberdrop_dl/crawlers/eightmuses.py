@@ -46,8 +46,8 @@ class EightMusesCrawler(Crawler):
         results = await self.get_album_results(album_id)
 
         for tile in soup.select(TILE_SELECTOR):
-            tile_link = self.parse_url(css.get_attr(tile, "href"))
-            tile_title: str = css.get_attr_or_none(tile, "title") or ""
+            tile_link = self.parse_url(css.attr(tile, "href"))
+            tile_title: str = css.get_attr(tile, "title") or ""
             image = css.select(tile, IMAGE_SELECTOR)
             is_new_album = image["itemtype"] == "https://schema.org/ImageGallery"
             new_album_id = f"{scrape_item.album_id}/{tile_title.replace(' ', '-')}"

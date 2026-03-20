@@ -54,7 +54,7 @@ class FilesterCrawler(Crawler):
 
         while True:
             for row in soup.select(Selector.FILES):
-                url = get_text_between(css.get_attr(row, "onclick"), "'", "'")
+                url = get_text_between(css.attr(row, "onclick"), "'", "'")
                 web_url = self.parse_url(url)
                 new_scrape_item = scrape_item.create_child(web_url)
                 self.create_task(self.run(new_scrape_item))

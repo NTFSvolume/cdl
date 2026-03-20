@@ -65,7 +65,7 @@ class LuxureTVCrawler(Crawler):
         scrape_item.possible_datetime = self.parse_iso_date(css.json_ld(soup)["uploadDate"])
         video_player = css.select(soup, Selector.VIDEO_PLAYER)
         title = css.select_text(soup, Selector.TITLE)
-        link = self.parse_url(css.get_attr(video_player, "src"))
+        link = self.parse_url(css.attr(video_player, "src"))
         filename, ext = self.get_filename_and_ext(link.name)
         custom_filename = self.create_custom_filename(title, ext, file_id=video_id)
 

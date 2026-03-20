@@ -76,7 +76,7 @@ class MyDesiCrawler(Crawler):
 
 def _parse_formats(soup: BeautifulSoup) -> Generator[tuple[Resolution, str]]:
     for src in soup.select("#video-rate > a"):
-        quality = css.get_attr(src, "title")
-        link = css.get_attr(src, "href")
+        quality = css.attr(src, "title")
+        link = css.attr(src, "href")
         resolution = Resolution.highest() if "original" in quality.casefold() else Resolution.parse(quality)
         yield resolution, link

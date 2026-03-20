@@ -45,7 +45,7 @@ class FapelloCrawler(Crawler):
                 scrape_item.setup_as_album(title)
 
             for post in soup.select(CONTENT_SELECTOR):
-                link_str: str = css.get_attr(post, "href")
+                link_str: str = css.attr(post, "href")
                 if "javascript" in link_str:
                     link_str = css.select(post, "iframe", "src")
 

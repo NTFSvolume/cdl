@@ -49,7 +49,7 @@ class TransflixCrawler(Crawler):
         soup = await self.request_soup(scrape_item.url)
         title = open_graph.title(soup)
         video = css.select(soup, _SELECTORS.VIDEO)
-        link = self.parse_url(css.get_attr(video, "src"))
+        link = self.parse_url(css.attr(video, "src"))
         filename, ext = self.get_filename_and_ext(link.name)
         scrape_item.possible_datetime = _timestamp_from_filename(link.name)
         custom_filename = self.create_custom_filename(title, ext, file_id=video_id)

@@ -58,7 +58,7 @@ class InfluencerBitchesCrawler(Crawler):
             link = self.parse_url(link_str)
             if self.check_album_results(link, results):
                 continue
-            web_url = self.parse_url(css.get_attr(a_tag, "href"))
+            web_url = self.parse_url(css.attr(a_tag, "href"))
             new_scrape_item = scrape_item.create_child(web_url)
             filename, ext = self.get_filename_and_ext(link.name)
             await self.handle_file(link, new_scrape_item, filename, ext)

@@ -42,7 +42,7 @@ class PimpAndHostCrawler(Crawler):
                 scrape_item.setup_as_album(title, album_id=album_id)
 
                 if date_tag := soup.select_one(DATE_SELECTOR):
-                    scrape_item.possible_datetime = self.parse_date(css.get_attr(date_tag, "title"), DATE_FORMAT)
+                    scrape_item.possible_datetime = self.parse_date(css.attr(date_tag, "title"), DATE_FORMAT)
 
             for _, new_scrape_item in self.iter_children(scrape_item, soup, FILES_SELECTOR):
                 self.create_task(self.run(new_scrape_item))
