@@ -130,23 +130,24 @@ def decompose(tag: Tag, selector: str) -> None:
         inner_tag.decompose()
 
 
-def sanitize_page_title(title: str, domain: str) -> str:
-    sld = domain.rsplit(".", 1)[0].casefold()
+class Title(str):
+    def rstrip_domain(self, domain: str) -> Title:
+        second_level_domain = domain.rsplit(".", 1)[0].casefold()
 
-    def clean(string: str, char: str):
-        if char in string:
-            front, _, tail = string.rpartition(char)
-            if sld in tail.casefold():
-                string = front.strip()
-        return string
+        def clean(string: str, char: str) -> str:
+            if char in string:
+                front, _, tail = string.rpartition(char)
+                if second_level_domain in tail.casefold():
+                    string = front.strip()
+            return string
 
-    return clean(clean(title, "|"), " - ")
+        return Title(clean(clean(self, "|"), " - "))
 
 
-def page_title(soup: Tag, domain: str | None = None) -> str:
-    title = select_text(soup, "title")
+def page_title(soup: Tag, domain: str | None = None) -> Title:
+    title = Title(select_text(soup, "title"))
     if domain:
-        return sanitize_page_title(title, domain)
+        return title.rstrip_domain(domain)
     return title
 
 

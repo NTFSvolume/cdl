@@ -173,7 +173,7 @@ def extract_kvs_video(cls: Crawler, soup: BeautifulSoup) -> KVSVideo:
     if not video.title:
         title = open_graph.get_title(soup) or css.page_title(soup)
         assert title
-        video.title = css.sanitize_page_title(title, cls.DOMAIN)
+        video.title = css.Title(title).rstrip_domain(cls.DOMAIN)
     return video
 
 
