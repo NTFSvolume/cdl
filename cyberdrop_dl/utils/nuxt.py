@@ -19,16 +19,16 @@ def extract(soup: Tag) -> list[Any]:
     return json.loads(css.select_text(soup, "script#__NUXT_DATA__"))
 
 
-def parse_obj(nuxt_data: list[Any], *attributes: str) -> dict[str, Any]:
+def parse_obj(nuxt_data: list[Any], attribute: str, *attributes: str) -> dict[str, Any]:
     """Parses a single object from a NUXT rich JSON payload response (__NUXT_DATA__)
 
     It iterates over each object until it finds an object with the desired attributes"""
-    if obj := next(parse_objs(nuxt_data, *attributes), None):
+    if obj := next(parse_objs(nuxt_data, attribute, *attributes), None):
         return obj
     raise css.SelectorError(f"Unable to find object with {attributes = } in NUXT_DATA")
 
 
-def parse_objs(nuxt_data: list[Any], *attributes: str) -> Generator[dict[str, Any]]:
+def parse_objs(nuxt_data: list[Any], attribute: str, *attributes: str) -> Generator[dict[str, Any]]:
     """
     Iterates over each object from a NUXT rich JSON payload response (__NUXT_DATA__)
 
@@ -36,12 +36,11 @@ def parse_objs(nuxt_data: list[Any], *attributes: str) -> Generator[dict[str, An
 
     https://github.com/nuxt/nuxt/discussions/20879
     """
-    assert attributes
-    first_key = attributes[0]
+    attributes = attribute, *attributes
     objects = (obj for obj in nuxt_data if isinstance(obj, dict) and all(key in obj for key in attributes))
     for obj in objects:
         try:
-            index: int = obj[first_key]
+            index: int = obj[attribute]
             index_map: dict[str, int] = nuxt_data[index]
             if not isinstance(index_map, dict):
                 raise LookupError
