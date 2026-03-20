@@ -2,8 +2,8 @@ import datetime
 
 import pytest
 
+from cyberdrop_dl import ffmpeg
 from cyberdrop_dl.data_structures import AbsoluteHttpURL
-from cyberdrop_dl.utils import ffmpeg
 
 FFPROBE_IS_INSTALLED = bool(ffmpeg.get_ffprobe_version())
 
