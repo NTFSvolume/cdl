@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css
+from cyberdrop_dl.utils import css, nuxt
 from cyberdrop_dl.utils.utilities import error_handling_wrapper
 
 if TYPE_CHECKING:
@@ -53,14 +53,14 @@ class PMVHavenCrawler(Crawler):
         title = self.create_title(title)
         scrape_item.setup_as_profile(title)
 
-        nuxt_data = css.nuxt_data(soup)
+        nuxt_data = nuxt.extract(soup)
         await self._process_video_list(scrape_item, nuxt_data)
 
     @error_handling_wrapper
     async def playlist(self, scrape_item: ScrapeItem) -> None:
         soup = await self.request_soup(scrape_item.url)
-        nuxt_data = css.nuxt_data(soup)
-        playlist = css.parse_nuxt_obj(nuxt_data, "playlist")
+        nuxt_data = nuxt.extract(soup)
+        playlist = nuxt.parse_obj(nuxt_data, "playlist")
         name = playlist["name"]
         title = self.create_title(f"{name} [playlist]")
         scrape_item.setup_as_album(title)
@@ -72,7 +72,7 @@ class PMVHavenCrawler(Crawler):
         tags = scrape_item.url.query.get("tags") or scrape_item.url.query.get("musicSong")
         title = self.create_title(f"{tags} [search]")
         scrape_item.setup_as_album(title)
-        nuxt_data = css.nuxt_data(soup)
+        nuxt_data = nuxt.extract(soup)
         await self._process_video_list(scrape_item, nuxt_data)
 
     @error_handling_wrapper
@@ -81,15 +81,15 @@ class PMVHavenCrawler(Crawler):
             return
 
         soup = await self.request_soup(scrape_item.url)
-        nuxt_data = css.nuxt_data(soup)
-        video = css.parse_nuxt_obj(nuxt_data, "video", "uploaderVideosCount")
+        nuxt_data = nuxt.extract(soup)
+        video = nuxt.parse_obj(nuxt_data, "video", "uploaderVideosCount")
         await self._process_video_info(scrape_item, video)
 
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
     @error_handling_wrapper
     async def _process_video_list(self, scrape_item: ScrapeItem, nuxt_data: list[Any]) -> None:
-        for video_info in css.parse_nuxt_objs(nuxt_data, "videoUrl"):
+        for video_info in nuxt.parse_objs(nuxt_data, "videoUrl"):
             await self._process_video_info(scrape_item, video_info)
 
     @error_handling_wrapper
