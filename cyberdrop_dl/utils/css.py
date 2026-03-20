@@ -1,21 +1,16 @@
 from __future__ import annotations
 
-import functools
 import json
-from typing import TYPE_CHECKING, NamedTuple, ParamSpec, TypedDict, TypeVar, cast, overload
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast, overload
 
-import bs4.css
 from bs4 import BeautifulSoup
 
 from cyberdrop_dl.exceptions import ScrapeError
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator
+    from collections.abc import Generator
 
     from bs4.element import Tag
-
-    _P = ParamSpec("_P")
-    _R = TypeVar("_R")
 
 
 class SelectorError(ScrapeError):
@@ -34,25 +29,23 @@ class CssAttributeSelector(NamedTuple):
         return select_text(tag, self.element)
 
 
-class JsonLD(TypedDict):
-    uploadDate: str
+class JsonLD(dict[str, Any]):
+    @overload
+    def __getitem__(self, key: Literal["uploadDate"], /) -> str: ...  # pyright: ignore[reportNoOverloadImplementation]
+
+    @overload
+    def __getitem__(self, key: str, /) -> Any:
+        """Return self[key]."""
+
+    __getitem__ = dict.__getitem__
 
 
-def _not_none(func: Callable[_P, _R | None]) -> Callable[_P, _R]:
-    @functools.wraps(func)
-    def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
-        result = func(*args, **kwargs)
-        if result is None:
-            raise SelectorError
-        return result
-
-    return wrapper
-
-
-@_not_none
-def _select_one(tag: Tag, selector: str) -> Tag | None:
+def _select_one(tag: Tag, selector: str) -> Tag:
     """Same as `tag.select_one` but asserts the result is not `None`"""
-    return tag.select_one(selector)
+    result = tag.select_one(selector)
+    if result is None:
+        raise SelectorError(f"{selector} tag not found")
+    return result
 
 
 def select_text(tag: Tag, selector: str, strip: bool = True, *, decompose: str | None = None) -> str:
@@ -85,10 +78,12 @@ def get_text(tag: Tag, strip: bool = True) -> str:
     return tag.get_text(strip=strip)
 
 
-@_not_none
-def get_attr(tag: Tag, attribute: str) -> str | None:
+def get_attr(tag: Tag, attribute: str) -> str:
     """Same as `tag.get(attribute)` but asserts the result is not `None` and is a single string"""
-    return _get_attr(tag, attribute)
+    result = _get_attr(tag, attribute)
+    if result is None:
+        raise SelectorError(f"{attribute = } not found")
+    return result
 
 
 @overload
@@ -116,7 +111,7 @@ def iselect(tag: Tag, selector: str, attribute: str) -> Generator[str]: ...
 
 def iselect(tag: Tag, selector: str, attribute: str | None = None) -> Generator[Tag] | Generator[str]:
     """Same as `tag.select(selector)`, but it returns a generator instead of a list."""
-    tags = bs4.css.CSS(tag).iselect(selector)
+    tags = tag.css.iselect(selector)
     if not attribute:
         yield from tags
 
