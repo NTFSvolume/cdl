@@ -1,9 +1,8 @@
 from __future__ import annotations
 
+import html
 import json
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple, cast, overload
-
-from bs4 import BeautifulSoup
 
 from cyberdrop_dl.exceptions import ScrapeError
 
@@ -163,12 +162,7 @@ def json_ld(soup: Tag, /, contains: str | None = None) -> JsonLD:
     return cast("JsonLD", ld_json)
 
 
-def unescape(html: str) -> str:
-    return make_soup(html).get_text()
-
-
-def make_soup(html: str) -> BeautifulSoup:
-    return BeautifulSoup(html, "html.parser")
+unescape = html.unescape
 
 
 iframes = CssAttributeSelector("iframe", "src")
