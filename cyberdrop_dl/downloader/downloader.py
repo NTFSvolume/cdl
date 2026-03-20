@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, NamedTuple, ParamSpec, TypeVar
 
 from aiohttp import ClientConnectorError, ClientError, ClientResponseError
 
-from cyberdrop_dl import constants
+from cyberdrop_dl import constants, ffmpeg
 from cyberdrop_dl.data_structures.url_objects import HlsSegment, MediaItem
 from cyberdrop_dl.exceptions import (
     DownloadError,
@@ -26,7 +26,7 @@ from cyberdrop_dl.exceptions import (
     SkipDownloadError,
     TooManyCrawlerErrors,
 )
-from cyberdrop_dl.utils import aio, ffmpeg
+from cyberdrop_dl.utils import aio
 from cyberdrop_dl.utils.logger import log, log_debug
 from cyberdrop_dl.utils.utilities import error_handling_wrapper, parse_url
 
