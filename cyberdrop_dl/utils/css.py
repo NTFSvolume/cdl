@@ -130,28 +130,26 @@ def decompose(tag: Tag, selector: str) -> None:
         inner_tag.decompose()
 
 
-class Title(str):
-    def rstrip_domain(self: str, domain: str) -> Title:
-        assert domain
-        second_level_domain = domain.rsplit(".", 1)[0].casefold().removeprefix("www.")
+def rstrip_domain(title: str, domain: str) -> str:
+    assert domain
+    second_level_domain = domain.rsplit(".", 1)[0].casefold().removeprefix("www.")
 
-        def sanitize(string: str, char: str) -> str:
-            front, _, tail = string.rpartition(char)
-            if front and second_level_domain in tail.casefold():
-                return front.strip()
-            return string
+    def sanitize(string: str, char: str) -> str:
+        front, _, tail = string.rpartition(char)
+        if front and second_level_domain in tail.casefold():
+            return front.strip()
+        return string
 
-        title = self
-        for char in sorted(("|", " - "), key=lambda x: self.rfind(x), reverse=True):
-            title = sanitize(title, char)
+    for char in sorted(("|", " - "), key=lambda x: title.rfind(x), reverse=True):
+        title = sanitize(title, char)
 
-        return Title(title)
+    return title
 
 
-def page_title(soup: Tag, domain: str | None = None) -> Title:
-    title = Title(select_text(soup, "title"))
+def page_title(soup: Tag, domain: str | None = None) -> str:
+    title = select_text(soup, "title")
     if domain:
-        return title.rstrip_domain(domain)
+        return rstrip_domain(title, domain)
     return title
 
 

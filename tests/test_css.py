@@ -26,14 +26,9 @@ from cyberdrop_dl.utils import css
     ],
 )
 def test_rstrip_domain(raw: str, domain: str, expected: str) -> None:
-    assert css.Title(raw).rstrip_domain(domain) == expected
+    assert css.rstrip_domain(raw, domain) == expected
 
 
 def test_no_domain_raise_error() -> None:
     with pytest.raises(AssertionError):
-        css.Title("cyberdrop-dl | Foo").rstrip_domain("")
-
-
-def test_return_type_is_title() -> None:
-    title = css.Title("cyberdrop-dl | GitHub")
-    assert type(title.rstrip_domain("github.com")) is css.Title
+        css.rstrip_domain("cyberdrop-dl | Foo", "")
