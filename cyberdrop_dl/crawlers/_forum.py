@@ -540,7 +540,7 @@ class HTMLMessageBoardCrawler(MessageBoardCrawler, is_abc=True):
 
     def get_next_page(self, soup: BeautifulSoup) -> str | None:
         try:
-            return css.select_one(soup, *self.SELECTORS.next_page)
+            return css.select(soup, *self.SELECTORS.next_page)
         except css.SelectorError:
             return
 
