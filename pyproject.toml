@@ -54,7 +54,7 @@ Repository = "https://github.com/NTFSvolume/cdl"
 
 [build-system]
 build-backend = "uv_build"
-requires = ["uv_build>=0.9.26,<0.10.0"]
+requires = ["uv_build<=0.10.11"]
 
 [dependency-groups]
 dev = [
@@ -63,7 +63,7 @@ dev = [
     "pytest-asyncio>=1.3.0",
     "pytest-cov>=7.0.0",
     "pytest>=9.0.2",
-    "ruff>=0.14.11",
+    "ruff==0.15.6",
     "tox>=4.34.1"
 ]
 extras = [
