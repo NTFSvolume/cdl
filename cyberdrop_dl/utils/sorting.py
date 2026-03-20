@@ -11,8 +11,8 @@ import imagesize
 
 from cyberdrop_dl import constants
 from cyberdrop_dl.constants import FILE_FORMATS
+from cyberdrop_dl.ffmpeg import probe
 from cyberdrop_dl.utils import strings
-from cyberdrop_dl.utils.ffmpeg import probe
 from cyberdrop_dl.utils.logger import log, log_with_color
 from cyberdrop_dl.utils.utilities import purge_dir_tree
 
