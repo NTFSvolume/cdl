@@ -66,7 +66,7 @@ def _parse_obj(nuxt_data: list[Any], index_map: dict[str, int]) -> dict[str, Any
                 case ["ShallowRef" | "ShallowReactive" | "Ref" | "Reactive" | "NuxtError", idx]:
                     return hydrate(nuxt_data[idx])
                 case [str(name), *rest]:
-                    logger.debug(f"Unable to parse custom object {name} {rest}", 30)
+                    logger.warning(f"Unable to parse custom object {name} {rest}")
                     return None
                 case _:
                     return [hydrate(nuxt_data[idx]) for idx in value]
