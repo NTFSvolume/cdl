@@ -53,13 +53,13 @@ class PMVHavenCrawler(Crawler):
         title = self.create_title(title)
         scrape_item.setup_as_profile(title)
 
-        nuxt_data = css.get_nuxt_data(soup)
+        nuxt_data = css.nuxt_data(soup)
         await self._process_video_list(scrape_item, nuxt_data)
 
     @error_handling_wrapper
     async def playlist(self, scrape_item: ScrapeItem) -> None:
         soup = await self.request_soup(scrape_item.url)
-        nuxt_data = css.get_nuxt_data(soup)
+        nuxt_data = css.nuxt_data(soup)
         playlist = css.parse_nuxt_obj(nuxt_data, "playlist")
         name = playlist["name"]
         title = self.create_title(f"{name} [playlist]")
@@ -72,7 +72,7 @@ class PMVHavenCrawler(Crawler):
         tags = scrape_item.url.query.get("tags") or scrape_item.url.query.get("musicSong")
         title = self.create_title(f"{tags} [search]")
         scrape_item.setup_as_album(title)
-        nuxt_data = css.get_nuxt_data(soup)
+        nuxt_data = css.nuxt_data(soup)
         await self._process_video_list(scrape_item, nuxt_data)
 
     @error_handling_wrapper
@@ -81,7 +81,7 @@ class PMVHavenCrawler(Crawler):
             return
 
         soup = await self.request_soup(scrape_item.url)
-        nuxt_data = css.get_nuxt_data(soup)
+        nuxt_data = css.nuxt_data(soup)
         video = css.parse_nuxt_obj(nuxt_data, "video", "uploaderVideosCount")
         await self._process_video_info(scrape_item, video)
 

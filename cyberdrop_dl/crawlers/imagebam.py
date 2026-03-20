@@ -85,8 +85,9 @@ class ImageBamCrawler(Crawler):
             for _, new_scrape_item in self.iter_children(scrape_item, soup, Selectors.THUMBNAILS, results=results):
                 self.create_task(self._image_task(new_scrape_item))
 
-            next_page = css.select_one_get_attr_or_none(soup, Selectors.NEXT_PAGE, "href")
-            if not next_page:
+            try:
+                next_page = css.select(soup, Selectors.NEXT_PAGE, "href")
+            except css.SelectorError:
                 break
             soup = await self.request_soup(self.parse_url(next_page))
 

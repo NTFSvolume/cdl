@@ -8,7 +8,7 @@ import re
 from abc import ABC, abstractmethod
 from collections import Counter
 from dataclasses import dataclass, field
-from functools import partial, wraps
+from functools import wraps
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Concatenate, Literal, NamedTuple, ParamSpec, TypeAlias, TypeVar, final
 
@@ -746,8 +746,12 @@ class Crawler(ABC):
         else:
             selector = selector or self.NEXT_PAGE_SELECTOR
             assert selector, f"No selector was provided and {self.DOMAIN} does define a next_page_selector"
-            func = css.select_one_get_attr_or_none
-            get_next_page = partial(func, selector=selector, attribute="href")
+
+            def get_next_page(soup: BeautifulSoup, /) -> str | None:
+                try:
+                    return css.select(soup, selector, "href")
+                except css.SelectorError:
+                    return
 
         while True:
             soup = await self.request_soup(page_url, impersonate=cffi or None)

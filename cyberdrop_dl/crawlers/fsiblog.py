@@ -55,7 +55,7 @@ class FSIBlogCrawler(Crawler):
     @error_handling_wrapper
     async def post(self, scrape_item: ScrapeItem) -> None:
         soup = await self.request_soup(scrape_item.url)
-        meta: dict[str, str] = css.get_json_ld(soup)["@graph"][0]
+        meta: dict[str, str] = css.json_ld(soup)["@graph"][0]
         name = meta["name"].rpartition("-")[0]
         scrape_item.possible_datetime = date = self.parse_iso_date(meta["datePublished"])
         title = self.create_separate_post_title(name, None, date)

@@ -76,7 +76,12 @@ class OdnoklassnikiCrawler(Crawler):
 
         channel_id = channel_str.removeprefix("c")
         gwt_hash = get_text_between(css.select_text(soup, Selector.CHANNEL_HASH), 'gwtHash:"', '",')
-        last_element_id = css.select_one_get_attr_or_none(soup, *Selector.CHANNEL_LAST_ELEMENT)
+
+        try:
+            last_element_id = css.select(soup, *Selector.CHANNEL_LAST_ELEMENT)
+        except css.SelectorError:
+            last_element_id = None
+
         name = css.select_text(soup, Selector.CHANNEL_NAME)
         scrape_item.setup_as_album(self.create_title(name, channel_id), album_id=channel_id)
 
@@ -139,7 +144,7 @@ class OdnoklassnikiCrawler(Crawler):
         cdn_url = self.parse_url(src)
         # downloads may fail if we have cdn cookies
         self.client.client_manager.cookies.clear_domain(cdn_url.host)
-        json_ld = css.get_json_ld(soup)
+        json_ld = css.json_ld(soup)
         title: str = metadata["movie"].get("title") or json_ld["name"]
         scrape_item.possible_datetime = self.parse_iso_date(json_ld["uploadDate"])
         filename = self.create_custom_filename(title, ".mp4", file_id=video_id, resolution=resolution)

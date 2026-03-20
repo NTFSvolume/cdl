@@ -148,7 +148,7 @@ class RumbleCrawler(Crawler):
             return
 
         soup = await self.request_soup(scrape_item.url)
-        embed_id = self.parse_url(css.get_json_ld(soup)["embedUrl"]).name
+        embed_id = self.parse_url(css.json_ld(soup)["embedUrl"]).name
         await self.embed(scrape_item, embed_id)
 
     @error_handling_wrapper
