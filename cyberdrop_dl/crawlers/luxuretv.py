@@ -62,7 +62,7 @@ class LuxureTVCrawler(Crawler):
             return
 
         soup = await self.request_soup(scrape_item.url, impersonate=True)
-        scrape_item.possible_datetime = self.parse_iso_date(css.json_ld(soup).upload_date)
+        scrape_item.possible_datetime = self.parse_iso_date(css.json_ld(soup)["uploadDate"])
         video_player = css.select(soup, Selector.VIDEO_PLAYER)
         title = css.select_text(soup, Selector.TITLE)
         link = self.parse_url(css.get_attr(video_player, "src"))

@@ -63,7 +63,7 @@ class TNAFlixCrawler(Crawler):
         link = self.parse_url(best_format.link_str)
         filename, ext = self.get_filename_and_ext(link.name)
         title = open_graph.title(soup)
-        scrape_item.possible_datetime = self.parse_iso_date(css.json_ld(soup).upload_date)
+        scrape_item.possible_datetime = self.parse_iso_date(css.json_ld(soup)["uploadDate"])
         custom_filename = self.create_custom_filename(title, ext, file_id=video_id, resolution=best_format.resolution)
         return await self.handle_file(link, scrape_item, filename, ext, custom_filename=custom_filename)
 

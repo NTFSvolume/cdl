@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import functools
 import json
-from typing import TYPE_CHECKING, Any, NamedTuple, ParamSpec, TypeVar, overload
+from typing import TYPE_CHECKING, NamedTuple, ParamSpec, TypedDict, TypeVar, cast, overload
 
 import bs4.css
 from bs4 import BeautifulSoup
@@ -34,10 +34,8 @@ class CssAttributeSelector(NamedTuple):
         return select_text(tag, self.element)
 
 
-class JsonLD(dict[str, Any]):
-    @property
-    def upload_date(self) -> str:
-        return self["uploadDate"]
+class JsonLD(TypedDict):
+    uploadDate: str
 
 
 def _not_none(func: Callable[_P, _R | None]) -> Callable[_P, _R]:
@@ -167,7 +165,7 @@ def json_ld(soup: Tag, /, contains: str | None = None) -> JsonLD:
     if isinstance(ld_json, list):
         ld_json = ld_json[0]
 
-    return JsonLD(ld_json)
+    return cast("JsonLD", ld_json)
 
 
 def unescape(html: str) -> str:
