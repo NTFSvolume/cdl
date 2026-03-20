@@ -1,5 +1,6 @@
 from __future__ import annotations  #
 
+import random
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
@@ -10,7 +11,7 @@ from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_text_betwee
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
-_CDN_URL = AbsoluteHttpURL("https://cache1.filester.me")
+_CDN_URLS = AbsoluteHttpURL("https://cache1.filester.me"), AbsoluteHttpURL("https://cache6.filester.me")
 
 
 class Selector:
@@ -82,7 +83,7 @@ class FilesterCrawler(Crawler):
         mime_type = css.select_text(soup, Selector.MIME_TYPE)
         scrape_item.possible_datetime = self.parse_iso_date(css.select_text(soup, Selector.UPLOAD_DATE))
         filename, ext = self.get_filename_and_ext(name, mime_type=mime_type)
-        await self.handle_file(dl_link, scrape_item, name, ext, custom_filename=filename)
+        await self.handle_file(scrape_item.url, scrape_item, name, ext, custom_filename=filename, debrid_link=dl_link)
 
     async def _request_download(self, slug: str) -> AbsoluteHttpURL:
         resp = await self.request_json(
@@ -90,4 +91,5 @@ class FilesterCrawler(Crawler):
             method="POST",
             json={"file_slug": slug},
         )
-        return _CDN_URL.with_path(resp["download_url"]).with_query(download="true")
+        base = random.choice(_CDN_URLS)
+        return base.with_path(resp["download_url"]).with_query(download="true")
