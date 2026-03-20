@@ -652,7 +652,7 @@ class Crawler(ABC):
 
         seen: set[str] = set()
         for tag in css.iselect(soup, selector):
-            link_str: str | None = css.get_attr(tag, attribute)
+            link_str: str | None = css.attr_or_none(tag, attribute)
             if not link_str or link_str in seen:
                 continue
             seen.add(link_str)
@@ -660,7 +660,7 @@ class Crawler(ABC):
             if self.check_album_results(link, album_results):
                 continue
             if t_tag := tag.select_one("img"):
-                thumb_str: str | None = css.get_attr(t_tag, "src")
+                thumb_str: str | None = css.attr_or_none(t_tag, "src")
             else:
                 thumb_str = None
             thumb = self.parse_url(thumb_str) if thumb_str and not is_blob_or_svg(thumb_str) else None

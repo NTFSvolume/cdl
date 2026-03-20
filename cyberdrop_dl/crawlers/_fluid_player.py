@@ -69,7 +69,7 @@ def _get_best_format(soup: BeautifulSoup) -> Format:
     def parse():
         for src in soup.select(Selector.VIDEO_SRC):
             url = css.attr(src, "src")
-            quality = css.get_attr(src, "title")
+            quality = css.attr_or_none(src, "title")
             resolution = parse_resolution(quality)
             yield Format(resolution, url)
 

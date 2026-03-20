@@ -56,7 +56,7 @@ def select_text(tag: Tag, selector: str, strip: bool = True, *, decompose: str |
     return text(inner_tag, strip)
 
 
-def get_attr(tag: Tag, attribute: str) -> str | None:
+def attr_or_none(tag: Tag, attribute: str) -> str | None:
     """Same as `tag.get(attribute)` but asserts the result is a single str"""
     attribute_ = attribute
     if attribute_ == "srcset":
@@ -75,7 +75,7 @@ def get_attr(tag: Tag, attribute: str) -> str | None:
 
 def attr(tag: Tag, attribute: str) -> str:
     """Same as `tag.get(attribute)` but asserts the result is not `None` and is a single string"""
-    result = get_attr(tag, attribute)
+    result = attr_or_none(tag, attribute)
     if result is None:
         raise SelectorError(f"{attribute = } not found")
     return result
@@ -116,7 +116,7 @@ def iselect(tag: Tag, selector: str, attribute: str | None = None) -> Generator[
 
     else:
         for inner_tag in tags:
-            if attr := get_attr(inner_tag, attribute):
+            if attr := attr_or_none(inner_tag, attribute):
                 yield attr
 
 

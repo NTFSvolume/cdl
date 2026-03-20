@@ -214,7 +214,7 @@ def _extract_download_link(soup: BeautifulSoup) -> str:
             raise ScrapeError(410)
         raise ScrapeError(422)
 
-    if encoded_url := css.get_attr(download_button, "data-scrambled-url"):
+    if encoded_url := css.attr_or_none(download_button, "data-scrambled-url"):
         return base64.b64decode(encoded_url).decode()
 
     url = css.attr(download_button, "href")
