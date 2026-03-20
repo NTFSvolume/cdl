@@ -229,13 +229,16 @@ class Downloader:
     async def _download_rendition_group(
         self, media_item: MediaItem, m3u8_group: RenditionGroup
     ) -> tuple[Path, Path | None, Path | None]:
+
+        temp_dir = media_item.complete_file.with_suffix(constants.TempExt.HLS)
+
         async def download(m3u8: M3U8):
             assert m3u8.media_type
             if not m3u8.segments:
                 raise DownloadError(204, f"{m3u8.media_type} m3u8 manifest ({m3u8.base_uri}) has no valid segments")
 
-            download_folder = media_item.complete_file.with_suffix(constants.TempExt.HLS) / m3u8.media_type
-            coros = self._prepare_hls_downloads(media_item, m3u8, download_folder)
+            download_folder = temp_dir / m3u8.media_type
+
             n_segmets = len(m3u8.segments)
             if n_segmets > 1:
                 suffix = f".{m3u8.media_type}.ts"
@@ -247,7 +250,10 @@ class Downloader:
                 return output
 
             batch_size = _VIDEO_HLS_BATCH_SIZE if m3u8.media_type == "video" else _AUDIO_HLS_BATCH_SIZE
-            tasks_results = await aio.gather(coros, batch_size=batch_size)
+
+            tasks_results = await aio.gather(
+                self._prepare_hls_downloads(media_item, m3u8, download_folder), batch_size=batch_size
+            )
             n_successful = sum(1 for result in tasks_results if result.downloaded)
 
             if n_successful != n_segmets:
@@ -261,7 +267,7 @@ class Downloader:
                 if not ffmpeg_result.success:
                     raise DownloadError("FFmpeg Concat Error", ffmpeg_result.stderr, media_item)
             else:
-                await asyncio.to_thread(seg_paths[0].rename, output)
+                _ = await asyncio.to_thread(seg_paths[0].rename, output)
             return output
 
         audio = subtitles = None
@@ -279,6 +285,10 @@ class Downloader:
         if m3u8_group.audio:
             audio = await download(m3u8_group.audio)
         video = await download(m3u8_group.video)
+        try:
+            await asyncio.to_thread(temp_dir.rmdir)
+        except OSError:
+            pass
         return video, audio, subtitles
 
     def _prepare_hls_downloads(

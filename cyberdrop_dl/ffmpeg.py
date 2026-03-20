@@ -17,11 +17,11 @@ from multidict import CIMultiDict, CIMultiDictProxy
 from cyberdrop_dl.utils.utilities import get_valid_dict
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable, Iterator, Mapping, Sequence
+    from collections.abc import Generator, Iterable, Iterator, Mapping
 
     from cyberdrop_dl.data_structures import AbsoluteHttpURL
 
-    _CMD: TypeAlias = Sequence[str | Path]
+    _CMD: TypeAlias = Iterable[str | Path]
 
 
 logger = logging.getLogger(__name__)
@@ -81,20 +81,20 @@ def get_ffprobe_version() -> str | None:
         return _get_bin_version(bin_path)
 
 
-async def merge(input_files: Sequence[Path], output_file: Path, *, same_folder: bool = True) -> SubProcessResult:
-    result = await _merge(input_files, output_file=output_file)
+async def merge(input_files: Iterable[Path], output_file: Path) -> SubProcessResult:
+    result = await _merge(input_files, output_file)
     if result.success:
-        await _delete_files(input_files, same_folder=same_folder)
+        await _delete_files(input_files, same_folder=False)
     return result
 
 
-async def _merge(input_files: Sequence[Path], output_file: Path) -> SubProcessResult:
+async def _merge(input_files: Iterable[Path], output_file: Path) -> SubProcessResult:
     inputs = itertools.chain.from_iterable(("-i", path) for path in input_files)
     command = *_FFMPEG_CALL_PREFIX, *inputs, *Args.MAP_ALL_STREAMS, *Args.CODEC_COPY, output_file
     return await _run_command(command)
 
 
-async def concat(input_files: Sequence[Path], output_file: Path, *, same_folder: bool = True) -> SubProcessResult:
+async def concat(input_files: Iterable[Path], output_file: Path, *, same_folder: bool = True) -> SubProcessResult:
     concat_file = output_file.with_suffix(output_file.suffix + ".ffmpeg_concat.txt")
     await _create_concat_file(input_files, output_file=concat_file)
     try:
@@ -116,7 +116,7 @@ async def _concat(input: Path, output: Path) -> SubProcessResult:
     return await _fixup_concat_video(concatenated_file, output)
 
 
-async def _create_concat_file(input_files: Sequence[Path], output_file: Path) -> None:
+async def _create_concat_file(input_files: Iterable[Path], output_file: Path) -> None:
     # Input paths MUST be absolute!!.
 
     def write() -> None:
