@@ -131,17 +131,21 @@ def decompose(tag: Tag, selector: str) -> None:
 
 
 class Title(str):
-    def rstrip_domain(self, domain: str) -> Title:
-        second_level_domain = domain.rsplit(".", 1)[0].casefold()
+    def rstrip_domain(self: str, domain: str) -> Title:
+        assert domain
+        second_level_domain = domain.rsplit(".", 1)[0].casefold().removeprefix("www.")
 
-        def clean(string: str, char: str) -> str:
-            if char in string:
-                front, _, tail = string.rpartition(char)
-                if second_level_domain in tail.casefold():
-                    string = front.strip()
+        def sanitize(string: str, char: str) -> str:
+            front, _, tail = string.rpartition(char)
+            if front and second_level_domain in tail.casefold():
+                return front.strip()
             return string
 
-        return Title(clean(clean(self, "|"), " - "))
+        title = self
+        for char in sorted(("|", " - "), key=lambda x: self.rfind(x), reverse=True):
+            title = sanitize(title, char)
+
+        return Title(title)
 
 
 def page_title(soup: Tag, domain: str | None = None) -> Title:
