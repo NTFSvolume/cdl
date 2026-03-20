@@ -34,6 +34,12 @@ class CssAttributeSelector(NamedTuple):
         return select_text(tag, self.element)
 
 
+class JsonLD(dict[str, Any]):
+    @property
+    def upload_date(self) -> str:
+        return self["uploadDate"]
+
+
 def _not_none(func: Callable[_P, _R | None]) -> Callable[_P, _R]:
     @functools.wraps(func)
     def wrapper(*args: _P.args, **kwargs: _P.kwargs) -> _R:
@@ -152,20 +158,16 @@ def page_title(soup: Tag, domain: str | None = None) -> str:
     return title
 
 
-def json_ld(soup: Tag, /, contains: str | None = None) -> dict[str, Any]:
+def json_ld(soup: Tag, /, contains: str | None = None) -> JsonLD:
     selector = "script[type='application/ld+json']"
     if contains:
         selector += f":-soup-contains('{contains}')"
 
     ld_json = json.loads(select_text(soup, selector)) or {}
     if isinstance(ld_json, list):
-        return ld_json[0]
+        ld_json = ld_json[0]
 
-    return ld_json
-
-
-def json_ld_date(soup: Tag) -> str:
-    return json_ld(soup)["uploadDate"]
+    return JsonLD(ld_json)
 
 
 def unescape(html: str) -> str:

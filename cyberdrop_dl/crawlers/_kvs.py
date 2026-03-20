@@ -129,7 +129,7 @@ class KernelVideoSharingCrawler(Crawler, is_abc=True):
         filename, ext = self.get_filename_and_ext(video.url.name)
         custom_filename = self.create_custom_filename(video.title, ext, file_id=video.id, resolution=video.resolution)
         try:
-            date_str = css.json_ld_date(soup)
+            date_str = css.json_ld(soup).upload_date
             scrape_item.possible_datetime = self.parse_iso_date(date_str)
         except (LookupError, ValueError, css.SelectorError):
             date_str = css.select_text(soup, _SELECTORS.DATE).split(":", 1)[-1].strip()
