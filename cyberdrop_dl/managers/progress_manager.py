@@ -141,7 +141,7 @@ class ProgressManager:
             return
         end_time = time.perf_counter()
         runtime = timedelta(seconds=int(end_time - start_time))
-        total_data_written = ByteSize(self.manager.storage_manager.total_data_written).human_readable(decimal=True)
+        total_data_written = ByteSize(self.file_progress.total_data_written).human_readable(decimal=True)
 
         log_spacer(20)
         log("Printing Stats...\n", 20)

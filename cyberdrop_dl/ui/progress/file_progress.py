@@ -41,6 +41,7 @@ class FileProgress(DequeProgress):
         if manager.parsed_args.cli_only_args.portrait:
             use_columns = vertical_columns
         self._progress = Progress(*use_columns)
+        self.total_data_written = 0
         super().__init__("Downloads", visible_tasks_limit)
 
     def get_queue_length(self) -> int:
@@ -66,7 +67,7 @@ class FileProgress(DequeProgress):
 
     def advance_file(self, task_id: TaskID, amount: int) -> None:
         """Advances the progress of the given task by the given amount."""
-        self.manager.storage_manager.total_data_written += amount
+        self.total_data_written += amount
         self._progress.advance(task_id, amount)
 
     def get_speed(self, task_id: TaskID) -> float:

@@ -20,7 +20,6 @@ from cyberdrop_dl.managers.live_manager import LiveManager
 from cyberdrop_dl.managers.log_manager import LogManager
 from cyberdrop_dl.managers.path_manager import PathManager
 from cyberdrop_dl.managers.progress_manager import ProgressManager
-from cyberdrop_dl.managers.storage_manager import StorageManager
 from cyberdrop_dl.utils.logger import LogHandler, QueuedLogger, log
 from cyberdrop_dl.utils.utilities import close_if_defined, get_system_information
 
@@ -50,7 +49,6 @@ class Manager:
         self.log_manager: LogManager = field(init=False)
         self.db_manager: Database = field(init=False)
         self.client_manager: ClientManager = field(init=False)
-        self.storage_manager: StorageManager = field(init=False)
 
         self.progress_manager: ProgressManager = field(init=False)
         self.live_manager: LiveManager = field(init=False)
@@ -108,11 +106,6 @@ class Manager:
         if not isinstance(self.client_manager, ClientManager):
             self.client_manager = ClientManager(self)
             await self.client_manager.startup()
-        if not isinstance(self.storage_manager, StorageManager):
-            self.storage_manager = StorageManager(self)
-
-        elif self.states.RUNNING.is_set():
-            await self.storage_manager.reset()
 
         await self.async_db_hash_startup()
 
@@ -202,7 +195,6 @@ class Manager:
         await self.async_db_close()
 
         self.client_manager = await close_if_defined(self.client_manager)
-        self.storage_manager = await close_if_defined(self.storage_manager)
         self.cache_manager = await close_if_defined(self.cache_manager)
 
         while self.loggers:
