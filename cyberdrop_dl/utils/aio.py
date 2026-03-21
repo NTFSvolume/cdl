@@ -100,7 +100,7 @@ class AsyncIOWrapper(Generic[AnyStr]):
 
 @dataclasses.dataclass(slots=True, eq=False)
 class AsyncIteratorWrapper(Generic[_T]):
-    func: Awaitable[Iterator[_T]]
+    func: Awaitable[Iterable[_T]]
     iterator: Iterator[_T] | None = dataclasses.field(default=None, init=False)
 
     def __aiter__(self) -> Self:
@@ -108,7 +108,7 @@ class AsyncIteratorWrapper(Generic[_T]):
 
     async def __anext__(self) -> _T:
         if self.iterator is None:
-            self.iterator = await self.func
+            self.iterator = iter(await self.func)
         value = await asyncio.to_thread(next, self.iterator, _MISSING)
         if value is _MISSING:
             raise StopAsyncIteration from None
