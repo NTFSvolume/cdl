@@ -41,7 +41,7 @@ def save(file: Path, /, data: BaseModel | dict[str, Any]) -> None:
 
     file.parent.mkdir(parents=True, exist_ok=True)
     with file.open("w", encoding="utf8") as file_io:
-        yaml.safe_dump(data, file_io, default_flow_style=False)
+        yaml.dump(data, file_io, default_flow_style=False)
 
 
 def load(file: Path, /) -> dict[str, Any]:
