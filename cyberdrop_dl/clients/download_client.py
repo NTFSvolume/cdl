@@ -10,13 +10,12 @@ from typing import TYPE_CHECKING, Any
 
 import aiofiles
 
-from cyberdrop_dl import constants
+from cyberdrop_dl import aio, constants
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.constants import FILE_FORMATS
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, InvalidContentTypeError, SlowDownloadError
-from cyberdrop_dl.utils import aio, dates
-from cyberdrop_dl.utils.aio import WeakAsyncLocks
+from cyberdrop_dl.utils import dates
 from cyberdrop_dl.utils.logger import log, log_debug
 from cyberdrop_dl.utils.utilities import get_size_or_none
 
@@ -49,7 +48,7 @@ class DownloadClient:
         self.manager = manager
         self.client_manager = client_manager
         self.download_speed_threshold = self.manager.config_manager.settings_data.runtime_options.slow_download_speed
-        self._server_locks = WeakAsyncLocks[str]()
+        self._server_locks = aio.WeakAsyncLocks[str]()
         self.server_locked_domains: set[str] = set()
         self._supports_ranges: bool = True
 

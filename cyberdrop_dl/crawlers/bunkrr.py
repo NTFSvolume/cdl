@@ -10,11 +10,12 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from aiohttp import ClientConnectorError
 
+from cyberdrop_dl import aio
 from cyberdrop_dl.constants import FILE_FORMATS
 from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths, auto_task_id
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError
-from cyberdrop_dl.utils import aio, css, open_graph
+from cyberdrop_dl.utils import css, open_graph
 from cyberdrop_dl.utils.utilities import error_handling_wrapper, parse_url, xor_decrypt
 
 if TYPE_CHECKING:

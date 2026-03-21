@@ -15,6 +15,7 @@ from aiohttp import ClientResponse, ClientSession
 from aiolimiter import AsyncLimiter
 
 from cyberdrop_dl import constants, ddos_guard, env
+from cyberdrop_dl.aio import WeakAsyncLocks
 from cyberdrop_dl.clients.download_client import DownloadClient
 from cyberdrop_dl.clients.flaresolverr import FlareSolverr
 from cyberdrop_dl.clients.response import AbstractResponse
@@ -23,7 +24,6 @@ from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
 from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, ScrapeError, TooManyCrawlerErrors
 from cyberdrop_dl.ffmpeg import probe
 from cyberdrop_dl.ui.prompts.user_prompts import get_cookies_from_browsers
-from cyberdrop_dl.utils.aio import WeakAsyncLocks
 from cyberdrop_dl.utils.cookie_management import read_netscape_files
 from cyberdrop_dl.utils.logger import log, log_debug, log_spacer
 

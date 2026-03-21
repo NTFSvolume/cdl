@@ -7,8 +7,7 @@ import aiofiles
 import rich
 from aiohttp import FormData
 
-from cyberdrop_dl import constants
-from cyberdrop_dl.utils import aio
+from cyberdrop_dl import aio, constants
 from cyberdrop_dl.utils.logger import log, log_debug, log_spacer
 
 if TYPE_CHECKING:
