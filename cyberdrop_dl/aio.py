@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
+import functools
 import shutil
 import sys
 import tempfile
@@ -16,6 +17,7 @@ from typing import (
     TYPE_CHECKING,
     Any,
     AnyStr,
+    Concatenate,
     Generic,
     ParamSpec,
     Self,
@@ -316,3 +318,14 @@ async def temp_dir() -> AsyncGenerator[Path]:
         yield Path(temp_dir.name)
     finally:
         await asyncio.to_thread(temp_dir.cleanup)
+
+
+def aclosing_wrapper(
+    func: Callable[Concatenate[_P], AsyncGenerator[_R]],
+) -> Callable[Concatenate[_P], contextlib.aclosing[AsyncGenerator[_R]]]:
+
+    @functools.wraps(func)
+    def wrapper(*args: _P.args, **kwargs: _P.kwargs):
+        return contextlib.aclosing(func(*args, **kwargs))
+
+    return wrapper
