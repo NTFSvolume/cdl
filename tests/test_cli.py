@@ -23,15 +23,6 @@ def test_command_by_console_output(tmp_cwd: Path, capsys: pytest.CaptureFixture[
     assert text in output
 
 
-@pytest.mark.parametrize(
-    "exception, exists",
-    [
-        (ValueError, True),
-        (OSError, True),
-        (KeyboardInterrupt, False),
-        (ValidationError("", []), False),
-    ],
-)
 def test_impersonate_defaults_to_true_with_no_args() -> None:
     result = parse_args(["--download"])
     assert result.cli_only_args.impersonate is None
