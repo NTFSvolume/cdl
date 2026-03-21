@@ -56,7 +56,7 @@ class RedGifsCrawler(Crawler):
             raise ScrapeError(422, error["message"])
 
     def __post_init__(self) -> None:
-        self.headers = {}
+        self.headers: dict[str, str] = {}
 
     async def async_startup(self) -> None:
         await self.get_auth_token(API_ENTRYPOINT / "auth/temporary")
@@ -67,13 +67,11 @@ class RedGifsCrawler(Crawler):
                 return await self.user(scrape_item, _id(user_name))
             case ["i" | "watch" | "ifr", gif_id]:
                 return await self.gif(scrape_item, _id(gif_id))
-
-        if self.is_self_subdomain(scrape_item.url) and len(scrape_item.url.parts) == 2:
-            scrape_item.url = _canonical_url(scrape_item.url.name)
-            self.create_task(self.run(scrape_item))
-            return
-
-        raise ValueError
+            case [_, _] if self.is_self_subdomain(scrape_item.url):
+                scrape_item.url = _canonical_url(scrape_item.url.name)
+                return await self.gif(scrape_item, scrape_item.url.name)
+            case _:
+                raise ValueError
 
     @error_handling_wrapper
     async def user(self, scrape_item: ScrapeItem, user_id: str) -> None:
