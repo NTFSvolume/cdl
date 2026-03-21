@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import dataclasses
-import itertools
-from typing import TYPE_CHECKING, Any, ClassVar, Required, TypedDict
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Required, TypedDict
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils.utilities import error_handling_wrapper, parse_url
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterable
+    from collections.abc import AsyncGenerator
 
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
     from cyberdrop_dl.utils.dates import TimeStamp
@@ -50,8 +50,13 @@ class RedGifsCrawler(Crawler):
     DOMAIN: ClassVar[str] = "redgifs"
     FOLDER_DOMAIN: ClassVar[str] = "RedGifs"
 
+    @classmethod
+    def _json_response_check(cls, json_resp: Any) -> None:
+        if error := json_resp.get("error"):
+            raise ScrapeError(422, error["message"])
+
     def __post_init__(self) -> None:
-        self.headers = {}
+        self.headers: dict[str, str] = {}
 
     async def async_startup(self) -> None:
         await self.get_auth_token(API_ENTRYPOINT / "auth/temporary")
@@ -62,40 +67,57 @@ class RedGifsCrawler(Crawler):
                 return await self.user(scrape_item, _id(user_name))
             case ["i" | "watch" | "ifr", gif_id]:
                 return await self.gif(scrape_item, _id(gif_id))
-
-        if self.is_self_subdomain(scrape_item.url) and len(scrape_item.url.parts) == 2:
-            scrape_item.url = _canonical_url(scrape_item.url.name)
-            self.create_task(self.run(scrape_item))
-            return
-
-        raise ValueError
+            case [_, _] if self.is_self_subdomain(scrape_item.url):
+                scrape_item.url = _canonical_url(scrape_item.url.name)
+                return await self.gif(scrape_item, scrape_item.url.name)
+            case _:
+                raise ValueError
 
     @error_handling_wrapper
     async def user(self, scrape_item: ScrapeItem, user_id: str) -> None:
         title = self.create_title(user_id)
         scrape_item.setup_as_album(title)
 
-        async for gifs in self._user_profile_pager(user_id):
+        async for gifs in self._profile_pager(user_id, init_page=int(scrape_item.url.query.get("page", 1))):
             for gif in gifs:
                 new_scrape_item = scrape_item.create_child(_canonical_url(gif.id))
                 await self._handle_gif(new_scrape_item, gif)
                 scrape_item.add_children()
 
-    async def _user_profile_pager(self, user_id: str) -> AsyncIterable[list[Gif]]:
-        total_pages: int | None = None
-        for page in itertools.count(1):
-            api_url = (API_ENTRYPOINT / "users" / user_id / "search").with_query(order="new", page=page)
-            json_resp: dict[str, Any] = await self.request_json(api_url, headers=self.headers)
-            gifs_in_current_page = [Gif.from_dict(gif) for gif in json_resp["gifs"]]
-            yield gifs_in_current_page
+    async def _profile_pager(self, user_id: str, init_page: int = 1) -> AsyncGenerator[list[Gif]]:
+        total_gifs: int = 0
+        gif_ids: set[str] = set()
+        page_limit = 100
+        page_count = 100
 
-            # The "pages" values of the json response is only the number of pages to get the first 1K gifs
-            # We have to manually compute the actual number of pages to handle profiles with 1K+ gifs
-            if total_pages is None:
-                total_gifs: int = json_resp["users"][0]["gifs"]
-                total_pages, res = divmod(total_gifs, len(gifs_in_current_page))
-                total_pages += bool(res)
-            if page >= total_pages:
+        api_url = (API_ENTRYPOINT / "users" / user_id / "search").with_query(count=page_count)
+
+        async def request_gifs(order: Literal["new", "old"], page: int) -> list[Gif]:
+            nonlocal total_gifs
+            resp: dict[str, Any] = await self.request_json(
+                api_url.update_query(order=order, page=page),
+                headers=self.headers,
+            )
+            if not total_gifs:
+                total_gifs = resp["users"][0]["gifs"]
+
+            return [Gif.from_dict(gif) for gif in resp["gifs"]]
+
+        for page in range(init_page, page_limit + 1):
+            gifs = await request_gifs("new", page)
+            gif_ids.update(gif.id for gif in gifs)
+            yield gifs
+
+            if len(gif_ids) >= total_gifs:
+                return
+
+        # fetch gifs in reverse order to bypass API limit
+        for page in range(1, page_limit + 1):
+            gifs = [gif for gif in await request_gifs("old", page) if gif.id not in gif_ids]
+            gif_ids.update(gif.id for gif in gifs)
+            yield gifs
+
+            if len(gifs) < page_count:
                 break
 
     @error_handling_wrapper
@@ -106,8 +128,8 @@ class RedGifsCrawler(Crawler):
 
         scrape_item.url = canonical_url
         api_url = API_ENTRYPOINT / "gifs" / post_id
-        json_resp: dict[str, dict] = await self.request_json(api_url, headers=self.headers)
-        gif = Gif.from_dict(json_resp["gif"])
+        resp: dict[str, dict[str, Any]] = await self.request_json(api_url, headers=self.headers)
+        gif = Gif.from_dict(resp["gif"])
         if gif.title:
             scrape_item.setup_as_album(self.create_title(gif.title))
         await self._handle_gif(scrape_item, gif)
