@@ -149,7 +149,7 @@ class AsyncContextManagerMixin(ABC):
 
 
 async def gather(*coros: Awaitable[_T]) -> list[_T]:
-    """Like asyncio.gather but a exception on any coro cancels all pending coros
+    """Like asyncio.gather but an exception on any coro cancels all pending coros
 
     AKA: all or nothing"""
 
