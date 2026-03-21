@@ -2,12 +2,21 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import os
 from pathlib import Path
 from unittest import mock
 
 import pytest
 
 from cyberdrop_dl import storage
+
+
+def create_partition(path: str):
+    return storage.DiskPartition(Path(path), Path(path), "", "")
+
+
+def find_partition(path: str):
+    return storage.find_partition(Path(path))
 
 
 async def test_unsupported_fs_should_not_return_zero() -> None:
@@ -50,24 +59,29 @@ def test_storage_only_work_with_abs_paths() -> None:
     assert storage.find_partition(cwd.resolve())
 
 
+@pytest.mark.skipif(os.name == "nt", reason="Test paths are only posix")
 async def test_find_partition_finds_the_correct_partition() -> None:
-    def part(path: str):
-        return storage.DiskPartition(Path(path), Path(path), "", "")
-
-    def find(path: str):
-        return storage.find_partition(Path(path))
 
     root, home, usb, external_ssd = partitions = [
-        part("/"),
-        part("/home"),
-        part("/mnt/USB"),
-        part("/home/external_SSD"),
+        create_partition(path) for path in ("/", "/home", "/mnt/USB", "/home/external_SSD")
     ]
 
     storage._PARTITIONS = partitions  # pyright: ignore[reportPrivateUsage]
 
-    assert find("/swap_file") is root
-    assert find("/home/user/.bash_rc") is home
-    assert find("/home/external_SSD/song.mp3") is external_ssd
-    assert find("/mnt/USB") is usb
-    assert find("/mnt") is root
+    assert find_partition("/swap_file") is root
+    assert find_partition("/home/user/.bash_rc") is home
+    assert find_partition("/home/external_SSD/song.mp3") is external_ssd
+    assert find_partition("/mnt/USB") is usb
+    assert find_partition("/mnt") is root
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Test paths are only for windows")
+async def test_find_partition_finds_the_correct_partition_windows() -> None:
+    c_drive, d_drive = partitions = [create_partition(path) for path in ("C:/", "D:/")]
+
+    storage._PARTITIONS = partitions  # pyright: ignore[reportPrivateUsage]
+
+    assert find_partition("C:/pagefile") is c_drive
+    assert find_partition("C:/") is c_drive
+    assert find_partition("D:/music/song.mp3") is d_drive
+    assert find_partition("Z:/") is None
