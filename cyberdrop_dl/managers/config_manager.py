@@ -1,15 +1,11 @@
 from __future__ import annotations
 
-import os
-import shutil
 from dataclasses import field
-from time import sleep
 from typing import TYPE_CHECKING
 
 from cyberdrop_dl import yaml
 from cyberdrop_dl.config import AuthSettings, ConfigSettings, GlobalSettings
 from cyberdrop_dl.exceptions import InvalidYamlError
-from cyberdrop_dl.managers.log_manager import LogManager
 from cyberdrop_dl.utils.apprise import get_apprise_urls
 
 if TYPE_CHECKING:
@@ -39,24 +35,13 @@ class ConfigManager:
 
     def startup(self) -> None:
         """Startup process for the config manager."""
-        self.loaded_config = self.get_loaded_config()
         self.settings = self.manager.path_manager.config_folder / self.loaded_config / "settings.yaml"
         self.global_settings = self.manager.path_manager.config_folder / "global_settings.yaml"
         self.authentication_settings = self.manager.path_manager.config_folder / "authentication.yaml"
-        auth_override = self.manager.path_manager.config_folder / self.loaded_config / "authentication.yaml"
-
-        if auth_override.is_file():
-            self.authentication_settings = auth_override
 
         self.settings.parent.mkdir(parents=True, exist_ok=True)
-        self.pydantic_config = self.manager.cache_manager.get("pydantic_config")
+
         self.load_configs()
-
-    def get_loaded_config(self):
-        return self.loaded_config or self.get_default_config()
-
-    def get_default_config(self) -> str:
-        return self.manager.cache_manager.get("default_config") or "Default"
 
     def load_configs(self) -> None:
         """Loads all the configs."""
@@ -65,8 +50,6 @@ class ConfigManager:
         self._load_settings_config()
         self.apprise_file = self.manager.path_manager.config_folder / self.loaded_config / "apprise.txt"
         self.apprise_urls = get_apprise_urls(file=self.apprise_file)
-        self._set_apprise_fixed()
-        self._set_pydantic_config()
 
     @staticmethod
     def get_model_fields(model: BaseModel, *, exclude_unset: bool = True) -> set[str]:
@@ -160,51 +143,6 @@ class ConfigManager:
         configs = [config.name for config in self.manager.path_manager.config_folder.iterdir() if config.is_dir()]
         configs.sort()
         return configs
-
-    def change_default_config(self, config_name: str) -> None:
-        """Changes the default config."""
-        self.manager.cache_manager.save("default_config", config_name)
-
-    def delete_config(self, config_name: str) -> None:
-        """Deletes a config."""
-        configs = self.get_configs()
-        configs.remove(config_name)
-
-        if self.manager.cache_manager.get("default_config") == config_name:
-            self.manager.cache_manager.save("default_config", configs[0])
-
-        config = self.manager.path_manager.config_folder / config_name
-        shutil.rmtree(config)
-
-    def change_config(self, config_name: str) -> None:
-        """Changes the config."""
-        self.loaded_config = config_name
-        self.startup()
-
-        self.manager.path_manager.startup()
-        sleep(1)
-        self.manager.log_manager = LogManager(self.manager)
-        sleep(1)
-
-    def _set_apprise_fixed(self):
-        apprise_fixed = self.manager.cache_manager.get("apprise_fixed")
-        if apprise_fixed:
-            return
-        if os.name == "nt":
-            try:
-                import win32con  # noqa: F401
-            except ImportError:
-                pass
-            else:
-                with self.apprise_file.open("a", encoding="utf8") as f:
-                    f.write("windows://\n")
-        self.manager.cache_manager.save("apprise_fixed", True)
-
-    def _set_pydantic_config(self):
-        if self.pydantic_config:
-            return
-        self.manager.cache_manager.save("pydantic_config", True)
-        self.pydantic_config = True
 
 
 def is_in_file(search_value: str, file: Path) -> bool:
