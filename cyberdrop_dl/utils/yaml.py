@@ -44,15 +44,7 @@ def save(file: Path, /, data: BaseModel | dict[str, Any]) -> None:
         yaml.safe_dump(data, file_io, default_flow_style=False)
 
 
-def load(file: Path, /, *, create: bool = False) -> dict[str, Any]:
-    if create:
-        file.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            file.touch(exist_ok=False)
-        except FileExistsError:
-            pass
-        else:
-            return {}
+def load(file: Path, /) -> dict[str, Any]:
     try:
         with file.open("r", encoding="utf8") as file_io:
             return yaml.safe_load(file_io) or {}
