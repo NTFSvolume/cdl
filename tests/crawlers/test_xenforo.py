@@ -74,13 +74,10 @@ async def post_startup_manager(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     downloads = str(tmp_path / "Downloads")
     monkeypatch.chdir(tmp_path)
     manager = Manager(("--appdata-folder", appdata, "-d", downloads))
-    manager.startup()
     manager.path_manager.startup()
     manager.log_manager.startup()
-    await manager.async_startup()
-    yield manager
-    await manager.async_db_close()
-    await manager.close()
+    async with manager:
+        yield manager
 
 
 @pytest.mark.parametrize(

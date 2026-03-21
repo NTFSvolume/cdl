@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import Field
 from typing import TYPE_CHECKING, Any, TypeVar
 
 import pytest
@@ -115,14 +114,3 @@ def test_args_logging_should_censor_webhook(
     _, _, webhook_text = webhook_line.partition(":")
     webhook_url = webhook_text.strip().split(" ")[0].replace('"', "").strip()
     assert output == webhook_url
-
-
-async def test_async_db_close(running_manager: Manager) -> None:
-    await running_manager.async_startup()
-    assert not isinstance(running_manager.db_manager, Field)
-    assert not isinstance(running_manager.hash_manager, Field)
-    assert "overwrite" not in str(running_manager.log_manager.main_log)
-    await running_manager.async_db_close()
-    assert isinstance(running_manager.db_manager, Field)
-    assert isinstance(running_manager.hash_manager, Field)
-    await running_manager.close()

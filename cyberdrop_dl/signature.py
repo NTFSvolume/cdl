@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING, ParamSpec, TypeVar
 
 if TYPE_CHECKING:
@@ -30,11 +31,3 @@ else:
             return y
 
         return call
-
-
-def easy_repr(*fields: str) -> Callable[..., str]:
-    def _repr_(self: object) -> str:
-        params = ", ".join(f"{f}={getattr(self, f)!r}" for f in fields)
-        return f"{type(self).__name__}({params})"
-
-    return _repr_

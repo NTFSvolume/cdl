@@ -191,8 +191,6 @@ def _setup_manager(args: Sequence[str] | None = None) -> Manager:
 
     manager = Manager(args)
 
-    manager.startup()
-
     if not manager.parsed_args.cli_only_args.download:
         ProgramUI(manager)
 
@@ -209,11 +207,8 @@ class Director:
         return self._run()
 
     async def async_run(self) -> None:
-        try:
-            async with storage.monitor(self.manager.global_config.general.required_free_space):
-                await _run_manager(self.manager)
-        finally:
-            await self.manager.close()
+        async with self.manager, storage.monitor(self.manager.global_config.general.required_free_space):
+            await _run_manager(self.manager)
 
     def _run(self) -> int:
         exit_code = _C.ERROR

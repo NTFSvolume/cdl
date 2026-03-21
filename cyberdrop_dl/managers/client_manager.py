@@ -143,19 +143,16 @@ class ClientManager:
         self._curl_session: AsyncSession[CurlResponse]
         self._json_response_checks: dict[str, Callable[[Any], None]] = {}
 
-    def _startup(self) -> None:
+    async def __aenter__(self) -> Self:
+        await _set_dns_resolver()
         self._session = self.new_scrape_session()
         self._download_session = self.new_download_session()
-        if _curl_import_error is not None:
-            return
-
-        self._curl_session = self.new_curl_cffi_session()
-
-    async def __aenter__(self) -> Self:
-        self._startup()
+        if _curl_import_error is None:
+            self._curl_session = self.new_curl_cffi_session()
         return self
 
     async def __aexit__(self, *args) -> None:
+        await self.flaresolverr.close()
         await self._session.close()
         await self._download_session.close()
         if _curl_import_error is not None:
@@ -229,9 +226,6 @@ class ClientManager:
         for domain, _ in self.cookies._cookies:
             if word in domain:
                 yield domain, self.cookies.filter_cookies(AbsoluteHttpURL(f"https://{domain}"))
-
-    async def startup(self) -> None:
-        await _set_dns_resolver()
 
     def new_curl_cffi_session(self) -> AsyncSession:
         # Calling code should have validated if curl is actually available
@@ -443,9 +437,6 @@ class ClientManager:
 
         max_audio_duration = max_audio_duration or float("inf")
         return min_audio_duration <= duration <= max_audio_duration
-
-    async def close(self) -> None:
-        await self.flaresolverr.close()
 
 
 async def _set_dns_resolver(loop: asyncio.AbstractEventLoop | None = None) -> None:
