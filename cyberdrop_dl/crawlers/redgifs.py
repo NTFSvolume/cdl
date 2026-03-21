@@ -80,13 +80,13 @@ class RedGifsCrawler(Crawler):
         title = self.create_title(user_id)
         scrape_item.setup_as_album(title)
 
-        async for gifs in self._profile_pager(user_id):
+        async for gifs in self._profile_pager(user_id, init_page=int(scrape_item.url.query.get("page", 1))):
             for gif in gifs:
                 new_scrape_item = scrape_item.create_child(_canonical_url(gif.id))
                 await self._handle_gif(new_scrape_item, gif)
                 scrape_item.add_children()
 
-    async def _profile_pager(self, user_id: str) -> AsyncGenerator[list[Gif]]:
+    async def _profile_pager(self, user_id: str, init_page: int = 1) -> AsyncGenerator[list[Gif]]:
         total_gifs: int = 0
         gif_ids: set[str] = set()
         page_limit = 100
@@ -96,16 +96,16 @@ class RedGifsCrawler(Crawler):
 
         async def request_gifs(order: Literal["new", "old"], page: int) -> list[Gif]:
             nonlocal total_gifs
-            json_resp: dict[str, Any] = await self.request_json(
+            resp: dict[str, Any] = await self.request_json(
                 api_url.update_query(order=order, page=page),
                 headers=self.headers,
             )
             if not total_gifs:
-                total_gifs = json_resp["users"][0]["gifs"]
+                total_gifs = resp["users"][0]["gifs"]
 
-            return [Gif.from_dict(gif) for gif in json_resp["gifs"]]
+            return [Gif.from_dict(gif) for gif in resp["gifs"]]
 
-        for page in range(1, page_limit + 1):
+        for page in range(init_page, page_limit + 1):
             gifs = await request_gifs("new", page)
             gif_ids.update(gif.id for gif in gifs)
             yield gifs
@@ -130,8 +130,8 @@ class RedGifsCrawler(Crawler):
 
         scrape_item.url = canonical_url
         api_url = API_ENTRYPOINT / "gifs" / post_id
-        json_resp: dict[str, dict] = await self.request_json(api_url, headers=self.headers)
-        gif = Gif.from_dict(json_resp["gif"])
+        resp: dict[str, dict[str, Any]] = await self.request_json(api_url, headers=self.headers)
+        gif = Gif.from_dict(resp["gif"])
         if gif.title:
             scrape_item.setup_as_album(self.create_title(gif.title))
         await self._handle_gif(scrape_item, gif)
