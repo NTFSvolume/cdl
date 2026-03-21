@@ -6,10 +6,10 @@ from dataclasses import field
 from time import sleep
 from typing import TYPE_CHECKING
 
+from cyberdrop_dl import yaml
 from cyberdrop_dl.config import AuthSettings, ConfigSettings, GlobalSettings
 from cyberdrop_dl.exceptions import InvalidYamlError
 from cyberdrop_dl.managers.log_manager import LogManager
-from cyberdrop_dl.utils import yaml
 from cyberdrop_dl.utils.apprise import get_apprise_urls
 
 if TYPE_CHECKING:

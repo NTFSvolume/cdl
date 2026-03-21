@@ -3,9 +3,9 @@ from typing import Self
 
 from pydantic import BaseModel
 
+from cyberdrop_dl import yaml
 from cyberdrop_dl.exceptions import InvalidYamlError
 from cyberdrop_dl.models import AliasModel, get_model_fields
-from cyberdrop_dl.utils import yaml
 
 
 class ConfigModel(AliasModel):

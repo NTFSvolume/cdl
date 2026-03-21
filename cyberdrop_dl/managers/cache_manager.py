@@ -4,7 +4,7 @@ from dataclasses import field
 from typing import TYPE_CHECKING, Any
 
 from cyberdrop_dl import __version__ as current_version
-from cyberdrop_dl.utils import yaml
+from cyberdrop_dl import yaml
 
 if TYPE_CHECKING:
     from pathlib import Path
