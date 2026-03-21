@@ -6,7 +6,7 @@ from argparse import SUPPRESS, ArgumentParser, RawDescriptionHelpFormatter
 from shutil import get_terminal_size
 from typing import TYPE_CHECKING, Any, Final, NoReturn
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
 from cyberdrop_dl import __version__, env
 from cyberdrop_dl.cli import arguments
@@ -104,15 +104,10 @@ def make_parser() -> CLIParser:
 
 def parse_args(args: Sequence[str] | None = None) -> ParsedArgs:
     """Parses the command line arguments passed into the program."""
-    from cyberdrop_dl.utils.yaml import handle_validation_error
 
     parsed_args = make_parser().parse_args(args)
-    try:
-        model = ParsedArgs.model_validate(parsed_args, extra="forbid")
 
-    except ValidationError as e:
-        handle_validation_error(e, title="CLI arguments")
-        sys.exit(1)
+    model = ParsedArgs.model_validate(parsed_args, extra="forbid")
 
     if model.cli_only_args.show_supported_sites:
         show_supported_sites()

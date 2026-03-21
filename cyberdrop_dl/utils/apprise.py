@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import json
 import shutil
-import sys
 import tempfile
 from dataclasses import dataclass
 from enum import IntEnum
@@ -12,14 +11,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import rich
-from pydantic import ValidationError
 from rich.text import Text
 
 from cyberdrop_dl import constants
 from cyberdrop_dl.dependencies import apprise
 from cyberdrop_dl.models import AppriseURLModel
 from cyberdrop_dl.utils.logger import log, log_debug, log_spacer
-from cyberdrop_dl.utils.yaml import handle_validation_error
 
 if TYPE_CHECKING:
     from cyberdrop_dl.managers.manager import Manager
@@ -85,12 +82,8 @@ def get_apprise_urls(*, file: Path | None = None, urls: list[str] | None = None)
     if apprise is None:
         log("Found apprise URLs for notifications but apprise is not installed. Ignoring", 30)
         return []
-    try:
-        return _simplify_urls([AppriseURLModel.model_validate({"url": url}) for url in set(urls)])
 
-    except ValidationError as e:
-        handle_validation_error(e, title="Apprise", file=file)
-        sys.exit(1)
+    return _simplify_urls([AppriseURLModel.model_validate({"url": url}) for url in set(urls)])
 
 
 def _simplify_urls(apprise_urls: list[AppriseURLModel]) -> list[AppriseURL]:
