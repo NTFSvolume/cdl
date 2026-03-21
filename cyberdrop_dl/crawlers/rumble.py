@@ -206,6 +206,6 @@ class RumbleCrawler(Crawler):
             )
 
         if hls_formats:
-            hls_formats = await aio.gather([resolve_m3u8(f) for f in hls_formats])
+            hls_formats = await aio.map(resolve_m3u8, hls_formats)
 
         return max((*hls_formats, *other_formats))

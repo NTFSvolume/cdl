@@ -3,69 +3,298 @@
 from __future__ import annotations
 
 import asyncio
-import weakref
+import contextlib
+import dataclasses
+import shutil
+import sys
+import tempfile
+from abc import ABC, abstractmethod
+from pathlib import Path
 from stat import S_ISREG
-from typing import TYPE_CHECKING, Final, Generic, TypeVar, cast
+from typing import (
+    IO,
+    TYPE_CHECKING,
+    Any,
+    AnyStr,
+    Generic,
+    ParamSpec,
+    Self,
+    TypeVar,
+    TypeVarTuple,
+    cast,
+    final,
+    overload,
+)
+from weakref import WeakValueDictionary
+
+from typing_extensions import Sentinel
 
 if TYPE_CHECKING:
-    import pathlib
-    from collections.abc import Awaitable, Sequence
+    from collections.abc import AsyncGenerator, AsyncIterator, Awaitable, Callable, Coroutine, Iterable, Iterator
+    from types import TracebackType
+
+    from _typeshed import OpenBinaryMode, OpenTextMode
+
 
 _T = TypeVar("_T")
+_Ts = TypeVarTuple("_Ts")
+_R = TypeVar("_R")
+_P = ParamSpec("_P")
+_MISSING = Sentinel("_MISSING")
 
 
-if TYPE_CHECKING:
-    from collections.abc import Awaitable, Sequence
+@dataclasses.dataclass(slots=True, eq=False)
+class WeakAsyncLocks(Generic[_T]):
+    """A WeakValueDictionary wrapper for asyncio.Locks.
 
-
-async def gather(coros: Sequence[Awaitable[_T]], batch_size: int = 10) -> list[_T]:
-    """Like `asyncio.gather`, but creates tasks lazily to minimize event loop overhead.
-
-    This function ensures there are never more than `batch_size` tasks created at any given time.
-
-    If any exception is raised within a task, all currently running tasks
-    are cancelled and any renaming task in the queue will be ignored.
+    Unused locks are automatically garbage collected. When trying to retrieve a
+    lock that does not exists, a new lock will be created.
     """
 
-    semaphore = asyncio.BoundedSemaphore(batch_size)
-    results: list[_T] = cast("list[_T]", [None] * len(coros))
+    _locks: WeakValueDictionary[_T, asyncio.Lock] = dataclasses.field(init=False, default_factory=WeakValueDictionary)
 
-    async def worker(index: int, coro: Awaitable[_T]):
+    def __getitem__(self, key: _T, /) -> asyncio.Lock:
+        lock = self._locks.get(key)
+        if lock is None:
+            self._locks[key] = lock = asyncio.Lock()
+        return lock
+
+
+@dataclasses.dataclass(slots=True, eq=False)
+class AsyncIOWrapper(Generic[AnyStr]):
+    """An asynchronous context manager wrapper for a file object."""
+
+    _coro: Awaitable[IO[AnyStr]]
+    _io: IO[AnyStr] = dataclasses.field(init=False)
+
+    async def __aenter__(self) -> Self:
+        self._io = await self._coro
+        return self
+
+    async def __aexit__(self, *_) -> None:
+        return await asyncio.to_thread(self._io.close)
+
+    async def __aiter__(self) -> AsyncIterator[AnyStr]:
+        while True:
+            line = await self.readline()
+            if line:
+                yield line
+            else:
+                break
+
+    async def read(self, size: int = -1) -> AnyStr:
+        return await asyncio.to_thread(self._io.read, size)
+
+    async def readline(self) -> AnyStr:
+        return await asyncio.to_thread(self._io.readline)
+
+    async def readlines(self) -> list[AnyStr]:
+        return await asyncio.to_thread(self._io.readlines)
+
+    async def write(self, b: AnyStr, /) -> int:
+        return await asyncio.to_thread(self._io.write, b)
+
+    async def writelines(self, lines: Iterable[AnyStr], /) -> None:
+        return await asyncio.to_thread(self._io.writelines, lines)
+
+
+@dataclasses.dataclass(slots=True, eq=False)
+class AsyncIteratorWrapper(Generic[_T]):
+    func: Awaitable[Iterator[_T]]
+    iterator: Iterator[_T] | None = dataclasses.field(default=None, init=False)
+
+    def __aiter__(self) -> Self:
+        return self
+
+    async def __anext__(self) -> _T:
+        if self.iterator is None:
+            self.iterator = await self.func
+        value = await asyncio.to_thread(next, self.iterator, _MISSING)
+        if value is _MISSING:
+            raise StopAsyncIteration from None
+
+        return cast("_T", value)
+
+
+class AsyncContextManagerMixin(ABC):
+    __stack: contextlib.AsyncExitStack | None = None
+
+    @final
+    @property
+    def _stack(self) -> contextlib.AsyncExitStack[bool | None]:
+        if self.__stack is None:
+            raise RuntimeError(f"{type(self).__name__} can only be used as a context manager")
+        return self.__stack
+
+    @final
+    async def __aenter__(self) -> Self:
+        if self.__stack is not None:
+            raise RuntimeError(f"{type(self).__name__} does not allow reentrance")
+        self.__stack = contextlib.AsyncExitStack()
+        _ = await self.__stack.__aenter__()
+        await self._async_ctx_()
+        return self
+
+    @final
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> bool | None:
+        return await self._stack.__aexit__(exc_type, exc_val, exc_tb)
+
+    @abstractmethod
+    async def _async_ctx_(self) -> None: ...
+
+
+async def gather(*coros: Awaitable[_T]) -> list[_T]:
+    """Like asyncio.gather but a exception on any coro cancels all pending coros
+
+    AKA: all or nothing"""
+
+    async def run(coro: Awaitable[_R]) -> _R:
+        return await coro
+
+    async with asyncio.TaskGroup() as tg:
+        tasks = [tg.create_task(run(coro)) for coro in coros]
+
+    return [t.result() for t in tasks]
+
+
+async def map(
+    coro_factory: Callable[[_T], Awaitable[_R]],
+    params: Iterable[_T],
+    /,
+    *,
+    task_limit: int | None = None,
+) -> list[_R]:
+    """Map an async factory over a sequence of arguments with optional concurrency cap.
+
+    If `task_limit` is given, no more than that many coroutines will be “in flight” at the same time,
+    limiting memory pressure and event loop overhead"""
+    return await map_tuples(coro_factory, ((param,) for param in params), task_limit=task_limit)
+
+
+async def map_tuples(
+    coro_factory: Callable[[*_Ts], Awaitable[_R]],
+    params_batched: Iterable[tuple[*_Ts]],
+    /,
+    *,
+    task_limit: int | None = None,
+) -> list[_R]:
+    """Map an async factory over a sequence of arguments with optional concurrency cap.
+
+    If `task_limit` is given, no more than that many coroutines will be “in flight” at the same time,
+    limiting memory pressure and event loop overhead"""
+    if not task_limit:
+        return await gather(*(coro_factory(*params) for params in params_batched))
+
+    semaphore = asyncio.BoundedSemaphore(task_limit)
+    tasks: list[asyncio.Task[_R]] = []
+
+    async def run(coro: Awaitable[_R]) -> _R:
         try:
-            result = await coro
-            results[index] = result
+            return await coro
         finally:
             semaphore.release()
 
     async with asyncio.TaskGroup() as tg:
-        for index, coro in enumerate(coros):
-            await semaphore.acquire()
-            tg.create_task(worker(index, coro))
+        for params in params_batched:
+            _ = await semaphore.acquire()
+            coro = coro_factory(*params)
+            tasks.append(tg.create_task(run(coro)))
 
-    return results
-
-
-async def stat(path: pathlib.Path):
-    return await asyncio.to_thread(path.stat)
+    return [t.result() for t in tasks]
 
 
-async def is_dir(path: pathlib.Path) -> bool:
-    return await asyncio.to_thread(path.is_dir)
+def run(coro: Coroutine[Any, Any, _T]) -> _T:
+    def _loop_factory() -> asyncio.AbstractEventLoop:
+        loop = asyncio.new_event_loop()
+        if sys.version_info > (3, 12):
+            loop.set_task_factory(asyncio.eager_task_factory)
+        return loop
+
+    with asyncio.Runner(loop_factory=_loop_factory) as runner:
+        return runner.run(coro)
 
 
-async def is_file(path: pathlib.Path) -> bool:
-    return await asyncio.to_thread(path.is_file)
+def to_thread(fn: Callable[_P, _R]) -> Callable[_P, Coroutine[None, None, _R]]:
+    """Convert a blocking callable into an async callable that runs in another thread"""
+
+    async def async_run(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+        return await asyncio.to_thread(fn, *args, **kwargs)
+
+    return async_run
 
 
-async def exists(path: pathlib.Path) -> bool:
-    return await asyncio.to_thread(path.exists)
+chmod = to_thread(Path.chmod)
+copy = to_thread(shutil.copy)
+exists = to_thread(Path.exists)
+is_dir = to_thread(Path.is_dir)
+is_file = to_thread(Path.is_file)
+mkdir = to_thread(Path.mkdir)
+move = to_thread(shutil.move)
+read_bytes = to_thread(Path.read_bytes)
+read_text = to_thread(Path.read_text)
+resolve = to_thread(Path.resolve)
+stat = to_thread(Path.stat)
+touch = to_thread(Path.touch)
+unlink = remove = to_thread(Path.unlink)
+write_bytes = to_thread(Path.write_bytes)
+write_text = to_thread(Path.write_text)
 
 
-async def unlink(path: pathlib.Path, missing_ok: bool = False) -> None:
-    return await asyncio.to_thread(path.unlink, missing_ok)
+def glob(path: Path, pattern: str) -> AsyncIterator[Path]:
+    coro = asyncio.to_thread(path.glob, pattern)
+    return AsyncIteratorWrapper(coro)
 
 
-async def get_size(path: pathlib.Path) -> int | None:
+def rglob(path: Path, pattern: str) -> AsyncIterator[Path]:
+    coro = asyncio.to_thread(path.rglob, pattern)
+    return AsyncIteratorWrapper(coro)
+
+
+def iterdir(path: Path) -> AsyncIterator[Path]:
+    coro = asyncio.to_thread(path.iterdir)
+    return AsyncIteratorWrapper(coro)
+
+
+@overload
+def open(
+    path: Path,
+    mode: OpenBinaryMode,
+    buffering: int = ...,
+    encoding: str | None = ...,
+    errors: str | None = ...,
+    newline: str | None = ...,
+) -> AsyncIOWrapper[bytes]: ...
+
+
+@overload
+def open(
+    path: Path,
+    mode: OpenTextMode = ...,
+    buffering: int = ...,
+    encoding: str | None = ...,
+    errors: str | None = ...,
+    newline: str | None = ...,
+) -> AsyncIOWrapper[str]: ...
+
+
+def open(
+    path: Path,
+    mode: str = "r",
+    buffering: int = -1,
+    encoding: str | None = None,
+    errors: str | None = None,
+    newline: str | None = None,
+) -> AsyncIOWrapper[Any]:
+    coro = asyncio.to_thread(path.open, mode, buffering, encoding, errors, newline)
+    return AsyncIOWrapper(coro)
+
+
+async def get_size(path: Path) -> int | None:
     """If path exists and is a file, returns its size. Returns `None` otherwise"""
 
     # Manually parse stat result to make sure we only use 1 fs call
@@ -75,24 +304,15 @@ async def get_size(path: pathlib.Path) -> int | None:
     except (OSError, ValueError):
         return
     else:
-        if S_ISREG(stat_result.st_mode):
-            return stat_result.st_size
+        if not S_ISREG(stat_result.st_mode):
+            raise IsADirectoryError(path)
+        return stat_result.st_size
 
 
-class WeakAsyncLocks(Generic[_T]):
-    """A WeakValueDictionary wrapper for asyncio.Locks.
-
-    Unused locks are automatically garbage collected. When trying to retrieve a
-    lock that does not exists, a new lock will be created.
-    """
-
-    __slots__ = ("__locks",)
-
-    def __init__(self) -> None:
-        self.__locks: Final = weakref.WeakValueDictionary[_T, asyncio.Lock]()
-
-    def __getitem__(self, key: _T, /) -> asyncio.Lock:
-        lock = self.__locks.get(key)
-        if lock is None:
-            self.__locks[key] = lock = asyncio.Lock()
-        return lock
+@contextlib.asynccontextmanager
+async def temp_dir() -> AsyncGenerator[Path]:
+    temp_dir = await asyncio.to_thread(tempfile.TemporaryDirectory, prefix="cdl_", ignore_cleanup_errors=True)
+    try:
+        yield Path(temp_dir.name)
+    finally:
+        await asyncio.to_thread(temp_dir.cleanup)

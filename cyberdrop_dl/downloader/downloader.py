@@ -33,8 +33,6 @@ from cyberdrop_dl.utils.utilities import error_handling_wrapper, parse_url
 # Windows epoch is January 1, 1601. Unix epoch is January 1, 1970
 WIN_EPOCH_OFFSET = 116444736e9
 MAC_OS_SET_FILE = None
-_VIDEO_HLS_BATCH_SIZE = 10
-_AUDIO_HLS_BATCH_SIZE = 50
 
 
 # Try to import win32con for Windows constants, fallback to hardcoded values if unavailable
@@ -249,11 +247,8 @@ class Downloader:
             if await asyncio.to_thread(output.is_file):
                 return output
 
-            batch_size = _VIDEO_HLS_BATCH_SIZE if m3u8.media_type == "video" else _AUDIO_HLS_BATCH_SIZE
+            tasks_results = await self._download_segments(media_item, m3u8, download_folder)
 
-            tasks_results = await aio.gather(
-                self._prepare_hls_downloads(media_item, m3u8, download_folder), batch_size=batch_size
-            )
             n_successful = sum(1 for result in tasks_results if result.downloaded)
 
             if n_successful != n_segmets:
@@ -291,9 +286,7 @@ class Downloader:
             pass
         return video, audio, subtitles
 
-    def _prepare_hls_downloads(
-        self, media_item: MediaItem, m3u8: M3U8, download_folder: Path
-    ) -> list[Coroutine[None, None, SegmentDownloadResult]]:
+    def _download_segments(self, media_item: MediaItem, m3u8: M3U8, download_folder: Path):
         padding = max(5, len(str(len(m3u8.segments))))
 
         def create_segments() -> Generator[HlsSegment]:
@@ -320,7 +313,11 @@ class Downloader:
                 await self.start_download(seg_media_item),
             )
 
-        return [download_segment(segment) for segment in create_segments()]
+        return aio.map(
+            download_segment,
+            create_segments(),
+            task_limit=10 if m3u8.media_type == "video" else 50,
+        )
 
     async def finalize_download(self, media_item: MediaItem, downloaded: bool) -> None:
         if downloaded:
