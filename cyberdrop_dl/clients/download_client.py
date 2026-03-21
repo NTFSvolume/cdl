@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 import aiofiles
 
-from cyberdrop_dl import aio, constants
+from cyberdrop_dl import aio, constants, storage
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.constants import FILE_FORMATS
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
@@ -234,7 +234,7 @@ class DownloadClient:
         """Appends content to a file."""
 
         assert media_item.task_id is not None
-        check_free_space = self.make_free_space_checker(media_item)
+        check_free_space = storage.create_free_space_checker(media_item)
         check_download_speed = self.make_speed_checker(media_item)
         await check_free_space()
         await self._pre_download_check(media_item)
@@ -263,17 +263,6 @@ class DownloadClient:
         if not await aio.get_size(media_item.partial_file):
             await aio.unlink(media_item.partial_file, missing_ok=True)
             raise DownloadError(HTTPStatus.INTERNAL_SERVER_ERROR, message="File is empty")
-
-    def make_free_space_checker(self, media_item: MediaItem) -> Callable[[], Coroutine[Any, Any, None]]:
-        current_chunk = 0
-
-        async def check_free_space() -> None:
-            nonlocal current_chunk
-            if current_chunk % _FREE_SPACE_CHECK_PERIOD == 0:
-                await self.manager.storage_manager.check_free_space(media_item)
-            current_chunk += 1
-
-        return check_free_space
 
     def make_speed_checker(self, media_item: MediaItem) -> Callable[[], None]:
         last_slow_speed_read = None

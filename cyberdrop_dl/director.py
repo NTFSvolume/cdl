@@ -10,7 +10,7 @@ from functools import wraps
 from pathlib import Path
 from typing import TYPE_CHECKING, ParamSpec, TypeVar
 
-from cyberdrop_dl import constants, env
+from cyberdrop_dl import aio, constants, env, storage
 from cyberdrop_dl.dependencies import browser_cookie3
 from cyberdrop_dl.managers.manager import Manager
 from cyberdrop_dl.scraper.scrape_mapper import ScrapeMapper
@@ -200,13 +200,6 @@ def _setup_manager(args: Sequence[str] | None = None) -> Manager:
     return manager
 
 
-def _loop_factory() -> asyncio.AbstractEventLoop:
-    loop = asyncio.new_event_loop()
-    if sys.version_info > (3, 12):
-        loop.set_task_factory(asyncio.eager_task_factory)
-    return loop
-
-
 class Director:
     """Creates a manager and runs it"""
 
@@ -218,15 +211,15 @@ class Director:
 
     async def async_run(self) -> None:
         try:
-            await _run_manager(self.manager)
+            async with storage.monitor(self.manager.global_config.general.required_free_space):
+                await _run_manager(self.manager)
         finally:
             await self.manager.close()
 
     def _run(self) -> int:
         exit_code = _C.ERROR
         with contextlib.suppress(Exception):
-            with asyncio.Runner(loop_factory=_loop_factory) as runner:
-                runner.run(self.async_run())
+            aio.run(self.async_run())
             exit_code = _C.OK
 
         return exit_code

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, NamedTuple, ParamSpec, TypeVar
 
 from aiohttp import ClientConnectorError, ClientError, ClientResponseError
 
-from cyberdrop_dl import aio, constants, ffmpeg
+from cyberdrop_dl import aio, constants, ffmpeg, storage
 from cyberdrop_dl.data_structures.url_objects import HlsSegment, MediaItem
 from cyberdrop_dl.exceptions import (
     DownloadError,
@@ -330,7 +330,7 @@ class Downloader:
 
     async def check_file_can_download(self, media_item: MediaItem) -> None:
         """Checks if the file can be downloaded."""
-        await self.manager.storage_manager.check_free_space(media_item)
+        await storage.check(media_item)
         if not self.manager.client_manager.check_allowed_filetype(media_item):
             raise RestrictedFiletypeError(origin=media_item)
         if not await self.manager.client_manager.check_file_duration(media_item):
