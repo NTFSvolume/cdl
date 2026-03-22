@@ -157,10 +157,8 @@ class ClientManager:
         await self._download_session.close()
         if _curl_import_error is not None:
             return
-        try:
-            await self._curl_session.close()
-        except Exception:
-            pass
+
+        await self._curl_session.close()
 
     @property
     def rate_limiting_options(self):

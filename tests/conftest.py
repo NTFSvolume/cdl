@@ -51,7 +51,7 @@ def pytest_collection_modifyitems(config: Config, items: list[pytest.Item]) -> N
         items[:] = selected_tests
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture
 def tmp_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.chdir(tmp_path)
     return tmp_path
@@ -64,19 +64,20 @@ async def logs(caplog: pytest.LogCaptureFixture) -> pytest.LogCaptureFixture:
 
 
 @pytest.fixture(scope="function", name="manager")
-def post_startup_manager(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Manager:
+async def post_startup_manager(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncGenerator[Manager]:
     appdata = str(tmp_path)
     downloads = str(tmp_path / "Downloads")
     monkeypatch.chdir(tmp_path)
     bare_manager = Manager(("--appdata-folder", appdata, "-d", downloads, "--download-tiktok-audios"))
-    bare_manager.post_init()
-    return bare_manager
+    async with bare_manager:
+        yield bare_manager
 
 
 @pytest.fixture(scope="function")
 async def running_manager(manager: Manager) -> AsyncGenerator[Manager]:
     scrape_mapper.existing_crawlers.clear()
     manager.states.RUNNING.set()
-    async with manager:
+    try:
         yield manager
+    finally:
         manager.states.RUNNING.clear()

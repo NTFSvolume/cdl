@@ -90,7 +90,7 @@ class ScrapeMapper:
         self = cls(manager)
         await self.manager.client_manager.load_cookie_files()
 
-        async with self.manager.client_manager, asyncio.TaskGroup() as tg:
+        async with asyncio.TaskGroup() as tg:
             self.manager.scrape_mapper = self
             self.manager.task_group = tg
             yield self
