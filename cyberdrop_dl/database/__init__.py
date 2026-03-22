@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
 import aiosqlite
 
@@ -17,6 +17,13 @@ class Database:
         self.ignore_history = ignore_history
         self.history_table: HistoryTable
         self.hash_table: HashTable
+
+    async def __aenter__(self) -> Self:
+        await self.startup()
+        return self
+
+    async def __aexit__(self, *_: object) -> None:
+        await self.close()
 
     async def startup(self) -> None:
         """Startup process for the DBManager."""

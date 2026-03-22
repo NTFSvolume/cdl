@@ -24,12 +24,8 @@ class PathManager:
 
         self.log_folder: Path = field(init=False)
 
-        self.cache_folder: Path = field(init=False)
-        self.config_folder: Path = field(init=False)
-
         self.input_file: Path = field(init=False)
         self.history_db: Path = field(init=False)
-        self.cache_db: Path = field(init=False)
 
         self._completed_downloads: set[MediaItem] = set()
         self._completed_downloads_paths: set[Path] = set()
@@ -52,6 +48,10 @@ class PathManager:
         ]
         self._appdata: Path = field(init=False)
 
+        self.cache_folder: Path = self.appdata / "Cache"
+        self.config_folder: Path = self.appdata / "Configs"
+        self.cookies_dir: Path = self.appdata / "Cookies"
+
     @property
     def cwd(self) -> Path:
         if env.RUNNING_IN_IDE and Path.cwd().name == "cyberdrop_dl":
@@ -70,18 +70,12 @@ class PathManager:
 
         return self._appdata
 
-    def pre_startup(self) -> None:
-        self.cache_folder = self.appdata / "Cache"
-        self.config_folder = self.appdata / "Configs"
-        self.cookies_dir = self.appdata / "Cookies"
-        self.cache_db = self.cache_folder / "request_cache.db"
-
+    def mkdirs(self) -> None:
         self.cache_folder.mkdir(parents=True, exist_ok=True)
         self.config_folder.mkdir(parents=True, exist_ok=True)
         self.cookies_dir.mkdir(parents=True, exist_ok=True)
-        self.cache_db.touch(exist_ok=True)
 
-    def startup(self) -> None:
+    def resolve_paths(self) -> None:
         """Startup process for the Directory Manager."""
         settings_data = self.manager.config_manager.settings_data
         current_config = self.manager.config_manager.loaded_config

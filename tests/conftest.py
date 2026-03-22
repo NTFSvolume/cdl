@@ -64,22 +64,20 @@ async def logs(caplog: pytest.LogCaptureFixture) -> pytest.LogCaptureFixture:
 
 
 @pytest.fixture(scope="function", name="manager")
-def post_startup_manager(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Manager:
+async def post_startup_manager(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncGenerator[Manager]:
     appdata = str(tmp_path)
     downloads = str(tmp_path / "Downloads")
     monkeypatch.chdir(tmp_path)
     bare_manager = Manager(("--appdata-folder", appdata, "-d", downloads, "--download-tiktok-audios"))
-    bare_manager.startup()
-    bare_manager.path_manager.startup()
-    bare_manager.log_manager.startup()
-    return bare_manager
+    async with bare_manager:
+        yield bare_manager
 
 
 @pytest.fixture(scope="function")
 async def running_manager(manager: Manager) -> AsyncGenerator[Manager]:
     scrape_mapper.existing_crawlers.clear()
-    await manager.async_startup()
     manager.states.RUNNING.set()
-    yield manager
-    manager.states.RUNNING.clear()
-    await manager.close()
+    try:
+        yield manager
+    finally:
+        manager.states.RUNNING.clear()

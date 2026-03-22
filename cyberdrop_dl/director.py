@@ -67,14 +67,11 @@ def _ui_error_handling_wrapper(
 @_ui_error_handling_wrapper
 async def _run_manager(manager: Manager) -> None:
     """Runs the program and handles the UI."""
-    manager.path_manager.startup()
-    manager.log_manager.startup()
     debug_log_file_path = _setup_debug_logger(manager)
     start_time = manager.start_time
     _setup_main_logger(manager)
     log(f"Using Debug Log: {debug_log_file_path}", 10)
     log("Starting Async Processes...", 10)
-    await manager.async_startup()
     log_spacer(10)
 
     log("Starting CDL...\n", 20)
@@ -191,8 +188,6 @@ def _setup_manager(args: Sequence[str] | None = None) -> Manager:
 
     manager = Manager(args)
 
-    manager.startup()
-
     if not manager.parsed_args.cli_only_args.download:
         ProgramUI(manager)
 
@@ -209,11 +204,8 @@ class Director:
         return self._run()
 
     async def async_run(self) -> None:
-        try:
-            async with storage.monitor(self.manager.global_config.general.required_free_space):
-                await _run_manager(self.manager)
-        finally:
-            await self.manager.close()
+        async with self.manager, storage.monitor(self.manager.global_config.general.required_free_space):
+            await _run_manager(self.manager)
 
     def _run(self) -> int:
         exit_code = _C.ERROR

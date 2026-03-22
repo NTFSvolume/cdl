@@ -27,10 +27,9 @@ def hash_directory_scanner(manager: Manager, path: Path) -> None:
 
 
 async def _hash_directory_scanner_helper(manager: Manager, path: Path) -> None:
-    await manager.async_db_hash_startup()
-    await manager.hash_manager.hash_client.hash_directory(path)
-    manager.progress_manager.print_dedupe_stats()
-    await manager.async_db_close()
+    async with manager.connect_to_db():
+        await manager.hash_manager.hash_client.hash_directory(path)
+        manager.progress_manager.print_dedupe_stats()
 
 
 class HashClient:
