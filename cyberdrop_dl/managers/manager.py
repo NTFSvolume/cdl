@@ -60,14 +60,10 @@ class Manager(aio.AsyncContextManagerMixin):
 
         self.parsed_args: ParsedArgs = parse_args(args)
         self.path_manager: PathManager = PathManager(self)
-        self.path_manager.pre_startup()
+
         self.cache_manager: dict[str, Any]
         self.config_manager: ConfigManager = ConfigManager(self)
-        self.config_manager.startup()
-
-        self.args_consolidation()
-        self.path_manager.startup()
-        self.log_manager = LogManager(self)
+        self.log_manager = LogManager
 
     @property
     def states(self) -> AsyncioEvents:
@@ -89,6 +85,13 @@ class Manager(aio.AsyncContextManagerMixin):
 
     @override
     async def _async_ctx_(self) -> None:
+        self.path_manager.mkdirs()
+        self.config_manager.startup()
+
+        self.args_consolidation()
+        self.path_manager.resolve_paths()
+        self.log_manager = LogManager(self)
+
         try:
             self.cache_manager = yaml.load(self.path_manager.cache_folder / "cache.yaml")
         except FileNotFoundError:

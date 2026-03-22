@@ -74,7 +74,7 @@ async def post_startup_manager(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     downloads = str(tmp_path / "Downloads")
     monkeypatch.chdir(tmp_path)
     manager = Manager(("--appdata-folder", appdata, "-d", downloads))
-    manager.path_manager.startup()
+    manager.path_manager.resolve_paths()
     manager.log_manager.startup()
     async with manager:
         yield manager
