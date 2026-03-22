@@ -135,10 +135,7 @@ class Manager(aio.AsyncContextManagerMixin):
         self.progress_manager = ProgressManager(self)
         self.progress_manager.startup()
         async with self.db_manager:
-            try:
-                yield
-            finally:
-                del self.db_manager
+            yield
 
     def process_additive_args(self) -> None:
         cli_general_options = self.parsed_args.global_settings.general
