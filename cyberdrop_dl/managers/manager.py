@@ -54,7 +54,7 @@ class Manager(aio.AsyncContextManagerMixin):
         self.start_time: float = perf_counter()
 
         self.loggers: dict[str, QueuedLogger] = {}
-        self.states: AsyncioEvents
+        self._states: AsyncioEvents | None = None
 
         constants.console_handler = LogHandler(level=constants.CONSOLE_LEVEL)
 
@@ -70,6 +70,12 @@ class Manager(aio.AsyncContextManagerMixin):
         self.log_manager = LogManager(self)
 
     @property
+    def states(self) -> AsyncioEvents:
+        if self._states is None:
+            self._states = AsyncioEvents(asyncio.Event(), asyncio.Event())
+        return self._states
+
+    @property
     def config(self):
         return self.config_manager.settings_data
 
@@ -83,14 +89,13 @@ class Manager(aio.AsyncContextManagerMixin):
 
     @override
     async def _async_ctx_(self) -> None:
-        self.states = AsyncioEvents(asyncio.Event(), asyncio.Event())
         try:
             self.cache_manager = yaml.load(self.path_manager.cache_folder / "cache.yaml")
         except FileNotFoundError:
             self.cache_manager = {}
         self.args_logging()
 
-        exit_stack = self._stack
+        exit_stack = self._exit_stack
         self.client_manager = await exit_stack.enter_async_context(ClientManager(self))
 
         _ = await exit_stack.enter_async_context(self.connect_to_db())
