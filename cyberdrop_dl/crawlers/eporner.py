@@ -206,7 +206,7 @@ class EpornerCrawler(Crawler):
     async def _request_location_reencoded(self, link: AbsoluteHttpURL):
         # The location header is not encoded and the "requote_url_redirect" param of aiohttp is session scoped
         # so we manually requote this redirect
-        async with self.request(link, method="HEAD", allow_redirects=False) as resp:
+        async with self.request(link, allow_redirects=False) as resp:
             assert resp.location
             return AbsoluteHttpURL(f"{resp.location.origin()}/{resp.location.raw_path_qs}", encoded=True)
 
