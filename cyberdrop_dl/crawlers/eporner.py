@@ -200,7 +200,15 @@ class EpornerCrawler(Crawler):
             resolution=video.best_src.resolution,
             video_codec=video.best_src.codec.name.lower(),
         )
-        await self.handle_file(link, scrape_item, video.title, ext, custom_filename=filename)
+        dl_link = await self._request_location_reencoded(link)
+        await self.handle_file(link, scrape_item, video.title, ext, custom_filename=filename, debrid_link=dl_link)
+
+    async def _request_location_reencoded(self, link: AbsoluteHttpURL):
+        # The location header is not encoded and the "requote_url_redirect" param of aiohttp is session scoped
+        # so we manually requote this redirect
+        async with self.request(link, method="HEAD", allow_redirects=False) as resp:
+            assert resp.location
+            return AbsoluteHttpURL(f"{resp.location.origin()}/{resp.location.raw_path_qs}", encoded=True)
 
 
 def _parse_video(soup: BeautifulSoup) -> Video:
