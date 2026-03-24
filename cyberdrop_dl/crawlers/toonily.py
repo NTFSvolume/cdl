@@ -12,7 +12,7 @@ class Selector:
     CHAPTER = ".wp-manga-chapter a"
     IMAGE = ".reading-content .page-break.no-gaps img"
     SERIES_TITLE = ".post-title > h1"
-    CHAPTER_TITLE = "#chapter-heading"
+    NAV_BREADCUMBS = ".wp-manga-nav .breadcrumb li"
 
 
 class ToonilyCrawler(Crawler):
@@ -26,14 +26,12 @@ class ToonilyCrawler(Crawler):
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
-            case ["serie", _, *rest]:
-                match rest:
-                    case []:
-                        return await self.series(scrape_item)
-                    case [chapter] if chapter.startswith("chapter-"):
-                        return await self.chapter(scrape_item)
-
-        raise ValueError
+            case ["serie", _]:
+                return await self.series(scrape_item)
+            case ["serie", _, chapter] if chapter.startswith("chapter-"):
+                return await self.chapter(scrape_item)
+            case _:
+                raise ValueError
 
     @error_handling_wrapper
     async def series(self, scrape_item: ScrapeItem) -> None:
@@ -50,7 +48,8 @@ class ToonilyCrawler(Crawler):
     async def chapter(self, scrape_item: ScrapeItem) -> None:
         soup = await self.request_soup(scrape_item.url, impersonate=True)
 
-        series_name, chapter_title = css.select_text(soup, Selector.CHAPTER_TITLE).split(" - ", 1)
+        *_, series_name, chapter_title = (css.text(bc) for bc in soup.select(Selector.NAV_BREADCUMBS))
+
         if scrape_item.type != FILE_HOST_PROFILE:
             series_title = self.create_title(series_name)
             scrape_item.add_to_parent_title(series_title)
