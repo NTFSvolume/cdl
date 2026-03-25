@@ -316,10 +316,8 @@ class Crawler(ABC):
         async with self._semaphore:
             await self.manager.states.RUNNING.wait()
             self.waiting_items -= 1
-            og_url = scrape_item.url
-            scrape_item.url = url = self.transform_url(scrape_item.url)
-            if og_url != url:
-                log(f"URL transformation applied [{self.FOLDER_DOMAIN}]: \n  old_url: {og_url}\n  new_url: {url}")
+            with scrape_item.track_changes():
+                scrape_item.url = url = self.transform_url(scrape_item.url)
 
             if url.path_qs in self.scraped_items:
                 return log(f"Skipping {url} as it has already been scraped", 10)

@@ -1,8 +1,11 @@
 # pyright: ignore[reportIncompatibleVariableOverride]
 from __future__ import annotations
 
+import contextlib
 import copy
 import datetime
+import logging
+from contextvars import ContextVar
 from dataclasses import asdict, dataclass, field
 from enum import IntEnum
 from pathlib import Path
@@ -11,7 +14,7 @@ from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Self, overload
 import yarl
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Generator
 
     import aiohttp
     from propcache.api import under_cached_property as cached_property
@@ -111,6 +114,10 @@ FORUM = ScrapeItemType.FORUM
 FORUM_POST = ScrapeItemType.FORUM_POST
 FILE_HOST_PROFILE = ScrapeItemType.FILE_HOST_PROFILE
 FILE_HOST_ALBUM = ScrapeItemType.FILE_HOST_ALBUM
+
+
+_CURRENT_URL: ContextVar[AbsoluteHttpURL] = ContextVar("_CURRENT_URL")
+logger = logging.getLogger(__name__)
 
 
 class HlsSegment(NamedTuple):
@@ -241,6 +248,17 @@ class ScrapeItem:
     created_at: int | None = field(default=None, init=False)
     children_limits: list[int] = field(default_factory=list, init=False)
     password: str | None = field(default=None, init=False)
+
+    @contextlib.contextmanager
+    def track_changes(self) -> Generator[Self]:
+        old_url = self.url
+        token = _CURRENT_URL.set(self.url)
+        try:
+            yield self
+        finally:
+            if old_url != self.url:
+                logger.info(f"URL transformation applied: \n  {old_url = }\n  new_url: {self.url}")
+            _CURRENT_URL.reset(token)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(url={self.url!r}, parent_title={self.parent_title!r}, possible_datetime={self.possible_datetime!r}"
