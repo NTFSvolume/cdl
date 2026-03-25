@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import functools
 import sqlite3
 import sys
 from functools import wraps
@@ -19,7 +20,6 @@ from cyberdrop_dl.ui.prompts.defaults import DONE_CHOICE, EXIT_CHOICE
 from cyberdrop_dl.utils.cookie_management import clear_cookies
 from cyberdrop_dl.utils.sorting import Sorter
 from cyberdrop_dl.utils.text_editor import open_in_text_editor
-from cyberdrop_dl.utils.updates import check_latest_pypi
 from cyberdrop_dl.utils.utilities import clear_term
 
 if TYPE_CHECKING:
@@ -74,7 +74,6 @@ class ProgramUI:
             5: self._edit_urls,
             6: self._change_config,
             7: self._manage_configs,
-            8: self._check_updates,
             9: self._view_changelog,
         }
 
@@ -104,11 +103,6 @@ class ProgramUI:
         sorter = Sorter(self.manager)
         asyncio.run(sorter.run())
 
-    def _check_updates(self) -> None:
-        """Checks Cyberdrop-DL updates."""
-        check_latest_pypi(logging="CONSOLE")
-        enter_to_continue()
-
     def _change_config(self) -> None:
         configs = self.manager.config_manager.get_configs()
         selected_config = user_prompts.select_config(configs)
@@ -119,9 +113,12 @@ class ProgramUI:
 
     def _view_changelog(self) -> None:
         clear_term()
-        changelog_content = self._get_changelog()
-        if not changelog_content:
-            return
+        try:
+            changelog_content = _get_changelog()
+        except Exception:
+            self.print_error("UNABLE TO GET CHANGELOG INFORMATION")
+            return None
+
         with console.pager(links=True):
             console.print(Markdown(changelog_content, justify="left"))
 
@@ -254,33 +251,20 @@ class ProgramUI:
 
         return function_to_call()
 
-    def _get_changelog(self) -> str | None:
-        """Get latest changelog file from github. Returns its content."""
-        path = self.manager.path_manager.config_folder.parent / "CHANGELOG.md"
-        url = "https://raw.githubusercontent.com/NTFSvolume/cdl/refs/heads/master/CHANGELOG.md"
-        _, latest_version = check_latest_pypi(logging="OFF")
-        if not latest_version:
-            self.print_error("UNABLE TO GET LATEST VERSION INFORMATION")
-            return None
 
-        name = f"{path.stem}_{latest_version}{path.suffix}"
-        changelog = path.with_name(name)
-        if not changelog.is_file():
-            changelog_pattern = f"{path.stem}*{path.suffix}"
-            for old_changelog in path.parent.glob(changelog_pattern):
-                old_changelog.unlink()
-            try:
-                with request("GET", url, timeout=15) as response:
-                    response.raise_for_status()
-                    with changelog.open("wb") as f:
-                        f.write(response.content)
-            except Exception:
-                self.print_error("UNABLE TO GET CHANGELOG INFORMATION")
-                return None
+@functools.cache
+def _get_changelog() -> str:
+    """Get latest changelog file from github. Returns its content."""
 
-        lines = changelog.read_text(encoding="utf8").splitlines()
-        # remove keep_a_changelog disclaimer
-        return "\n".join(lines[:21] + lines[25:])
+    url = "https://raw.githubusercontent.com/NTFSvolume/cdl/refs/heads/main/CHANGELOG.md"
+
+    with request("GET", url, timeout=15) as response:
+        response.raise_for_status()
+        content = response.text
+
+    lines = content.splitlines()
+    # remove keep_a_changelog disclaimer
+    return "\n".join(lines[:21] + lines[25:])
 
 
 def vacuum_database(db_path: Path) -> None:
