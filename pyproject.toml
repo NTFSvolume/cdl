@@ -18,8 +18,7 @@ dependencies = [
     "beautifulsoup4 >=4.14.3",
     "certifi >=2026.1.4",
     "curl-cffi >=0.13,<0.14; implementation_name == 'cpython' ",
-    "dateparser >=1.2.2",
-    "imagesize >=1.4.1",
+    "imagesize >=2.0.0",
     "inquirerpy >=0.3.4",
     "jeepney >=0.9.0; 'bsd' in sys_platform or sys_platform == 'linux'",
     "m3u8 >=6.0.0",
@@ -35,7 +34,7 @@ dependencies = [
     "send2trash >=2.0.0",
     "truststore >=0.10.4",
     "xxhash >=3.6.0",
-    "yarl >=1.22.0"
+    "yarl >=1.23.0"
 ]
 description = "Bulk downloader for multiple file hosts"
 license = "GPL-3.0-only"
@@ -64,7 +63,7 @@ dev = [
     "pytest-cov>=7.0.0",
     "pytest>=9.0.2",
     "ruff==0.15.6",
-    "tox>=4.34.1"
+    "tox>=4.50.3"
 ]
 extras = [
     "apprise >=1.9.7"

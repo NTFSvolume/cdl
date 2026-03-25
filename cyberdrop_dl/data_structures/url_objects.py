@@ -419,7 +419,7 @@ class QueryDatetimeRange(NamedTuple):
 
 
 def _date_from_query_param(url: AbsoluteHttpURL, query_param: str) -> datetime.datetime | None:
-    from cyberdrop_dl.utils.dates import parse_aware_iso_datetime
+    from cyberdrop_dl.utils.dates import parse_iso
 
     if value := url.query.get(query_param):
-        return parse_aware_iso_datetime(value)
+        return parse_iso(value)
