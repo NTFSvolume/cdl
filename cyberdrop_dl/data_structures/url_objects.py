@@ -251,10 +251,6 @@ class ScrapeItem:
 
     _token: Token[AbsoluteHttpURL] | None = field(default=None, init=False)
 
-    @classmethod
-    def current_url(cls) -> AbsoluteHttpURL:
-        return CURRENT_URL.get()
-
     def __enter__(self) -> Self:
         self._token = CURRENT_URL.set(self.url)
         return self
