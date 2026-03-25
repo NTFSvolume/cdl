@@ -5,7 +5,7 @@ import contextlib
 import copy
 import datetime
 import logging
-from contextvars import ContextVar
+from contextvars import ContextVar, Token
 from dataclasses import asdict, dataclass, field
 from enum import IntEnum
 from pathlib import Path
@@ -116,7 +116,7 @@ FILE_HOST_PROFILE = ScrapeItemType.FILE_HOST_PROFILE
 FILE_HOST_ALBUM = ScrapeItemType.FILE_HOST_ALBUM
 
 
-_CURRENT_URL: ContextVar[AbsoluteHttpURL] = ContextVar("_CURRENT_URL")
+CURRENT_URL: ContextVar[AbsoluteHttpURL] = ContextVar("_CURRENT_URL")
 logger = logging.getLogger(__name__)
 
 
@@ -249,16 +249,28 @@ class ScrapeItem:
     children_limits: list[int] = field(default_factory=list, init=False)
     password: str | None = field(default=None, init=False)
 
+    _token: Token[AbsoluteHttpURL] | None = field(default=None, init=False)
+
+    @classmethod
+    def current_url(cls) -> AbsoluteHttpURL:
+        return CURRENT_URL.get()
+
+    def __enter__(self) -> Self:
+        self._token = CURRENT_URL.set(self.url)
+        return self
+
+    def __exit__(self, *_) -> None:
+        assert self._token
+        CURRENT_URL.reset(self._token)
+
     @contextlib.contextmanager
     def track_changes(self) -> Generator[Self]:
         old_url = self.url
-        token = _CURRENT_URL.set(self.url)
         try:
             yield self
         finally:
             if old_url != self.url:
                 logger.info(f"URL transformation applied: \n  {old_url = }\n  new_url: {self.url}")
-            _CURRENT_URL.reset(token)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(url={self.url!r}, parent_title={self.parent_title!r}, possible_datetime={self.possible_datetime!r}"
@@ -411,7 +423,10 @@ class ScrapeItem:
 
     def copy(self) -> Self:
         """Returns a deep copy of this scrape_item"""
-        return copy.deepcopy(self)
+        self._token, token = None, self._token
+        me = copy.deepcopy(self)
+        self._token = token
+        return me
 
 
 class QueryDatetimeRange(NamedTuple):
