@@ -5,7 +5,7 @@ TEST_CASES = [
         [
             {
                 "url": "https://gupload.xyz/data/e/hls/26011780d54f/thumb/thumbnail_grid.jpg",
-                "referer": "https://gupload.xyz/data/e/26011780d54f",
+                "referer": "https://gupload.xyz/data/e/26011780d54f#thumbnail",
                 "download_folder": "re:Loose Files (GUpload)",
                 "filename": "26011780d54f [720p]_thumb.jpg",
                 "original_filename": "26011780d54f_thumb.jpg",

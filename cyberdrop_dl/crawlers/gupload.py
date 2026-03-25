@@ -3,7 +3,7 @@ from __future__ import annotations
 import base64
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, Final
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures import Resolution
@@ -14,12 +14,12 @@ if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
 
-_KEY = b"G7#kP!2qZxV9mRwL"
+_KEY: Final = b"G7#kP!2qZxV9mRwL"
 
 
 def _decode_config(config_text: str) -> dict[str, Any]:
     _, payload = config_text.split("~", 1)
-    config_bytes = base64.b64decode(payload, validate=True)
+    config_bytes = base64.b64decode(payload)
     return json.loads(xor_decrypt(config_bytes, _KEY))
 
 
@@ -50,9 +50,13 @@ class GUploadCrawler(Crawler):
         await self.handle_file(m3u8_url, scrape_item, filename, ext, m3u8=m3u8, custom_filename=custom_filename)
         thumbnail = self.parse_url(config["posterUrl"])
         thumb_name, ext = self.get_filename_and_ext(f"{Path(custom_filename).stem}_thumb{thumbnail.suffix}")
-        # TODO: fix db referer
         await self.handle_file(
-            thumbnail, scrape_item, f"{video_id}_thumb{thumbnail.suffix}", ext, custom_filename=thumb_name
+            thumbnail,
+            scrape_item,
+            f"{video_id}_thumb{thumbnail.suffix}",
+            ext,
+            custom_filename=thumb_name,
+            referer=scrape_item.url.with_fragment("thumbnail"),
         )
 
     async def _request_video_config(self, url: AbsoluteHttpURL) -> dict[str, Any]:
