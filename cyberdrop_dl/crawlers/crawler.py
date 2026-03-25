@@ -403,6 +403,7 @@ class Crawler(ABC):
         media_item.metadata = metadata
         await self.__write_to_jsonl(media_item)
 
+    @final
     async def handle_file(
         self,
         url: AbsoluteHttpURL,
@@ -414,31 +415,30 @@ class Crawler(ABC):
         debrid_link: AbsoluteHttpURL | None = None,
         m3u8: m3u8.RenditionGroup | None = None,
         metadata: object = None,
+        referer: AbsoluteHttpURL | None = None,
     ) -> None:
         """Finishes handling the file and hands it off to the downloader."""
-        if not ext:
-            ext = Path(filename).suffix
-        if custom_filename:
-            original_filename, filename = filename, custom_filename
-        elif self.DOMAIN in ["cyberdrop"]:
-            original_filename, filename = remove_file_id(self.manager, filename, ext)
-        else:
-            original_filename = filename
+
+        ext = ext or Path(filename).suffix
+        if self.DOMAIN in ["cyberdrop"]:
+            custom_filename = remove_file_id(self.manager, filename, ext)
 
         download_folder = get_download_path(self.manager, scrape_item, self.FOLDER_DOMAIN)
         media_item = MediaItem.from_item(
             scrape_item,
             url,
             self.DOMAIN,
-            filename=filename,
+            filename=custom_filename or filename,
             download_folder=download_folder,
             db_path=self.create_db_path(url),
-            original_filename=original_filename,
+            original_filename=filename,
             ext=ext,
         )
         media_item.debrid_link = debrid_link
         if metadata is not None:
             media_item.metadata = metadata
+        if referer:
+            media_item.referer = referer
         await self.handle_media_item(media_item, m3u8)
 
     @final
