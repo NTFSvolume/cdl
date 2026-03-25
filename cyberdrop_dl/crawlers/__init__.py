@@ -136,6 +136,7 @@ from .txxx import TXXXCrawler
 from .upload_ee import UploadEECrawler
 from .upornia import UPorniaCrawler
 from .vbulletin import VBULLETIN_CRAWLERS
+from .vidara import VidaraCrawler
 from .vipr_dot_im import ViprImCrawler
 from .vjav import VJavCrawler
 from .voe_sx import VoeSxCrawler
