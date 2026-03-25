@@ -74,7 +74,7 @@ class ProgramUI:
             5: self._edit_urls,
             6: self._change_config,
             7: self._manage_configs,
-            9: self._view_changelog,
+            8: self._view_changelog,
         }
 
         answer = user_prompts.main_prompt(self.manager)
@@ -257,7 +257,6 @@ def _get_changelog() -> str:
     """Get latest changelog file from github. Returns its content."""
 
     url = "https://raw.githubusercontent.com/NTFSvolume/cdl/refs/heads/main/CHANGELOG.md"
-
     with request("GET", url, timeout=15) as response:
         response.raise_for_status()
         content = response.text

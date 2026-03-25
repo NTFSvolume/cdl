@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-import aiohttp
+import requests
 
 from cyberdrop_dl import __version__ as current
 
@@ -11,11 +11,11 @@ _PYPI_JSON_URL = "https://pypi.org/pypi/cyberdrop-dl-patched/json"
 logger = logging.getLogger(__name__)
 
 
-async def check_latest_pypi() -> None:
+def check_latest_pypi() -> None:
     logger.info("Checking for updates...")
     try:
-        async with aiohttp.request("GET", _PYPI_JSON_URL) as response:
-            contents = await response.json()
+        with requests.request("GET", _PYPI_JSON_URL) as response:
+            contents = response.json()
 
     except Exception as e:
         logger.error(f"Unable to get latest version information {e!r}")
