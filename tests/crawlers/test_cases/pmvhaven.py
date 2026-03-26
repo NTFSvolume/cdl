@@ -25,7 +25,7 @@ TEST_CASES = [
                 "album_id": None,
             }
         ],
-        range(170, 200),
+        range(240, 300),
     ),
     # Users
     (
@@ -46,11 +46,11 @@ TEST_CASES = [
         [
             {
                 "url": "ANY",
-                "download_folder": r"re:10 GODDESS [playlist] (PMVHaven)",
+                "download_folder": r"re:10 FUCKING GODDESSES [playlist] (PMVHaven)",
                 "referer": "ANY",
                 "album_id": None,
             }
         ],
-        range(10, 20),
+        10,
     ),
 ]
