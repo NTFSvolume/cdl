@@ -1,23 +1,45 @@
+# ruff: noqa: N815
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar
+import dataclasses
+import itertools
+from typing import TYPE_CHECKING, Any, ClassVar, Self
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
+from cyberdrop_dl.data_structures.mediaprops import Resolution
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, nuxt
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils.utilities import call_w_valid_kwargs, error_handling_wrapper
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
     from typing import Any
 
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
 
-class Selectors:
-    USER_NAME = "div.user-profile-card h1"
-
-
 PRIMARY_URL = AbsoluteHttpURL("https://pmvhaven.com")
+
+
+@dataclasses.dataclass(slots=True)
+class Video:
+    id: str
+    title: str
+    videoUrl: str
+    uploadDate: str
+    hlsMasterPlaylistUrl: str | None
+    width: int
+    height: int
+    oldId: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        data["id"] = data["_id"]
+        return call_w_valid_kwargs(cls, data)
+
+    @property
+    def web_url(self) -> AbsoluteHttpURL:
+        # The title does not matter, the website parses the id from the url and redirects to the correct video
+        return PRIMARY_URL / f"video/{self.title.lower()}_{self.id}"
 
 
 class PMVHavenCrawler(Crawler):
@@ -35,69 +57,75 @@ class PMVHavenCrawler(Crawler):
     FOLDER_DOMAIN: ClassVar[str] = "PMVHaven"
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
-        if "video" in scrape_item.url.parts:
-            return await self.video(scrape_item)
-        if "search" in scrape_item.url.parts:
-            return await self.search(scrape_item)
-        if any(u in scrape_item.url.parts for u in ("users", "profile")):
-            return await self.profile(scrape_item)
-        if "playlists" in scrape_item.url.parts:
-            return await self.playlist(scrape_item)
-        raise ValueError
+        match scrape_item.url.parts[1:]:
+            case ["video", _]:
+                return await self.video(scrape_item)
+            case ["search"] if query := scrape_item.url.query.get("q"):
+                return await self.search(scrape_item, query)
+            case ["users" | "profile", user_id]:
+                return await self.profile(scrape_item, user_id)
+            case ["playlists", playlist_id]:
+                return await self.playlist(scrape_item, playlist_id)
+            case _:
+                raise ValueError
 
     @error_handling_wrapper
-    async def profile(self, scrape_item: ScrapeItem) -> None:
-        soup = await self.request_soup(scrape_item.url)
-        username = css.select_text(soup, Selectors.USER_NAME)
-        title = f"{username} [user]"
-        title = self.create_title(title)
+    async def profile(self, scrape_item: ScrapeItem, user_id: str) -> None:
+        api_url = self.PRIMARY_URL / "api/users" / user_id
+        username = (await self.request_json(api_url))["data"]["username"]
+        title = self.create_title(f"{username} [user]")
         scrape_item.setup_as_profile(title)
 
-        nuxt_data = nuxt.extract(soup)
-        await self._process_video_list(scrape_item, nuxt_data)
+    @error_handling_wrapper
+    async def playlist(self, scrape_item: ScrapeItem, playlist_id: str) -> None:
+        title: str = ""
+        api_url = self.PRIMARY_URL / "api/playlists" / playlist_id
+        async for data in self._api_pager(api_url):
+            if not title:
+                title = self.create_title(f"{data['name']} [playlist]")
+                scrape_item.setup_as_album(title)
+
+            for video in data["videoDetails"]:
+                await self._video(scrape_item.copy(), Video.from_dict(video))
+                scrape_item.add_children()
+
+    async def _api_pager(self, api_url: AbsoluteHttpURL, init_page: int = 1) -> AsyncGenerator[Any]:
+        for page in itertools.count(init_page):
+            resp: dict[str, Any] = await self.request_json(api_url.update_query(limit=100, page=page))
+            yield resp["data"]
+            if not resp["pagination"]["hasMore"]:
+                break
 
     @error_handling_wrapper
-    async def playlist(self, scrape_item: ScrapeItem) -> None:
-        soup = await self.request_soup(scrape_item.url)
-        nuxt_data = nuxt.extract(soup)
-        playlist = nuxt.parse_obj(nuxt_data, "playlist")
-        name = playlist["name"]
-        title = self.create_title(f"{name} [playlist]")
-        scrape_item.setup_as_album(title)
-        await self._process_video_list(scrape_item, nuxt_data)
-
-    @error_handling_wrapper
-    async def search(self, scrape_item: ScrapeItem) -> None:
-        soup = await self.request_soup(scrape_item.url)
-        tags = scrape_item.url.query.get("tags") or scrape_item.url.query.get("musicSong")
-        title = self.create_title(f"{tags} [search]")
-        scrape_item.setup_as_album(title)
-        nuxt_data = nuxt.extract(soup)
-        await self._process_video_list(scrape_item, nuxt_data)
+    async def search(self, scrape_item: ScrapeItem, query: str) -> None:
+        title = self.create_title(f"{query} [search]")
+        scrape_item.setup_as_profile(title)
+        api_url = (self.PRIMARY_URL / "api/videos/search").with_query(q=query)
+        data: list[dict[str, Any]]
+        async for data in self._api_pager(api_url):
+            for video in data:
+                await self._video(scrape_item.copy(), Video.from_dict(video))
+                scrape_item.add_children()
 
     @error_handling_wrapper
     async def video(self, scrape_item: ScrapeItem) -> None:
         if await self.check_complete_from_referer(scrape_item):
             return
 
-        soup = await self.request_soup(scrape_item.url)
-        nuxt_data = nuxt.extract(soup)
-        video = nuxt.parse_obj(nuxt_data, "video", "uploaderVideosCount")
-        await self._process_video_info(scrape_item, video)
-
-    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+        api_url = self.PRIMARY_URL / "api/videos" / str(scrape_item.url)
+        data = (await self.request_json(api_url))["data"]
+        video = Video.from_dict(data)
+        await self._video(scrape_item, video)
 
     @error_handling_wrapper
-    async def _process_video_list(self, scrape_item: ScrapeItem, nuxt_data: list[Any]) -> None:
-        for video_info in nuxt.parse_objs(nuxt_data, "videoUrl"):
-            await self._process_video_info(scrape_item, video_info)
-
-    @error_handling_wrapper
-    async def _process_video_info(self, scrape_item: ScrapeItem, video_info: dict[str, Any]) -> None:
-        scrape_item.possible_datetime = self.parse_date(video_info["uploadDate"])
-        link = self.parse_url(video_info["videoUrl"])
+    async def _video(self, scrape_item: ScrapeItem, video: Video) -> None:
+        scrape_item.possible_datetime = self.parse_date(video.uploadDate)
+        link = self.parse_url(video.videoUrl)
         filename, ext = self.get_filename_and_ext(link.name, assume_ext=".mp4")
         custom_filename = self.create_custom_filename(
-            video_info["title"], ext, file_id=video_info["_id"], resolution=video_info["height"]
+            video.title,
+            ext,
+            file_id=video.id,
+            resolution=Resolution(video.width, video.height),
         )
-        await self.handle_file(link, scrape_item, filename, ext, custom_filename=custom_filename, metadata=video_info)
+        await self.handle_file(link, scrape_item, filename, ext, custom_filename=custom_filename, metadata=video)
