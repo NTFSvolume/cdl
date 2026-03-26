@@ -86,7 +86,7 @@ class PMVHavenCrawler(Crawler):
     @error_handling_wrapper
     async def playlist(self, scrape_item: ScrapeItem, playlist_id: str) -> None:
         title: str = ""
-        #TODO: use playlist as album_id to skip downloads faster
+        # TODO: use playlist as album_id to skip downloads faster
         api_url = self.PRIMARY_URL / "api/playlists" / playlist_id
         async for data in self._api_pager(api_url):
             if not title:
