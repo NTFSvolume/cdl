@@ -12,7 +12,7 @@ from cyberdrop_dl.utils import nuxt
 from cyberdrop_dl.utils.utilities import call_w_valid_kwargs, error_handling_wrapper
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator
+    from collections.abc import AsyncGenerator, Generator, Iterable
     from typing import Any
 
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
@@ -59,8 +59,8 @@ class PMVHavenCrawler(Crawler):
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
-            case ["video", _]:
-                return await self.video(scrape_item)
+            case ["video", slug] if video_id := slug.rsplit("_", 1)[-1]:
+                return await self.video(scrape_item, video_id)
             case ["search"] if query := scrape_item.url.query.get("q"):
                 return await self.search(scrape_item, query)
             case ["users" | "profile", _]:
@@ -78,7 +78,7 @@ class PMVHavenCrawler(Crawler):
         title = self.create_title(f"{username} [user]")
         scrape_item.setup_as_profile(title)
 
-        for video in map(Video.from_dict, nuxt.ifind(data, "videoUrl")):
+        for video in _parse_videos(nuxt.ifind(data, "videoUrl", "title")):
             await self._video(scrape_item.copy(), video)
             scrape_item.add_children()
 
@@ -91,7 +91,7 @@ class PMVHavenCrawler(Crawler):
                 title = self.create_title(f"{data['name']} [playlist]")
                 scrape_item.setup_as_album(title)
 
-            for video in map(Video.from_dict, data["videoDetails"]):
+            for video in _parse_videos(data["videoDetails"]):
                 await self._video(scrape_item.copy(), video)
                 scrape_item.add_children()
 
@@ -109,23 +109,23 @@ class PMVHavenCrawler(Crawler):
         api_url = (self.PRIMARY_URL / "api/videos/search").with_query(q=query)
         data: list[dict[str, Any]]
         async for data in self._api_pager(api_url):
-            for video in map(Video.from_dict, data):
+            for video in _parse_videos(data):
                 await self._video(scrape_item.copy(), video)
                 scrape_item.add_children()
 
     @error_handling_wrapper
-    async def video(self, scrape_item: ScrapeItem) -> None:
+    async def video(self, scrape_item: ScrapeItem, video_id: str) -> None:
         if await self.check_complete_from_referer(scrape_item):
             return
 
-        api_url = self.PRIMARY_URL / "api/videos" / str(scrape_item.url)
+        api_url = self.PRIMARY_URL / "api/videos" / video_id
         data = (await self.request_json(api_url))["data"]
         video = Video.from_dict(data)
         await self._video(scrape_item, video)
 
     @error_handling_wrapper
     async def _video(self, scrape_item: ScrapeItem, video: Video) -> None:
-        scrape_item.possible_datetime = self.parse_date(video.uploadDate)
+        scrape_item.possible_datetime = self.parse_iso_date(video.uploadDate)
         link = self.parse_url(video.videoUrl)
         filename, ext = self.get_filename_and_ext(link.name, assume_ext=".mp4")
         custom_filename = self.create_custom_filename(
@@ -135,3 +135,11 @@ class PMVHavenCrawler(Crawler):
             resolution=Resolution(video.width, video.height),
         )
         await self.handle_file(link, scrape_item, filename, ext, custom_filename=custom_filename, metadata=video)
+
+
+def _parse_videos(videos: Iterable[dict[str, Any]]) -> Generator[Video]:
+    ids: set[str] = set()
+    for data in videos:
+        if data["_id"] not in ids:
+            ids.add(data["_id"])
+            yield Video.from_dict(data)
