@@ -78,8 +78,8 @@ class PMVHavenCrawler(Crawler):
         title = self.create_title(f"{username} [user]")
         scrape_item.setup_as_profile(title)
 
-        for video in nuxt.ifind(data, "videoUrl"):
-            await self._video(scrape_item.copy(), Video.from_dict(video))
+        for video in map(Video.from_dict, nuxt.ifind(data, "videoUrl")):
+            await self._video(scrape_item.copy(), video)
             scrape_item.add_children()
 
     @error_handling_wrapper
@@ -91,8 +91,8 @@ class PMVHavenCrawler(Crawler):
                 title = self.create_title(f"{data['name']} [playlist]")
                 scrape_item.setup_as_album(title)
 
-            for video in data["videoDetails"]:
-                await self._video(scrape_item.copy(), Video.from_dict(video))
+            for video in map(Video.from_dict, data["videoDetails"]):
+                await self._video(scrape_item.copy(), video)
                 scrape_item.add_children()
 
     async def _api_pager(self, api_url: AbsoluteHttpURL, init_page: int = 1) -> AsyncGenerator[Any]:
@@ -109,8 +109,8 @@ class PMVHavenCrawler(Crawler):
         api_url = (self.PRIMARY_URL / "api/videos/search").with_query(q=query)
         data: list[dict[str, Any]]
         async for data in self._api_pager(api_url):
-            for video in data:
-                await self._video(scrape_item.copy(), Video.from_dict(video))
+            for video in map(Video.from_dict, data):
+                await self._video(scrape_item.copy(), video)
                 scrape_item.add_children()
 
     @error_handling_wrapper
