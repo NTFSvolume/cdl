@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Self
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.mediaprops import Resolution
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.utils import nuxt
 from cyberdrop_dl.utils.utilities import call_w_valid_kwargs, error_handling_wrapper
 
 if TYPE_CHECKING:
@@ -26,10 +27,10 @@ class Video:
     title: str
     videoUrl: str
     uploadDate: str
-    hlsMasterPlaylistUrl: str | None
     width: int
     height: int
-    oldId: str
+
+    hlsMasterPlaylistUrl: str | None = None
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Self:
@@ -62,19 +63,24 @@ class PMVHavenCrawler(Crawler):
                 return await self.video(scrape_item)
             case ["search"] if query := scrape_item.url.query.get("q"):
                 return await self.search(scrape_item, query)
-            case ["users" | "profile", user_id]:
-                return await self.profile(scrape_item, user_id)
+            case ["users" | "profile", _]:
+                return await self.profile(scrape_item)
             case ["playlists", playlist_id]:
                 return await self.playlist(scrape_item, playlist_id)
             case _:
                 raise ValueError
 
     @error_handling_wrapper
-    async def profile(self, scrape_item: ScrapeItem, user_id: str) -> None:
-        api_url = self.PRIMARY_URL / "api/users" / user_id
-        username = (await self.request_json(api_url))["data"]["username"]
+    async def profile(self, scrape_item: ScrapeItem) -> None:
+        soup = await self.request_soup(scrape_item.url)
+        data = nuxt.extract(soup)
+        username: str = nuxt.find(data, "username")["username"]
         title = self.create_title(f"{username} [user]")
         scrape_item.setup_as_profile(title)
+
+        for video in nuxt.ifind(data, "videoUrl"):
+            await self._video(scrape_item.copy(), Video.from_dict(video))
+            scrape_item.add_children()
 
     @error_handling_wrapper
     async def playlist(self, scrape_item: ScrapeItem, playlist_id: str) -> None:
