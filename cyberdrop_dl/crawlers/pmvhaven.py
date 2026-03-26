@@ -125,6 +125,7 @@ class PMVHavenCrawler(Crawler):
 
     @error_handling_wrapper
     async def _video(self, scrape_item: ScrapeItem, video: Video) -> None:
+        scrape_item.url = video.web_url
         scrape_item.possible_datetime = self.parse_iso_date(video.uploadDate)
         link = self.parse_url(video.videoUrl)
         filename, ext = self.get_filename_and_ext(link.name, assume_ext=".mp4")
