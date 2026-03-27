@@ -14,7 +14,7 @@ from aiohttp.client_reqrep import ClientResponse, ContentDisposition
 from bs4 import BeautifulSoup
 from multidict import CIMultiDict, CIMultiDictProxy
 from propcache import under_cached_property
-from typing_extensions import TypeVar
+from typing_extensions import TypeVar, override
 
 from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import InvalidContentTypeError, ScrapeError
@@ -81,7 +81,6 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
     @abstractmethod
     def iter_chunked(self, size: int) -> AsyncIterator[bytes]: ...
 
-    @abstractmethod
     @classmethod
     def create(cls, resp: _ResponseT) -> _AIOHTTPResponse | _FlareSolverrResponse | _CurlResponse:
         if isinstance(resp, ClientResponse):
@@ -218,6 +217,7 @@ class _FlareSolverrResponse(AbstractResponse[FlareSolverrSolution]):
     async def iter_chunked(self, size: int) -> AsyncIterator[bytes]:
         yield self._text.encode()
 
+    @override
     @classmethod
     def create(cls, resp: FlareSolverrSolution) -> Self:
         content_type, location = _parse_headers(resp.url, resp.headers)
@@ -244,6 +244,7 @@ class _AIOHTTPResponse(AbstractResponse[ClientResponse]):
     def iter_chunked(self, size: int) -> AsyncIterator[bytes]:
         return self._resp.content.iter_chunked(size)
 
+    @override
     @classmethod
     def create(cls, resp: ClientResponse) -> Self:
         url = AbsoluteHttpURL(resp.url)
@@ -274,6 +275,7 @@ class _CurlResponse(AbstractResponse[CurlResponse]):
         # Curl does not support size. We get chunks as they come
         return self._resp.aiter_content()
 
+    @override
     @classmethod
     def create(cls, resp: CurlResponse) -> Self:
         headers = CIMultiDictProxy(
