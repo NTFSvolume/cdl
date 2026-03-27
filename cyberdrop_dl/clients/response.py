@@ -63,7 +63,7 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
         default_factory=lambda: datetime.datetime.now(datetime.UTC).replace(microsecond=0),
     )
     _cache: dict[str, Any] = dataclasses.field(init=False, compare=False, default_factory=dict)
-    _lock: asyncio.Lock = dataclasses.field(init=False, compare=False, default_factory=asyncio.Lock, repr=False)
+    _lock: asyncio.Lock = dataclasses.field(init=False, compare=False, default_factory=asyncio.Lock)
 
     def __repr__(self) -> str:
         return f"<{type(self).__name__} [{self.status}] ({self.url})>"
