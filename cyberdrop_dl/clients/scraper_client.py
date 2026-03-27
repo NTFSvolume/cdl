@@ -134,7 +134,7 @@ class ScraperClient:
             return abs_resp
         except DDOSGuardError:
             flare_solution = await self.client_manager.flaresolverr.request(url, data)
-            return AbstractResponse.from_flaresolverr(flare_solution)
+            return AbstractResponse.from_resp(flare_solution)
 
     async def write_soup_to_disk(self, url: AbsoluteHttpURL, response: AbstractResponse, exc: Exception | None = None):
         """Writes html to a file."""
