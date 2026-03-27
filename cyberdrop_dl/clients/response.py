@@ -36,7 +36,6 @@ __all__ = ["AbstractResponse"]
 _ResponseT = TypeVar(
     "_ResponseT",
     bound=ClientResponse | CurlResponse | FlareSolverrSolution,
-    default=ClientResponse,
     infer_variance=True,
 )
 

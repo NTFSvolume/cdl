@@ -54,7 +54,7 @@ class ScraperClient:
         json: Any = None,
         cache_disabled: bool = False,
         **request_params: Any,
-    ) -> AsyncGenerator[AbstractResponse]:
+    ) -> AsyncGenerator[AbstractResponse[Any]]:
         """
         Asynchronous context manager for HTTP requests.
 
@@ -73,7 +73,7 @@ class ScraperClient:
         if not impersonate:
             headers.setdefault("user-agent", self.client_manager.manager.global_config.general.user_agent)
 
-        async with self.__request_context(url, method, request_params, impersonate, cache_disabled) as resp:
+        async with self.__request_context(url, method, request_params, impersonate) as resp:
             exc = None
             try:
                 yield await self._check_response(resp, url)
@@ -103,8 +103,7 @@ class ScraperClient:
         method: HttpMethod,
         request_params: dict[str, Any],
         impersonate: BrowserTypeLiteral | bool | None,
-        cache_disabled: bool,
-    ) -> AsyncGenerator[AbstractResponse]:
+    ) -> AsyncGenerator[AbstractResponse[Any]]:
         impersonate = self.client_manager.manager.parsed_args.cli_only_args.impersonate or impersonate
         if impersonate:
             self.client_manager.check_curl_cffi_is_available()
@@ -125,7 +124,7 @@ class ScraperClient:
         ):
             yield AbstractResponse.create(aio_resp)
 
-    async def _check_response(self, abs_resp: AbstractResponse, url: AbsoluteHttpURL, data: Any | None = None):
+    async def _check_response(self, abs_resp: AbstractResponse[Any], url: AbsoluteHttpURL, data: Any | None = None):
         """Checks the HTTP response status and retries DDOS Guard errors with FlareSolverr.
 
         Returns an AbstractResponse confirmed to not be a DDOS Guard page."""

@@ -35,7 +35,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable, Mapping
     from http.cookies import BaseCookie
 
-    from bs4 import BeautifulSoup
     from curl_cffi.requests import AsyncSession
     from curl_cffi.requests.models import Response as CurlResponse
 
@@ -336,9 +335,9 @@ class ClientManager:
 
     async def check_http_status(
         self,
-        response: ClientResponse | CurlResponse | AbstractResponse,
+        response: ClientResponse | CurlResponse | AbstractResponse[Any],
         download: bool = False,
-    ) -> BeautifulSoup | None:
+    ) -> None:
         """Checks the HTTP status code and raises an exception if it's not acceptable.
 
         If the response is successful and has valid html, returns soup
@@ -363,7 +362,7 @@ class ClientManager:
         await ddos_guard.check(response)
         raise DownloadError(status=response.status, message=message)
 
-    async def _check_json(self, response: AbstractResponse) -> None:
+    async def _check_json(self, response: AbstractResponse[Any]) -> None:
         if "json" not in response.content_type:
             return
 
