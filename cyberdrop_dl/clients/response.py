@@ -72,6 +72,22 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
     def __str__(self) -> str:
         return self.create_report()
 
+    def __json__(self) -> dict[str, Any]:
+        if content := self._text:
+            if "json" in self.content_type:
+                content = json.loads(content)
+
+            elif "html" in self.content_type:
+                content = BeautifulSoup(content, "html.parser").prettify(formatter="html")
+
+        return {
+            "url": str(self.url),
+            "status_code": self.status,
+            "datetime": self.created_at.isoformat(),
+            "response_headers": dict(self.headers),
+            "content": content,
+        }
+
     @abstractmethod
     async def _read(self) -> bytes: ...
 
@@ -82,7 +98,7 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
     def iter_chunked(self, size: int) -> AsyncIterator[bytes]: ...
 
     @classmethod
-    def create(cls, resp: _ResponseT) -> _AIOHTTPResponse | _FlareSolverrResponse | _CurlResponse:
+    def create(cls, resp: _ResponseT, /) -> _AIOHTTPResponse | _FlareSolverrResponse | _CurlResponse:
         if isinstance(resp, ClientResponse):
             return _AIOHTTPResponse.create(resp)
 
@@ -140,11 +156,6 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
                 self._text = await self._read_text(encoding)
             return self._text
 
-    def __check_content_type(self, content_type: str, *additional_content_types: str, expecting: str) -> None:
-        if not any(type_ in self.content_type for type_ in (content_type, *additional_content_types)):
-            msg = f"Received {self.content_type}, was expecting {expecting}"
-            raise InvalidContentTypeError(message=msg)
-
     @final
     async def soup(self, encoding: str | None = None) -> BeautifulSoup:
         self.__check_content_type("text", "html", expecting="HTML")
@@ -170,22 +181,6 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
 
         return json.loads(await self.text(encoding))
 
-    def __json__(self) -> dict[str, Any]:
-        if content := self._text:
-            if "json" in self.content_type:
-                content = json.loads(content)
-
-            elif "html" in self.content_type:
-                content = BeautifulSoup(content, "html.parser").prettify(formatter="html")
-
-        return {
-            "url": str(self.url),
-            "status_code": self.status,
-            "datetime": self.created_at.isoformat(),
-            "response_headers": dict(self.headers),
-            "content": content,
-        }
-
     @final
     def create_report(self, exc: Exception | None = None, **extras: Any) -> str:
         assert self.consumed
@@ -204,6 +199,11 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
         resp_info = json.dumps(me, indent=2, ensure_ascii=False)
         return f"<!-- cyberdrop-dl request response \n{resp_info}\n-->\n{body}"
 
+    def __check_content_type(self, content_type: str, *additional_content_types: str, expecting: str) -> None:
+        if not any(type_ in self.content_type for type_ in (content_type, *additional_content_types)):
+            msg = f"Received {self.content_type}, was expecting {expecting}"
+            raise InvalidContentTypeError(message=msg)
+
 
 class _FlareSolverrResponse(AbstractResponse[FlareSolverrSolution]):
     __slots__ = ()
@@ -219,16 +219,16 @@ class _FlareSolverrResponse(AbstractResponse[FlareSolverrSolution]):
 
     @override
     @classmethod
-    def create(cls, resp: FlareSolverrSolution) -> Self:
-        content_type, location = _parse_headers(resp.url, resp.headers)
+    def create(cls, solution: FlareSolverrSolution, /) -> Self:
+        content_type, location = _parse_headers(solution.url, solution.headers)
         return cls(
             content_type=content_type,
-            status=resp.status,
-            headers=resp.headers,
-            url=resp.url,
+            status=solution.status,
+            headers=solution.headers,
+            url=solution.url,
             location=location,
-            _text=resp.content,
-            _resp=resp,
+            _text=solution.content,
+            _resp=solution,
         )
 
 
@@ -246,7 +246,7 @@ class _AIOHTTPResponse(AbstractResponse[ClientResponse]):
 
     @override
     @classmethod
-    def create(cls, resp: ClientResponse) -> Self:
+    def create(cls, resp: ClientResponse, /) -> Self:
         url = AbsoluteHttpURL(resp.url)
         content_type, location = _parse_headers(url, resp.headers)
         return cls(
@@ -277,7 +277,7 @@ class _CurlResponse(AbstractResponse[CurlResponse]):
 
     @override
     @classmethod
-    def create(cls, resp: CurlResponse) -> Self:
+    def create(cls, resp: CurlResponse, /) -> Self:
         headers = CIMultiDictProxy(
             CIMultiDict(((name, value) for name, value in resp.headers.multi_items() if value is not None))
         )
