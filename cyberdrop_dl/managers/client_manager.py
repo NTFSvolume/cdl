@@ -134,7 +134,7 @@ class ClientManager:
         self.scraper_client = ScraperClient(self)
         self.speed_limiter = DownloadSpeedLimiter(self.rate_limiting_options.download_speed_limit)
         self.download_client = DownloadClient(manager, self)
-        self.flaresolverr = FlareSolverr(manager)
+        self.flaresolverr = FlareSolverr(self, self.manager.global_config.general.flaresolverr)
         self.file_locks: WeakAsyncLocks[str] = WeakAsyncLocks()
 
         self._session: aiohttp.ClientSession

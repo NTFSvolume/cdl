@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import itertools
+import logging
 import time
 from http.cookies import SimpleCookie
 from typing import TYPE_CHECKING, Any
@@ -12,14 +13,15 @@ from multidict import CIMultiDict, CIMultiDictProxy
 
 from cyberdrop_dl import ddos_guard
 from cyberdrop_dl.compat import StrEnum
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError
-from cyberdrop_dl.utils.logger import log
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.managers.client_manager import ClientManager
+
+logger = logging.getLogger(__name__)
 
 
 class _Command(StrEnum):
@@ -31,7 +33,7 @@ class _Command(StrEnum):
     POST_REQUEST = "request.post"
 
 
-@dataclasses.dataclass(frozen=True, slots=True)
+@dataclasses.dataclass(slots=True)
 class FlareSolverrSolution:
     content: str
     cookies: SimpleCookie
@@ -52,7 +54,7 @@ class FlareSolverrSolution:
         )
 
 
-@dataclasses.dataclass(frozen=True, slots=True)
+@dataclasses.dataclass(slots=True)
 class _FlareSolverrResponse:
     status: str
     message: str
@@ -66,26 +68,29 @@ class _FlareSolverrResponse:
         return _FlareSolverrResponse(status, message, status == "ok", solution)
 
 
+@dataclasses.dataclass(slots=True)
 class FlareSolverr:
     """Class that handles communication with flaresolverr."""
 
-    __slots__ = ("_next_request_id", "_request_lock", "_session_id", "_session_lock", "manager", "url")
+    client: ClientManager
+    url: AbsoluteHttpURL | None = None
 
-    def __init__(self, manager: Manager) -> None:
-        self.manager = manager
-        self._session_id: str = ""
-        self._session_lock, self._request_lock = asyncio.Lock(), asyncio.Lock()
-        self._next_request_id: Callable[[], int] = itertools.count(1).__next__
-        if manager.global_config.general.flaresolverr:
-            self.url = manager.global_config.general.flaresolverr / "v1"
-        else:
-            self.url = None
+    _session_id: str = dataclasses.field(init=False, default="")
+    _session_lock: asyncio.Lock = dataclasses.field(init=False, default_factory=asyncio.Lock)
+    _request_lock: asyncio.Lock = dataclasses.field(init=False, default_factory=asyncio.Lock)
+    _next_request_id: Callable[[], int] = dataclasses.field(
+        init=False, default_factory=lambda: itertools.count(1).__next__
+    )
 
-    def __repr__(self):
-        return f"{type(self).__name__}(url={self.url!r})"
+    def __post_init__(self) -> None:
+        if self.url:
+            self.url = self.url.origin() / "v1"
 
-    async def close(self):
-        await self._destroy_session()
+    async def close(self) -> None:
+        try:
+            await self._destroy_session()
+        except Exception as e:
+            logger.error(f"Unable to destroy flaresolver session ({e})")
 
     async def request(self, url: AbsoluteHttpURL, data: Any = None) -> FlareSolverrSolution:
         invalid_response_error = DDOSGuardError("Invalid response from flaresolverr")
@@ -111,12 +116,12 @@ class FlareSolverr:
         if not resp.solution:
             raise invalid_response_error
 
-        self.manager.client_manager.cookies.update_cookies(resp.solution.cookies)
-        await self._check_user_agent(resp.solution)
+        self.client.cookies.update_cookies(resp.solution.cookies)
+        await self._check_resp(resp.solution)
         return resp.solution
 
-    async def _check_user_agent(self, solution: FlareSolverrSolution) -> None:
-        cdl_user_agent = self.manager.global_config.general.user_agent
+    async def _check_resp(self, solution: FlareSolverrSolution) -> None:
+        cdl_user_agent = self.client.manager.global_config.general.user_agent
         mismatch_ua_msg = (
             "Config user_agent and flaresolverr user_agent do not match:"
             f"\n  Cyberdrop-DL: '{cdl_user_agent}'"
@@ -130,19 +135,18 @@ class FlareSolverr:
                 raise DDOSGuardError(mismatch_ua_msg) from None
 
         if solution.user_agent != cdl_user_agent:
-            msg = f"{mismatch_ua_msg}\n Response was successful but cookies will not be valid"
-            log(msg, 30)
+            logger.warning(f"{mismatch_ua_msg}\n Response was successful but cookies will not be valid")
 
     async def _request(self, command: _Command, /, data: Any = None, **kwargs: Any) -> _FlareSolverrResponse:
         if not self.url:
             raise DDOSGuardError("Found DDoS challenge, but FlareSolverr is not configured")
 
-        timeout = self.manager.global_config.rate_limiting_options._aiohttp_timeout
+        timeout = self.client.manager.global_config.rate_limiting_options._aiohttp_timeout
         if command is _Command.CREATE_SESSION:
             timeout = aiohttp.ClientTimeout(total=5 * 60, connect=60)  # 5 minutes to create session
 
         #  timeout in milliseconds (60s)
-        playload = {"cmd": command, "maxTimeout": 60_000} | kwargs
+        playload: dict[str, Any] = {"cmd": command, "maxTimeout": 60_000} | kwargs
 
         if data:
             assert command is _Command.POST_REQUEST
@@ -150,11 +154,11 @@ class FlareSolverr:
 
         async with (
             self._request_lock,
-            self.manager.progress_manager.show_status_msg(
+            self.client.manager.progress_manager.show_status_msg(
                 f"Waiting For Flaresolverr Response [{self._next_request_id()}]"
             ),
         ):
-            async with self.manager.client_manager._session.post(
+            async with self.client._session.post(
                 self.url,
                 json=playload,
                 timeout=timeout,
@@ -164,7 +168,7 @@ class FlareSolverr:
     async def _create_session(self) -> None:
         session_id = "cyberdrop-dl"
         kwargs = {}
-        if proxy := self.manager.global_config.general.proxy:
+        if proxy := self.client.manager.global_config.general.proxy:
             kwargs["proxy"] = {"url": str(proxy)}
 
         resp = await self._request(_Command.CREATE_SESSION, session=session_id, **kwargs)
@@ -174,7 +178,7 @@ class FlareSolverr:
 
     async def _destroy_session(self) -> None:
         if self._session_id:
-            await self._request(_Command.DESTROY_SESSION)
+            _ = await self._request(_Command.DESTROY_SESSION)
             self._session_id = ""
 
 

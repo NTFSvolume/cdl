@@ -1,4 +1,5 @@
 import os
+from collections.abc import AsyncGenerator
 
 import pytest
 
@@ -14,7 +15,7 @@ pytestmark = pytest.mark.skipif(not FLARESOLVER_URL, reason=f"{ENV_NAME} environ
 
 
 @pytest.fixture
-async def flaresolverr(running_manager: Manager):
+async def flaresolverr(running_manager: Manager) -> AsyncGenerator[FlareSolverr]:
     async with ScrapeMapper.managed(running_manager) as scrape_mapper:
         await scrape_mapper.run()
         flare = running_manager.client_manager.flaresolverr
@@ -22,13 +23,13 @@ async def flaresolverr(running_manager: Manager):
         yield flare
 
 
-def test_flaresolver(flaresolverr: FlareSolverr):
+def test_flaresolver(flaresolverr: FlareSolverr) -> None:
     assert flaresolverr.url
     assert flaresolverr._next_request_id() == 1
     assert flaresolverr._next_request_id() == 2
 
 
-async def test_create_session(flaresolverr: FlareSolverr):
+async def test_create_session(flaresolverr: FlareSolverr) -> None:
     assert flaresolverr._session_id == ""
     resp = await flaresolverr._request(_Command.CREATE_SESSION, session="cyberdrop-dl")
     assert resp.ok
@@ -38,7 +39,7 @@ async def test_create_session(flaresolverr: FlareSolverr):
     assert "The session has been removed" in resp.message
 
 
-async def test_create_session_methods(flaresolverr: FlareSolverr):
+async def test_create_session_methods(flaresolverr: FlareSolverr) -> None:
     assert flaresolverr._session_id == ""
     await flaresolverr._create_session()
     assert flaresolverr._session_id == "cyberdrop-dl"
@@ -46,7 +47,7 @@ async def test_create_session_methods(flaresolverr: FlareSolverr):
     assert flaresolverr._session_id == ""
 
 
-async def test_request_w_solution(flaresolverr: FlareSolverr):
+async def test_request_w_solution(flaresolverr: FlareSolverr) -> None:
     url = AbsoluteHttpURL("https://google.com")
     solution = await flaresolverr.request(url)
     assert solution.status == 200
