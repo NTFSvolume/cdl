@@ -97,6 +97,9 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
     @abstractmethod
     def iter_chunked(self, size: int) -> AsyncIterator[bytes]: ...
 
+    @abstractmethod
+    async def aclose(self) -> None: ...
+
     @classmethod
     def create(cls, resp: _ResponseT, /) -> _AIOHTTPResponse | _FlareSolverrResponse | _CurlResponse:
         if isinstance(resp, ClientResponse):
@@ -126,8 +129,8 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
         if name := self.content_disposition.filename:
             return name
 
-        msg = "No content dispotition has no filename information"
-        raise ScrapeError(422, msg) from None
+        msg = "Content disposition has no filename information"
+        raise ScrapeError(422, msg)
 
     @property
     def consumed(self) -> bool:
@@ -217,6 +220,8 @@ class _FlareSolverrResponse(AbstractResponse[FlareSolverrSolution]):
     async def iter_chunked(self, size: int) -> AsyncIterator[bytes]:
         yield self._text.encode()
 
+    async def aclose(self) -> None: ...
+
     @override
     @classmethod
     def create(cls, solution: FlareSolverrSolution, /) -> Self:
@@ -243,6 +248,10 @@ class _AIOHTTPResponse(AbstractResponse[ClientResponse]):
 
     def iter_chunked(self, size: int) -> AsyncIterator[bytes]:
         return self._resp.content.iter_chunked(size)
+
+    async def aclose(self) -> None:
+        self._resp.release()
+        await self._resp.wait_for_close()
 
     @override
     @classmethod
@@ -274,6 +283,9 @@ class _CurlResponse(AbstractResponse[CurlResponse]):
     def iter_chunked(self, size: int) -> AsyncIterator[bytes]:
         # Curl does not support size. We get chunks as they come
         return self._resp.aiter_content()
+
+    async def aclose(self) -> None:
+        await self._resp.aclose()
 
     @override
     @classmethod
