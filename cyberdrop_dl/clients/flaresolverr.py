@@ -17,7 +17,7 @@ from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterable
 
     from cyberdrop_dl.managers.client_manager import ClientManager
 
@@ -46,7 +46,7 @@ class FlareSolverrSolution:
     def from_dict(solution: dict[str, Any]) -> FlareSolverrSolution:
         return FlareSolverrSolution(
             status=int(solution["status"]),
-            cookies=_parse_cookies(solution.get("cookies") or []),
+            cookies=_parse_cookies(solution.get("cookies") or ()),
             user_agent=solution["userAgent"],
             content=solution["response"],
             url=AbsoluteHttpURL(solution["url"]),
@@ -58,14 +58,19 @@ class FlareSolverrSolution:
 class _FlareSolverrResponse:
     status: str
     message: str
-    ok: bool
     solution: FlareSolverrSolution | None
+
+    @property
+    def ok(self) -> bool:
+        return self.status == "ok"
 
     @staticmethod
     def from_dict(resp: dict[str, Any]) -> _FlareSolverrResponse:
-        status, message = resp["status"], resp["message"]
-        solution = FlareSolverrSolution.from_dict(sol) if (sol := resp.get("solution")) else None
-        return _FlareSolverrResponse(status, message, status == "ok", solution)
+        return _FlareSolverrResponse(
+            resp["status"],
+            resp["message"],
+            solution=FlareSolverrSolution.from_dict(sol) if (sol := resp.get("solution")) else None,
+        )
 
 
 @dataclasses.dataclass(slots=True)
@@ -182,7 +187,7 @@ class FlareSolverr:
             self._session_id = ""
 
 
-def _parse_cookies(cookies: list[dict[str, Any]]) -> SimpleCookie:
+def _parse_cookies(cookies: Iterable[dict[str, Any]]) -> SimpleCookie:
     simple_cookie = SimpleCookie()
     now = time.time()
     for cookie in cookies:
