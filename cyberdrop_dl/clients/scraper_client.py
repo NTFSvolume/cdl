@@ -113,7 +113,7 @@ class ScraperClient:
             request_params["impersonate"] = impersonate
             curl_resp = await self.client_manager._curl_session.request(method, str(url), stream=True, **request_params)
             try:
-                yield AbstractResponse.from_resp(curl_resp)
+                yield AbstractResponse.create(curl_resp)
                 self.__sync_session_cookies(url)
             finally:
                 await curl_resp.aclose()
@@ -123,7 +123,7 @@ class ScraperClient:
         async with (
             self.client_manager._session.request(method, url, **request_params) as aio_resp,
         ):
-            yield AbstractResponse.from_resp(aio_resp)
+            yield AbstractResponse.create(aio_resp)
 
     async def _check_response(self, abs_resp: AbstractResponse, url: AbsoluteHttpURL, data: Any | None = None):
         """Checks the HTTP response status and retries DDOS Guard errors with FlareSolverr.
@@ -134,7 +134,7 @@ class ScraperClient:
             return abs_resp
         except DDOSGuardError:
             flare_solution = await self.client_manager.flaresolverr.request(url, data)
-            return AbstractResponse.from_resp(flare_solution)
+            return AbstractResponse.create(flare_solution)
 
     async def write_soup_to_disk(self, url: AbsoluteHttpURL, response: AbstractResponse, exc: Exception | None = None):
         """Writes html to a file."""

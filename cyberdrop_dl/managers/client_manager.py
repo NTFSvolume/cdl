@@ -344,7 +344,7 @@ class ClientManager:
         If the response is successful and has valid html, returns soup
         """
         if not isinstance(response, AbstractResponse):
-            response = AbstractResponse.from_resp(response)
+            response = AbstractResponse.create(response)
 
         message = None
 

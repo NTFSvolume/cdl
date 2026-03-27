@@ -33,7 +33,12 @@ else:
 
 __all__ = ["AbstractResponse"]
 
-_ResponseT = TypeVar("_ResponseT", bound=ClientResponse | CurlResponse | FlareSolverrSolution, default=None)
+_ResponseT = TypeVar(
+    "_ResponseT",
+    bound=ClientResponse | CurlResponse | FlareSolverrSolution,
+    default=ClientResponse,
+    infer_variance=True,
+)
 
 
 @dataclasses.dataclass(slots=True)
@@ -78,11 +83,7 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
 
     @abstractmethod
     @classmethod
-    def create(cls, resp: _ResponseT) -> Self: ...
-
-    @final
-    @staticmethod
-    def from_resp(resp: _ResponseT, /) -> _AIOHTTPResponse | _CurlResponse | _FlareSolverrResponse:
+    def create(cls, resp: _ResponseT) -> _AIOHTTPResponse | _FlareSolverrResponse | _CurlResponse:
         if isinstance(resp, ClientResponse):
             return _AIOHTTPResponse.create(resp)
 
@@ -97,7 +98,7 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
         try:
             header = self.headers[hdrs.CONTENT_DISPOSITION]
         except KeyError:
-            msg = f"No content dispotition header found for response from {self.url}"
+            msg = f"No content disposition header found in response from {self.url}"
             raise ScrapeError(422, msg) from None
         disposition_type, params = aiohttp.multipart.parse_content_disposition(header)
         params = MappingProxyType(params)
@@ -148,10 +149,10 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
     @final
     async def soup(self, encoding: str | None = None) -> BeautifulSoup:
         self.__check_content_type("text", "html", expecting="HTML")
-        content = await self.text(encoding)
-        if not content:
-            raise ScrapeError(204, "Received empty HTML response")
-        return BeautifulSoup(content, "html.parser")
+        if content := await self.text(encoding):
+            return BeautifulSoup(content, "html.parser")
+
+        raise ScrapeError(204, "Received empty HTML response")
 
     @final
     async def json(
@@ -170,32 +171,38 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
 
         return json.loads(await self.text(encoding))
 
-    @final
-    def create_report(self, exc: Exception | None = None, *extras: Any) -> str:
-        assert self.consumed
+    def __json__(self) -> dict[str, Any]:
+        if content := self._text:
+            if "json" in self.content_type:
+                content = json.loads(content)
 
-        info = {
+            elif "html" in self.content_type:
+                content = BeautifulSoup(content, "html.parser").prettify(formatter="html")
+
+        return {
             "url": str(self.url),
             "status_code": self.status,
             "datetime": self.created_at.isoformat(),
             "response_headers": dict(self.headers),
+            "content": content,
         }
+
+    @final
+    def create_report(self, exc: Exception | None = None, **extras: Any) -> str:
+        assert self.consumed
+
+        me = self.__json__()
         if exc:
-            info |= {"error": str(exc), "exception": repr(exc)}
+            me |= {"error": str(exc), "exception": repr(exc)}
+
         if extras:
-            info |= extras
+            me |= extras
 
         if "json" in self.content_type:
-            info["content"] = json.loads(self._text)
-            return json.dumps(info, indent=2, ensure_ascii=False)
+            return json.dumps(me, indent=2, ensure_ascii=False)
 
-        elif "html" in self.content_type:
-            body = BeautifulSoup(self._text, "html.parser").prettify(formatter="html")
-
-        else:
-            body = self._text
-
-        resp_info = json.dumps(info, indent=2, ensure_ascii=False)
+        body: str = me.pop("content")
+        resp_info = json.dumps(me, indent=2, ensure_ascii=False)
         return f"<!-- cyberdrop-dl request response \n{resp_info}\n-->\n{body}"
 
 

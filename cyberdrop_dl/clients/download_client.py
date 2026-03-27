@@ -184,7 +184,7 @@ class DownloadClient:
         if domain in _USE_IMPERSONATION:
             resp = await self.client_manager._curl_session.get(str(url), stream=True, headers=headers)
             try:
-                yield AbstractResponse.from_resp(resp)
+                yield AbstractResponse.create(resp)
             finally:
                 await resp.aclose()
             return
