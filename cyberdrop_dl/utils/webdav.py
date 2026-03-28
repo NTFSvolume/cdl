@@ -5,7 +5,7 @@ import datetime
 import email.utils
 from collections.abc import Generator
 from types import MappingProxyType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 from xml.etree import ElementTree
 
 from yarl import URL
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator
 
 
-_PROPERTIES = (
+_PROPERTIES: Final = (
     "creationdate",
     "displayname",
     "getcontentlength",
@@ -44,9 +44,14 @@ class Node:
         return self.resource_type == "collection"
 
 
-_NODE_PROPERTIES_MAP: MappingProxyType[str, str] = MappingProxyType(
-    {f.name.replace("_", ""): f.name for f in dataclasses.fields(Node)}
+_NODE_FIELDS_MAP: dict[str, str] = {f.name.replace("_", ""): f.name for f in dataclasses.fields(Node)}
+
+
+_PROPERTY_TO_NODE_ATTR_MAP: MappingProxyType[str, str] = MappingProxyType(
+    {prop: _NODE_FIELDS_MAP[prop.removeprefix("get")] for prop in _PROPERTIES}
 )
+
+del _NODE_FIELDS_MAP
 
 
 def parse_resp(xml_resp: str) -> Generator[Node]:
@@ -72,7 +77,7 @@ def _parse_node(response: ElementTree.Element[str]) -> Generator[tuple[str, str]
     for prop in _PROPERTIES:
         value = response.findtext(".//{DAV:}" + prop)
         if value is not None:
-            name = _NODE_PROPERTIES_MAP[prop.removeprefix("get")]
+            name = _PROPERTY_TO_NODE_ATTR_MAP[prop]
             yield name, value
 
 
