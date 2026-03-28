@@ -40,19 +40,18 @@ def test_webdav_parse_propfind() -> None:
     assert len(result) == 1
     node = result[0]
     assert node == webdav.Node(
-        display_name="movie.mp4",
+        name="movie.mp4",
         content_type="video/mp4",
-        resource_type="",
+        type=None,
         etag="ac8d5ef02ce089df735bf8c3813be492",
         content_length=422682383,
         last_modified=datetime.datetime(2026, 3, 27, 22, 3, 10, tzinfo=datetime.UTC),
         creation_date=datetime.datetime(1970, 1, 1, 0, 0, tzinfo=datetime.UTC),
         href="/public.php/dav/files/e5mYoDxSSGn2b",
-        status="HTTP/1.1 200 OK",
     )
 
 
-class TestPrepareRequest:
+class TestPropFind:
     @staticmethod
     @signature.copy(webdav.create_propfind_xml)
     def prepare_request(*args, **kwargs) -> ElementTree.Element[str]:
@@ -65,31 +64,16 @@ class TestPrepareRequest:
         assert prop is not None
         return prop
 
-    def test_empty_properties(self) -> None:
+    def test_default_propfind(self) -> None:
         root = self.prepare_request()
         assert root.tag == "{DAV:}propfind"
         prop = self.prop(root)
-        assert len(prop) == 0
-
-    def test_single_dav_property(self) -> None:
-        root = self.prepare_request("displayname")
-        prop = self.prop(root)
         assert prop.find("{DAV:}displayname") is not None
         assert prop.findtext("{DAV:}displayname") == ""
 
-    def test_multiple_dav_properties(self) -> None:
-        root = self.prepare_request("displayname", "getcontenttype", "resourcetype")
-        prop = self.prop(root)
         tags = {element.tag for element in prop}
-        expected = {"{DAV:}displayname", "{DAV:}getcontenttype", "{DAV:}resourcetype"}
+        expected = {"{DAV:}" + prop for prop in webdav._STD_PROPERTIES}
         assert tags == expected
-
-    def test_status_property_is_excluded(self) -> None:
-        root = self.prepare_request("status", "displayname")
-        prop = self.prop(root)
-        assert prop.find("{DAV:}status") is None
-        assert prop.find("{DAV:}displayname") is not None
-        assert prop.findtext("{DAV:}displayname") == ""
 
     def test_additional_ns(self) -> None:
         root = self.prepare_request("cs:getctag", namespaces={"cs": "https://calendarserver.org/ns"})

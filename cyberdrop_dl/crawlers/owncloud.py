@@ -36,7 +36,7 @@ class OwnCloudCrawler(Crawler, is_generic=True):
 
     @error_handling_wrapper
     async def _file(self, scrape_item: ScrapeItem, file: webdav.Node) -> None:
-        filename, ext = self.get_filename_and_ext(file.display_name, mime_type=file.content_type)
+        filename, ext = self.get_filename_and_ext(file.name, mime_type=file.content_type)
         scrape_item.possible_datetime = dates.to_timestamp(file.last_modified)
         await self.handle_file(scrape_item.url, scrape_item, filename, ext)
 
