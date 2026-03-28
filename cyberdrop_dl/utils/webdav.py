@@ -84,7 +84,7 @@ def _parse_node(response: ElementTree.Element[str]) -> Generator[tuple[str, str]
 def prepare_request(*properties: str, namespaces: Mapping[str, str] | None = None) -> bytes:
     root = ElementTree.Element(
         "d:propfind",
-        attrib={f"xmlns:{name}": uri for name, uri in {"xmlns:d": "DAV:", **(namespaces or {})}.items()},
+        attrib={f"xmlns:{name}": uri for name, uri in {"d": "DAV:", **(namespaces or {})}.items()},
     )
 
     prop_tag = ElementTree.SubElement(root, "d:prop")
