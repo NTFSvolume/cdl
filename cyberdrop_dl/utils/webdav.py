@@ -23,7 +23,7 @@ _PROPERTIES: Final = (
     "resourcetype",
     "status",
 )
-_NAMESPACE = ("d", "DAV:")
+_NAMESPACE: Final = ("d", "DAV:")
 
 ElementTree.register_namespace(*_NAMESPACE)
 
