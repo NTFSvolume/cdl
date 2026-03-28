@@ -50,7 +50,7 @@ class OwnCloudCrawler(Crawler, is_generic=True):
                 "Origin": str(url.origin()),
                 "Content-Type": "text/plain;charset=UTF-8",
             },
-            data=webdav.PROPERTIES_XML,
+            data=webdav.DEFAULT_PROPFIND,
         )
 
         return tuple(webdav.parse_resp(content))

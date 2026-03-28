@@ -54,9 +54,9 @@ def test_webdav_resp_parsing() -> None:
 
 class TestPrepareRequest:
     @staticmethod
-    @signature.copy(webdav.prepare_request)
+    @signature.copy(webdav.create_propfind_xml)
     def prepare_request(*args, **kwargs) -> ElementTree.Element[str]:
-        root = webdav.prepare_request(*args, **kwargs)
+        root = webdav.create_propfind_xml(*args, **kwargs)
         return webdav.update_tags_from_ns(root)
 
     @staticmethod

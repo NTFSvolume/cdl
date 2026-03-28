@@ -83,7 +83,7 @@ def _parse_node(response: ElementTree.Element[str]) -> Generator[tuple[str, str]
             yield name, value
 
 
-def prepare_request(
+def create_propfind_xml(
     *properties: str,
     namespaces: Mapping[str, str] | Iterable[tuple[str, str]] | None = None,
 ) -> ElementTree.Element[str]:
@@ -96,10 +96,10 @@ def prepare_request(
         attrib={f"xmlns:{prefix}": uri for prefix, uri in ns.items()},
     )
 
-    prop_tag = ElementTree.SubElement(root, "d:prop")
+    prop_element = ElementTree.SubElement(root, "d:prop")
     for prop in properties:
         if prop not in ("status",):
-            _ = ElementTree.SubElement(prop_tag, f"d:{prop}" if ":" not in prop else prop)
+            _ = ElementTree.SubElement(prop_element, f"d:{prop}" if ":" not in prop else prop)
 
     ElementTree.indent(root, space="  ")
     return root
@@ -113,4 +113,4 @@ def xml_to_bytes(root: ElementTree.Element[str]) -> bytes:
     return ElementTree.tostring(root, xml_declaration=True, encoding="utf-8")
 
 
-PROPERTIES_XML = xml_to_bytes(prepare_request(*_PROPERTIES))
+DEFAULT_PROPFIND = xml_to_bytes(create_propfind_xml(*_PROPERTIES))
