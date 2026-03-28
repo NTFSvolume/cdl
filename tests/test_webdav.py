@@ -1,27 +1,36 @@
-import datetime
+from __future__ import annotations
 
+import datetime
+from typing import TYPE_CHECKING
+
+import pytest
+
+from cyberdrop_dl import signature
 from cyberdrop_dl.utils import webdav
+
+if TYPE_CHECKING:
+    from xml.etree import ElementTree
 
 XML = """<?xml version="1.0"?>
 <d:multistatus
-	xmlns:d="DAV:"
-	xmlns:oc="http://owncloud.org/ns"
-	xmlns:nc="http://nextcloud.org/ns">
-	<d:response>
-		<d:href>/public.php/dav/files/e5mYoDxSSGn2b</d:href>
-		<d:propstat>
-			<d:prop>
-				<d:displayname>movie.mp4</d:displayname>
-				<d:getcontenttype>video/mp4</d:getcontenttype>
-				<d:resourcetype/>
-				<d:getetag>&quot;ac8d5ef02ce089df735bf8c3813be492&quot;</d:getetag>
-				<d:getcontentlength>422682383</d:getcontentlength>
-				<d:getlastmodified>Fri, 27 Mar 2026 22:03:10 GMT</d:getlastmodified>
-				<d:creationdate>1970-01-01T00:00:00+00:00</d:creationdate>
-			</d:prop>
-			<d:status>HTTP/1.1 200 OK</d:status>
-		</d:propstat>
-	</d:response>
+    xmlns:d="DAV:"
+    xmlns:oc="http://owncloud.org/ns"
+    xmlns:nc="http://nextcloud.org/ns">
+    <d:response>
+        <d:href>/public.php/dav/files/e5mYoDxSSGn2b</d:href>
+        <d:propstat>
+            <d:prop>
+                <d:displayname>movie.mp4</d:displayname>
+                <d:getcontenttype>video/mp4</d:getcontenttype>
+                <d:resourcetype/>
+                <d:getetag>&quot;ac8d5ef02ce089df735bf8c3813be492&quot;</d:getetag>
+                <d:getcontentlength>422682383</d:getcontentlength>
+                <d:getlastmodified>Fri, 27 Mar 2026 22:03:10 GMT</d:getlastmodified>
+                <d:creationdate>1970-01-01T00:00:00+00:00</d:creationdate>
+            </d:prop>
+            <d:status>HTTP/1.1 200 OK</d:status>
+        </d:propstat>
+    </d:response>
 </d:multistatus>
 """
 
@@ -41,3 +50,78 @@ def test_webdav_resp_parsing() -> None:
         href="/public.php/dav/files/e5mYoDxSSGn2b",
         status="HTTP/1.1 200 OK",
     )
+
+
+class TestPrepareRequest:
+    @staticmethod
+    @signature.copy(webdav.prepare_request)
+    def prepare_request(*args, **kwargs) -> ElementTree.Element[str]:
+        root = webdav.prepare_request(*args, **kwargs)
+        return webdav.update_tags_from_ns(root)
+
+    @staticmethod
+    def prop(root: ElementTree.Element[str]) -> ElementTree.Element[str]:
+        prop = root.find("{DAV:}prop")
+        assert prop is not None
+        return prop
+
+    def test_empty_properties(self) -> None:
+        root = self.prepare_request()
+        assert root.tag == "{DAV:}propfind"
+        prop = self.prop(root)
+        assert len(prop) == 0
+
+    def test_single_dav_property(self) -> None:
+        root = self.prepare_request("displayname")
+        prop = self.prop(root)
+        assert prop.find("{DAV:}displayname") is not None
+        assert prop.findtext("{DAV:}displayname") == ""
+
+    def test_multiple_dav_properties(self) -> None:
+        root = self.prepare_request("displayname", "getcontenttype", "resourcetype")
+        prop = self.prop(root)
+        tags = {element.tag for element in prop}
+        expected = {"{DAV:}displayname", "{DAV:}getcontenttype", "{DAV:}resourcetype"}
+        assert tags == expected
+
+    def test_status_property_is_excluded(self) -> None:
+        root = self.prepare_request("status", "displayname")
+        prop = self.prop(root)
+        assert prop.find("{DAV:}status") is None
+        assert prop.find("{DAV:}displayname") is not None
+        assert prop.findtext("{DAV:}displayname") == ""
+
+    def test_additional_ns(self) -> None:
+        root = self.prepare_request("cs:getctag", namespaces={"cs": "https://calendarserver.org/ns"})
+        prop = self.prop(root)
+        assert prop.find("{https://calendarserver.org/ns}getctag") is not None
+
+    @pytest.mark.parametrize(
+        "props, extra_ns",
+        [
+            (("displayname",), None),
+            (("displayname",), {}),
+            (
+                ("displayname", "cs:getctag"),
+                {
+                    "cs": "http://calendarserver.org/ns",
+                },
+            ),
+            (
+                ("displayname", "cs:getctag", "oc:size"),
+                {
+                    "cs": "http://calendarserver.org/ns",
+                    "oc": "http://owncloud.org/ns",
+                },
+            ),
+        ],
+    )
+    def test_custom_namespaces(self, props: tuple[str, ...], extra_ns: dict[str, str] | None) -> None:
+        root = self.prepare_request(*props, namespaces=extra_ns)
+        assert root.attrib == {}
+        for prop in props:
+            if ":" in prop:
+                assert root.find(f".//{prop}", extra_ns) is not None
+
+    def test_to_bytes_has_xml_declaration(self) -> None:
+        assert webdav.xml_to_bytes(self.prepare_request()).startswith(b"<?xml version=")

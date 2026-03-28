@@ -3,7 +3,6 @@ from __future__ import annotations
 import dataclasses
 import datetime
 import email.utils
-from collections.abc import Generator
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Final
 from xml.etree import ElementTree
@@ -11,7 +10,7 @@ from xml.etree import ElementTree
 from yarl import URL
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Mapping
+    from collections.abc import Generator, Iterable, Mapping
 
 
 _PROPERTIES: Final = (
@@ -24,6 +23,9 @@ _PROPERTIES: Final = (
     "resourcetype",
     "status",
 )
+_NAMESPACE = ("d", "DAV:")
+
+ElementTree.register_namespace(*_NAMESPACE)
 
 
 @dataclasses.dataclass(slots=True)
@@ -81,10 +83,17 @@ def _parse_node(response: ElementTree.Element[str]) -> Generator[tuple[str, str]
             yield name, value
 
 
-def prepare_request(*properties: str, namespaces: Mapping[str, str] | None = None) -> bytes:
+def prepare_request(
+    *properties: str,
+    namespaces: Mapping[str, str] | Iterable[tuple[str, str]] | None = None,
+) -> ElementTree.Element[str]:
+    ns: dict[str, str] = dict([_NAMESPACE])
+    if namespaces is not None:
+        ns.update(namespaces)
+
     root = ElementTree.Element(
         "d:propfind",
-        attrib={f"xmlns:{name}": uri for name, uri in {"d": "DAV:", **(namespaces or {})}.items()},
+        attrib={f"xmlns:{prefix}": uri for prefix, uri in ns.items()},
     )
 
     prop_tag = ElementTree.SubElement(root, "d:prop")
@@ -93,8 +102,15 @@ def prepare_request(*properties: str, namespaces: Mapping[str, str] | None = Non
             _ = ElementTree.SubElement(prop_tag, f"d:{prop}" if ":" not in prop else prop)
 
     ElementTree.indent(root, space="  ")
+    return root
 
+
+def update_tags_from_ns(root: ElementTree.Element[str]) -> ElementTree.Element[str]:
+    return ElementTree.fromstring(xml_to_bytes(root))
+
+
+def xml_to_bytes(root: ElementTree.Element[str]) -> bytes:
     return ElementTree.tostring(root, xml_declaration=True, encoding="utf-8")
 
 
-PROPERTIES_XML = prepare_request(*_PROPERTIES)
+PROPERTIES_XML = xml_to_bytes(prepare_request(*_PROPERTIES))
