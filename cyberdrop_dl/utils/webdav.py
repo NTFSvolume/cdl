@@ -49,7 +49,7 @@ class Node:
 _NODE_FIELDS_MAP: dict[str, str] = {f.name.replace("_", ""): f.name for f in dataclasses.fields(Node)}
 
 
-_PROPERTY_TO_NODE_ATTR_MAP: MappingProxyType[str, str] = MappingProxyType(
+_PROPERTY_MAP: MappingProxyType[str, str] = MappingProxyType(
     {prop: _NODE_FIELDS_MAP[prop.removeprefix("get")] for prop in _PROPERTIES}
 )
 
@@ -79,7 +79,7 @@ def _parse_node(response: ElementTree.Element[str]) -> Generator[tuple[str, str]
     for prop in _PROPERTIES:
         value = response.findtext(".//{DAV:}" + prop)
         if value is not None:
-            name = _PROPERTY_TO_NODE_ATTR_MAP[prop]
+            name = _PROPERTY_MAP[prop]
             yield name, value
 
 
