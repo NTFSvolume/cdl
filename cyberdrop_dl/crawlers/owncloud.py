@@ -43,7 +43,7 @@ class OwnCloudCrawler(Crawler, is_generic=True):
     async def request_webdav(self, url: AbsoluteHttpURL) -> tuple[webdav.Node, ...]:
         content = await self.request_text(
             url,
-            method="PROPFIND",  # pyright: ignore[reportArgumentType]
+            method=webdav.Method.PROPFIND,  # pyright: ignore[reportArgumentType]
             headers={
                 "Depth": "infinity",
                 "X-Requested-With": "XMLHttpRequest",
@@ -53,4 +53,4 @@ class OwnCloudCrawler(Crawler, is_generic=True):
             data=webdav.DEFAULT_PROPFIND,
         )
 
-        return tuple(webdav.parse_resp(content))
+        return tuple(webdav.parse_propfind(content))

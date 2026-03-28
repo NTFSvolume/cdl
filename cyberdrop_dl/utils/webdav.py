@@ -3,6 +3,7 @@ from __future__ import annotations
 import dataclasses
 import datetime
 import email.utils
+from enum import StrEnum
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Final
 from xml.etree import ElementTree
@@ -26,6 +27,19 @@ _PROPERTIES: Final = (
 _NAMESPACE: Final = ("d", "DAV:")
 
 ElementTree.register_namespace(*_NAMESPACE)
+
+
+class Method(StrEnum):
+    """Webdav HTTP methods"""
+
+    PROPPATCH = "PROPPATCH"
+    PROPFIND = "PROPFIND"
+    DELETE = "DELETE"
+    COPY = "COPY"
+    MOVE = "MOVE"
+    MKCOL = "MKCOL"
+    LOCK = "LOCK"
+    UNLOCK = "UNLOCK"
 
 
 @dataclasses.dataclass(slots=True)
@@ -56,7 +70,7 @@ _PROPERTY_MAP: MappingProxyType[str, str] = MappingProxyType(
 del _NODE_FIELDS_MAP
 
 
-def parse_resp(xml_resp: str) -> Generator[Node]:
+def parse_propfind(xml_resp: str) -> Generator[Node]:
     root = ElementTree.fromstring(xml_resp)
 
     for response in root.iterfind(".//{DAV:}response"):

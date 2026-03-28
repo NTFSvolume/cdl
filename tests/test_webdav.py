@@ -35,8 +35,8 @@ XML = """<?xml version="1.0"?>
 """
 
 
-def test_webdav_resp_parsing() -> None:
-    result = tuple(webdav.parse_resp(XML))
+def test_webdav_parse_propfind() -> None:
+    result = tuple(webdav.parse_propfind(XML))
     assert len(result) == 1
     node = result[0]
     assert node == webdav.Node(
