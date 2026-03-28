@@ -11,7 +11,7 @@ from xml.etree import ElementTree
 from yarl import URL
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Generator, Mapping
 
 
 _PROPERTIES: Final = (
@@ -81,16 +81,16 @@ def _parse_node(response: ElementTree.Element[str]) -> Generator[tuple[str, str]
             yield name, value
 
 
-def prepare_request(*properties: str) -> bytes:
+def prepare_request(*properties: str, namespaces: Mapping[str, str] | None = None) -> bytes:
     root = ElementTree.Element(
         "d:propfind",
-        attrib={"xmlns:d": "DAV:"},
+        attrib={f"xmlns:{name}": uri for name, uri in {"xmlns:d": "DAV:", **(namespaces or {})}.items()},
     )
 
     prop_tag = ElementTree.SubElement(root, "d:prop")
     for prop in properties:
         if prop not in ("status",):
-            ElementTree.SubElement(prop_tag, "d:" + prop)
+            _ = ElementTree.SubElement(prop_tag, f"d:{prop}" if ":" not in prop else prop)
 
     ElementTree.indent(root, space="  ")
 
