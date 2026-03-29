@@ -68,8 +68,9 @@ class TestPropFind:
         root = self.create_propfind_xml()
         assert root.tag == "{DAV:}propfind"
         prop = self.prop(root)
-        assert prop.find("{DAV:}displayname") is not None
-        assert prop.findtext("{DAV:}displayname") == ""
+        name_ele = prop.find("{DAV:}displayname")
+        assert name_ele is not None
+        assert name_ele.text is None
 
         tags = {element.tag for element in prop}
         expected = {"{DAV:}" + prop for prop in webdav._STD_PROPERTIES}
