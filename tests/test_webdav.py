@@ -36,10 +36,9 @@ XML = """<?xml version="1.0"?>
 
 
 def test_webdav_parse_propfind() -> None:
-    result = tuple(webdav.parse_propfind(XML))
-    assert len(result) == 1
-    node = result[0]
-    assert node == webdav.Node(
+    resources = tuple(webdav.parse_propfind(XML))
+    assert len(resources) == 1
+    assert resources[0] == webdav.Resource(
         name="movie.mp4",
         content_type="video/mp4",
         type=None,

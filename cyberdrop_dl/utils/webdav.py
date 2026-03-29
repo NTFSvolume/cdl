@@ -1,3 +1,5 @@
+# https://www.rfc-editor.org/rfc/rfc4918.html
+
 from __future__ import annotations
 
 import dataclasses
@@ -40,7 +42,7 @@ class Method(StrEnum):
 
 
 @dataclasses.dataclass(slots=True)
-class Node:
+class Resource:
     name: str
     content_type: str
     etag: str
@@ -54,11 +56,11 @@ class Node:
     extra_props: dict[str, str] = dataclasses.field(default_factory=dict)
 
     @property
-    def is_dir(self) -> bool:
+    def is_collection(self) -> bool:
         return self.type == "collection"
 
 
-def parse_propfind(xml_resp: str) -> Generator[Node]:
+def parse_propfind(xml_resp: str) -> Generator[Resource]:
     root = ElementTree.fromstring(xml_resp)
 
     for response in root.iterfind(".//{DAV:}response"):
@@ -70,7 +72,7 @@ def parse_propfind(xml_resp: str) -> Generator[Node]:
 
         pop = props.pop
 
-        yield Node(
+        yield Resource(
             name=pop("{DAV:}displayname"),
             content_type=pop("{DAV:}getcontenttype"),
             etag=pop("{DAV:}getetag").strip('"'),

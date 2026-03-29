@@ -1,4 +1,5 @@
 # https://owncloud.dev/apis/http/webdav/#calling-the-webdav-api
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
@@ -26,21 +27,23 @@ class OwnCloudCrawler(Crawler, is_generic=True):
     async def public_share(self, scrape_item: ScrapeItem, share_token: str) -> None:
         origin = scrape_item.url.origin()
         webdav_url = origin / "public.php/dav/files" / share_token
-        nodes = await self.request_webdav(webdav_url)
-        for node in nodes:
-            if not node.is_dir:
-                url = self.parse_url(node.href, origin)
-                new_item = scrape_item.create_child(url)
-                await self._file(new_item, node)
-                scrape_item.add_children()
+
+        for resource in await self.request_webdav(webdav_url):
+            if resource.is_collection:
+                continue
+
+            url = self.parse_url(resource.href, origin)
+            new_item = scrape_item.create_child(url)
+            await self._file(new_item, resource)
+            scrape_item.add_children()
 
     @error_handling_wrapper
-    async def _file(self, scrape_item: ScrapeItem, file: webdav.Node) -> None:
+    async def _file(self, scrape_item: ScrapeItem, file: webdav.Resource) -> None:
         filename, ext = self.get_filename_and_ext(file.name, mime_type=file.content_type)
         scrape_item.possible_datetime = dates.to_timestamp(file.last_modified)
         await self.handle_file(scrape_item.url, scrape_item, filename, ext)
 
-    async def request_webdav(self, url: AbsoluteHttpURL) -> tuple[webdav.Node, ...]:
+    async def request_webdav(self, url: AbsoluteHttpURL) -> tuple[webdav.Resource, ...]:
         content = await self.request_text(
             url,
             method=webdav.Method.PROPFIND,  # pyright: ignore[reportArgumentType]
