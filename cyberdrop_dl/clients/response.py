@@ -16,6 +16,7 @@ from multidict import CIMultiDict, CIMultiDictProxy
 from propcache import under_cached_property
 from typing_extensions import TypeVar, override
 
+from cyberdrop_dl.clients.flaresolverr import Solution as FlaresolverrSolution
 from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import InvalidContentTypeError, ScrapeError
 from cyberdrop_dl.utils.utilities import parse_url
@@ -25,11 +26,10 @@ if TYPE_CHECKING:
 
     from curl_cffi.requests.models import Response as CurlResponse
 
-    from cyberdrop_dl.clients.flaresolverr import Solution as FlaresolverrSolution
 
 else:
     CurlResponse = object
-    FlaresolverrSolution = object
+
 
 __all__ = ["AbstractResponse"]
 
@@ -57,13 +57,13 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
 
     _resp: _ResponseT
     _text: str = ""
+    _cache: dict[str, Any] = dataclasses.field(init=False, compare=False, default_factory=dict)
+    _lock: asyncio.Lock = dataclasses.field(init=False, compare=False, default_factory=asyncio.Lock)
     created_at: datetime.datetime = dataclasses.field(
         init=False,
         compare=False,
         default_factory=lambda: datetime.datetime.now(datetime.UTC).replace(microsecond=0),
     )
-    _cache: dict[str, Any] = dataclasses.field(init=False, compare=False, default_factory=dict)
-    _lock: asyncio.Lock = dataclasses.field(init=False, compare=False, default_factory=asyncio.Lock)
 
     def __repr__(self) -> str:
         return f"<{type(self).__name__} [{self.status}] ({self.url})>"
@@ -82,7 +82,7 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
         return {
             "url": str(self.url),
             "status_code": self.status,
-            "datetime": self.created_at.isoformat(),
+            "created_at": self.created_at.isoformat(),
             "response_headers": dict(self.headers),
             "content": content,
         }
