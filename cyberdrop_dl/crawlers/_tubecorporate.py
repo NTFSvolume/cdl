@@ -11,7 +11,7 @@ from cyberdrop_dl.utils.utilities import error_handling_wrapper
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
 
-_FORMATS: Final = ".mp4", "_sd.mp4", "_hq.mp4", "_hd.mp4", "_fhd.mp4"
+_FORMATS: Final = "_sd.mp4", "_hq.mp4", "_hd.mp4", "_fhd.mp4"
 
 
 @dataclasses.dataclass(slots=True)
@@ -41,7 +41,7 @@ class TubeCorporateCrawler(Crawler, is_abc=True):
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
-            case ["videos" | "embed", video_id, *_]:
+            case ["videos" | "video" | "embed", video_id, *_]:
                 return await self.video(scrape_item, video_id)
             case _:
                 raise ValueError
@@ -75,7 +75,7 @@ class TubeCorporateCrawler(Crawler, is_abc=True):
             )
         ) as resp:
             origin = resp.url.origin()  # May have been a redirect. We need the real origin as referer
-            src = _get_best_format(await resp.json())
+            src = _select_best_src(_parse_formats(await resp.json()))
 
         mil_index = int(1e6 * (int(video_id) // 1e6))
         k_index = 1_000 * (int(video_id) // 1_000)
@@ -93,24 +93,31 @@ class TubeCorporateCrawler(Crawler, is_abc=True):
         )
 
 
-def _get_best_format(formats: list[dict[str, str]] | dict[str, str]) -> str:
-    if isinstance(formats, dict):
-        if formats.get("error"):
-            error = formats["msg"]
-            if "not_found" in error:
-                error = 404
-            elif "private" in error:
-                error = 403
+def _parse_formats(formats: list[dict[str, str]] | dict[str, str]) -> list[dict[str, str]]:
+    if isinstance(formats, list):
+        return formats
 
-            raise ScrapeError(error)
+    if formats.get("error"):
+        error = formats["msg"]
+        if "not_found" in error:
+            error = 404
+        elif "private" in error:
+            error = 403
 
-        raise ScrapeError(422, f"Expected list response, got {formats = !r}")
+        raise ScrapeError(error)
 
-    try:
-        best = max(formats, key=lambda f: _FORMATS.index(f["format"]))
-    except ValueError:
-        unknown = tuple(name for f in formats if (name := f["format"]) not in _FORMATS)
-        raise ScrapeError(422, f"Video has unknown formats: {unknown}") from None
+    raise ScrapeError(422, f"Expected list response, got {formats = !r}")
+
+
+def _select_best_src(formats: list[dict[str, str]]) -> str:
+    if len(formats) == 1:
+        best = formats[0]
+    else:
+        try:
+            best = max(formats, key=lambda f: _FORMATS.index(f["format"]))
+        except ValueError:
+            unknown = tuple(name for f in formats if (name := f["format"]) not in _FORMATS)
+            raise ScrapeError(422, f"Video has unknown formats: {unknown}") from None
 
     return _decode_url(best["video_url"])
 
