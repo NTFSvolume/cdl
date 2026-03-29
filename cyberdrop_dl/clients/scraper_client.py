@@ -74,6 +74,9 @@ class ScraperClient:
         request_params["data"] = data
         request_params["json"] = json
 
+        if method == "GET" and (data or json):
+            method = "POST"
+
         if not impersonate:
             headers.setdefault("user-agent", self.client_manager.manager.global_config.general.user_agent)
 
