@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any
 import aiohttp
 from multidict import CIMultiDict, CIMultiDictProxy
 
-from cyberdrop_dl import ddos_guard
 from cyberdrop_dl.compat import StrEnum
 from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError
@@ -120,32 +119,12 @@ class FlareSolverr:
         if not resp.solution:
             raise invalid_response_error
 
-        self.client.cookies.update_cookies(resp.solution.cookies)
-        await self._check_resp(resp.solution)
         return resp.solution
 
-    async def _check_resp(self, solution: FlareSolverrSolution) -> None:
-        cdl_user_agent = self.client.manager.global_config.general.user_agent
-        mismatch_ua_msg = (
-            "Config user_agent and flaresolverr user_agent do not match:"
-            f"\n  Cyberdrop-DL: '{cdl_user_agent}'"
-            f"\n  Flaresolverr: '{solution.user_agent}'"
-        )
-
-        try:
-            await ddos_guard.check(solution.content)
-        except DDOSGuardError:
-            if solution.user_agent != cdl_user_agent:
-                raise DDOSGuardError(mismatch_ua_msg) from None
-
-        if solution.user_agent != cdl_user_agent:
-            logger.warning(f"{mismatch_ua_msg}\n Response was successful but cookies will not be valid")
-
     async def _request(self, command: _Command, /, data: Any = None, **kwargs: Any) -> _FlareSolverrResponse:
-
-        timeout = self.client.manager.global_config.rate_limiting_options._aiohttp_timeout
+        kwargs = {}
         if command is _Command.CREATE_SESSION:
-            timeout = aiohttp.ClientTimeout(total=5 * 60, connect=60)  # 5 minutes to create session
+            kwargs.update(timeout=aiohttp.ClientTimeout(total=5 * 60, connect=60))  # 5 minutes to create session
 
         #  timeout in milliseconds (60s)
         playload: dict[str, Any] = {"cmd": command, "maxTimeout": 60_000} | kwargs
@@ -160,11 +139,7 @@ class FlareSolverr:
                 f"Waiting For Flaresolverr Response [{self._next_request_id()}]"
             ),
         ):
-            async with self.client._session.post(
-                self.url,
-                json=playload,
-                timeout=timeout,
-            ) as response:
+            async with self.client._session.post(self.url, json=playload, **kwargs) as response:
                 return _FlareSolverrResponse.from_dict(await response.json())
 
     async def _create_session(self) -> None:

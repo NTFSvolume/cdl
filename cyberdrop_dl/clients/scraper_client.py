@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import time
 from datetime import datetime
 from json import dumps as json_dumps
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-import cyberdrop_dl.constants as constants
+from cyberdrop_dl import constants, ddos_guard
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.exceptions import DDOSGuardError
 from cyberdrop_dl.utils.cookie_management import make_simple_cookie
@@ -22,6 +23,8 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
     from cyberdrop_dl.managers.client_manager import ClientManager
+
+logger = logging.getLogger(__name__)
 
 
 class ScraperClient:
@@ -132,12 +135,33 @@ class ScraperClient:
             await self.client_manager.check_http_status(abs_resp)
             return abs_resp
         except DDOSGuardError:
-            if not self.client_manager.flaresolverr:
+            if not (flare := self.client_manager.flaresolverr):
                 raise
-            flare_solution = await self.client_manager.flaresolverr.request(url, data)
-            return AbstractResponse.create(flare_solution)
 
-    async def write_soup_to_disk(self, url: AbsoluteHttpURL, response: AbstractResponse, exc: Exception | None = None):
+            solution = await flare.request(url, data)
+            self.client_manager.cookies.update_cookies(solution.cookies)
+
+            cdl_user_agent = self.client_manager.manager.global_config.general.user_agent
+            mismatch_ua_msg = (
+                "Config user_agent and flaresolverr user_agent do not match:"
+                f"\n  Cyberdrop-DL: '{cdl_user_agent}'"
+                f"\n  Flaresolverr: '{solution.user_agent}'"
+            )
+
+            try:
+                await ddos_guard.check(solution.content)
+            except DDOSGuardError:
+                if solution.user_agent != cdl_user_agent:
+                    raise DDOSGuardError(mismatch_ua_msg) from None
+
+            if solution.user_agent != cdl_user_agent:
+                logger.warning(f"{mismatch_ua_msg}\n Response was successful but cookies will not be valid")
+
+            return AbstractResponse.create(solution)
+
+    async def write_soup_to_disk(
+        self, url: AbsoluteHttpURL, response: AbstractResponse[Any], exc: Exception | None = None
+    ):
         """Writes html to a file."""
 
         if not (
