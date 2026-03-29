@@ -41,7 +41,7 @@ class FlareSolverrSolution:
     status: int
 
     @staticmethod
-    def from_dict(solution: dict[str, Any]) -> FlareSolverrSolution:
+    def from_dict(solution: Mapping[str, Any]) -> FlareSolverrSolution:
         return FlareSolverrSolution(
             status=int(solution["status"]),
             cookies=_parse_cookies(solution.get("cookies") or ()),
@@ -63,10 +63,10 @@ class _FlareSolverrResponse:
         return self.status == "ok"
 
     @staticmethod
-    def from_dict(resp: dict[str, Any]) -> _FlareSolverrResponse:
+    def from_dict(resp: Mapping[str, Any]) -> _FlareSolverrResponse:
         return _FlareSolverrResponse(
-            resp["status"],
-            resp["message"],
+            status=resp["status"],
+            message=resp["message"],
             solution=FlareSolverrSolution.from_dict(sol) if (sol := resp.get("solution")) else None,
         )
 
