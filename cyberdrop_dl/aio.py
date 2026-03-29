@@ -121,7 +121,7 @@ class AsyncContextManagerMixin(ABC):
 
     @final
     @property
-    def _stack(self) -> contextlib.AsyncExitStack[bool | None]:
+    def _exit_stack(self) -> contextlib.AsyncExitStack[bool | None]:
         if self.__stack is None:
             raise RuntimeError(f"{type(self).__name__} can only be used as a context manager")
         return self.__stack
@@ -142,7 +142,7 @@ class AsyncContextManagerMixin(ABC):
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> bool | None:
-        return await self._stack.__aexit__(exc_type, exc_val, exc_tb)
+        return await self._exit_stack.__aexit__(exc_type, exc_val, exc_tb)
 
     @abstractmethod
     async def _async_ctx_(self) -> None: ...

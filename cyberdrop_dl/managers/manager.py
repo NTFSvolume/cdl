@@ -1,18 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
-from dataclasses import Field, field
+from dataclasses import field
 from time import perf_counter
 from typing import TYPE_CHECKING, Any, NamedTuple, TypeVar
 
 from pydantic import BaseModel
+from typing_extensions import override
 
-from cyberdrop_dl import __version__, constants, ffmpeg
-from cyberdrop_dl.cli import ParsedArgs, parse_args
+from cyberdrop_dl import __version__, aio, constants, ffmpeg, yaml
+from cyberdrop_dl.cli import parse_args
 from cyberdrop_dl.database import Database
-from cyberdrop_dl.database.transfer import transfer_v5_db_to_v6
-from cyberdrop_dl.managers.cache_manager import CacheManager
 from cyberdrop_dl.managers.client_manager import ClientManager
 from cyberdrop_dl.managers.config_manager import ConfigManager
 from cyberdrop_dl.managers.hash_manager import HashManager
@@ -21,12 +21,12 @@ from cyberdrop_dl.managers.log_manager import LogManager
 from cyberdrop_dl.managers.path_manager import PathManager
 from cyberdrop_dl.managers.progress_manager import ProgressManager
 from cyberdrop_dl.utils.logger import LogHandler, QueuedLogger, log
-from cyberdrop_dl.utils.utilities import close_if_defined, get_system_information
+from cyberdrop_dl.utils.utilities import get_system_information
 
 if TYPE_CHECKING:
-    from asyncio import TaskGroup
-    from collections.abc import Sequence
+    from collections.abc import AsyncGenerator, Sequence
 
+    from cyberdrop_dl.cli.model import ParsedArgs
     from cyberdrop_dl.scraper.scrape_mapper import ScrapeMapper
 
 
@@ -35,37 +35,42 @@ class AsyncioEvents(NamedTuple):
     RUNNING: asyncio.Event
 
 
-class Manager:
+class Manager(aio.AsyncContextManagerMixin):
     def __init__(self, args: Sequence[str] | None = None) -> None:
         if isinstance(args, str):
             args = [args]
 
-        self.parsed_args: ParsedArgs = field(init=False)
-        self.cache_manager: CacheManager = CacheManager(self)
-        self.path_manager: PathManager = field(init=False)
-        self.config_manager: ConfigManager = field(init=False)
-        self.hash_manager: HashManager = field(init=False)
+        self.hash_manager: HashManager
 
-        self.log_manager: LogManager = field(init=False)
-        self.db_manager: Database = field(init=False)
-        self.client_manager: ClientManager = field(init=False)
+        self.db_manager: Database
+        self.client_manager: ClientManager
 
         self.progress_manager: ProgressManager = field(init=False)
         self.live_manager: LiveManager = field(init=False)
 
-        self._loaded_args_config: bool = False
-        self._made_portable: bool = False
-
-        self.task_group: TaskGroup = field(init=False)
-        self.scrape_mapper: ScrapeMapper = field(init=False)
+        self.task_group: asyncio.TaskGroup
+        self.scrape_mapper: ScrapeMapper
 
         self.start_time: float = perf_counter()
-        self.downloaded_data: int = 0
+
         self.loggers: dict[str, QueuedLogger] = {}
-        self.args = args
-        self.states: AsyncioEvents
+        self._states: AsyncioEvents | None = None
 
         constants.console_handler = LogHandler(level=constants.CONSOLE_LEVEL)
+
+        self.parsed_args: ParsedArgs = parse_args(args)
+        self.path_manager: PathManager = PathManager(self)
+
+        self.cache_manager: dict[str, Any]
+        self.config_manager: ConfigManager = ConfigManager(self)
+        self.log_manager: LogManager
+        self._ready = False
+
+    @property
+    def states(self) -> AsyncioEvents:
+        if self._states is None:
+            self._states = AsyncioEvents(asyncio.Event(), asyncio.Event())
+        return self._states
 
     @property
     def config(self):
@@ -79,54 +84,58 @@ class Manager:
     def global_config(self):
         return self.config_manager.global_settings_data
 
-    def startup(self) -> None:
-        """Startup process for the manager."""
+    def post_init(self) -> None:
+        if not self._ready:
+            self.path_manager.mkdirs()
+            self.config_manager.startup()
 
-        if isinstance(self.parsed_args, Field):
-            self.parsed_args = parse_args(self.args)
+            self.args_consolidation()
+            self.path_manager.resolve_paths()
+            self.log_manager = LogManager(self)
+            self._ready = True
 
-        self.path_manager = PathManager(self)
-        self.path_manager.pre_startup()
-        self.cache_manager.startup(self.path_manager.cache_folder / "cache.yaml")
-        self.config_manager = ConfigManager(self)
-        self.config_manager.startup()
-
-        self.args_consolidation()
-
-        self.path_manager.startup()
-        self.log_manager = LogManager(self)
-
-    """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
-
-    async def async_startup(self) -> None:
-        """Async startup process for the manager."""
-        self.states = AsyncioEvents(asyncio.Event(), asyncio.Event())
+    @override
+    async def _async_ctx_(self) -> None:
+        self.post_init()
+        try:
+            self.cache_manager = yaml.load(self.path_manager.cache_folder / "cache.yaml")
+        except FileNotFoundError:
+            self.cache_manager = {}
         self.args_logging()
 
-        if not isinstance(self.client_manager, ClientManager):
-            self.client_manager = ClientManager(self)
-            await self.client_manager.startup()
+        exit_stack = self._exit_stack
+        self.client_manager = await exit_stack.enter_async_context(ClientManager(self))
 
-        await self.async_db_hash_startup()
+        _ = await exit_stack.enter_async_context(self.connect_to_db())
 
         constants.MAX_NAME_LENGTHS["FILE"] = self.config_manager.global_settings_data.general.max_file_name_length
         constants.MAX_NAME_LENGTHS["FOLDER"] = self.config_manager.global_settings_data.general.max_folder_name_length
 
-    async def async_db_hash_startup(self) -> None:
-        if not isinstance(self.db_manager, Database):
-            self.db_manager = Database(
-                self.path_manager.history_db,
-                self.config.runtime_options.ignore_history,
-            )
-            await self.db_manager.startup()
-        transfer_v5_db_to_v6(self.path_manager.history_db)
-        if not isinstance(self.hash_manager, HashManager):
-            self.hash_manager = HashManager(self)
-        if not isinstance(self.live_manager, LiveManager):
-            self.live_manager = LiveManager(self)
-        if not isinstance(self.progress_manager, ProgressManager):
-            self.progress_manager = ProgressManager(self)
-            self.progress_manager.startup()
+        def save_cache() -> None:
+            self.cache_manager["version"] = __version__
+            yaml.save(self.path_manager.cache_folder / "cache.yaml", self.cache_manager)
+
+        def close_loggers() -> None:
+            while self.loggers:
+                _, queued_logger = self.loggers.popitem()
+                queued_logger.stop()
+
+        exit_stack.callback(save_cache)
+        exit_stack.callback(close_loggers)
+
+    @contextlib.asynccontextmanager
+    async def connect_to_db(self) -> AsyncGenerator[None]:
+        self.db_manager = Database(
+            self.path_manager.history_db,
+            self.config.runtime_options.ignore_history,
+        )
+
+        self.hash_manager = HashManager(self)
+        self.live_manager = LiveManager(self)
+        self.progress_manager = ProgressManager(self)
+        self.progress_manager.startup()
+        async with self.db_manager:
+            yield
 
     def process_additive_args(self) -> None:
         cli_general_options = self.parsed_args.global_settings.general
@@ -181,25 +190,6 @@ class Manager:
             f"Using ffprobe version: {ffmpeg.get_ffprobe_version()}",
         )
         log("\n".join(args_info))
-
-    async def async_db_close(self) -> None:
-        "Partial shutdown for managers used for hash directory scanner"
-        self.db_manager = await close_if_defined(self.db_manager)
-        self.hash_manager = constants.NOT_DEFINED
-        self.progress_manager.hash_progress.reset()
-
-    async def close(self) -> None:
-        """Closes the manager."""
-        self.states.RUNNING.clear()
-
-        await self.async_db_close()
-
-        self.client_manager = await close_if_defined(self.client_manager)
-        self.cache_manager = await close_if_defined(self.cache_manager)
-
-        while self.loggers:
-            _, queued_logger = self.loggers.popitem()
-            queued_logger.stop()
 
 
 def add_or_remove_lists(cli_values: list[str], config_values: list[str]) -> None:
