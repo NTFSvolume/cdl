@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from curl_cffi.requests.impersonate import BrowserTypeLiteral
     from curl_cffi.requests.session import HttpMethod
 
-    from cyberdrop_dl.clients.flaresolverr import FlareSolverrSolution
+    from cyberdrop_dl.clients import flaresolverr
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
     from cyberdrop_dl.managers.client_manager import ClientManager
 
@@ -148,7 +148,7 @@ class ScraperClient:
             await self._check_flaresolverr_resp(solution)
             return AbstractResponse.create(solution)
 
-    async def _check_flaresolverr_resp(self, solution: FlareSolverrSolution) -> None:
+    async def _check_flaresolverr_resp(self, solution: flaresolverr.Solution) -> None:
         cdl_user_agent = self.client_manager.manager.global_config.general.user_agent
         mismatch_ua_msg = (
             "Config user_agent and flaresolverr user_agent do not match:"

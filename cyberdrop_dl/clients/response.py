@@ -25,17 +25,17 @@ if TYPE_CHECKING:
 
     from curl_cffi.requests.models import Response as CurlResponse
 
-    from cyberdrop_dl.clients.flaresolverr import FlareSolverrSolution
+    from cyberdrop_dl.clients.flaresolverr import Solution as FlaresolverrSolution
 
 else:
     CurlResponse = object
-    FlareSolverrSolution = object
+    FlaresolverrSolution = object
 
 __all__ = ["AbstractResponse"]
 
 _ResponseT = TypeVar(
     "_ResponseT",
-    bound=ClientResponse | CurlResponse | FlareSolverrSolution,
+    bound=ClientResponse | CurlResponse | FlaresolverrSolution,
     infer_variance=True,
 )
 
@@ -104,7 +104,7 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
         if isinstance(resp, ClientResponse):
             return _AIOHTTPResponse.create(resp)
 
-        if isinstance(resp, FlareSolverrSolution):
+        if isinstance(resp, FlaresolverrSolution):
             return _FlareSolverrResponse.create(resp)
 
         return _CurlResponse.create(resp)
@@ -207,7 +207,7 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
             raise InvalidContentTypeError(message=msg)
 
 
-class _FlareSolverrResponse(AbstractResponse[FlareSolverrSolution]):
+class _FlareSolverrResponse(AbstractResponse[FlaresolverrSolution]):
     __slots__ = ()
 
     async def _read(self) -> bytes:
@@ -223,7 +223,7 @@ class _FlareSolverrResponse(AbstractResponse[FlareSolverrSolution]):
 
     @override
     @classmethod
-    def create(cls, solution: FlareSolverrSolution, /) -> Self:
+    def create(cls, solution: FlaresolverrSolution, /) -> Self:
         content_type, location = _parse_headers(solution.url, solution.headers)
         return cls(
             content_type=content_type,

@@ -32,7 +32,7 @@ class Command(StrEnum):
 
 
 @dataclasses.dataclass(slots=True)
-class FlareSolverrSolution:
+class Solution:
     content: str
     cookies: SimpleCookie
     headers: CIMultiDictProxy[str]
@@ -41,8 +41,8 @@ class FlareSolverrSolution:
     status: int
 
     @staticmethod
-    def from_dict(solution: Mapping[str, Any]) -> FlareSolverrSolution:
-        return FlareSolverrSolution(
+    def from_dict(solution: Mapping[str, Any]) -> Solution:
+        return Solution(
             status=int(solution["status"]),
             cookies=_parse_cookies(solution.get("cookies") or ()),
             user_agent=solution["userAgent"],
@@ -53,29 +53,26 @@ class FlareSolverrSolution:
 
 
 @dataclasses.dataclass(slots=True)
-class _FlareSolverrResponse:
+class Response:
     status: str
     message: str
-    solution: FlareSolverrSolution | None
+    solution: Solution | None
 
     @property
     def ok(self) -> bool:
         return self.status == "ok"
 
     @staticmethod
-    def from_dict(resp: Mapping[str, Any]) -> _FlareSolverrResponse:
-        return _FlareSolverrResponse(
+    def from_dict(resp: Mapping[str, Any]) -> Response:
+        return Response(
             status=resp["status"],
             message=resp["message"],
-            solution=FlareSolverrSolution.from_dict(sol) if (sol := resp.get("solution")) else None,
+            solution=Solution.from_dict(sol) if (sol := resp.get("solution")) else None,
         )
 
 
-class FlareSolverrDownError(DDOSGuardError): ...
-
-
 @dataclasses.dataclass(slots=True)
-class FlareSolverr:
+class FlareSolverrClient:
     """Class that handles communication with flaresolverr."""
 
     url: AbsoluteHttpURL
@@ -115,7 +112,7 @@ class FlareSolverr:
                 logger.exception(msg)
                 raise RuntimeError(msg) from e
 
-    async def request(self, url: AbsoluteHttpURL, data: dict[str, Any] | None = None) -> FlareSolverrSolution:
+    async def request(self, url: AbsoluteHttpURL, data: dict[str, Any] | None = None) -> Solution:
 
         await self._ensure_session()
         invalid_response_error = DDOSGuardError("Invalid response from flaresolverr")
@@ -138,13 +135,7 @@ class FlareSolverr:
 
         return resp.solution
 
-    async def _request(
-        self,
-        command: Command,
-        /,
-        data: dict[str, Any] | None = None,
-        **params: Any,
-    ) -> _FlareSolverrResponse:
+    async def _request(self, command: Command, /, data: dict[str, Any] | None = None, **params: Any) -> Response:
         timeout = {}
         if command is Command.CREATE_SESSION:
             timeout.update(timeout=aiohttp.ClientTimeout(total=5 * 60, connect=60))  # 5 minutes to create session
@@ -159,7 +150,7 @@ class FlareSolverr:
         async with self._request_lock:
             logger.debug(f"Making FlareSolverr request #{self._request_id()} with {params = }")
             async with self._aiohttp_session.post(self.url, json=params, **timeout) as response:
-                return _FlareSolverrResponse.from_dict(await response.json())
+                return Response.from_dict(await response.json())
 
     async def _create_session(self) -> None:
         session_id = "cyberdrop-dl"

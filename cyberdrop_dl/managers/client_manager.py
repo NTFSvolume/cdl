@@ -17,7 +17,7 @@ from aiolimiter import AsyncLimiter
 from cyberdrop_dl import constants, ddos_guard, env
 from cyberdrop_dl.aio import WeakAsyncLocks
 from cyberdrop_dl.clients.download_client import DownloadClient
-from cyberdrop_dl.clients.flaresolverr import FlareSolverr
+from cyberdrop_dl.clients.flaresolverr import FlareSolverrClient
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.clients.scraper_client import ScraperClient
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
@@ -134,7 +134,7 @@ class ClientManager:
         self.scraper_client = ScraperClient(self)
         self.speed_limiter = DownloadSpeedLimiter(self.rate_limiting_options.download_speed_limit)
         self.download_client = DownloadClient(manager, self)
-        self._flaresolverr: FlareSolverr | None = None
+        self._flaresolverr: FlareSolverrClient | None = None
         self.file_locks: WeakAsyncLocks[str] = WeakAsyncLocks()
         self._session: aiohttp.ClientSession
         self._download_session: aiohttp.ClientSession
@@ -142,9 +142,9 @@ class ClientManager:
         self._json_response_checks: dict[str, Callable[[Any], None]] = {}
 
     @property
-    def flaresolverr(self) -> FlareSolverr | None:
+    def flaresolverr(self) -> FlareSolverrClient | None:
         if self._flaresolverr is None and (url := self.manager.global_config.general.flaresolverr):
-            self._flaresolverr = FlareSolverr(url, self._session)
+            self._flaresolverr = FlareSolverrClient(url, self._session)
         return self._flaresolverr
 
     def _startup(self) -> None:
