@@ -20,6 +20,7 @@ class Video:
     post_date: str
     src: AbsoluteHttpURL
     resolution: Resolution
+    origin: AbsoluteHttpURL
 
 
 class TubeCorporateCrawler(Crawler, is_abc=True):
@@ -51,8 +52,7 @@ class TubeCorporateCrawler(Crawler, is_abc=True):
         if await self.check_complete_from_referer(scrape_item):
             return
 
-        origin = scrape_item.url.origin()
-        video = await self._request_video(origin, video_id)
+        video = await self._request_video(scrape_item.url.origin(), video_id)
         scrape_item.possible_datetime = self.parse_iso_date(video.post_date)
         ext = ".mp4"
         custom_filename = self.create_custom_filename(video.title, ext, file_id=video_id, resolution=video.resolution)
@@ -65,10 +65,11 @@ class TubeCorporateCrawler(Crawler, is_abc=True):
             custom_filename=custom_filename,
             debrid_link=video.src,
             metadata=video,
+            referer=scrape_item.url.with_host(video.origin.host),
         )
 
     async def _request_video(self, origin: AbsoluteHttpURL, video_id: str) -> Video:
-        res, src = await self._request_stream(origin, video_id)
+        origin, res, src = await self._request_stream(origin, video_id)
 
         mil_index = int(1e6 * (int(video_id) // 1e6))
         k_index = 1_000 * (int(video_id) // 1_000)
@@ -84,15 +85,21 @@ class TubeCorporateCrawler(Crawler, is_abc=True):
             post_date=video["post_date"],
             resolution=res,
             src=src,
+            origin=origin,
         )
 
-    async def _request_stream(self, origin: AbsoluteHttpURL, video_id: str) -> tuple[Resolution, AbsoluteHttpURL]:
-        formats: list[dict[str, str]] | dict[str, str] = await self.request_json(
+    async def _request_stream(
+        self, origin: AbsoluteHttpURL, video_id: str
+    ) -> tuple[AbsoluteHttpURL, Resolution, AbsoluteHttpURL]:
+        async with self.request(
             (origin / "api/videofile.php").with_query(
                 video_id=video_id,
                 lifetime=8_640_000,
             )
-        )
+        ) as resp:
+            origin = resp.url.origin()
+            formats: list[dict[str, str]] | dict[str, str] = await resp.json()
+
         if isinstance(formats, dict):
             if formats.get("error"):
                 error = formats["msg"]
@@ -108,7 +115,6 @@ class TubeCorporateCrawler(Crawler, is_abc=True):
         def get_res(format: str) -> Resolution:
             height = {
                 "_sd.mp4": 480,
-                "_hq.mp4": 720,
                 "_hd.mp4": 720,
                 "_fhd.mp4": 1080,
             }.get(format)
@@ -116,7 +122,7 @@ class TubeCorporateCrawler(Crawler, is_abc=True):
 
         res, url = max((get_res(f["format"]), f["video_url"]) for f in formats)
 
-        return res, self.parse_url(_decode_url(url), trim=False)
+        return origin, res, self.parse_url(_decode_url(url), trim=False)
 
 
 def _decode_url(url: str) -> str:
