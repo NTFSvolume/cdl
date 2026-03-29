@@ -133,20 +133,17 @@ class FlareSolverr:
             assert command is _Command.POST_REQUEST
             playload["postData"] = aiohttp.FormData(data)().decode()
 
-        async with (
-            self._request_lock,
-            self.client.manager.progress_manager.show_status_msg(
-                f"Waiting For Flaresolverr Response [{self._next_request_id()}]"
-            ),
-        ):
+        async with self._request_lock:
+            logger.debug(f"Waiting For Flaresolverr Response [{self._next_request_id()}]")
             async with self.client._session.post(self.url, json=playload, **kwargs) as response:
                 return _FlareSolverrResponse.from_dict(await response.json())
 
     async def _create_session(self) -> None:
         session_id = "cyberdrop-dl"
         kwargs = {}
-        if proxy := self.client.manager.global_config.general.proxy:
-            kwargs["proxy"] = {"url": str(proxy)}
+
+        if proxy := self.client._session._default_proxy:
+            kwargs.update(proxy={"url": str(proxy)})
 
         resp = await self._request(_Command.CREATE_SESSION, session=session_id, **kwargs)
         if not resp.ok:
