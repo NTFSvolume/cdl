@@ -91,7 +91,7 @@ class MediaFireCrawler(Crawler):
         match scrape_item.url.parts[1:]:
             case ["folder", folder_key, *_]:
                 return await self.folder(scrape_item, folder_key)
-            case ["file", quick_key, *_]:
+            case ["file" | "file_premium", quick_key, *_]:
                 return await self.file(scrape_item, quick_key)
             case _:
                 raise ValueError
