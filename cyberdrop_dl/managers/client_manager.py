@@ -449,7 +449,8 @@ class ClientManager:
         return min_audio_duration <= duration <= max_audio_duration
 
     async def close(self) -> None:
-        await self.flaresolverr.aclose()
+        if self._flaresolverr:
+            await self._flaresolverr.aclose()
 
 
 async def _set_dns_resolver(loop: asyncio.AbstractEventLoop | None = None) -> None:
