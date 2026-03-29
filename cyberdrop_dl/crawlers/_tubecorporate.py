@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.mediaprops import Resolution
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils.utilities import error_handling_wrapper, parse_url
 
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
@@ -69,15 +69,22 @@ class TubeCorporateCrawler(Crawler, is_abc=True):
         )
 
     async def _request_video(self, origin: AbsoluteHttpURL, video_id: str) -> Video:
-        origin, res, src = await self._request_stream(origin, video_id)
+        async with self.request(
+            (origin / "api/videofile.php").with_query(
+                video_id=video_id,
+                lifetime=8_640_000,
+            )
+        ) as resp:
+            origin = resp.url.origin()  # May have been a redirect. We need the real origin as referer
+            res, src = _get_best_format(await resp.json())
 
         mil_index = int(1e6 * (int(video_id) // 1e6))
         k_index = 1_000 * (int(video_id) // 1_000)
         lifetime = 86_400
 
-        json_url = origin / f"api/json/video/{lifetime}/{mil_index}/{k_index}/{video_id}.json"
+        info_url = origin / f"api/json/video/{lifetime}/{mil_index}/{k_index}/{video_id}.json"
 
-        video: dict[str, Any] = (await self.request_json(json_url))["video"]
+        video: dict[str, Any] = (await self.request_json(info_url))["video"]
 
         return Video(
             title=video["title"],
@@ -88,47 +95,37 @@ class TubeCorporateCrawler(Crawler, is_abc=True):
             origin=origin,
         )
 
-    async def _request_stream(
-        self, origin: AbsoluteHttpURL, video_id: str
-    ) -> tuple[AbsoluteHttpURL, Resolution, AbsoluteHttpURL]:
-        async with self.request(
-            (origin / "api/videofile.php").with_query(
-                video_id=video_id,
-                lifetime=8_640_000,
-            )
-        ) as resp:
-            origin = resp.url.origin()
-            formats: list[dict[str, str]] | dict[str, str] = await resp.json()
 
-        if isinstance(formats, dict):
-            if formats.get("error"):
-                error = formats["msg"]
-                if "not_found" in error:
-                    error = 404
-                elif "private" in error:
-                    error = 403
+def _get_best_format(formats: list[dict[str, str]] | dict[str, str]) -> tuple[Resolution, AbsoluteHttpURL]:
+    if isinstance(formats, dict):
+        if formats.get("error"):
+            error = formats["msg"]
+            if "not_found" in error:
+                error = 404
+            elif "private" in error:
+                error = 403
 
-                raise ScrapeError(error)
+            raise ScrapeError(error)
 
-            raise ScrapeError(422, f"Expected list response, got {formats = !r}")
+        raise ScrapeError(422, f"Expected list response, got {formats = !r}")
 
-        def get_res(format: str) -> Resolution:
-            height = {
-                "_sd.mp4": 480,
-                "_hd.mp4": 720,
-                "_fhd.mp4": 1080,
-            }.get(format)
-            return Resolution.parse(height)
+    def get_res(format: str) -> Resolution:
+        height = {
+            "_sd.mp4": 480,
+            "_hd.mp4": 720,
+            "_fhd.mp4": 1080,
+        }.get(format)
+        return Resolution.parse(height)
 
-        res, url = max((get_res(f["format"]), f["video_url"]) for f in formats)
+    res, url = max((get_res(f["format"]), f["video_url"]) for f in formats)
 
-        return origin, res, self.parse_url(_decode_url(url), trim=False)
+    return res, parse_url(_decode_url(url), trim=False)
 
 
 def _decode_url(url: str) -> str:
     return base64.b64decode(
         url.translate(
-            url.maketrans(
+            str.maketrans(
                 {
                     "\u0405": "S",
                     "\u0406": "I",
