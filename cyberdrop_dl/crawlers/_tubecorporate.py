@@ -39,15 +39,13 @@ class TubeCorporateCrawler(Crawler, is_abc=True):
         if await self.check_complete_from_referer(scrape_item):
             return
 
-        api_url = self._get_api_url(scrape_item, video_id)
-        video = _choose_best_format(await self.request_json(api_url))
-        video_info = await self._get_video_info(scrape_item, video_id)
-        scrape_item.possible_datetime = self.parse_iso_date(video_info["post_date"])
+        video = await self._request_video(scrape_item.url.origin(), video_id)
+        scrape_item.possible_datetime = self.parse_iso_date(video["post_date"])
 
         decoded_url = _decode_base64(video["video_url"])
         link = self.parse_url(decoded_url, relative_to=scrape_item.url.origin(), trim=False)
         filename, ext = self.get_filename_and_ext(video_id + ".mp4")
-        custom_filename = self.create_custom_filename(video_info["title"], ext, file_id=video_id)
+        custom_filename = self.create_custom_filename(video["title"], ext, file_id=video_id)
 
         return await self.handle_file(
             scrape_item.url,
@@ -56,21 +54,27 @@ class TubeCorporateCrawler(Crawler, is_abc=True):
             ext,
             custom_filename=custom_filename,
             debrid_link=link,
-            metadata=video_info,
+            metadata=video,
         )
 
-    async def _get_video_info(self, scrape_item: ScrapeItem, video_id: str) -> dict[str, str]:
-        json_url = self._get_json_url(scrape_item, video_id)
+    async def _request_video(self, origin: AbsoluteHttpURL, video_id: str) -> dict[str, str]:
+
+        formats: dict[str, str] = await self.request_json(
+            (origin / "api/videofile.php").with_query(
+                video_id=video_id,
+                lifetime=8640000,
+            )
+        )
+
+        if formats.get("error"):
+            error = {"not_found": 404}.get(formats["msg"], formats["msg"])
+            raise ScrapeError(error)
+
+        slug = f"{int(1e6 * (int(video_id) // 1e6))}/{1000 * (int(video_id) // 1000)}"
+        json_url = origin / f"api/json/video/86400/{slug}/{video_id}.json"
+
         video_info: dict[str, dict[str, str]] = await self.request_json(json_url)
         return video_info["video"]
-
-    def _get_json_url(self, scrape_item: ScrapeItem, video_id: str) -> AbsoluteHttpURL:
-        slug = f"{int(1e6 * (int(video_id) // 1e6))}/{1000 * (int(video_id) // 1000)}"
-        return scrape_item.url.with_path(f"api/json/video/86400/{slug}/{video_id}.json")
-
-    def _get_api_url(self, scrape_item: ScrapeItem, video_id: str) -> AbsoluteHttpURL:
-        query = {"video_id": video_id, "lifetime": "8640000"}
-        return scrape_item.url.with_path("api/videofile.php").with_query(query)
 
 
 def _choose_best_format(formats: list[dict[str, str]]) -> dict[str, str]:
