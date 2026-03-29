@@ -134,7 +134,11 @@ class ClientManager:
         self.scraper_client = ScraperClient(self)
         self.speed_limiter = DownloadSpeedLimiter(self.rate_limiting_options.download_speed_limit)
         self.download_client = DownloadClient(manager, self)
-        self.flaresolverr = FlareSolverr(self, self.manager.global_config.general.flaresolverr)
+        if url := self.manager.global_config.general.flaresolverr:
+            self.flaresolverr: FlareSolverr | None = FlareSolverr(self, url)
+        else:
+            self.flaresolverr = None
+
         self.file_locks: WeakAsyncLocks[str] = WeakAsyncLocks()
 
         self._session: aiohttp.ClientSession
@@ -444,7 +448,7 @@ class ClientManager:
         return min_audio_duration <= duration <= max_audio_duration
 
     async def close(self) -> None:
-        await self.flaresolverr.close()
+        await self.flaresolverr.aclose()
 
 
 async def _set_dns_resolver(loop: asyncio.AbstractEventLoop | None = None) -> None:

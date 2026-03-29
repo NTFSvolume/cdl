@@ -78,7 +78,7 @@ class FlareSolverr:
     """Class that handles communication with flaresolverr."""
 
     client: ClientManager
-    url: AbsoluteHttpURL | None = None
+    url: AbsoluteHttpURL
 
     _session_id: str = dataclasses.field(init=False, default="")
     _session_lock: asyncio.Lock = dataclasses.field(init=False, default_factory=asyncio.Lock)
@@ -88,10 +88,9 @@ class FlareSolverr:
     )
 
     def __post_init__(self) -> None:
-        if self.url:
-            self.url = self.url.origin() / "v1"
+        self.url = self.url.origin() / "v1"
 
-    async def close(self) -> None:
+    async def aclose(self) -> None:
         try:
             await self._destroy_session()
         except Exception as e:
@@ -143,8 +142,6 @@ class FlareSolverr:
             logger.warning(f"{mismatch_ua_msg}\n Response was successful but cookies will not be valid")
 
     async def _request(self, command: _Command, /, data: Any = None, **kwargs: Any) -> _FlareSolverrResponse:
-        if not self.url:
-            raise DDOSGuardError("Found DDoS challenge, but FlareSolverr is not configured")
 
         timeout = self.client.manager.global_config.rate_limiting_options._aiohttp_timeout
         if command is _Command.CREATE_SESSION:

@@ -132,6 +132,8 @@ class ScraperClient:
             await self.client_manager.check_http_status(abs_resp)
             return abs_resp
         except DDOSGuardError:
+            if not self.client_manager.flaresolverr:
+                raise
             flare_solution = await self.client_manager.flaresolverr.request(url, data)
             return AbstractResponse.create(flare_solution)
 
