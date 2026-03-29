@@ -126,15 +126,15 @@ class FlareSolverr:
             kwargs.update(timeout=aiohttp.ClientTimeout(total=5 * 60, connect=60))  # 5 minutes to create session
 
         #  timeout in milliseconds (60s)
-        playload: dict[str, Any] = {"cmd": command, "maxTimeout": 60_000} | kwargs
+        params: dict[str, Any] = {"cmd": command, "maxTimeout": 60_000} | kwargs
 
         if data:
             assert command is _Command.POST_REQUEST
-            playload["postData"] = aiohttp.FormData(data)().decode()
+            params["postData"] = aiohttp.FormData(data)().decode()
 
         async with self._request_lock:
-            logger.debug(f"Waiting For FlareSolverr response ({self._next_request_id()})")
-            async with self._session.post(self.url, json=playload, **kwargs) as response:
+            logger.debug(f"Waiting For FlareSolverr response ({self._next_request_id()}) {params = }")
+            async with self._session.post(self.url, json=params, **kwargs) as response:
                 return _FlareSolverrResponse.from_dict(await response.json())
 
     async def _create_session(self) -> None:
