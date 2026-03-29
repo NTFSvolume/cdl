@@ -29,17 +29,13 @@ class VidaraCrawler(Crawler):
         if await self.check_complete_from_referer(scrape_item):
             return
 
-        api_url = (scrape_item.url.origin() / "api/stream").with_query(filecode=video_id)
-        resp = await self.request_json(api_url)
-        m3u8_url = self.parse_url(resp["streaming_url"])
-
+        m3u8_url, thumbnail = await self._request_stream(video_id)
         m3u8, info = await self.get_m3u8_from_playlist_url(m3u8_url)
         name, ext = self.get_filename_and_ext(video_id + ".mp4")
         custom_filename = self.create_custom_filename(name, ext, resolution=info.resolution)
 
         await self.handle_file(scrape_item.url, scrape_item, name, ext, m3u8=m3u8, custom_filename=custom_filename)
 
-        thumbnail = self.parse_url(resp["thumbnail"])
         thumb_name = f"{Path(custom_filename).stem}_thumb{thumbnail.suffix}"
         filename, _ = self.get_filename_and_ext(thumb_name)
         await self.handle_file(
@@ -50,4 +46,18 @@ class VidaraCrawler(Crawler):
             custom_filename=filename,
             debrid_link=thumbnail,
             referer=referer,
+        )
+
+    async def _request_stream(self, video_id: str) -> tuple[AbsoluteHttpURL, AbsoluteHttpURL]:
+        resp = await self.request_json(
+            self.PRIMARY_URL / "api/stream",
+            method="POST",
+            json={
+                "devide": "web",
+                "filecode": video_id,
+            },
+        )
+        return (
+            self.parse_url(resp["streaming_url"]),
+            self.parse_url(resp["thumbnail"]),
         )
