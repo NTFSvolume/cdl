@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from curl_cffi.requests.impersonate import BrowserTypeLiteral
     from curl_cffi.requests.session import HttpMethod
 
+    from cyberdrop_dl.clients.flaresolverr import FlareSolverrSolution
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
     from cyberdrop_dl.managers.client_manager import ClientManager
 
@@ -134,30 +135,35 @@ class ScraperClient:
         try:
             await self.client_manager.check_http_status(abs_resp)
             return abs_resp
-        except DDOSGuardError:
+        except DDOSGuardError as e:
             if not (flare := self.client_manager.flaresolverr):
                 raise
 
-            solution = await flare.request(url, data)
-            self.client_manager.cookies.update_cookies(solution.cookies)
-
-            cdl_user_agent = self.client_manager.manager.global_config.general.user_agent
-            mismatch_ua_msg = (
-                "Config user_agent and flaresolverr user_agent do not match:"
-                f"\n  Cyberdrop-DL: '{cdl_user_agent}'"
-                f"\n  Flaresolverr: '{solution.user_agent}'"
-            )
-
             try:
-                await ddos_guard.check(solution.content)
-            except DDOSGuardError:
-                if solution.user_agent != cdl_user_agent:
-                    raise DDOSGuardError(mismatch_ua_msg) from None
+                solution = await flare.request(url, data)
+            except RuntimeError:
+                raise e from None
 
-            if solution.user_agent != cdl_user_agent:
-                logger.warning(f"{mismatch_ua_msg}\n Response was successful but cookies will not be valid")
-
+            self.client_manager.cookies.update_cookies(solution.cookies)
+            await self._check_flaresolverr_resp(solution)
             return AbstractResponse.create(solution)
+
+    async def _check_flaresolverr_resp(self, solution: FlareSolverrSolution) -> None:
+        cdl_user_agent = self.client_manager.manager.global_config.general.user_agent
+        mismatch_ua_msg = (
+            "Config user_agent and flaresolverr user_agent do not match:"
+            f"\n  Cyberdrop-DL: '{cdl_user_agent}'"
+            f"\n  Flaresolverr: '{solution.user_agent}'"
+        )
+
+        try:
+            await ddos_guard.check(solution.content)
+        except DDOSGuardError:
+            if solution.user_agent != cdl_user_agent:
+                raise DDOSGuardError(mismatch_ua_msg) from None
+
+        if solution.user_agent != cdl_user_agent:
+            logger.warning(f"{mismatch_ua_msg}\n Response was successful but cookies will not be valid")
 
     async def write_soup_to_disk(
         self, url: AbsoluteHttpURL, response: AbstractResponse[Any], exc: Exception | None = None

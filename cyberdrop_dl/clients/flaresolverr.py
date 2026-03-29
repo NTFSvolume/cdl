@@ -71,6 +71,9 @@ class _FlareSolverrResponse:
         )
 
 
+class FlareSolverrDownError(DDOSGuardError): ...
+
+
 @dataclasses.dataclass(slots=True)
 class FlareSolverr:
     """Class that handles communication with flaresolverr."""
@@ -82,6 +85,7 @@ class FlareSolverr:
     _session_lock: asyncio.Lock = dataclasses.field(init=False, default_factory=asyncio.Lock)
     _request_lock: asyncio.Lock = dataclasses.field(init=False, default_factory=asyncio.Lock)
     _request_id: Callable[[], int] = dataclasses.field(init=False, default_factory=lambda: itertools.count(1).__next__)
+    _down: bool = dataclasses.field(init=False, default=False)
 
     def __post_init__(self) -> None:
         self.url = self.url.origin() / "v1"
@@ -92,14 +96,30 @@ class FlareSolverr:
         except Exception as e:
             logger.error(f"Unable to destroy flaresolver session ({e})")
 
+    async def _ensure_session(self) -> None:
+        msg = "Unable to create Flaresolverr session"
+        if self._down:
+            raise RuntimeError(msg)
+
+        if self._session_id:
+            return
+
+        async with self._session_lock:
+            if self._session_id:
+                return
+
+            try:
+                await self._create_session()
+            except Exception as e:
+                self._down = True
+                logger.exception(msg)
+                raise RuntimeError(msg) from e
+
     async def request(self, url: AbsoluteHttpURL, data: dict[str, Any] | None = None) -> FlareSolverrSolution:
+
+        await self._ensure_session()
         invalid_response_error = DDOSGuardError("Invalid response from flaresolverr")
         try:
-            if not self._session_id:
-                async with self._session_lock:
-                    if not self._session_id:
-                        await self._create_session()
-
             resp = await self._request(
                 Command.POST_REQUEST if data else Command.GET_REQUEST,
                 url=str(url),
@@ -150,7 +170,7 @@ class FlareSolverr:
 
         resp = await self._request(Command.CREATE_SESSION, session=session_id, **params)
         if not resp.ok:
-            raise DDOSGuardError(f"Failed to create flaresolverr session: {resp.message}")
+            raise RuntimeError(f"FlareSolverr said: {resp.message}")
         self._session_id = session_id
 
     async def _destroy_session(self) -> None:
