@@ -54,7 +54,7 @@ def test_webdav_parse_propfind() -> None:
 class TestPropFind:
     @staticmethod
     @signature.copy(webdav.create_propfind_xml)
-    def prepare_request(*args, **kwargs) -> ElementTree.Element[str]:
+    def create_propfind_xml(*args, **kwargs) -> ElementTree.Element[str]:
         root = webdav.create_propfind_xml(*args, **kwargs)
         return webdav.update_tags_from_ns(root)
 
@@ -65,7 +65,7 @@ class TestPropFind:
         return prop
 
     def test_default_propfind(self) -> None:
-        root = self.prepare_request()
+        root = self.create_propfind_xml()
         assert root.tag == "{DAV:}propfind"
         prop = self.prop(root)
         assert prop.find("{DAV:}displayname") is not None
@@ -76,7 +76,7 @@ class TestPropFind:
         assert tags == expected
 
     def test_additional_ns(self) -> None:
-        root = self.prepare_request("cs:getctag", namespaces={"cs": "https://calendarserver.org/ns"})
+        root = self.create_propfind_xml("cs:getctag", namespaces={"cs": "https://calendarserver.org/ns"})
         prop = self.prop(root)
         assert prop.find("{https://calendarserver.org/ns}getctag") is not None
 
@@ -101,11 +101,11 @@ class TestPropFind:
         ],
     )
     def test_custom_namespaces(self, props: tuple[str, ...], extra_ns: dict[str, str] | None) -> None:
-        root = self.prepare_request(*props, namespaces=extra_ns)
+        root = self.create_propfind_xml(*props, namespaces=extra_ns)
         assert root.attrib == {}
         for prop in props:
             if ":" in prop:
                 assert root.find(f".//{prop}", extra_ns) is not None
 
     def test_to_bytes_has_xml_declaration(self) -> None:
-        assert webdav.xml_to_bytes(self.prepare_request()).startswith(b"<?xml version=")
+        assert webdav.xml_to_bytes(self.create_propfind_xml()).startswith(b"<?xml version=")
