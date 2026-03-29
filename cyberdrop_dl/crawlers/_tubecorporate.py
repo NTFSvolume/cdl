@@ -1,14 +1,25 @@
 from __future__ import annotations
 
 import base64
+import dataclasses
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
+from cyberdrop_dl.data_structures.mediaprops import Resolution
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils.utilities import error_handling_wrapper
 
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
+
+
+@dataclasses.dataclass(slots=True)
+class Video:
+    title: str
+    thumb: AbsoluteHttpURL
+    post_date: str
+    src: AbsoluteHttpURL
+    resolution: Resolution
 
 
 class TubeCorporateCrawler(Crawler, is_abc=True):
@@ -40,50 +51,71 @@ class TubeCorporateCrawler(Crawler, is_abc=True):
             return
 
         origin = scrape_item.url.origin()
-        _src = await self._request_stream(origin, video_id)
         video = await self._request_video(origin, video_id)
-        scrape_item.possible_datetime = self.parse_iso_date(video["post_date"])
-
-        decoded_url = _decode_url(video["video_url"])
-        link = self.parse_url(decoded_url, relative_to=scrape_item.url.origin(), trim=False)
-        filename, ext = self.get_filename_and_ext(video_id + ".mp4")
-        custom_filename = self.create_custom_filename(video["title"], ext, file_id=video_id)
+        scrape_item.possible_datetime = self.parse_iso_date(video.post_date)
+        ext = ".mp4"
+        custom_filename = self.create_custom_filename(video.title, ext, file_id=video_id, resolution=video.resolution)
 
         return await self.handle_file(
             scrape_item.url,
             scrape_item,
-            filename,
+            video.title,
             ext,
             custom_filename=custom_filename,
-            debrid_link=link,
+            debrid_link=video.src,
             metadata=video,
         )
 
-    async def _request_video(self, origin: AbsoluteHttpURL, video_id: str) -> dict[str, str]:
+    async def _request_video(self, origin: AbsoluteHttpURL, video_id: str) -> Video:
+        res, src = await self._request_stream(origin, video_id)
 
-        slug = f"{int(1e6 * (int(video_id) // 1e6))}/{1000 * (int(video_id) // 1000)}"
-        json_url = origin / f"api/json/video/86400/{slug}/{video_id}.json"
+        mil_index = int(1e6 * (int(video_id) // 1e6))
+        k_index = 1_000 * (int(video_id) // 1_000)
+        lifetime = 86_400
 
-        video_info: dict[str, dict[str, str]] = await self.request_json(json_url)
-        return video_info["video"]
+        json_url = origin / f"api/json/video/{lifetime}/{mil_index}/{k_index}/{video_id}.json"
 
-    async def _request_stream(self, origin: AbsoluteHttpURL, video_id: str) -> AbsoluteHttpURL:
+        video: dict[str, Any] = (await self.request_json(json_url))["video"]
+
+        return Video(
+            title=video["title"],
+            thumb=self.parse_url(video["thumbsrc"]),
+            post_date=video["post_date"],
+            resolution=res,
+            src=src,
+        )
+
+    async def _request_stream(self, origin: AbsoluteHttpURL, video_id: str) -> tuple[Resolution, AbsoluteHttpURL]:
         formats: list[dict[str, str]] | dict[str, str] = await self.request_json(
             (origin / "api/videofile.php").with_query(
                 video_id=video_id,
-                lifetime=8640000,
+                lifetime=8_640_000,
             )
         )
         if isinstance(formats, dict):
             if formats.get("error"):
-                error = {"not_found": 404}.get(formats["msg"], formats["msg"])
+                error = formats["msg"]
+                if "not_found" in error:
+                    error = 404
+                elif "private" in error:
+                    error = 403
+
                 raise ScrapeError(error)
+
             raise ScrapeError(422, f"Expected list response, got {formats = !r}")
 
-        if len(formats) > 1:
-            raise ScrapeError(422, "More than one format found")
+        def get_res(format: str) -> Resolution:
+            height = {
+                "_sd.mp4": 480,
+                "_hq.mp4": 720,
+                "_hd.mp4": 720,
+                "_fhd.mp4": 1080,
+            }.get(format)
+            return Resolution.parse(height)
 
-        return self.parse_url(_decode_url(formats[0]["video_url"]))
+        res, url = max((get_res(f["format"]), f["video_url"]) for f in formats)
+
+        return res, self.parse_url(_decode_url(url))
 
 
 def _decode_url(url: str) -> str:
