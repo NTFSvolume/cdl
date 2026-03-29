@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.mediaprops import Resolution
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, parse_url
+from cyberdrop_dl.utils.utilities import error_handling_wrapper
 
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
@@ -20,7 +20,6 @@ class Video:
     post_date: str
     src: AbsoluteHttpURL
     resolution: Resolution
-    origin: AbsoluteHttpURL
 
 
 class TubeCorporateCrawler(Crawler, is_abc=True):
@@ -65,7 +64,7 @@ class TubeCorporateCrawler(Crawler, is_abc=True):
             custom_filename=custom_filename,
             debrid_link=video.src,
             metadata=video,
-            referer=scrape_item.url.with_host(video.origin.host),
+            referer=scrape_item.url.with_host(video.src.host),
         )
 
     async def _request_video(self, origin: AbsoluteHttpURL, video_id: str) -> Video:
@@ -91,12 +90,11 @@ class TubeCorporateCrawler(Crawler, is_abc=True):
             thumb=self.parse_url(video["thumbsrc"]),
             post_date=video["post_date"],
             resolution=res,
-            src=src,
-            origin=origin,
+            src=self.parse_url(src, origin, trim=False),
         )
 
 
-def _get_best_format(formats: list[dict[str, str]] | dict[str, str]) -> tuple[Resolution, AbsoluteHttpURL]:
+def _get_best_format(formats: list[dict[str, str]] | dict[str, str]) -> tuple[Resolution, str]:
     if isinstance(formats, dict):
         if formats.get("error"):
             error = formats["msg"]
@@ -119,7 +117,7 @@ def _get_best_format(formats: list[dict[str, str]] | dict[str, str]) -> tuple[Re
 
     res, url = max((get_res(f["format"]), f["video_url"]) for f in formats)
 
-    return res, parse_url(_decode_url(url), trim=False)
+    return res, _decode_url(url)
 
 
 def _decode_url(url: str) -> str:
