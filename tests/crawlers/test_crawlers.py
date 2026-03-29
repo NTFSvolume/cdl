@@ -29,13 +29,13 @@ def _crawler_mock(func: str = "handle_media_item") -> mock._patch[mock.AsyncMock
 class Result(TypedDict):
     # Simplified version of media_item
     url: str
-    filename: NotRequired[str]
-    debrid_link: NotRequired[str | None]
-    original_filename: NotRequired[str]
-    referer: NotRequired[str]
-    album_id: NotRequired[str | None]
-    datetime: NotRequired[int | None]
-    download_folder: NotRequired[str]
+    filename: NotRequired[str | type]
+    debrid_link: NotRequired[str | None | type]
+    original_filename: NotRequired[str | type]
+    referer: NotRequired[str | type]
+    album_id: NotRequired[str | None | type]
+    datetime: NotRequired[int | None | type]
+    download_folder: NotRequired[str | type]
 
 
 @dataclasses.dataclass(slots=True)
@@ -79,13 +79,13 @@ def _load_test_data() -> None:
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
     _load_test_data()
     if "crawler_test_case" in metafunc.fixturenames:
-        valid_domains = sorted(_TEST_DATA)
+        valid_domains = set(_TEST_DATA)
         domains_to_tests: list[str] = getattr(metafunc.config, "test_crawlers_domains", [])
         for domain in domains_to_tests:
             assert domain in valid_domains, f"{domain = } is not a valid or has not tests defined"
 
         all_test_cases: list[CrawlerTestCase] = []
-        for domain, test_cases in _TEST_DATA.items():
+        for domain, test_cases in sorted(_TEST_DATA.items()):
             if domain in domains_to_tests:
                 all_test_cases.extend(CrawlerTestCase(domain, *case) for case in test_cases)
         metafunc.parametrize("crawler_test_case", all_test_cases, ids=lambda x: f"{x.domain} - {x.input_url}")

@@ -707,7 +707,7 @@ wheels = [
 
 [[package]]
 name = "cyberdrop-dl-patched"
-version = "9.0.1"
+version = "9.0.2"
 source = { editable = "." }
 dependencies = [
     { name = "aiodns" },
