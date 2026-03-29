@@ -2,15 +2,16 @@ from __future__ import annotations
 
 import base64
 import dataclasses
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, Final
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
-from cyberdrop_dl.data_structures.mediaprops import Resolution
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils.utilities import error_handling_wrapper
 
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
+
+_FORMATS: Final = ".mp4", "_sd.mp4", "_hq.mp4", "_hd.mp4", "_fhd.mp4"
 
 
 @dataclasses.dataclass(slots=True)
@@ -19,7 +20,6 @@ class Video:
     thumb: AbsoluteHttpURL
     post_date: str
     src: AbsoluteHttpURL
-    resolution: Resolution
 
 
 class TubeCorporateCrawler(Crawler, is_abc=True):
@@ -29,7 +29,7 @@ class TubeCorporateCrawler(Crawler, is_abc=True):
             "/embed/<video_id>/...",
         )
     }
-    DEFAULT_TRIM_URLS: ClassVar[bool] = False
+    # DEFAULT_TRIM_URLS: ClassVar[bool] = False
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         domains = cls.PRIMARY_URL.host, *cls.SUPPORTED_DOMAINS
@@ -54,7 +54,7 @@ class TubeCorporateCrawler(Crawler, is_abc=True):
         video = await self._request_video(scrape_item.url.origin(), video_id)
         scrape_item.possible_datetime = self.parse_iso_date(video.post_date)
         ext = ".mp4"
-        custom_filename = self.create_custom_filename(video.title, ext, file_id=video_id, resolution=video.resolution)
+        custom_filename = self.create_custom_filename(video.title, ext, file_id=video_id)
 
         return await self.handle_file(
             scrape_item.url,
@@ -75,7 +75,7 @@ class TubeCorporateCrawler(Crawler, is_abc=True):
             )
         ) as resp:
             origin = resp.url.origin()  # May have been a redirect. We need the real origin as referer
-            res, src = _get_best_format(await resp.json())
+            src = _get_best_format(await resp.json())
 
         mil_index = int(1e6 * (int(video_id) // 1e6))
         k_index = 1_000 * (int(video_id) // 1_000)
@@ -89,12 +89,11 @@ class TubeCorporateCrawler(Crawler, is_abc=True):
             title=video["title"],
             thumb=self.parse_url(video["thumbsrc"]),
             post_date=video["post_date"],
-            resolution=res,
             src=self.parse_url(src, origin, trim=False),
         )
 
 
-def _get_best_format(formats: list[dict[str, str]] | dict[str, str]) -> tuple[Resolution, str]:
+def _get_best_format(formats: list[dict[str, str]] | dict[str, str]) -> str:
     if isinstance(formats, dict):
         if formats.get("error"):
             error = formats["msg"]
@@ -107,17 +106,13 @@ def _get_best_format(formats: list[dict[str, str]] | dict[str, str]) -> tuple[Re
 
         raise ScrapeError(422, f"Expected list response, got {formats = !r}")
 
-    def get_res(format: str) -> Resolution:
-        height = {
-            "_sd.mp4": 480,
-            "_hd.mp4": 720,
-            "_fhd.mp4": 1080,
-        }.get(format)
-        return Resolution.parse(height)
+    try:
+        best = max(formats, key=lambda f: _FORMATS.index(f["format"]))
+    except ValueError:
+        unknown = tuple(name for f in formats if (name := f["format"]) not in _FORMATS)
+        raise ScrapeError(422, f"Video has unknown formats: {unknown}") from None
 
-    res, url = max((get_res(f["format"]), f["video_url"]) for f in formats)
-
-    return res, _decode_url(url)
+    return _decode_url(best["video_url"])
 
 
 def _decode_url(url: str) -> str:
