@@ -39,10 +39,12 @@ class TubeCorporateCrawler(Crawler, is_abc=True):
         if await self.check_complete_from_referer(scrape_item):
             return
 
-        video = await self._request_video(scrape_item.url.origin(), video_id)
+        origin = scrape_item.url.origin()
+        _src = await self._request_stream(origin, video_id)
+        video = await self._request_video(origin, video_id)
         scrape_item.possible_datetime = self.parse_iso_date(video["post_date"])
 
-        decoded_url = _decode_base64(video["video_url"])
+        decoded_url = _decode_url(video["video_url"])
         link = self.parse_url(decoded_url, relative_to=scrape_item.url.origin(), trim=False)
         filename, ext = self.get_filename_and_ext(video_id + ".mp4")
         custom_filename = self.create_custom_filename(video["title"], ext, file_id=video_id)
@@ -59,34 +61,35 @@ class TubeCorporateCrawler(Crawler, is_abc=True):
 
     async def _request_video(self, origin: AbsoluteHttpURL, video_id: str) -> dict[str, str]:
 
-        formats: dict[str, str] = await self.request_json(
-            (origin / "api/videofile.php").with_query(
-                video_id=video_id,
-                lifetime=8640000,
-            )
-        )
-
-        if formats.get("error"):
-            error = {"not_found": 404}.get(formats["msg"], formats["msg"])
-            raise ScrapeError(error)
-
         slug = f"{int(1e6 * (int(video_id) // 1e6))}/{1000 * (int(video_id) // 1000)}"
         json_url = origin / f"api/json/video/86400/{slug}/{video_id}.json"
 
         video_info: dict[str, dict[str, str]] = await self.request_json(json_url)
         return video_info["video"]
 
+    async def _request_stream(self, origin: AbsoluteHttpURL, video_id: str) -> AbsoluteHttpURL:
+        formats: list[dict[str, str]] | dict[str, str] = await self.request_json(
+            (origin / "api/videofile.php").with_query(
+                video_id=video_id,
+                lifetime=8640000,
+            )
+        )
+        if isinstance(formats, dict):
+            if formats.get("error"):
+                error = {"not_found": 404}.get(formats["msg"], formats["msg"])
+                raise ScrapeError(error)
+            raise ScrapeError(422, f"Expected list response, got {formats = !r}")
 
-def _choose_best_format(formats: list[dict[str, str]]) -> dict[str, str]:
-    if len(formats) > 1:
-        raise ScrapeError(422, "More than one format found")
-    return formats[0]
+        if len(formats) > 1:
+            raise ScrapeError(422, "More than one format found")
+
+        return self.parse_url(_decode_url(formats[0]["video_url"]))
 
 
-def _decode_base64(text: str) -> str:
+def _decode_url(url: str) -> str:
     return base64.b64decode(
-        text.translate(
-            text.maketrans(
+        url.translate(
+            url.maketrans(
                 {
                     "\u0405": "S",
                     "\u0406": "I",
