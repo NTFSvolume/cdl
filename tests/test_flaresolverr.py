@@ -4,7 +4,7 @@ from collections.abc import AsyncGenerator
 import aiohttp
 import pytest
 
-from cyberdrop_dl.clients.flaresolverr import FlareSolverr, _Command
+from cyberdrop_dl.clients.flaresolverr import Command, FlareSolverr
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 
 ENV_NAME = "CDL_FLARESOLVERR"
@@ -22,17 +22,17 @@ async def flaresolverr() -> AsyncGenerator[FlareSolverr]:
 
 def test_flaresolver(flaresolverr: FlareSolverr) -> None:
     assert flaresolverr.url
-    assert flaresolverr._next_request_id() == 1
-    assert flaresolverr._next_request_id() == 2
+    assert flaresolverr._request_id() == 1
+    assert flaresolverr._request_id() == 2
 
 
 async def test_create_session(flaresolverr: FlareSolverr) -> None:
     assert flaresolverr._session_id == ""
-    resp = await flaresolverr._request(_Command.CREATE_SESSION, session="cyberdrop-dl")
+    resp = await flaresolverr._request(Command.CREATE_SESSION, session="cyberdrop-dl")
     assert resp.ok
     assert "Session created successfully" in resp.message or "Session already exists" in resp.message
     assert resp.solution is None
-    resp = await flaresolverr._request(_Command.DESTROY_SESSION, session="cyberdrop-dl")
+    resp = await flaresolverr._request(Command.DESTROY_SESSION, session="cyberdrop-dl")
     assert "The session has been removed" in resp.message
 
 
