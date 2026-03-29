@@ -16,6 +16,7 @@ class VidaraCrawler(Crawler):
     DOMAIN: ClassVar[str] = "vidara"
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://vidara.to")
     create_db_path = staticmethod(DBPathBuilder.path_qs_frag)
+    _DOWNLOAD_SLOTS: ClassVar[int | None] = 2
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
