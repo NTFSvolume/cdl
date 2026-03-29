@@ -18,7 +18,6 @@ from cyberdrop_dl.exceptions import DDOSGuardError
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
-    from cyberdrop_dl.managers.client_manager import ClientManager
 
 logger = logging.getLogger(__name__)
 
@@ -76,8 +75,8 @@ class _FlareSolverrResponse:
 class FlareSolverr:
     """Class that handles communication with flaresolverr."""
 
-    client: ClientManager
     url: AbsoluteHttpURL
+    _session: aiohttp.ClientSession
 
     _session_id: str = dataclasses.field(init=False, default="")
     _session_lock: asyncio.Lock = dataclasses.field(init=False, default_factory=asyncio.Lock)
@@ -134,15 +133,15 @@ class FlareSolverr:
             playload["postData"] = aiohttp.FormData(data)().decode()
 
         async with self._request_lock:
-            logger.debug(f"Waiting For Flaresolverr Response [{self._next_request_id()}]")
-            async with self.client._session.post(self.url, json=playload, **kwargs) as response:
+            logger.debug(f"Waiting For FlareSolverr response ({self._next_request_id()})")
+            async with self._session.post(self.url, json=playload, **kwargs) as response:
                 return _FlareSolverrResponse.from_dict(await response.json())
 
     async def _create_session(self) -> None:
         session_id = "cyberdrop-dl"
         kwargs = {}
 
-        if proxy := self.client._session._default_proxy:
+        if proxy := self._session._default_proxy:
             kwargs.update(proxy={"url": str(proxy)})
 
         resp = await self._request(_Command.CREATE_SESSION, session=session_id, **kwargs)

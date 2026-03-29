@@ -134,17 +134,18 @@ class ClientManager:
         self.scraper_client = ScraperClient(self)
         self.speed_limiter = DownloadSpeedLimiter(self.rate_limiting_options.download_speed_limit)
         self.download_client = DownloadClient(manager, self)
-        if url := self.manager.global_config.general.flaresolverr:
-            self.flaresolverr: FlareSolverr | None = FlareSolverr(self, url)
-        else:
-            self.flaresolverr = None
-
+        self._flaresolverr: FlareSolverr | None = None
         self.file_locks: WeakAsyncLocks[str] = WeakAsyncLocks()
-
         self._session: aiohttp.ClientSession
         self._download_session: aiohttp.ClientSession
         self._curl_session: AsyncSession[CurlResponse]
         self._json_response_checks: dict[str, Callable[[Any], None]] = {}
+
+    @property
+    def flaresolverr(self) -> FlareSolverr | None:
+        if self._flaresolverr is None and (url := self.manager.global_config.general.flaresolverr):
+            self._flaresolverr = FlareSolverr(url, self._session)
+        return self._flaresolverr
 
     def _startup(self) -> None:
         self._session = self.new_scrape_session()
