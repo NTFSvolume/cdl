@@ -29,6 +29,7 @@ class TubeCorporateCrawler(Crawler, is_abc=True):
             "/embed/<video_id>/...",
         )
     }
+    DEFAULT_TRIM_URLS: ClassVar[bool] = False
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         domains = cls.PRIMARY_URL.host, *cls.SUPPORTED_DOMAINS
@@ -115,7 +116,7 @@ class TubeCorporateCrawler(Crawler, is_abc=True):
 
         res, url = max((get_res(f["format"]), f["video_url"]) for f in formats)
 
-        return res, self.parse_url(_decode_url(url))
+        return res, self.parse_url(_decode_url(url), trim=False)
 
 
 def _decode_url(url: str) -> str:
