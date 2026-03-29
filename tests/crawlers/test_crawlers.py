@@ -126,23 +126,50 @@ def _assert_n_results(test_case: CrawlerTestCase, n_results: int) -> None:
         assert total == n_results
 
 
+class _NOT_NONE:  # noqa: N801
+    def __eq__(self, other) -> bool:
+        return other is not None
+
+    def __ne__(self, other) -> bool:
+        return other is None
+
+    def __repr__(self) -> str:
+        return "<NOT_NONE>"
+
+
+NOT_NONE = _NOT_NONE()
+
+
 def _validate_results(crawler: Crawler, test_case: CrawlerTestCase, results: list[MediaItem]) -> None:
     expected_results = sorted(test_case.results, key=lambda x: x["url"])
     origin = getattr(crawler, "PRIMARY_URL", AbsoluteHttpURL("https://google.com"))
     for index, (expected, media_item) in enumerate(zip(expected_results, results, strict=False), 1):
         for attr_name, expected_value in expected.items():
             result_value = getattr(media_item, attr_name)
-            if isinstance(expected_value, str):
-                if expected_value.startswith("http"):
-                    expected_value = crawler.parse_url(expected_value, origin)
-                elif expected_value == "ANY":
-                    expected_value = mock.ANY
-                elif expected_value.startswith("re:"):
-                    expected_value = expected_value.removeprefix("re:")
-                    assert _re_search(expected_value, str(result_value)), (
-                        f"{result_value = } does not match {expected_value}"
+
+            match expected_value:
+                case type():
+                    assert isinstance(result_value, expected_value), (
+                        f"{attr_name} for result#{index} is {type(result_value)!r}, expected {expected_value!r}"
                     )
                     continue
+
+                case str():
+                    match expected_value:
+                        case "ANY":
+                            expected_value = mock.ANY
+                        case "NOT_NONE":
+                            expected_value = NOT_NONE
+                        case _:
+                            if expected_value.startswith("http"):
+                                expected_value = crawler.parse_url(expected_value, origin)
+
+                            elif expected_value.startswith("re:"):
+                                expected_value = expected_value.removeprefix("re:")
+                                assert _re_search(expected_value, str(result_value)), (
+                                    f"{result_value = } does not match {expected_value}"
+                                )
+                                continue
 
             assert expected_value == result_value, f"{attr_name} for result#{index} is different"
 
