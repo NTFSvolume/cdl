@@ -132,11 +132,9 @@ def _setup_debug_logger(manager: Manager) -> Path | None:
     if not env.DEBUG_VAR:
         return
 
-    debug_logger = logging.getLogger("cyberdrop_dl_debug")
-    log_level = 10
+    log_level = logging.DEBUG
     settings_data = manager.config_manager.settings_data
     settings_data.runtime_options.log_level = log_level
-    debug_logger.setLevel(log_level)
     debug_log_file_path = Path(__file__).parents[1] / "cyberdrop_dl_debug.log"
     if env.DEBUG_LOG_FOLDER:
         debug_log_folder = Path(env.DEBUG_LOG_FOLDER)
@@ -151,7 +149,8 @@ def _setup_debug_logger(manager: Manager) -> Path | None:
 
     file_handler = LogHandler(level=log_level, file=file_io, width=500, debug=True)
     queued_logger = QueuedLogger(manager, file_handler, "debug")
-    debug_logger.addHandler(queued_logger.handler)
+
+    logging.getLogger("cyberdrop_dl").addHandler(queued_logger.handler)
 
     # aiosqlite_log = logging.getLogger("aiosqlite")
     # aiosqlite_log.setLevel(log_level)
