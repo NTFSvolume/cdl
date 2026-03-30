@@ -1,6 +1,7 @@
 # pyright: ignore[reportIncompatibleVariableOverride]
 from __future__ import annotations
 
+import base64
 import contextlib
 import copy
 import datetime
@@ -164,6 +165,8 @@ class MediaItem:
     uploaded_at_date: datetime.datetime | None = field(init=False, default=None)
     extra_info: dict[str, Any] = field(init=False, default_factory=dict)
 
+    base64_id: str = field(init=False)
+
     def __post_init__(self) -> None:
         if self.url.scheme == "metadata":
             self.db_path = ""
@@ -172,13 +175,20 @@ class MediaItem:
             assert isinstance(self.uploaded_at, int), f"Invalid {self.uploaded_at =!r} from {self.referer}"
             self.uploaded_at_date = datetime.datetime.fromtimestamp(self.uploaded_at, tz=datetime.UTC)
 
+        self.base64_id = base64.urlsafe_b64encode("".join(self.id).encode()).decode()
+
+    @property
+    def id(self) -> tuple[str, str]:
+        assert self.db_path
+        return self.domain, self.db_path
+
     @property
     def real_url(self) -> AbsoluteHttpURL:
         return self.debrid_link or self.url
 
     @property
-    def temp_path(self) -> Path:
-        return self.path.with_suffix(self.path.suffix + ".part")
+    def unique_temp_path(self) -> Path:
+        return self.path.parent / f"{self.base64_id}.part"
 
     @staticmethod
     def from_item(
