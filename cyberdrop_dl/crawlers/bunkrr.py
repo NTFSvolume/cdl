@@ -16,7 +16,7 @@ from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths, au
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError
 from cyberdrop_dl.utils import css, open_graph
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, parse_url, xor_decrypt
+from cyberdrop_dl.utils.utilities import error_handling_wrapper, xor_decrypt
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
@@ -37,34 +37,34 @@ class Selector:
 
 
 VIDEO_AND_IMAGE_EXTS: set[str] = FILE_FORMATS["Images"] | FILE_FORMATS["Videos"]
-HOST_OPTIONS: set[str] = {"bunkr.site", "bunkr.cr", "bunkr.ph"}
-DEEP_SCRAPE_CDNS: set[str] = {
-    "burger",
-    "milkshake",
-    "static.scdn.st",
-    "wiener",
-}  # CDNs under maintanance, ignore them and try to get a cached URL
-FILE_KEYS = "id", "name", "original", "slug", "type", "extension", "size", "timestamp", "thumbnail", "cdnEndpoint"
+_HOST_OPTIONS: frozenset[str] = frozenset(("bunkr.site", "bunkr.cr", "bunkr.ph"))
+_DEEP_SCRAPE_CDNS: frozenset[str] = frozenset(
+    (
+        "burger",
+        "milkshake",
+        "static.scdn.st",
+        "wiener",
+    )
+)  # CDNs under maintanance, ignore them and try to get a cached URL
+
 known_bad_hosts: set[str] = set()
 
 
-def _make_album_parser(keys: tuple[str, ...]) -> Callable[[BeautifulSoup], Generator[File]]:
-    translation_map = {f" {key}: ": f'"{key}": ' for key in keys}
+def _make_album_parser() -> Callable[[BeautifulSoup], Generator[File]]:
+    translation_map = {f" {field.name}: ": f'"{field.name}": ' for field in dataclasses.fields(File)}
     pattern = re.compile("|".join(sorted(translation_map.keys(), key=len, reverse=True)))
 
-    def fix_unicode(value: str) -> str:
-        return value.encode("raw_unicode_escape").decode("unicode-escape")
+    def fix_unicode(value: object) -> Any:
+        if type(value) is str:
+            return value.encode("raw_unicode_escape").decode("unicode-escape")
+        return value
 
     def decode(text: str) -> Generator[File]:
         content = pattern.sub(lambda m: translation_map[m.group(0)], text.replace("\\'", "'"))
 
+        file: dict[str, Any]
         for file in json.loads(content):
-            yield File(
-                name=fix_unicode(file.get("original") or file["name"]),
-                slug=fix_unicode(file["slug"]),
-                thumbnail=fix_unicode(file["thumbnail"]),
-                date=file["timestamp"],
-            )
+            yield File(**{name: fix_unicode(value) for name, value in file.items()})
 
     def parse(soup: BeautifulSoup) -> Generator[File]:
         album_js = css.select_text(soup, Selector.ALBUM_FILES)
@@ -74,25 +74,34 @@ def _make_album_parser(keys: tuple[str, ...]) -> Callable[[BeautifulSoup], Gener
     return parse
 
 
-@dataclasses.dataclass(slots=True, frozen=True)
+@dataclasses.dataclass(slots=True)
 class File:
+    id: int
     name: str
-    thumbnail: str
-    date: str
+    original: str | None
     slug: str
+    type: str
+    extension: str
+    size: int
+    timestamp: str
+    thumbnail: str
+    cdnEndpoint: str  # noqa: N815
 
-    def src(self) -> AbsoluteHttpURL:
+    src: AbsoluteHttpURL | None = None
+
+    def __post_init__(self) -> None:
         if self.thumbnail.count("https://") != 1:
-            raise ValueError
-        if AbsoluteHttpURL(self.thumbnail).parts[1:2] != ("thumbs",):
-            raise ValueError
+            return
+
+        if AbsoluteHttpURL(self.thumbnail, encoded="%" in self.thumbnail).parts[1:2] != ("thumbs",):
+            return
 
         src_str = self.thumbnail.replace("/thumbs/", "/")
-        ext = Path(self.name).suffix
-        src = parse_url(src_str).with_suffix(ext).with_query(None)
+        src = AbsoluteHttpURL(src_str, encoded="%" in src_str).with_suffix(Path(self.name).suffix).with_query(None)
         if src.suffix.lower() not in FILE_FORMATS["Images"]:
             src = src.with_host(src.host.replace("i-", ""))
-        return _override_cdn(src)
+
+        self.src = _override_cdn(src)
 
 
 class BunkrrCrawler(Crawler):
@@ -115,7 +124,7 @@ class BunkrrCrawler(Crawler):
     def __post_init__(self) -> None:
         self.switch_host_locks: aio.WeakAsyncLocks[str] = aio.WeakAsyncLocks()
         self.known_good_url: AbsoluteHttpURL | None = None
-        self._parse_album_files = _make_album_parser(FILE_KEYS)
+        self._parse_album_files = _make_album_parser()
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
@@ -134,7 +143,7 @@ class BunkrrCrawler(Crawler):
                 if self.is_subdomain(scrape_item.url):
                     return await self._direct_file(scrape_item, scrape_item.url)
 
-        raise ValueError
+                raise ValueError
 
     @error_handling_wrapper
     async def album(self, scrape_item: ScrapeItem, album_id: str) -> None:
@@ -159,10 +168,10 @@ class BunkrrCrawler(Crawler):
             return
 
         deep_scrape = False
-        scrape_item.uploaded_at = self.parse_date(file.date, "%H:%M:%S %d/%m/%Y")
-        try:
-            src = file.src()
-        except ValueError:
+        scrape_item.uploaded_at = self.parse_date(file.timestamp, "%H:%M:%S %d/%m/%Y")
+
+        src = file.src
+        if not src:
             self.create_task(self.run(scrape_item))
             return
 
@@ -170,7 +179,7 @@ class BunkrrCrawler(Crawler):
             src.suffix.lower() not in VIDEO_AND_IMAGE_EXTS
             or "no-image" in src.name
             or self.deep_scrape
-            or any(cdn in src.host for cdn in DEEP_SCRAPE_CDNS)
+            or any(cdn in src.host for cdn in _DEEP_SCRAPE_CDNS)
         )
 
         if deep_scrape:
@@ -180,7 +189,7 @@ class BunkrrCrawler(Crawler):
         if self.check_album_results(src, results):
             return
 
-        await self._direct_file(scrape_item, src, file.name)
+        await self._direct_file(scrape_item, src, file.original or file.name)
 
     @error_handling_wrapper
     async def file(self, scrape_item: ScrapeItem) -> None:
@@ -200,8 +209,7 @@ class BunkrrCrawler(Crawler):
             file_id = self.parse_url(dl_link).name
             src = await self._request_download(file_id)
 
-        name = open_graph.title(soup)  # See: https://github.com/jbsparrow/CyberDropDownloader/issues/929
-        await self._direct_file(scrape_item, src, name)
+        await self._direct_file(scrape_item, src, open_graph.title(soup))
 
     @error_handling_wrapper
     async def reinforced_file(self, scrape_item: ScrapeItem, file_id: str) -> None:
@@ -211,10 +219,8 @@ class BunkrrCrawler(Crawler):
         await self._direct_file(scrape_item, src, name)
 
     @error_handling_wrapper
-    async def _direct_file(
-        self, scrape_item: ScrapeItem, link: AbsoluteHttpURL, fallback_filename: str | None = None
-    ) -> None:
-        name = link.query.get("n") or fallback_filename or link.name
+    async def _direct_file(self, scrape_item: ScrapeItem, link: AbsoluteHttpURL, filename: str | None = None) -> None:
+        name = link.query.get("n") or filename or link.name
         link = link.update_query(n=name)
         filename, ext = self.get_filename_and_ext(name, assume_ext=".mp4")
         if not self.is_subdomain(scrape_item.url):
@@ -239,7 +245,7 @@ class BunkrrCrawler(Crawler):
 
         except (ClientConnectorError, DDOSGuardError):
             known_bad_hosts.add(url.host)
-            if not HOST_OPTIONS - known_bad_hosts:
+            if not _HOST_OPTIONS - known_bad_hosts:
                 raise
         else:
             if not self.known_good_url:
@@ -263,7 +269,7 @@ class BunkrrCrawler(Crawler):
                 if soup := await self._try_request_soup(url):
                     return soup
 
-        for host in HOST_OPTIONS - known_bad_hosts:
+        for host in _HOST_OPTIONS - known_bad_hosts:
             async with self.switch_host_locks[host]:
                 if host in known_bad_hosts:
                     continue
