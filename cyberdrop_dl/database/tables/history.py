@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from sqlite3 import IntegrityError, Row
 from typing import TYPE_CHECKING, cast
 
@@ -20,6 +21,7 @@ if TYPE_CHECKING:
 
 
 _FETCH_MANY_SIZE: int = 1000
+logger = logging.getLogger(__name__)
 
 
 class HistoryTable:
@@ -34,10 +36,24 @@ class HistoryTable:
         """Startup process for the HistoryTable."""
         from cyberdrop_dl.crawlers import cyberdrop, jpg5, redgifs, turbovid
 
-        await self.db_conn.create_function("FIX_REDGIFS_REFERER", 1, redgifs.fix_db_referer, deterministic=True)
-        await self.db_conn.create_function("FIX_JPG5_REFERER", 1, jpg5.fix_db_referer, deterministic=True)
-        await self.db_conn.create_function("FIX_CYBERDROP_REFERER", 1, cyberdrop.fix_db_referer, deterministic=True)
-        await self.db_conn.create_function("FIX_TURBOVID_REFERER", 1, turbovid.fix_db_referer, deterministic=True)
+        def try_wrap(fn):
+            def call(*args, **kwargs):
+                try:
+                    return fn(*args, **kwargs)
+                except BaseException:
+                    logger.exception(f"{fn.__name__} failed")
+                    raise
+
+            return call
+
+        for name, fn in [
+            ("FIX_REDGIFS_REFERER", redgifs.fix_db_referer),
+            ("FIX_JPG5_REFERER", jpg5.fix_db_referer),
+            ("FIX_CYBERDROP_REFERER", cyberdrop.fix_db_referer),
+            ("FIX_TURBOVID_REFERER", turbovid.fix_db_referer),
+        ]:
+            await self.db_conn.create_function(name, 1, try_wrap(fn), deterministic=True)
+
         await self.db_conn.execute(create_history)
         await self.db_conn.commit()
         await self.fix_primary_keys()
