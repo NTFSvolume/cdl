@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Literal, Self
 import aiofiles
 from yarl import URL
 
+from cyberdrop_dl.clients.jdownloader import JDownloader
 from cyberdrop_dl.constants import REGEX_LINKS, BlockedDomains
 from cyberdrop_dl.crawlers._chevereto import CheveretoCrawler
 from cyberdrop_dl.crawlers.crawler import Crawler, create_crawlers
@@ -21,7 +22,6 @@ from cyberdrop_dl.crawlers.wordpress import WordPressHTMLCrawler, WordPressMedia
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.exceptions import JDownloaderError, NoExtensionError
 from cyberdrop_dl.scraper.filters import is_in_domain_list, is_outside_date_range, is_valid_url
-from cyberdrop_dl.scraper.jdownloader import JDownloader
 from cyberdrop_dl.utils.logger import log_spacer
 from cyberdrop_dl.utils.utilities import get_download_path, remove_trailing_slash
 
@@ -62,10 +62,6 @@ class ScrapeMapper:
     @property
     def global_settings(self) -> GlobalSettings:
         return self.manager.config_manager.global_settings_data
-
-    @property
-    def enable_generic_crawler(self) -> bool:
-        return self.global_settings.general.enable_generic_crawler
 
     def start_scrapers(self) -> None:
         """Starts all scrapers."""
