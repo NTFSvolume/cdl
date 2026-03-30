@@ -49,26 +49,26 @@ _DEEP_SCRAPE_CDNS: frozenset[str] = frozenset(
 known_bad_hosts: set[str] = set()
 
 
-def _make_album_parser() -> Callable[[BeautifulSoup], Generator[File]]:
+def _make_album_parser() -> Callable[[str], Generator[File]]:
     translation_map = {f" {field.name}: ": f'"{field.name}": ' for field in dataclasses.fields(File)}
     pattern = re.compile("|".join(sorted(translation_map.keys(), key=len, reverse=True)))
 
+    def translate(text: str) -> str:
+        return pattern.sub(lambda m: translation_map[m.group(0)], text.replace("\\'", "'")).strip()
+
     def fix_unicode(value: object) -> Any:
         if type(value) is str:
-            return value.encode("raw_unicode_escape").decode("unicode-escape")
+            return value.encode("raw_unicode_escape").decode("utf-8")
         return value
 
-    def decode(text: str) -> Generator[File]:
-        content = pattern.sub(lambda m: translation_map[m.group(0)], text.replace("\\'", "'"))
-
+    def decode(content: str) -> Generator[File]:
         file: dict[str, Any]
         for file in json.loads(content):
             yield File(**{name: fix_unicode(value) for name, value in file.items()})
 
-    def parse(soup: BeautifulSoup) -> Generator[File]:
-        album_js = css.select_text(soup, Selector.ALBUM_FILES)
-        files = album_js[album_js.find("=") + 1 : album_js.rfind("];") + 1]
-        return decode(files)
+    def parse(album_js: str) -> Generator[File]:
+        content = translate(album_js[album_js.find("=") + 1 : album_js.rfind("];")])
+        return decode(content.rstrip(",") + "]")
 
     return parse
 
@@ -86,9 +86,12 @@ class File:
     thumbnail: str
     cdnEndpoint: str  # noqa: N815
 
-    src: AbsoluteHttpURL | None = None
+    src: AbsoluteHttpURL | None = dataclasses.field(compare=False, default=None)
 
     def __post_init__(self) -> None:
+        if self.src:
+            return
+
         if self.thumbnail.count("https://") != 1:
             return
 
@@ -153,7 +156,7 @@ class BunkrrCrawler(Crawler):
 
         origin = scrape_item.url.origin()
         results = await self.get_album_results(album_id)
-        for file in self._parse_album_files(soup):
+        for file in self._parse_album_files(css.select_text(soup, Selector.ALBUM_FILES)):
             web_url = origin / "f" / file.slug
             new_scrape_item = scrape_item.create_child(web_url)
             self.create_task(self._album_file(new_scrape_item, file, results))
@@ -291,11 +294,10 @@ def _override_cdn(url: AbsoluteHttpURL) -> AbsoluteHttpURL:
     return url
 
 
-def _decrypt_api_resp(encrypted: bool, timestamp: int, url: str) -> str:
+def _decrypt_api_resp(url: str, timestamp: int, encrypted: bool) -> str:
     if not encrypted:
         return url
 
     time_key = timestamp // 3600
-    secret_key = f"SECRET_KEY_{time_key}"
-    encrypted_url = base64.b64decode(url)
-    return xor_decrypt(encrypted_url, secret_key.encode())
+    secret_key = f"SECRET_KEY_{time_key}".encode()
+    return xor_decrypt(base64.b64decode(url), secret_key)
