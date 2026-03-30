@@ -42,6 +42,7 @@ DEEP_SCRAPE_CDNS: set[str] = {
     "burger",
     "milkshake",
     "static.scdn.st",
+    "wiener",
 }  # CDNs under maintanance, ignore them and try to get a cached URL
 FILE_KEYS = "id", "name", "original", "slug", "type", "extension", "size", "timestamp", "thumbnail", "cdnEndpoint"
 known_bad_hosts: set[str] = set()
@@ -71,22 +72,6 @@ def _make_album_parser(keys: tuple[str, ...]) -> Callable[[BeautifulSoup], Gener
         return decode(files)
 
     return parse
-
-
-@dataclasses.dataclass(slots=True, frozen=True)
-class ApiResponse:
-    encrypted: bool
-    timestamp: int
-    url: str
-
-    def decrypt(self) -> str:
-        if not self.encrypted:
-            return self.url
-
-        time_key = self.timestamp // 3600
-        secret_key = f"SECRET_KEY_{time_key}"
-        encrypted_url = base64.b64decode(self.url)
-        return xor_decrypt(encrypted_url, secret_key.encode())
 
 
 @dataclasses.dataclass(slots=True, frozen=True)
@@ -245,7 +230,7 @@ class BunkrrCrawler(Crawler):
             json={"id": file_id},
             headers={"Referer": str(_REINFORCED_URL)},
         )
-        return self.parse_url(ApiResponse(**resp).decrypt())
+        return self.parse_url(_decrypt_api_resp(**resp))
 
     async def _try_request_soup(self, url: AbsoluteHttpURL) -> BeautifulSoup | None:
         try:
@@ -304,3 +289,13 @@ def _override_cdn(url: AbsoluteHttpURL) -> AbsoluteHttpURL:
     if "burger." in url.host:
         return url.with_host("brg-bk.cdn.gigachad-cdn.ru")
     return url
+
+
+def _decrypt_api_resp(encrypted: bool, timestamp: int, url: str) -> str:
+    if not encrypted:
+        return url
+
+    time_key = timestamp // 3600
+    secret_key = f"SECRET_KEY_{time_key}"
+    encrypted_url = base64.b64decode(url)
+    return xor_decrypt(encrypted_url, secret_key.encode())
