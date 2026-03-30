@@ -1,44 +1,42 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import TYPE_CHECKING, Any, ClassVar, Required, TypedDict
+from typing import TYPE_CHECKING, Any, ClassVar, Final
 
 from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, parse_url
+from cyberdrop_dl.utils.utilities import error_handling_wrapper
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator
 
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
-    from cyberdrop_dl.utils.dates import TimeStamp
 
 # Primary URL needs `www.` to prevent redirect
 PRIMARY_URL = AbsoluteHttpURL("https://www.redgifs.com/")
 API_ENTRYPOINT = AbsoluteHttpURL("https://api.redgifs.com/v2")
-_PAGE_LIMIT = 100
-_PAGE_COUNT = 100
-
-
-class Links(TypedDict, total=False):
-    sd: Required[str]
-    hd: str
+_PAGE_LIMIT: Final = 100
+_PAGE_COUNT: Final = 100
 
 
 @dataclasses.dataclass(slots=True, order=True)
 class Gif:
     id: str
-    urls: Links
-    date: TimeStamp
-    url: AbsoluteHttpURL
-    title: str | None = None
+    create_date: int
+    hd: str | None
+    sd: str
+    title: str | None
 
     @staticmethod
     def from_dict(gif: dict[str, Any]) -> Gif:
-        urls: Links = gif["urls"]
-        url = parse_url(urls.get("hd") or urls["sd"], relative_to=PRIMARY_URL)
-        return Gif(gif["id"], urls, gif["createDate"], url, gif.get("title"))
+        return Gif(
+            id=gif["id"],
+            create_date=gif["createDate"],
+            sd=gif["urls"]["sd"],
+            hd=gif["urls"].get("hd"),
+            title=gif.get("title"),
+        )
 
 
 class RedGifsCrawler(Crawler):
@@ -129,22 +127,21 @@ class RedGifsCrawler(Crawler):
 
         scrape_item.url = canonical_url
         api_url = API_ENTRYPOINT / "gifs" / post_id
-        resp: dict[str, dict[str, Any]] = await self.request_json(api_url, headers=self.headers)
-        gif = Gif.from_dict(resp["gif"])
+        gif = Gif.from_dict((await self.request_json(api_url, headers=self.headers))["gif"])
         if gif.title:
             scrape_item.setup_as_album(self.create_title(gif.title))
         await self._handle_gif(scrape_item, gif)
 
     async def _handle_gif(self, scrape_item: ScrapeItem, gif: Gif) -> None:
-        scrape_item.possible_datetime = gif.date
-        filename, ext = self.get_filename_and_ext(gif.url.name)
-        await self.handle_file(gif.url, scrape_item, filename, ext)
+        src = self.parse_url(gif.hd or gif.sd)
+        scrape_item.possible_datetime = gif.create_date
+        filename, ext = self.get_filename_and_ext(src.name)
+        await self.handle_file(src, scrape_item, filename, ext)
 
     @error_handling_wrapper
     async def get_auth_token(self, token_url: AbsoluteHttpURL) -> None:
-        json_obj: dict[str, Any] = await self.request_json(token_url)
-        token: str = json_obj["token"]
-        self.headers = {"Authorization": f"Bearer {token}"}
+        token: str = (await self.request_json(token_url))["token"]
+        self.headers.update(Authorization=f"Bearer {token}")
 
 
 def _id(name: str) -> str:
