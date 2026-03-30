@@ -64,7 +64,7 @@ class RedGifsCrawler(Crawler):
 
         with self.catch_errors(token_url), self.disable_on_error("Unable to get API token"):
             token: str = (await self.request_json(token_url))["token"]
-            self.headers.update(Authorization=f"Bearer {token}")
+            self.headers["Authorization"] = f"Bearer {token}"
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
