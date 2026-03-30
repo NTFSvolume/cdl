@@ -82,7 +82,7 @@ class BandcampCrawler(Crawler):
     _song_task = auto_task_id(song)
 
     async def _track(self, scrape_item: ScrapeItem, track: dict[str, Any]) -> None:
-        scrape_item.possible_datetime = dates.parse_http(track["publish_date"])
+        scrape_item.uploaded_at = dates.parse_http(track["publish_date"])
         best_format = await self._get_best_format(track.pop("free_download"), track["file"])
         full_name = f"{track['artist']} - {track['title']}{best_format.ext}"
         filename, ext = self.get_filename_and_ext(full_name)

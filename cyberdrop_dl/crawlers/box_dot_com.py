@@ -131,7 +131,7 @@ class BoxDotComCrawler(Crawler):
         assert file.type == ItemType.file
         filename, ext = self.get_filename_and_ext(file.name)
         link = DOWNLOAD_URL_BASE.update_query(shared_name=shared_name, file_id=file.typed_id)
-        scrape_item.possible_datetime = file.date
+        scrape_item.uploaded_at = file.date
         await self.handle_file(scrape_item.url, scrape_item, filename, ext, debrid_link=link)
 
     def build_file_system(self, items: list[Item], root_id: str) -> dict[Path, Item]:

@@ -78,7 +78,7 @@ class Rule34VaultCrawler(Crawler):
         soup = await self.request_soup(scrape_item.url)
 
         if date_tag := soup.select_one(_SELECTORS.DATE):
-            scrape_item.possible_datetime = self.parse_date(date_tag.text, "%b %d, %Y, %I:%M:%S %p")
+            scrape_item.uploaded_at = self.parse_date(date_tag.text, "%b %d, %Y, %I:%M:%S %p")
 
         scrape_item.url = canonical_url
         media_tag = soup.select_one(_SELECTORS.VIDEO) or soup.select_one(_SELECTORS.IMAGE)

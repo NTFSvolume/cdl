@@ -67,7 +67,7 @@ class FlickrCrawler(Crawler):
 
     @error_handling_wrapper
     async def _photo(self, scrape_item: ScrapeItem, photo: dict[str, Any]) -> None:
-        scrape_item.possible_datetime = int(photo.get("dateuploaded") or photo["dateupload"])
+        scrape_item.uploaded_at = int(photo.get("dateuploaded") or photo["dateupload"])
         title = photo["title"]
         name: str = (title["_content"] if isinstance(title, dict) else title) or photo["media"]
         source = await self._get_source(photo)

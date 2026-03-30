@@ -37,9 +37,9 @@ class TwitterCrawler(Crawler):
     async def tweet(self, scrape_item: ScrapeItem) -> None:
         url = _API_URL / scrape_item.url.path.removeprefix("/")
         tweet: dict[str, Any] = (await self.request_json(url))["tweet"]
-        scrape_item.possible_datetime = tweet["created_timestamp"]
+        scrape_item.uploaded_at = tweet["created_timestamp"]
         name = tweet["author"]["screen_name"]
-        post_title = self.create_separate_post_title(None, tweet["id"], scrape_item.possible_datetime)
+        post_title = self.create_separate_post_title(None, tweet["id"], scrape_item.uploaded_at)
         scrape_item.setup_as_profile(self.create_title(f"@{name}"))
         scrape_item.add_to_parent_title(post_title)
 

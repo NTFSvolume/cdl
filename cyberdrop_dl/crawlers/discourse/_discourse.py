@@ -81,7 +81,7 @@ class DiscourseCrawler(MessageBoardCrawler, is_generic=True):
     async def topic(self, scrape_item: ScrapeItem, topic: Topic) -> None:
         title = self.create_title(topic.title, thread_id=topic.id)
         scrape_item.setup_as_forum(title)
-        scrape_item.possible_datetime = to_timestamp(topic.created_at)
+        scrape_item.uploaded_at = to_timestamp(topic.created_at)
         if topic.image_url:
             await self.handle_link(scrape_item, self.parse_url(topic.image_url))
         await self.process_posts(scrape_item, topic)

@@ -53,7 +53,7 @@ class MyDesiCrawler(Crawler):
         _, ext = self.get_filename_and_ext(link.name)
         metadata: dict[str, str] = css.json_ld(soup)["subjectOf"]
         title = metadata["name"]
-        scrape_item.possible_datetime = self.parse_iso_date(metadata.get("uploadDate", ""))
+        scrape_item.uploaded_at = self.parse_iso_date(metadata.get("uploadDate", ""))
         custom_filename = self.create_custom_filename(title, ext, resolution=resolution)
         return await self.handle_file(link, scrape_item, title, ext, custom_filename=custom_filename)
 

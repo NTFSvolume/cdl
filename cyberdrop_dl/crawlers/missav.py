@@ -67,9 +67,9 @@ class MissAVCrawler(Crawler):
             title = _fix_title(title, dvd_code_tag)
 
         if date_str:
-            scrape_item.possible_datetime = self.parse_iso_date(date_str)
+            scrape_item.uploaded_at = self.parse_iso_date(date_str)
         elif date_tag := soup.select_one(Selector.DATE):
-            scrape_item.possible_datetime = self.parse_iso_date(css.attr(date_tag, "datetime"))
+            scrape_item.uploaded_at = self.parse_iso_date(css.attr(date_tag, "datetime"))
         else:
             _ = self.parse_date("")  # Trigger warning
 

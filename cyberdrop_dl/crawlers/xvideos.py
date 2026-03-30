@@ -117,7 +117,7 @@ class XVideosCrawler(Crawler):
             raise ScrapeError(404, css.text(error))
 
         title = css.page_title(soup, self.DOMAIN)
-        scrape_item.possible_datetime = self.parse_iso_date(css.json_ld(soup)["uploadDate"])
+        scrape_item.uploaded_at = self.parse_iso_date(css.json_ld(soup)["uploadDate"])
         script = css.select_text(soup, Selectors.HLS_VIDEO_JS)
         m3u8_url = self.parse_url(get_text_between(script, "setVideoHLS('", "')"))
         m3u8, info = await self.get_m3u8_from_playlist_url(m3u8_url)

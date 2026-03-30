@@ -204,7 +204,7 @@ class TikTokCrawler(Crawler):
         scrape_item.add_to_parent_title(title)
         post_title = self.create_separate_post_title(post.title, post.id, post.create_time)
         scrape_item.setup_as_album(post_title, album_id=post.id)
-        scrape_item.possible_datetime = post.create_time
+        scrape_item.uploaded_at = post.create_time
         self._handle_images(scrape_item, post)
         self._handle_audio(scrape_item, post)
         self._handle_video(scrape_item, post)

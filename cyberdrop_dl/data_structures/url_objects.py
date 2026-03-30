@@ -146,7 +146,7 @@ class MediaItem:
         default=None, compare=False
     )
     album_id: str | None = None
-    datetime: int | None = field(default=None, compare=False)
+    uploaded_at: int | None = field(default=None, compare=False)
     parents: list[AbsoluteHttpURL] = field(default_factory=list, compare=False)
     parent_threads: set[AbsoluteHttpURL] = field(default_factory=set, compare=False)
 
@@ -159,6 +159,7 @@ class MediaItem:
     parent_media_item: MediaItem | None = field(default=None, compare=False)
     _task_id: TaskID | None = field(default=None, compare=False)
     metadata: object = field(init=False, default_factory=dict, compare=False)
+    uploaded_at_date: datetime.datetime | None = field(init=False, default=None)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(domain={self.domain!r}, url={self.url!r}, referer={self.referer!r}, filename={self.filename!r}"
@@ -167,10 +168,9 @@ class MediaItem:
         if self.url.scheme == "metadata":
             self.db_path = ""
 
-    def datetime_obj(self) -> datetime.datetime | None:
-        if self.datetime:
-            assert isinstance(self.datetime, int), f"Invalid {self.datetime =!r} from {self.referer}"
-            return datetime.datetime.fromtimestamp(self.datetime)
+        if self.uploaded_at:
+            assert isinstance(self.uploaded_at, int), f"Invalid {self.uploaded_at =!r} from {self.referer}"
+            self.uploaded_at_date = datetime.datetime.fromtimestamp(self.uploaded_at, tz=datetime.UTC)
 
     @staticmethod
     def from_item(
@@ -196,7 +196,7 @@ class MediaItem:
             ext=ext or Path(filename).suffix,
             original_filename=original_filename or filename,
             parents=origin.parents.copy(),
-            datetime=origin.possible_datetime if isinstance(origin, ScrapeItem) else origin.datetime,
+            uploaded_at=origin.uploaded_at,
             parent_media_item=None if isinstance(origin, ScrapeItem) else origin,
             parent_threads=origin.parent_threads.copy(),
         )
@@ -218,16 +218,14 @@ class MediaItem:
         else:
             self._task_id = task_id
 
-    def as_jsonable_dict(self) -> dict[str, Any]:
-        item = asdict(self)
-        if datetime := self.datetime_obj():
-            item["datetime"] = datetime
-        item["attempts"] = item.pop("current_attempt")
+    def __json__(self) -> dict[str, Any]:
+        me = asdict(self)
+        me["attempts"] = me.pop("current_attempt")
         if self.hash:
-            item["hash"] = f"xxh128:{self.hash}"
+            me["hash"] = f"xxh128:{self.hash}"
         for name in ("fallbacks", "_task_id", "is_segment", "parent_media_item"):
-            _ = item.pop(name)
-        return item
+            _ = me.pop(name)
+        return me
 
 
 @dataclass(kw_only=True, slots=True)
@@ -236,7 +234,7 @@ class ScrapeItem:
     parent_title: str = ""
     part_of_album: bool = False
     album_id: str | None = None
-    possible_datetime: int | None = None
+    uploaded_at: int | None = None
     retry_path: Path | None = None
 
     parents: list[AbsoluteHttpURL] = field(default_factory=list, init=False)
@@ -269,7 +267,7 @@ class ScrapeItem:
                 logger.info(f"URL transformation applied: \n  {old_url = }\n  new_url: {self.url}")
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}(url={self.url!r}, parent_title={self.parent_title!r}, possible_datetime={self.possible_datetime!r}"
+        return f"{type(self).__name__}(url={self.url!r}, parent_title={self.parent_title!r}, possible_datetime={self.uploaded_at!r}"
 
     def __post_init__(self) -> None:
         self.password = self.url.query.get("password")
@@ -322,7 +320,7 @@ class ScrapeItem:
 
         Reset `part_of_album` back to `False`
         """
-        self.album_id = self.possible_datetime = self.type = None
+        self.album_id = self.uploaded_at = self.type = None
         self.part_of_album = False
         self.reset_childen()
         if reset_parents:
@@ -365,7 +363,7 @@ class ScrapeItem:
 
         scrape_item.url = url
         scrape_item.part_of_album = part_of_album or scrape_item.part_of_album
-        scrape_item.possible_datetime = possible_datetime or scrape_item.possible_datetime
+        scrape_item.uploaded_at = possible_datetime or scrape_item.uploaded_at
         scrape_item.album_id = album_id or scrape_item.album_id
         return scrape_item
 

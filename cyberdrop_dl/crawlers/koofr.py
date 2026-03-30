@@ -91,7 +91,7 @@ class KooFrCrawler(Crawler):
             return
 
         filename, ext = self.get_filename_and_ext(file.name)
-        scrape_item.possible_datetime = file.modified // 1000
+        scrape_item.uploaded_at = file.modified // 1000
         await self.handle_file(link, scrape_item, file.name, ext, custom_filename=filename)
 
 

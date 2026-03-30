@@ -75,7 +75,7 @@ class ArchiveBateCrawler(MixDropCrawler):
         video_src = css.select(soup, _SELECTORS.VIDEO, "src")
         title = self.create_title(f"{user_name} [{site_name}]")
         scrape_item.setup_as_profile(title)
-        scrape_item.possible_datetime = self.parse_date(date_str)
+        scrape_item.uploaded_at = self.parse_date(date_str)
         mixdrop_url = self.get_embed_url(self.parse_url(video_src))  # Override domain
 
         if await self.check_complete_from_referer(mixdrop_url):

@@ -38,6 +38,6 @@ class FilesVcCrawler(Crawler):
         json_resp: dict[str, Any] = await self.request_json(api_url)
 
         filename, ext = self.get_filename_and_ext(json_resp["filename"], assume_ext=".zip")
-        scrape_item.possible_datetime = self.parse_date(json_resp["upload_time"])
+        scrape_item.uploaded_at = self.parse_date(json_resp["upload_time"])
         link = self.parse_url(json_resp["file_url"])
         await self.handle_file(link, scrape_item, filename, ext)

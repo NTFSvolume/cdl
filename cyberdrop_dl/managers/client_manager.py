@@ -223,7 +223,7 @@ class ClientManager:
 
     def check_allowed_date_range(self, media_item: MediaItem) -> bool:
         """Checks if the file was uploaded within the config date range"""
-        datetime = media_item.datetime_obj()
+        datetime = media_item.uploaded_at_date
         if not datetime:
             return True
 

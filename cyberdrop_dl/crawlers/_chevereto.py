@@ -201,7 +201,7 @@ class CheveretoCrawler(Crawler, is_generic=True):
             link_str = Selector.MAIN_IMAGE(soup)
 
         source = self.parse_url(link_str)
-        scrape_item.possible_datetime = self.parse_iso_date(Selector.DATE(soup))
+        scrape_item.uploaded_at = self.parse_iso_date(Selector.DATE(soup))
         await self.direct_file(scrape_item, source)
 
     def _get_album_files(self, soup: BeautifulSoup) -> Generator[tuple[AbsoluteHttpURL, AbsoluteHttpURL]]:

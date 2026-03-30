@@ -81,7 +81,7 @@ class FilesterCrawler(Crawler):
         dl_link = await self._request_download(slug)
         name = open_graph.title(soup)
         mime_type = css.select_text(soup, Selector.MIME_TYPE)
-        scrape_item.possible_datetime = self.parse_iso_date(css.select_text(soup, Selector.UPLOAD_DATE))
+        scrape_item.uploaded_at = self.parse_iso_date(css.select_text(soup, Selector.UPLOAD_DATE))
         filename, ext = self.get_filename_and_ext(name, mime_type=mime_type)
         await self.handle_file(scrape_item.url, scrape_item, name, ext, custom_filename=filename, debrid_link=dl_link)
 

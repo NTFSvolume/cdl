@@ -260,7 +260,7 @@ class PornHubCrawler(Crawler):
         formats = [Format.new(media) for media in get_media_list(soup)]
         best_hls = max(f for f in formats if f.format == "hls")
         debrid_link = m3u8 = best_format = None
-        scrape_item.possible_datetime = date = self.parse_iso_date(get_upload_date_str(soup))
+        scrape_item.uploaded_at = date = self.parse_iso_date(get_upload_date_str(soup))
         assert date
         use_hls = date >= MP4_NOT_AVAILABLE_SINCE
 

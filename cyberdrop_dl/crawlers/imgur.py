@@ -101,7 +101,7 @@ class ImgurCrawler(Crawler):
 
     @error_handling_wrapper
     async def _image(self, scrape_item: ScrapeItem, image: dict[str, Any]) -> None:
-        scrape_item.possible_datetime = image["datetime"]
+        scrape_item.uploaded_at = image["datetime"]
         url = self.parse_url(image["link"])
         filename, ext = self.get_filename_and_ext(url.name)
         await self.handle_file(url, scrape_item, filename, ext, metadata=image)

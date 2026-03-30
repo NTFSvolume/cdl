@@ -345,7 +345,7 @@ class Downloader:
 
         if self.manager.config_manager.settings_data.download_options.disable_file_timestamps:
             return
-        if not media_item.datetime:
+        if not media_item.uploaded_at:
             log(f"Unable to parse upload date for {media_item.url}, using current datetime as file datetime", 30)
             return
 
@@ -356,7 +356,7 @@ class Downloader:
             if sys.platform == "win32":
 
                 def set_win_time():
-                    nano_ts: float = media_item.datetime * 1e7  # Windows uses nano seconds for dates
+                    nano_ts: float = media_item.uploaded_at * 1e7  # Windows uses nano seconds for dates
                     timestamp = int(nano_ts + WIN_EPOCH_OFFSET)
 
                     # Windows dates are 64bits, split into 2 32bits unsigned ints (dwHighDateTime , dwLowDateTime)
@@ -392,7 +392,7 @@ class Downloader:
                 await asyncio.to_thread(set_win_time)
 
             elif sys.platform == "darwin" and MAC_OS_SET_FILE:
-                date_string = datetime.fromtimestamp(media_item.datetime).strftime("%m/%d/%Y %H:%M:%S")
+                date_string = datetime.fromtimestamp(media_item.uploaded_at).strftime("%m/%d/%Y %H:%M:%S")
                 cmd = ["-d", date_string, complete_file]
                 process = await asyncio.subprocess.create_subprocess_exec(
                     MAC_OS_SET_FILE, *cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
@@ -404,7 +404,7 @@ class Downloader:
 
         # 2. try setting modification and access date
         try:
-            await asyncio.to_thread(os.utime, complete_file, (media_item.datetime, media_item.datetime))
+            await asyncio.to_thread(os.utime, complete_file, (media_item.uploaded_at, media_item.uploaded_at))
         except OSError:
             pass
 

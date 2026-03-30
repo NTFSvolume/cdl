@@ -81,7 +81,7 @@ class NHentaiCrawler(Crawler):
         titles: dict[str, str] = json_resp["title"]
         title: str = titles.get("english") or titles.get("japanese") or titles["pretty"]
         scrape_item.setup_as_album(self.create_title(title, gallery_id), album_id=gallery_id)
-        scrape_item.possible_datetime = json_resp["upload_date"]
+        scrape_item.uploaded_at = json_resp["upload_date"]
 
         padding = max(3, len(str(json_resp["num_pages"])))
         for index, link in _gen_image_urls(json_resp):

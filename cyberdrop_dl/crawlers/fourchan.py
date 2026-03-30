@@ -82,7 +82,7 @@ class FourChanCrawler(Crawler):
                 custom_filename = self.create_custom_filename(file_stem, ext)
                 filename, _ = self.get_filename_and_ext(url.name)
                 new_scrape_item = scrape_item.copy()
-                new_scrape_item.possible_datetime = post["time"]
+                new_scrape_item.uploaded_at = post["time"]
                 await self.handle_file(url, new_scrape_item, filename, ext, custom_filename=custom_filename)
                 scrape_item.add_children()
 

@@ -161,7 +161,7 @@ class YetiShareCrawler(Crawler, is_abc=True):
         token = raw_link.rpartition("?download_token=")[-1]
         link = self.parse_url(raw_link).with_query(download_token=token)
 
-        scrape_item.possible_datetime = self.parse_date(
+        scrape_item.uploaded_at = self.parse_date(
             css.select_text(soup, Selector.FILE_UPLOAD_DATE),
             "%d/%m/%Y %H:%M:%S",
         )

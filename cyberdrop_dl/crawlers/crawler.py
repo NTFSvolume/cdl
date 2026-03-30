@@ -521,7 +521,7 @@ class Crawler(ABC, HTTPClientProxy):
         if not self.manager.config.files.dump_json:
             return
 
-        data = [media_item.as_jsonable_dict()]
+        data = [media_item.__json__()]
         await self.manager.log_manager.write_jsonl(data)
 
     async def check_complete(self, url: AbsoluteHttpURL, referer: AbsoluteHttpURL) -> bool:
@@ -538,8 +538,10 @@ class Crawler(ABC, HTTPClientProxy):
 
     async def handle_media_item(self, media_item: MediaItem, m3u8: m3u8.RenditionGroup | None = None) -> None:
         await self.manager.states.RUNNING.wait()
-        if media_item.datetime and not isinstance(media_item.datetime, int):
-            msg = f"Invalid datetime from '{self.FOLDER_DOMAIN}' crawler . Got {media_item.datetime!r}, expected int."
+        if media_item.uploaded_at and not isinstance(media_item.uploaded_at, int):
+            msg = (
+                f"Invalid datetime from '{self.FOLDER_DOMAIN}' crawler . Got {media_item.uploaded_at!r}, expected int."
+            )
             log(msg, bug=True)
 
         check_complete = await self.check_complete(media_item.url, media_item.referer)
@@ -837,7 +839,7 @@ class Crawler(ABC, HTTPClientProxy):
     @contextlib.asynccontextmanager
     async def new_task_group(self, scrape_item: ScrapeItem) -> AsyncGenerator[asyncio.TaskGroup]:
         async with asyncio.TaskGroup() as tg:
-            with error_handling_context(self, scrape_item):
+            with self.catch_errors(scrape_item):
                 yield tg
 
     @final

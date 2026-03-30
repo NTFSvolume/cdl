@@ -128,7 +128,7 @@ class PimpBunnyCrawler(Crawler):
         custom_filename = self.create_custom_filename(
             video.title, video.url.suffix, file_id=video.id, resolution=video.resolution
         )
-        scrape_item.possible_datetime = self.parse_iso_date(css.json_ld(soup)["uploadDate"])
+        scrape_item.uploaded_at = self.parse_iso_date(css.json_ld(soup)["uploadDate"])
         await self.handle_file(
             scrape_item.url,
             scrape_item,

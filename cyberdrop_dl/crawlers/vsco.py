@@ -72,7 +72,7 @@ class VSCOCrawler(Crawler):
     async def _file(self, scrape_item: ScrapeItem, file: dict[str, Any]) -> None:
         file = {to_snake(key): value for key, value in file.items()}
         file["id"] = file.get("id") or file["_id"]
-        scrape_item.possible_datetime = (file.get("upload_date") or file["created_date"]) // 1000
+        scrape_item.uploaded_at = (file.get("upload_date") or file["created_date"]) // 1000
         if file["type"] == "image":
             return await self._image(scrape_item, file)
         await self._video(scrape_item, file)

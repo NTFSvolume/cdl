@@ -382,7 +382,7 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
         user_name = self._user_names[post.user]
         title = self.create_title(user_name, post.user_id)
         scrape_item.setup_as_album(title, album_id=post.user_id)
-        scrape_item.possible_datetime = post.timestamp
+        scrape_item.uploaded_at = post.timestamp
         post_title = self.create_separate_post_title(post.title, post.id, post.timestamp)
         scrape_item.add_to_parent_title(post_title)
         self.__handle_post(scrape_item, post)
@@ -392,7 +392,7 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
         title = self.create_title(f"{server.name} [discord]", server.id)
         channel_name = next(c.name for c in server.channels if c.id == post.channel_id)
         scrape_item.setup_as_album(title, album_id=server.id)
-        scrape_item.possible_datetime = post.timestamp
+        scrape_item.uploaded_at = post.timestamp
         scrape_item.add_to_parent_title(f"#{channel_name}")
         post_title = self.create_separate_post_title(None, post.id, post.timestamp)
         scrape_item.add_to_parent_title(post_title)

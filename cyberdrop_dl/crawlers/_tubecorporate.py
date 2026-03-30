@@ -52,7 +52,7 @@ class TubeCorporateCrawler(Crawler, is_abc=True):
             return
 
         video = await self._request_video(scrape_item.url.origin(), video_id)
-        scrape_item.possible_datetime = self.parse_iso_date(video.post_date)
+        scrape_item.uploaded_at = self.parse_iso_date(video.post_date)
         ext = ".mp4"
         custom_filename = self.create_custom_filename(video.title, ext, file_id=video_id)
 

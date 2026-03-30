@@ -174,7 +174,7 @@ class BunkrrCrawler(Crawler):
             return
 
         deep_scrape = False
-        scrape_item.possible_datetime = self.parse_date(file.date, "%H:%M:%S %d/%m/%Y")
+        scrape_item.uploaded_at = self.parse_date(file.date, "%H:%M:%S %d/%m/%Y")
         try:
             src = file.src()
         except ValueError:

@@ -85,7 +85,7 @@ class OmegaScansCrawler(Crawler):
             date_str = css.select_text(soup, DATE_JS_SELECTOR).split('created_at\\":\\"')[1].split(".")[0]
             date = self.parse_date(date_str)
 
-        scrape_item.possible_datetime = date
+        scrape_item.uploaded_at = date
         for attribute in ("src", "data-src"):
             for _, link in self.iter_tags(soup, IMAGE_SELECTOR, attribute):
                 filename, ext = self.get_filename_and_ext(link.name)

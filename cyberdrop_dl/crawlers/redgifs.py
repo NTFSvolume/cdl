@@ -142,7 +142,7 @@ class RedGifsCrawler(Crawler):
 
     async def _gif(self, scrape_item: ScrapeItem, gif: Gif) -> None:
         src = self.parse_url(gif.hd or gif.sd)
-        scrape_item.possible_datetime = gif.create_date
+        scrape_item.uploaded_at = gif.create_date
         filename, ext = self.get_filename_and_ext(src.name)
         await self.handle_file(src, scrape_item, filename, ext, metadata=gif)
 

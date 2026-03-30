@@ -85,8 +85,8 @@ class ChibiSafeCrawler(Crawler, is_abc=True):
 
     @error_handling_wrapper
     def _handle_file(self, scrape_item: ScrapeItem, file: File) -> None:
-        if scrape_item.possible_datetime is None and file.createdAt:
-            scrape_item.possible_datetime = to_timestamp(file.createdAt)
+        if scrape_item.uploaded_at is None and file.createdAt:
+            scrape_item.uploaded_at = to_timestamp(file.createdAt)
         name = file.original or file.name
         filename, ext = self.get_filename_and_ext(name)
         self.create_task(

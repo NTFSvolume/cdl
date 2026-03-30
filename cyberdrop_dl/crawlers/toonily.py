@@ -56,7 +56,7 @@ class ToonilyCrawler(Crawler):
 
         scrape_item.setup_as_album(chapter_title)
         iso_date = css.json_ld(soup)["@graph"][0]["datePublished"]
-        scrape_item.possible_datetime = self.parse_iso_date(iso_date)
+        scrape_item.uploaded_at = self.parse_iso_date(iso_date)
 
         for _, link in self.iter_tags(soup, Selector.IMAGE, "src"):
             self.create_task(self.direct_file(scrape_item, link))

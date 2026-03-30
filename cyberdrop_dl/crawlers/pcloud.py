@@ -118,7 +118,7 @@ class PCloudCrawler(Crawler):
 
         link = await self._request_download_url(scrape_item, file)
         # https://docs.pcloud.com/structures/datetime.html
-        scrape_item.possible_datetime = dates.parse_http(file.modified)
+        scrape_item.uploaded_at = dates.parse_http(file.modified)
         filename, ext = self.get_filename_and_ext(file.name)
         # Adding the code as query just for logging messages. It will be discarded in the actual db
         db_url = (scrape_item.url.origin() / "file" / file._id).with_query(code=scrape_item.url.query["code"])

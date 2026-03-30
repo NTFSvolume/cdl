@@ -146,7 +146,7 @@ class OdnoklassnikiCrawler(Crawler):
         self.client.client_manager.cookies.clear_domain(cdn_url.host)
         json_ld = css.json_ld(soup)
         title: str = metadata["movie"].get("title") or json_ld["name"]
-        scrape_item.possible_datetime = self.parse_iso_date(json_ld["uploadDate"])
+        scrape_item.uploaded_at = self.parse_iso_date(json_ld["uploadDate"])
         filename = self.create_custom_filename(title, ".mp4", file_id=video_id, resolution=resolution)
         await self.handle_file(
             mobile_url, scrape_item, video_id + ".mp4", custom_filename=filename, debrid_link=cdn_url

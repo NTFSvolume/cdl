@@ -150,7 +150,7 @@ class WordPressBaseCrawler(Crawler, is_abc=True):
         if is_single_post:
             title = self.create_title(title)
         scrape_item.setup_as_album(title, album_id=post_id)
-        scrape_item.possible_datetime = to_timestamp(post.date_gmt)
+        scrape_item.uploaded_at = to_timestamp(post.date_gmt)
         if post.thumbnail:
             await self.direct_file(scrape_item, self.parse_url(post.thumbnail))
         return await self.handle_post_content(scrape_item, post)

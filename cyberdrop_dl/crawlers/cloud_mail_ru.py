@@ -92,7 +92,7 @@ class CloudMailRuCrawler(Crawler):
 
         dl_link = self.dispatcher_server / file["weblink"]
         filename, ext = self.get_filename_and_ext(file["name"])
-        scrape_item.possible_datetime = file["mtime"]
+        scrape_item.uploaded_at = file["mtime"]
         await self.handle_file(
             scrape_item.url, scrape_item, file["name"], ext, debrid_link=dl_link, custom_filename=filename
         )

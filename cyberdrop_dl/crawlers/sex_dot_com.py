@@ -73,7 +73,7 @@ class SexDotComCrawler(Crawler):
         else:
             return
 
-        scrape_item.possible_datetime = self.parse_date(real_item["createdAt"])
+        scrape_item.uploaded_at = self.parse_date(real_item["createdAt"])
         scrape_item.url = canonical_url
         await self.handle_file(media_url, scrape_item, filename, ext)
         scrape_item.add_children()

@@ -166,7 +166,7 @@ class PkmncardsCrawler(Crawler):
         link = card.download_url  # .with_suffix(".png")  # they offer both jpg and png. png is higher quality
         set_title = self.create_title(f"{card.set.name} ({card.set.full_code})")
         scrape_item.setup_as_album(set_title, album_id=card.set.abbr)
-        scrape_item.possible_datetime = card.set.release_date
+        scrape_item.uploaded_at = card.set.release_date
         filename, ext = self.get_filename_and_ext(link.name, assume_ext=".jpg")
         custom_filename = self.create_custom_filename(card.full_name, ext)
         await self.handle_file(link, scrape_item, filename, ext, custom_filename=custom_filename)

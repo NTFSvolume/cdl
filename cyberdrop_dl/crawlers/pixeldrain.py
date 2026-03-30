@@ -262,7 +262,7 @@ class PixelDrainCrawler(Crawler):
             return await self._text(scrape_item, file)
 
         filename, ext = self.get_filename_and_ext(file.name, mime_type=file.mime_type)
-        scrape_item.possible_datetime = self.parse_iso_date(file.date_upload)
+        scrape_item.uploaded_at = self.parse_iso_date(file.date_upload)
         await self.handle_file(link, scrape_item, file.name, ext, debrid_link=debrid_link, custom_filename=filename)
 
     @error_handling_wrapper

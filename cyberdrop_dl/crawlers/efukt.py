@@ -71,7 +71,7 @@ class EfuktCrawler(Crawler):
         datetime = self._parse_date(date_str, "%m/%d/%y")
         if not datetime:
             raise ScrapeError(422)
-        scrape_item.possible_datetime = to_timestamp(datetime)
+        scrape_item.uploaded_at = to_timestamp(datetime)
 
         if is_image_or_gif(scrape_item.url):
             link = self.parse_url(css.select(soup, _SELECTORS.IMAGE, "src"))

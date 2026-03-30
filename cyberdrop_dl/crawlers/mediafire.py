@@ -145,7 +145,7 @@ class MediaFireCrawler(Crawler):
             return
 
         soup = await self.request_soup(scrape_item.url, impersonate=True)
-        scrape_item.possible_datetime = self.parse_iso_date(file.created)
+        scrape_item.uploaded_at = self.parse_iso_date(file.created)
         link = self.parse_url(_extract_download_link(soup))
         filename, ext = self.get_filename_and_ext(file.filename)
         await self.handle_file(link, scrape_item, file.filename, ext, custom_filename=filename)

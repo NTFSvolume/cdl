@@ -88,7 +88,7 @@ class TokioMotionCrawler(Crawler):
                 raise ScrapeError(401, "Private video")
             raise ScrapeError(422, "Couldn't find video source")
 
-        scrape_item.possible_datetime = self.parse_date(css.select_text(soup, _SELECTORS.VIDEO_DATE))
+        scrape_item.uploaded_at = self.parse_date(css.select_text(soup, _SELECTORS.VIDEO_DATE))
         link_str = css.attr(src, "src")
         link = self.parse_url(link_str)
         title = css.select_text(soup, "title").rsplit(" - TOKYO Motion")[0].strip()

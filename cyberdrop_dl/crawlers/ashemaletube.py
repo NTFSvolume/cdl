@@ -184,7 +184,7 @@ class AShemaleTubeCrawler(Crawler):
 
         if video_object := soup.select_one(_SELECTORS.VIDEO_PROPS_JS):
             json_data = json.loads(css.text(video_object))
-            scrape_item.possible_datetime = self.parse_iso_date(json_data.get("uploadDate", ""))
+            scrape_item.uploaded_at = self.parse_iso_date(json_data.get("uploadDate", ""))
 
         title = css.select_text(soup, "title").split("- aShemaletube.com")[0].strip()
         scrape_item.url = canonical_url

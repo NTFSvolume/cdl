@@ -49,7 +49,7 @@ class StreamableCrawler(Crawler):
             raise ScrapeError(404, VIDEO_STATUS.get(status))
 
         title = json_resp.get("reddit_title") or json_resp["title"]
-        scrape_item.possible_datetime = json_resp["date_added"]
+        scrape_item.uploaded_at = json_resp["date_added"]
 
         self.log_debug(json.dumps(json_resp, indent=4))
         link_str = get_best_quality(json_resp["files"])
