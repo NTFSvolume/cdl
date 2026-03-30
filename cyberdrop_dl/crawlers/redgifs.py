@@ -82,16 +82,16 @@ class RedGifsCrawler(Crawler):
     async def user(self, scrape_item: ScrapeItem, user_id: str) -> None:
         title = self.create_title(user_id)
         scrape_item.setup_as_album(title)
+        init_page = int(scrape_item.url.query.get("page", 1))
 
-        async for gifs in self._profile_pager(user_id, init_page=int(scrape_item.url.query.get("page", 1))):
+        async for gifs in self._profile_pager(user_id, init_page):
             for gif in gifs:
                 new_scrape_item = scrape_item.create_child(_canonical_url(gif.id))
-                await self._handle_gif(new_scrape_item, gif)
+                await self._gif(new_scrape_item, gif)
                 scrape_item.add_children()
 
     async def _profile_pager(self, user_id: str, init_page: int = 1) -> AsyncGenerator[tuple[Gif, ...]]:
         gif_ids: set[str] = set()
-        api_url = (API_ENTRYPOINT / "users" / user_id / "search").with_query(count=_PAGE_COUNT)
 
         def parse_unique_gifs(gifs: list[dict[str, str]]) -> Generator[Gif]:
             for gif_dict in gifs:
@@ -100,11 +100,14 @@ class RedGifsCrawler(Crawler):
                     gif_ids.add(gif.id)
                     yield gif
 
-        async def pagination(*, reverse: bool = False) -> AsyncGenerator[tuple[Gif, ...]]:
+        api_url = API_ENTRYPOINT / "users" / user_id / "search"
+
+        async def pager(*, reverse: bool = False) -> AsyncGenerator[tuple[Gif, ...]]:
             for page in range(1 if reverse else init_page, _PAGE_LIMIT + 1):
                 resp: dict[str, Any] = await self.request_json(
-                    api_url.update_query(
+                    api_url.with_query(
                         order="old" if reverse else "new",
+                        count=_PAGE_COUNT,
                         page=page,
                     ),
                     headers=self.headers,
@@ -116,31 +119,31 @@ class RedGifsCrawler(Crawler):
 
                 yield gifs
 
-        async for gifs in pagination():
+        async for gifs in pager():
             yield gifs
 
         # fetch gifs in reverse order to bypass API pagination limit
-        async for gifs in pagination(reverse=True):
+        async for gifs in pager(reverse=True):
             yield gifs
 
     @error_handling_wrapper
-    async def gif(self, scrape_item: ScrapeItem, post_id: str) -> None:
-        canonical_url = _canonical_url(post_id)
+    async def gif(self, scrape_item: ScrapeItem, gif_id: str) -> None:
+        canonical_url = _canonical_url(gif_id)
         if await self.check_complete_from_referer(canonical_url):
             return
 
         scrape_item.url = canonical_url
-        api_url = API_ENTRYPOINT / "gifs" / post_id
+        api_url = API_ENTRYPOINT / "gifs" / gif_id
         gif = Gif.from_dict((await self.request_json(api_url, headers=self.headers))["gif"])
         if gif.title:
             scrape_item.setup_as_album(self.create_title(gif.title))
-        await self._handle_gif(scrape_item, gif)
+        await self._gif(scrape_item, gif)
 
-    async def _handle_gif(self, scrape_item: ScrapeItem, gif: Gif) -> None:
+    async def _gif(self, scrape_item: ScrapeItem, gif: Gif) -> None:
         src = self.parse_url(gif.hd or gif.sd)
         scrape_item.possible_datetime = gif.create_date
         filename, ext = self.get_filename_and_ext(src.name)
-        await self.handle_file(src, scrape_item, filename, ext)
+        await self.handle_file(src, scrape_item, filename, ext, metadata=gif)
 
 
 def _id(name: str) -> str:
