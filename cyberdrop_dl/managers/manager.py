@@ -98,7 +98,7 @@ class Manager:
         self.args_consolidation()
 
         self.path_manager.startup()
-        self.log_manager = LogManager(self)
+        self.log_manager = LogManager.from_manager(self)
 
     """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
 

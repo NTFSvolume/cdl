@@ -2,18 +2,17 @@ from __future__ import annotations
 
 import asyncio
 import csv
+import dataclasses
 import logging
 from collections import defaultdict
-from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Self
 
-from cyberdrop_dl.constants import CSV_DELIMITER
 from cyberdrop_dl.exceptions import get_origin
 from cyberdrop_dl.utils import json
-from cyberdrop_dl.utils.logger import log_spacer
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Iterable, Iterator
+    from pathlib import Path
 
     from yarl import URL
 
@@ -23,60 +22,93 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_CSV_DELIMITER = ","
 
-class LogManager:
-    def __init__(self, manager: Manager) -> None:
-        self.manager = manager
-        self.main_log: Path = manager.path_manager.main_log
-        self.last_post_log: Path = manager.path_manager.last_forum_post_log
-        self.unsupported_urls_log: Path = manager.path_manager.unsupported_urls_log
-        self.download_error_log: Path = manager.path_manager.download_error_urls_log
-        self.scrape_error_log: Path = manager.path_manager.scrape_error_urls_log
+
+@dataclasses.dataclass(slots=True, kw_only=True)
+class LogFiles:
+    main_log: Path
+    last_post_log: Path
+    unsupported_urls_log: Path
+    download_error_log: Path
+    scrape_error_log: Path
+    jsonl_file: Path = dataclasses.field(init=False)
+
+    def __iter__(self) -> Iterator[Path]:
+        return iter(dataclasses.astuple(self))
+
+    def post_init(self) -> None:
         self.jsonl_file = self.main_log.with_suffix(".results.jsonl")
-        self._file_locks: dict[Path, asyncio.Lock] = defaultdict(asyncio.Lock)
-        self._has_headers: set[Path] = set()
 
-    def startup(self) -> None:
-        """Startup process for the file manager."""
-        for var in vars(self).values():
-            if isinstance(var, Path):
-                var.unlink(missing_ok=True)
 
-    async def write_jsonl(self, data: Iterable[dict[str, Any]]):
-        async with self._file_locks[self.jsonl_file]:
-            await json.dump_jsonl(data, self.jsonl_file)
+@dataclasses.dataclass(slots=True)
+class LogManager:
+    files: LogFiles
+    task_group: asyncio.TaskGroup
+    _file_locks: dict[Path, asyncio.Lock] = dataclasses.field(
+        init=False, default_factory=lambda: defaultdict(asyncio.Lock)
+    )
+    _has_headers: set[Path] = dataclasses.field(init=False, default_factory=set)
+    _ready: bool = dataclasses.field(init=False, default=False)
 
-    async def _write_to_csv(self, file: Path, **kwargs) -> None:
-        """Write to the specified csv file. kwargs are columns for the CSV."""
+    @classmethod
+    def from_manager(cls, manager: Manager) -> Self:
+        files = LogFiles(
+            main_log=manager.path_manager.main_log,
+            last_post_log=manager.path_manager.last_forum_post_log,
+            unsupported_urls_log=manager.path_manager.unsupported_urls_log,
+            download_error_log=manager.path_manager.download_error_urls_log,
+            scrape_error_log=manager.path_manager.scrape_error_urls_log,
+        )
+        return cls(files, manager.task_group)
+
+    def delete_old_logs(self) -> None:
+        if self._ready:
+            return
+        for path in self.files:
+            path.unlink(missing_ok=True)
+        self._ready = True
+
+    async def write_jsonl(self, data: Iterable[dict[str, Any]]) -> None:
+        async with self._file_locks[self.files.jsonl_file]:
+            await json.dump_jsonl(data, self.files.jsonl_file)
+
+    async def _write_to_csv(self, file: Path, **row: object) -> None:
         async with self._file_locks[file]:
-            write_headers = file not in self._has_headers
+            is_first_write = file not in self._has_headers
             self._has_headers.add(file)
 
-            def write():
+            def write() -> None:
+                if is_first_write:
+                    file.parent.mkdir(parents=True, exist_ok=True)
+
                 with file.open("a", encoding="utf8", newline="") as csv_file:
                     writer = csv.DictWriter(
-                        csv_file, fieldnames=kwargs.keys(), delimiter=CSV_DELIMITER, quoting=csv.QUOTE_ALL
+                        csv_file,
+                        fieldnames=tuple(row),
+                        delimiter=_CSV_DELIMITER,
+                        quoting=csv.QUOTE_ALL,
                     )
-                    if write_headers:
+                    if is_first_write:
                         writer.writeheader()
-                    writer.writerow(kwargs)
+                    writer.writerow(row)
 
             await asyncio.to_thread(write)
 
     def write_last_post_log(self, url: URL) -> None:
         """Writes to the last post log."""
-        self.manager.task_group.create_task(self._write_to_csv(self.last_post_log, url=url))
+        _ = self.task_group.create_task(self._write_to_csv(self.files.last_post_log, url=url))
 
     def write_unsupported_urls_log(self, url: URL, origin: URL | None = None) -> None:
         """Writes to the unsupported urls log."""
-        self.manager.task_group.create_task(self._write_to_csv(self.unsupported_urls_log, url=url, origin=origin))
+        _ = self.task_group.create_task(self._write_to_csv(self.files.unsupported_urls_log, url=url, origin=origin))
 
     def write_download_error_log(self, media_item: MediaItem, error_message: str) -> None:
         """Writes to the download error log."""
         origin = get_origin(media_item)
-        self.manager.task_group.create_task(
+        _ = self.task_group.create_task(
             self._write_to_csv(
-                self.download_error_log,
+                self.files.download_error_log,
                 url=media_item.url,
                 error=error_message,
                 referer=media_item.referer,
@@ -86,23 +118,21 @@ class LogManager:
 
     def write_scrape_error_log(self, url: URL | str, error_message: str, origin: URL | Path | None = None) -> None:
         """Writes to the scrape error log."""
-        self.manager.task_group.create_task(
-            self._write_to_csv(self.scrape_error_log, url=url, error=error_message, origin=origin)
+        _ = self.task_group.create_task(
+            self._write_to_csv(self.files.scrape_error_log, url=url, error=error_message, origin=origin)
         )
 
-    async def update_last_forum_post(self) -> None:
+    async def update_last_forum_post(self, input_file: Path) -> None:
         """Updates the last forum post."""
-        input_file = self.manager.path_manager.input_file
 
-        def proceed():
-            return input_file.is_file() and self.last_post_log.is_file()
+        def update() -> None:
+            if input_file.is_file() and self.files.last_post_log.is_file():
+                _update_last_forum_post(input_file, self.files.last_post_log)
 
-        if await asyncio.to_thread(proceed):
-            await asyncio.to_thread(_update_last_forum_post, input_file, self.last_post_log)
+        await asyncio.to_thread(update)
 
 
 def _update_last_forum_post(input_file: Path, last_post_log: Path) -> None:
-    log_spacer(20)
     logger.info("Updating Last Forum Posts...\n")
 
     current_urls, current_base_urls, new_urls, new_base_urls = [], [], [], []
@@ -118,6 +148,7 @@ def _update_last_forum_post(input_file: Path, last_post_log: Path) -> None:
                 if base_url not in current_base_urls:
                     current_urls.append(url)
                     current_base_urls.append(base_url)
+
     except UnicodeDecodeError:
         logger.exception("Unable to read input file, skipping update_last_forum_post")
         return

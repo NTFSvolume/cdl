@@ -29,7 +29,7 @@ MAX_REDIRECTS: Final[int] = 8
 CONSOLE_LEVEL = 100
 MAX_NAME_LENGTHS = {"FILE": 95, "FOLDER": 60}
 DEFAULT_CONSOLE_WIDTH = 240
-CSV_DELIMITER = ","
+
 LOG_OUTPUT_TEXT = Text("")
 
 VALIDATION_ERROR_FOOTER = """Please delete the file or fix the errors. Read the documentation to learn what's the expected format and values: https://script-ware.gitbook.io/cyberdrop-dl/reference/configuration-options

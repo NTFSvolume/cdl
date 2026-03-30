@@ -63,7 +63,7 @@ def _ui_error_handling_wrapper(
 async def _run_manager(manager: Manager) -> None:
     """Runs the program and handles the UI."""
     manager.path_manager.startup()
-    manager.log_manager.startup()
+    manager.log_manager.delete_old_logs()
     debug_log_file_path = _setup_debug_logger(manager)
     start_time = manager.start_time
     _setup_main_logger(manager)
@@ -125,7 +125,8 @@ async def _post_runtime(manager: Manager) -> None:
     check_partials_and_empty_folders(manager)
 
     if manager.config_manager.settings_data.runtime_options.update_last_forum_post:
-        await manager.log_manager.update_last_forum_post()
+        log_spacer(20)
+        await manager.log_manager.update_last_forum_post(manager.path_manager.input_file)
 
 
 def _setup_debug_logger(manager: Manager) -> Path | None:
