@@ -304,7 +304,7 @@ class ClientManager:
                     f"{crawler.__class__.__name__} has been disabled after too many errors. "
                     f"URLs from the following domains will be ignored: {crawler.SCRAPE_MAPPER_KEYS}"
                 )
-                logger.exception(msg)
+                logger.error(msg)
             raise TooManyCrawlerErrors
 
     @contextlib.contextmanager
