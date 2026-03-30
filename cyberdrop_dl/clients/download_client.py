@@ -310,7 +310,7 @@ class DownloadClient:
                 proceed = await self.client_manager.check_file_duration(media_item)
                 await self.manager.db_manager.history_table.add_duration(domain, media_item)
                 if not proceed:
-                    logger.info(f"Download skippedped {media_item.url} due to runtime restrictions")
+                    logger.info(f"Download skipped {media_item.url} due to runtime restrictions")
                     await asyncio.to_thread(media_item.path.unlink)
                     await self.mark_incomplete(media_item, domain)
                     self.manager.progress_manager.download_progress.add_skipped()

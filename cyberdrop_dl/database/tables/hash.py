@@ -1,9 +1,8 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
-
-from cyberdrop_dl.utils.logger import log
 
 from .definitions import create_files, create_hash, create_hash_index
 
@@ -12,6 +11,9 @@ if TYPE_CHECKING:
     from yarl import URL
 
     from cyberdrop_dl.database import Database
+
+
+logger = logging.getLogger(__name__)
 
 
 class HashTable:
@@ -51,7 +53,7 @@ class HashTable:
                 return row[0]
 
         except Exception as e:
-            log(f"Error checking file: {e}", 40, exc_info=e)
+            logger.exception(f"Error checking file: {e}")
 
     async def get_files_with_hash_matches(
         self, hash_value: str, size: int, hash_type: str | None = None
@@ -83,8 +85,8 @@ class HashTable:
             cursor = await self.db_conn.execute(query, (hash_value, size, hash_type))
             return cast("list[aiosqlite.Row]", await cursor.fetchall())
 
-        except Exception as e:
-            log(f"Error retrieving folder and filename: {e}", 40, exc_info=e)
+        except Exception:
+            logger.exception("Error retrieving folder and filename")
             return []
 
     async def check_hash_exists(self, hash_type: str, hash_value: str) -> bool:
@@ -129,7 +131,7 @@ class HashTable:
             await self.db_conn.execute(query, (hash_value, hash_type, folder, download_filename, hash_value))
             await self.db_conn.commit()
         except Exception as e:
-            log(f"Error inserting/updating record: {e}", 40, exc_info=e)
+            logger.exception(f"Error inserting/updating record: {e}")
             return False
         return True
 
@@ -166,7 +168,7 @@ class HashTable:
             )
             await self.db_conn.commit()
         except Exception as e:
-            log(f"Error inserting/updating record: {e}", 40, exc_info=e)
+            logger.exception(f"Error inserting/updating record: {e}")
             return False
         return True
 
@@ -190,5 +192,5 @@ class HashTable:
             rows = await cursor.fetchall()
             return [row[0] for row in rows]
         except Exception as e:
-            log(f"Error retrieving folder and filename: {e}", 40, exc_info=e)
+            logger.exception(f"Error retrieving folder and filename: {e}")
             return []
