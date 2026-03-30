@@ -123,7 +123,7 @@ class BunkrrCrawler(Crawler):
 
     def __post_init__(self) -> None:
         self.switch_host_locks: aio.WeakAsyncLocks[str] = aio.WeakAsyncLocks()
-        self.known_good_url: AbsoluteHttpURL | None = None
+        self._known_good_host: str | None = None
         self._parse_album_files = _make_album_parser()
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
@@ -247,8 +247,8 @@ class BunkrrCrawler(Crawler):
             if not _HOST_OPTIONS - known_bad_hosts:
                 raise
         else:
-            if not self.known_good_url:
-                self.known_good_url = resp.url.origin()
+            if not self._known_good_host:
+                self._known_good_host = resp.url.host
             if url.query.get("advanced") and url.query != resp.url.query:
                 soup = await self.request_soup(resp.url.with_query(url.query))
             return soup
@@ -260,8 +260,8 @@ class BunkrrCrawler(Crawler):
 
         If we find one, keep a reference to it and use it for all future requests"""
 
-        if self.known_good_url:
-            return await self.request_soup(url.with_host(self.known_good_url.host))
+        if self._known_good_host:
+            return await self.request_soup(url.with_host(self._known_good_host))
 
         async with self.switch_host_locks[url.host]:
             if url.host not in known_bad_hosts:
