@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import TYPE_CHECKING, Any, cast
 
 import aiofiles
@@ -8,7 +9,7 @@ import rich
 from aiohttp import FormData
 
 from cyberdrop_dl import aio, constants
-from cyberdrop_dl.utils.logger import log, log_debug, log_spacer
+from cyberdrop_dl.utils.logger import log_spacer
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -17,7 +18,7 @@ if TYPE_CHECKING:
     from cyberdrop_dl.managers.manager import Manager
     from cyberdrop_dl.models.base_models import HttpAppriseURL
 
-
+logger = logging.getLogger(__name__)
 _DEFAULT_DIFF_LINE_FORMAT: str = "{}"
 _STYLE_TO_DIFF_MAP = {
     "green": "+   {}",
@@ -71,7 +72,7 @@ async def send_webhook_message(manager: Manager) -> None:
     rich.print("\nSending Webhook Notifications.. ")
     url = cast("AbsoluteHttpURL", webhook.url.get_secret_value())
     form = await _prepare_form(webhook, manager.path_manager.main_log)
-    logger = log
+
     result = constants.NotificationResult.FAILED.value
 
     try:
@@ -79,7 +80,6 @@ async def send_webhook_message(manager: Manager) -> None:
             if response.ok:
                 result = constants.NotificationResult.SUCCESS.value
                 result_to_log = [result]
-                logger = log_debug
 
             else:
                 json_resp: dict[str, Any] = await response.json()
@@ -88,10 +88,10 @@ async def send_webhook_message(manager: Manager) -> None:
                 result_to_log = constants.NotificationResult.FAILED.value, resp_text
 
     except Exception as e:
-        logger("Unable to send webhook notification", 40, exc_info=e)
+        logger.exception("Unable to send webhook notification")
         result_to_log = result, str(e)
 
     log_spacer(10, log_to_console=False)
     rich.print("Webhook Notifications Results:", result)
     result_to_log = "\n".join(map(str, result_to_log))
-    logger(f"Webhook Notifications Results: {result_to_log}")
+    logger.info(f"Webhook Notifications Results: {result_to_log}")

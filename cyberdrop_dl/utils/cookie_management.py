@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import time
 from functools import wraps
@@ -10,7 +11,6 @@ from textwrap import dedent
 from typing import TYPE_CHECKING, NamedTuple, ParamSpec, TypeVar
 
 from cyberdrop_dl.dependencies import browser_cookie3
-from cyberdrop_dl.utils.logger import log
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterable, Callable
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from cyberdrop_dl.constants import BROWSERS
     from cyberdrop_dl.managers.manager import Manager
 
-
+logger = logging.getLogger(__name__)
 P = ParamSpec("P")
 R = TypeVar("R")
 
@@ -136,7 +136,7 @@ def extract_cookies(extractor_name: str) -> CookieJar:
 
 
 async def read_netscape_files(cookie_files: list[Path]) -> AsyncIterable[tuple[str, SimpleCookie]]:
-    now = time.time()
+    now = int(time.time())
     domains_seen = set()
     cookie_jars = await asyncio.gather(*(_read_netscape_file(file) for file in cookie_files))
     for file, cookie_jar in zip(cookie_files, cookie_jars, strict=True):
@@ -149,14 +149,16 @@ async def read_netscape_files(cookie_files: list[Path]) -> AsyncIterable[tuple[s
                 continue
             simplified_domain = cookie.domain.removeprefix(".")
             if simplified_domain not in current_cookie_file_domains:
-                log(f"Found cookies for {simplified_domain} in file '{file.name}'", 20)
+                logger.info(f"Found cookies for {simplified_domain} in file '{file.name}'")
                 current_cookie_file_domains.add(simplified_domain)
                 if simplified_domain in domains_seen:
-                    log(f"Previous cookies for domain {simplified_domain} detected. They will be overwritten", 30)
+                    logger.warning(
+                        f"Previous cookies for domain {simplified_domain} detected. They will be overwritten"
+                    )
 
             if (simplified_domain not in expired_cookies_domains) and cookie.is_expired(now):  # type: ignore
                 expired_cookies_domains.add(simplified_domain)
-                log(f"Cookies for {simplified_domain} are expired", 30)
+                logger.warning(f"Cookies for {simplified_domain} are expired")
 
             domains_seen.add(simplified_domain)
             simple_cookie = make_simple_cookie(cookie, now)
@@ -170,7 +172,7 @@ async def _read_netscape_file(file: Path) -> MozillaCookieJar | None:
             cookie_jar.load(ignore_discard=True)
             return cookie_jar
         except OSError as e:
-            log(f"Unable to load cookies from '{file.name}':\n  {e!s}", 40)
+            logger.error(f"Unable to load cookies from '{file.name}':\n  {e!s}")
 
     return await asyncio.to_thread(read)
 

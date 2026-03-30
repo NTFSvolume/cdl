@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import re
 from datetime import date, datetime
 from pathlib import Path
@@ -21,7 +22,7 @@ from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.exceptions import JDownloaderError, NoExtensionError
 from cyberdrop_dl.scraper.filters import is_in_domain_list, is_outside_date_range, is_valid_url
 from cyberdrop_dl.scraper.jdownloader import JDownloader
-from cyberdrop_dl.utils.logger import log, log_spacer
+from cyberdrop_dl.utils.logger import log_spacer
 from cyberdrop_dl.utils.utilities import get_download_path, remove_trailing_slash
 
 if TYPE_CHECKING:
@@ -33,6 +34,7 @@ if TYPE_CHECKING:
     from cyberdrop_dl.crawlers import Crawler
     from cyberdrop_dl.managers.manager import Manager
 
+logger = logging.getLogger(__name__)
 existing_crawlers: dict[str, Crawler] = {}
 _seen_urls: set[AbsoluteHttpURL] = set()
 _crawlers_disabled_at_runtime: set[str] = set()
@@ -129,7 +131,7 @@ class ScrapeMapper:
                 self.count += 1
 
         if not self.count:
-            log("No valid links found.", 30)
+            logger.warning("No valid links found")
 
     """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
 
@@ -222,7 +224,7 @@ class ScrapeMapper:
             return
 
         if not self.real_debrid.disabled and self.real_debrid.api.is_supported(scrape_item.url):
-            log(f"Using RealDebrid for unsupported URL: {scrape_item.url}", 10)
+            logger.info(f"Using RealDebrid for unsupported URL: {scrape_item.url}")
             self.manager.task_group.create_task(self.real_debrid.run(scrape_item))
             return
 
@@ -234,7 +236,7 @@ class ScrapeMapper:
             pass
 
         if self.jdownloader.enabled and jdownloader_whitelisted:
-            log(f"Sending unsupported URL to JDownloader: {scrape_item.url}", 20)
+            logger.info(f"Sending unsupported URL to JDownloader: {scrape_item.url}")
             success = False
             try:
                 download_folder = get_download_path(self.manager, scrape_item, "jdownloader")
@@ -246,7 +248,7 @@ class ScrapeMapper:
                 )
                 success = True
             except JDownloaderError as e:
-                log(f"Failed to send {scrape_item.url} to JDownloader\n{e.message}", 40)
+                logger.error(f"Failed to send {scrape_item.url} to JDownloader\n{e.message}")
                 self.manager.log_manager.write_unsupported_urls_log(
                     scrape_item.url,
                     scrape_item.parents[0] if scrape_item.parents else None,
@@ -254,7 +256,7 @@ class ScrapeMapper:
             self.manager.progress_manager.scrape_stats_progress.add_unsupported(sent_to_jdownloader=success)
             return
 
-        log(f"Unsupported URL: {scrape_item.url}", 30)
+        logger.warning(f"Unsupported URL: {scrape_item.url}")
         self.manager.log_manager.write_unsupported_urls_log(
             scrape_item.url,
             scrape_item.parents[0] if scrape_item.parents else None,
@@ -274,23 +276,23 @@ class ScrapeMapper:
             is_in_domain_list(scrape_item, BlockedDomains.partial_match)
             or scrape_item.url.host in BlockedDomains.exact_match
         ):
-            log(f"Skipping {scrape_item.url} as it is a blocked domain", 10)
+            logger.info(f"Skipping {scrape_item.url} as it is a blocked domain")
             return False
 
         before = self.manager.parsed_args.cli_only_args.completed_before
         after = self.manager.parsed_args.cli_only_args.completed_after
         if is_outside_date_range(scrape_item, before, after):
-            log(f"Skipping {scrape_item.url} as it is outside of the desired date range", 10)
+            logger.info(f"Skipping {scrape_item.url} as it is outside of the desired date range")
             return False
 
         skip_hosts = self.manager.config_manager.settings_data.ignore_options.skip_hosts
         if skip_hosts and is_in_domain_list(scrape_item, skip_hosts):
-            log(f"Skipping URL by skip_hosts config: {scrape_item.url}", 10)
+            logger.info(f"Skipping URL by skip_hosts config: {scrape_item.url}")
             return False
 
         only_hosts = self.manager.config_manager.settings_data.ignore_options.only_hosts
         if only_hosts and not is_in_domain_list(scrape_item, only_hosts):
-            log(f"Skipping URL by only_hosts config: {scrape_item.url}", 10)
+            logger.info(f"Skipping URL by only_hosts config: {scrape_item.url}")
             return False
 
         return True
@@ -334,7 +336,7 @@ def regex_links(line: str) -> Generator[AbsoluteHttpURL]:
             encoded = "%" in link
             yield AbsoluteHttpURL(link, encoded=encoded)
         except Exception as e:
-            log(f"Unable to parse URL from input file: {link} {e:!r}", 40)
+            logger.error(f"Unable to parse URL from input file: {link} {e:!r}")
 
 
 def _create_item_from_row(row: aiosqlite.Row) -> ScrapeItem:
@@ -391,10 +393,10 @@ def register_crawler(
                 )
                 if from_user == "raise":
                     raise ValueError(msg)
-                log(msg, 40)
+                logger.error(msg)
                 continue
             else:
-                log(f"Successfully mapped {crawler.PRIMARY_URL} to generic crawler {crawler.GENERIC_NAME}")
+                logger.info(f"Successfully mapped {crawler.PRIMARY_URL} to generic crawler {crawler.GENERIC_NAME}")
 
         elif other:
             msg = f"{domain} from {crawler.NAME} already registered by {other}"
@@ -436,7 +438,7 @@ def disable_crawlers_by_config(existing_crawlers: dict[str, Crawler], crawlers_t
             f"{len(crawlers_to_disable)} Crawler names where provided to disable"
             f", but only {len(disabled_crawlers)} {'is' if len(disabled_crawlers) == 1 else 'are'} a valid crawler's name."
         )
-        log(msg, 30)
+        logger.warning(msg)
 
     if disabled_crawlers:
         existing_crawlers.clear()
@@ -444,7 +446,7 @@ def disable_crawlers_by_config(existing_crawlers: dict[str, Crawler], crawlers_t
         crawlers_info = "\n".join(
             str({info.site: info.supported_domains}) for info in sorted(crawlers.INFO for crawlers in disabled_crawlers)
         )
-        log(f"Crawlers disabled by config: \n{crawlers_info}")
+        logger.info(f"Crawlers disabled by config: \n{crawlers_info}")
     log_spacer(10)
 
 

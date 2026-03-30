@@ -16,13 +16,7 @@ from cyberdrop_dl.scraper.scrape_mapper import ScrapeMapper
 from cyberdrop_dl.ui.program_ui import ProgramUI
 from cyberdrop_dl.updates import check_latest_pypi
 from cyberdrop_dl.utils.apprise import send_apprise_notifications
-from cyberdrop_dl.utils.logger import (
-    LogHandler,
-    QueuedLogger,
-    log,
-    log_spacer,
-    log_with_color,
-)
+from cyberdrop_dl.utils.logger import LogHandler, QueuedLogger, log_spacer, log_with_color
 from cyberdrop_dl.utils.sorting import Sorter
 from cyberdrop_dl.utils.utilities import check_partials_and_empty_folders
 from cyberdrop_dl.utils.webhook import send_webhook_message
@@ -30,6 +24,7 @@ from cyberdrop_dl.utils.webhook import send_webhook_message
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Sequence
 
+logger = logging.getLogger(__name__)
 P = ParamSpec("P")
 R = TypeVar("R")
 
@@ -72,22 +67,22 @@ async def _run_manager(manager: Manager) -> None:
     debug_log_file_path = _setup_debug_logger(manager)
     start_time = manager.start_time
     _setup_main_logger(manager)
-    log(f"Using Debug Log: {debug_log_file_path}", 10)
-    log("Starting Async Processes...", 10)
+    logger.info(f"Using Debug Log: {debug_log_file_path}")
+    logger.info("Starting Async Processes...")
     await manager.async_startup()
     log_spacer(10)
 
-    log("Starting CDL...\n", 20)
+    logger.info("Starting CDL...\n")
 
     await _scheduler(manager)
 
     manager.progress_manager.print_stats(start_time)
 
     log_spacer(20)
-    log("Checking for Updates...", 20)
+    logger.info("Checking for Updates...")
     check_latest_pypi()
     log_spacer(20)
-    log("Closing Program...", 20)
+    logger.info("Closing Program...")
     log_with_color("Finished downloading. Enjoy :)", "green", 20, show_in_stats=False)
 
     await send_webhook_message(manager)

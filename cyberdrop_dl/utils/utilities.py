@@ -5,6 +5,7 @@ import dataclasses
 import functools
 import inspect
 import itertools
+import logging
 import mimetypes
 import os
 import platform
@@ -48,7 +49,7 @@ from cyberdrop_dl.exceptions import (
     get_origin,
 )
 from cyberdrop_dl.utils import json
-from cyberdrop_dl.utils.logger import log, log_with_color
+from cyberdrop_dl.utils.logger import log_with_color
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Generator, Iterable, Mapping
@@ -69,6 +70,7 @@ if TYPE_CHECKING:
         __dataclass_fields__: ClassVar[dict]
 
 
+logger = logging.getLogger(__name__)
 _ALLOWED_FILEPATH_PUNCTUATION = " .-_!#$%'()+,;=@[]^{}~"
 _BLOB_OR_SVG = ("data:", "blob:", "javascript:")
 
@@ -137,7 +139,7 @@ def error_handling_context(self: Crawler | Downloader, item: ScrapeItem | MediaI
         self.write_download_error(item, error_log_msg, exc_info)
         return
 
-    log(f"Scrape Failed: {link_to_show} ({error_log_msg.main_log_msg})", 40, exc_info=exc_info)
+    logger.error(f"Scrape Failed: {link_to_show} ({error_log_msg.main_log_msg})", exc_info=exc_info)
     self.manager.log_manager.write_scrape_error_log(link_to_show, error_log_msg.csv_log_msg, origin)
     self.manager.progress_manager.scrape_stats_progress.add_failure(error_log_msg.ui_failure)
 
@@ -288,7 +290,7 @@ def clear_term():
     os.system("cls" if os.name == "nt" else "clear")
 
 
-def get_size(path: os.DirEntry) -> int | None:
+def get_size(path: os.DirEntry[str]) -> int | None:
     try:
         return path.stat(follow_symlinks=False).st_size
     except (OSError, ValueError):
@@ -573,9 +575,7 @@ def xor_decrypt(encrypted_data: bytes, key: bytes) -> str:
     return data.decode("utf-8", errors="ignore")
 
 
-log_cyan = partial(log_with_color, style="cyan", level=20)
 log_yellow = partial(log_with_color, style="yellow", level=20)
-log_green = partial(log_with_color, style="green", level=20)
 log_red = partial(log_with_color, style="red", level=20)
 
 

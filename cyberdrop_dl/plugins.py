@@ -15,11 +15,11 @@ See: https://packaging.python.org/en/latest/guides/creating-and-discovering-plug
 from __future__ import annotations
 
 import dataclasses
+import logging
 from importlib.metadata import entry_points
 from typing import TYPE_CHECKING, Final
 
 from cyberdrop_dl import env
-from cyberdrop_dl.utils.logger import log
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.managers.manager import Manager
 
+logger = logging.getLogger(__name__)
 _GROUP_NAME: Final = "cyberdrop_dl_plugins"
 
 
@@ -51,8 +52,8 @@ def _get_plugins() -> Iterable[Plugin]:
 def load(manager: Manager) -> None:
     for plugin in _get_plugins():
         if env.NO_PLUGINS:
-            log(f"Found plugins installed but plugins are disabled. Ignored: {tuple(_get_plugins())}", 40)
+            logger.error(f"Found plugins installed but plugins are disabled. Ignored: {tuple(_get_plugins())}")
             return
 
         plugin.entrypoint.load()(manager)
-        log(f"Loaded {plugin}", 20)
+        logger.info(f"Loaded {plugin}")
