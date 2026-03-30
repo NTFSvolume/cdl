@@ -33,7 +33,7 @@ from aiolimiter import AsyncLimiter
 from yarl import URL
 
 from cyberdrop_dl import constants
-from cyberdrop_dl.clients.scraper_client import HTTPClient, HTTPClientProxy
+from cyberdrop_dl.clients import HTTPClient, HTTPClientProxy
 from cyberdrop_dl.data_structures.mediaprops import ISO639Subtitle, Resolution
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
 from cyberdrop_dl.downloader.downloader import Downloader

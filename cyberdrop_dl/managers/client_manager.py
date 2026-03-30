@@ -19,10 +19,10 @@ from aiolimiter import AsyncLimiter
 
 from cyberdrop_dl import constants, ddos_guard, env
 from cyberdrop_dl.aio import WeakAsyncLocks
+from cyberdrop_dl.clients import HTTPClient
 from cyberdrop_dl.clients.download_client import DownloadClient
 from cyberdrop_dl.clients.flaresolverr import FlareSolverrClient
 from cyberdrop_dl.clients.response import AbstractResponse
-from cyberdrop_dl.clients.scraper_client import HTTPClient
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
 from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, ScrapeError, TooManyCrawlerErrors
 from cyberdrop_dl.ffmpeg import probe
