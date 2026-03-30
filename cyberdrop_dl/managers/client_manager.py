@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import ssl
 from base64 import b64encode
 from collections import defaultdict
 from collections.abc import Generator
 from contextvars import ContextVar
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any, Literal, Self
+from typing import TYPE_CHECKING, Any, Self
 
 import aiohttp
 import certifi
@@ -27,11 +28,6 @@ from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, ScrapeError, 
 from cyberdrop_dl.ffmpeg import probe
 from cyberdrop_dl.ui.prompts.user_prompts import get_cookies_from_browsers
 from cyberdrop_dl.utils.cookie_management import read_netscape_files
-from cyberdrop_dl.utils.logger import log, log_debug, log_spacer
-
-_VALID_EXTENSIONS = (
-    constants.FILE_FORMATS["Images"] | constants.FILE_FORMATS["Videos"] | constants.FILE_FORMATS["Audio"]
-)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable, Mapping
@@ -47,6 +43,11 @@ try:
     from curl_cffi.requests import AsyncSession  # noqa: TC002
 except ImportError as e:
     _curl_import_error = e
+
+logger = logging.getLogger(__name__)
+_VALID_EXTENSIONS = (
+    constants.FILE_FORMATS["Images"] | constants.FILE_FORMATS["Videos"] | constants.FILE_FORMATS["Audio"]
+)
 
 _DOWNLOAD_ERROR_ETAGS = {
     "d835884373f4d6c8f24742ceabe74946": "Imgur image has been removed",
@@ -159,8 +160,8 @@ class ClientManager:
         return self._flaresolverr
 
     def _startup(self) -> None:
-        self._session = self.new_scrape_session()
-        self._download_session = self.new_download_session()
+        self._session = self.create_aiohttp_session()
+        self._download_session = self.create_aiohttp_session()
         if _curl_import_error is not None:
             return
 
@@ -275,24 +276,16 @@ class ClientManager:
             cookies={cookie.key: cookie.value for cookie in self.cookies},
         )
 
-    def new_scrape_session(self) -> ClientSession:
-        trace_configs = _create_request_log_hooks("scrape")
-        return self._new_session(cached=True, trace_configs=trace_configs)
-
-    def new_download_session(self) -> ClientSession:
-        trace_configs = _create_request_log_hooks("download")
-        return self._new_session(cached=False, trace_configs=trace_configs)
-
-    def _new_session(
-        self, cached: bool = False, trace_configs: list[aiohttp.TraceConfig] | None = None
+    def create_aiohttp_session(
+        self,
     ) -> ClientSession:
-        timeout = self.rate_limiting_options._aiohttp_timeout
         return ClientSession(
-            headers={"user-agent": self.manager.global_config.general.user_agent},
+            headers={
+                "user-agent": self.manager.global_config.general.user_agent,
+            },
             raise_for_status=False,
             cookie_jar=self.cookies,
-            timeout=timeout,
-            trace_configs=trace_configs,
+            timeout=self.rate_limiting_options._aiohttp_timeout,
             proxy=self.manager.global_config.general.proxy,
             connector=self._new_tcp_connector(),
             requote_redirect_url=False,
@@ -311,7 +304,7 @@ class ClientManager:
                     f"{crawler.__class__.__name__} has been disabled after too many errors. "
                     f"URLs from the following domains will be ignored: {crawler.SCRAPE_MAPPER_KEYS}"
                 )
-                log(msg, 40)
+                logger.exception(msg)
             raise TooManyCrawlerErrors
 
     @contextlib.contextmanager
@@ -340,8 +333,6 @@ class ClientManager:
             return
         async for domain, cookie in read_netscape_files(cookie_files):
             self.cookies.update_cookies(cookie, response_url=AbsoluteHttpURL(f"https://{domain}"))
-
-        log_spacer(20, log_to_console=False)
 
     def get_rate_limiter(self, domain: str) -> AsyncLimiter:
         """Get a rate limiter for a domain."""
@@ -466,7 +457,7 @@ async def _set_dns_resolver(loop: asyncio.AbstractEventLoop | None = None) -> No
         constants.DNS_RESOLVER = aiohttp.AsyncResolver
     except Exception as e:
         constants.DNS_RESOLVER = aiohttp.ThreadedResolver
-        log(f"Unable to setup asynchronous DNS resolver. Falling back to thread based resolver: {e}", 30)
+        logger.warning(f"Unable to setup asynchronous DNS resolver. Falling back to thread based resolver: {e}")
 
 
 async def _test_async_resolver(loop: asyncio.AbstractEventLoop | None = None) -> None:
@@ -478,20 +469,3 @@ async def _test_async_resolver(loop: asyncio.AbstractEventLoop | None = None) ->
 
     async with aiodns.DNSResolver(loop=loop, timeout=5.0) as resolver:
         _ = await resolver.query_dns("github.com", "A")
-
-
-def _create_request_log_hooks(client_type: Literal["scrape", "download"]) -> list[aiohttp.TraceConfig]:
-    async def on_request_start(*args) -> None:
-        params: aiohttp.TraceRequestStartParams = args[2]
-        log_debug(f"Starting {client_type} {params.method} request to {params.url}", 10)
-
-    async def on_request_end(*args) -> None:
-        params: aiohttp.TraceRequestEndParams = args[2]
-        msg = f"Finishing {client_type} {params.method} request to {params.url}"
-        msg += f" -> response status: {params.response.status}"
-        log_debug(msg, 10)
-
-    trace_config = aiohttp.TraceConfig()
-    trace_config.on_request_start.append(on_request_start)
-    trace_config.on_request_end.append(on_request_end)
-    return [trace_config]

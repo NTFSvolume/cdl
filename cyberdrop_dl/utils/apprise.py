@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import shutil
 import tempfile
 from dataclasses import dataclass
@@ -16,10 +17,12 @@ from rich.text import Text
 from cyberdrop_dl import constants
 from cyberdrop_dl.dependencies import apprise
 from cyberdrop_dl.models import AppriseURLModel
-from cyberdrop_dl.utils.logger import log, log_debug, log_spacer
+from cyberdrop_dl.utils.logger import log_spacer
 
 if TYPE_CHECKING:
     from cyberdrop_dl.managers.manager import Manager
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -80,7 +83,7 @@ def get_apprise_urls(*, file: Path | None = None, urls: list[str] | None = None)
     if not urls:
         return []
     if apprise is None:
-        log("Found apprise URLs for notifications but apprise is not installed. Ignoring", 30)
+        logger.warning("Found apprise URLs for notifications but apprise is not installed. Ignoring")
         return []
 
     return _simplify_urls([AppriseURLModel.model_validate({"url": url}) for url in set(urls)])
@@ -128,14 +131,14 @@ def _process_results(
 
     log_spacer(10, log_to_console=False, log_to_file=not all(result))
     rich.print("Apprise notifications results:", final_result.value)
-    logger = log_debug if all(result) else log
-    logger(f"Apprise notifications results: {final_result.value}")
-    logger(f"PARSED_APPRISE_URLs: \n{json.dumps(all_urls, indent=4)}\n")
-    logger(f"RESULTS_BY_TAGS: \n{json.dumps(result_dict, indent=4)}")
+    log = logger.debug if all(result) else logger.info
+    log(f"Apprise notifications results: {final_result.value}")
+    log(f"PARSED_APPRISE_URLs: \n{json.dumps(all_urls, indent=4)}\n")
+    log(f"RESULTS_BY_TAGS: \n{json.dumps(result_dict, indent=4)}")
     log_spacer(10, log_to_console=False, log_to_file=not all(result))
     parsed_log_lines = _parse_apprise_logs(apprise_logs)
     for line in parsed_log_lines:
-        logger(level=line.level.value, message=line.msg)
+        log(line.msg)
     return final_result, parsed_log_lines
 
 
@@ -208,7 +211,7 @@ async def send_apprise_notifications(manager: Manager) -> tuple[constants.Notifi
             shutil.copy(main_log, temp_main_log)
             notifications_to_send["attach_logs"]["attach"] = str(temp_main_log.resolve())
         except OSError:
-            log(attach_file_failed_msg, 40)
+            logger.exception(attach_file_failed_msg)
 
         async def notify(tag: str, msg: dict[str, Any]) -> tuple[str, bool | None]:
             result = await apprise_obj.async_notify(**msg, tag=tag)

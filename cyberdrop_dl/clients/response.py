@@ -69,7 +69,7 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
         return f"<{type(self).__name__} [{self.status}] ({self.url})>"
 
     def __str__(self) -> str:
-        return self.create_report()
+        return json.dumps(self.__json__(), indent=2, ensure_ascii=False)
 
     def __json__(self) -> dict[str, Any]:
         if content := self._text:

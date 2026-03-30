@@ -1,4 +1,3 @@
-# pyright: ignore[reportIncompatibleVariableOverride]
 from __future__ import annotations
 
 import base64
@@ -18,7 +17,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Generator
 
     import aiohttp
-    from propcache.api import under_cached_property as cached_property
     from rich.progress import TaskID
 
     from cyberdrop_dl import signature
@@ -34,17 +32,17 @@ if TYPE_CHECKING:
         @signature.copy(yarl.URL.__mod__)
         def __mod__(self) -> AbsoluteHttpURL: ...
 
-        @cached_property
-        def host(self) -> str: ...
+        @property
+        def host(self) -> str: ...  # pyright: ignore[reportIncompatibleVariableOverride]
 
-        @cached_property
-        def scheme(self) -> Literal["http", "https"]: ...
+        @property
+        def scheme(self) -> Literal["http", "https"]: ...  # pyright: ignore[reportIncompatibleVariableOverride]
 
-        @cached_property
-        def absolute(self) -> Literal[True]: ...
+        @property
+        def absolute(self) -> Literal[True]: ...  # pyright: ignore[reportIncompatibleVariableOverride]
 
-        @cached_property
-        def parent(self) -> AbsoluteHttpURL: ...
+        @property
+        def parent(self) -> AbsoluteHttpURL: ...  # pyright: ignore[reportIncompatibleVariableOverride]
 
         @signature.copy(yarl.URL.with_path)
         def with_path(self) -> AbsoluteHttpURL: ...

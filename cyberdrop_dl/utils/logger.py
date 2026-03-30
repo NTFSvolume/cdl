@@ -80,7 +80,7 @@ class LogHandler(RichHandler):
     """Rich Handler with default settings, automatic console creation and custom log render to remove padding in files."""
 
     def __init__(
-        self, level: int = 10, file: IO[str] | None = None, width: int | None = None, debug: bool = False, **kwargs
+        self, level: int = 10, file: IO[str] | None = None, width: int | None = None, debug: bool = False
     ) -> None:
         is_file: bool = file is not None
         redacted: bool = is_file and not debug
@@ -89,11 +89,23 @@ class LogHandler(RichHandler):
             console = _DEFAULT_CONSOLE
         else:
             console = console_cls(file=file, width=width)
-        options = constants.RICH_HANDLER_DEBUG_CONFIG if debug else constants.RICH_HANDLER_CONFIG
-        options = options | kwargs
-        super().__init__(level, console, show_time=is_file, **options)
+
+        super().__init__(
+            level,
+            console,
+            show_time=False,
+            show_path=False,
+            tracebacks_show_locals=debug,
+            locals_max_string=constants.DEFAULT_CONSOLE_WIDTH,
+            tracebacks_extra_lines=2,
+            locals_max_length=20,
+        )
         if is_file:
-            self._log_render = NoPaddingLogRender(show_level=True)
+            self._log_render = NoPaddingLogRender(
+                show_path=False,
+                show_level=True,
+                time_format=lambda dt: Text(f"[{dt.isoformat(sep=' ', timespec='milliseconds')}]", style="log.time"),
+            )
 
 
 class BareQueueHandler(QueueHandler):

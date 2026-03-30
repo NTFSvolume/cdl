@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import itertools
+import logging
 from datetime import datetime
 from pathlib import Path
 from subprocess import CalledProcessError
@@ -13,11 +14,14 @@ from cyberdrop_dl import constants
 from cyberdrop_dl.constants import FILE_FORMATS
 from cyberdrop_dl.ffmpeg import probe
 from cyberdrop_dl.utils import strings
-from cyberdrop_dl.utils.logger import log, log_with_color
+from cyberdrop_dl.utils.logger import log_with_color
 from cyberdrop_dl.utils.utilities import purge_dir_tree
 
 if TYPE_CHECKING:
     from cyberdrop_dl.managers.manager import Manager
+
+
+logger = logging.getLogger(__name__)
 
 
 async def get_modified_date(file: Path) -> datetime:
@@ -128,8 +132,8 @@ class Sorter:
                 bitrate = audio.bitrate
                 sample_rate = audio.sample_rate
 
-        except (RuntimeError, CalledProcessError, OSError) as e:
-            log(f"Unable to get audio properties of '{file}'", 40, exc_info=e)
+        except (RuntimeError, CalledProcessError, OSError):
+            logger.exception(f"Unable to get audio properties of '{file}'")
 
         if await self._process_file_move(
             file,
@@ -156,7 +160,7 @@ class Sorter:
                 width = height = resolution = None
 
         except (OSError, ValueError):
-            log(f"Unable to get some image properties of '{file}'")
+            logger.exception(f"Unable to get some image properties of '{file}'")
 
         if await self._process_file_move(
             file,
@@ -185,8 +189,8 @@ class Sorter:
                 duration = video.duration or probe_output.format.duration
                 framerate = video.fps
 
-        except (RuntimeError, CalledProcessError, OSError) as e:
-            log(f"Unable to get some video properties of '{file}'", 40, exc_info=e)
+        except (RuntimeError, CalledProcessError, OSError):
+            logger.exception(f"Unable to get some video properties of '{file}'")
 
         if await self._process_file_move(
             file,

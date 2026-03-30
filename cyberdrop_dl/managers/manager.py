@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from dataclasses import Field, field
 from time import perf_counter
 from typing import TYPE_CHECKING, Any, NamedTuple, TypeVar
@@ -20,7 +21,7 @@ from cyberdrop_dl.managers.live_manager import LiveManager
 from cyberdrop_dl.managers.log_manager import LogManager
 from cyberdrop_dl.managers.path_manager import PathManager
 from cyberdrop_dl.managers.progress_manager import ProgressManager
-from cyberdrop_dl.utils.logger import LogHandler, QueuedLogger, log
+from cyberdrop_dl.utils.logger import LogHandler, QueuedLogger
 from cyberdrop_dl.utils.utilities import close_if_defined, get_system_information
 
 if TYPE_CHECKING:
@@ -33,6 +34,9 @@ if TYPE_CHECKING:
 class AsyncioEvents(NamedTuple):
     SHUTTING_DOWN: asyncio.Event
     RUNNING: asyncio.Event
+
+
+logger = logging.getLogger(__name__)
 
 
 class Manager:
@@ -180,7 +184,7 @@ class Manager:
             f"Using ffmpeg version: {ffmpeg.get_ffmpeg_version()}",
             f"Using ffprobe version: {ffmpeg.get_ffprobe_version()}",
         )
-        log("\n".join(args_info))
+        logger.info("\n".join(args_info))
 
     async def async_db_close(self) -> None:
         "Partial shutdown for managers used for hash directory scanner"

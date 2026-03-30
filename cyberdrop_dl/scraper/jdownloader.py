@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import dataclasses
+import logging
 from typing import TYPE_CHECKING
 
 from myjdapi import myjdapi
 
 from cyberdrop_dl.exceptions import JDownloaderError
-from cyberdrop_dl.utils.logger import log
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -68,7 +70,7 @@ class JDownloader:
         except myjdapi.MYJDApiException as e:
             msg = e
 
-        log(f"Failed to connect to jDownloader: {msg}", 40)
+        logger.error(f"Failed to connect to jDownloader: {msg}")
         self.enabled = False
 
     def direct_unsupported_to_jdownloader(

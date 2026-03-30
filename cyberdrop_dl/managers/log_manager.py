@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import csv
+import logging
 from collections import defaultdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -9,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 from cyberdrop_dl.constants import CSV_DELIMITER
 from cyberdrop_dl.exceptions import get_origin
 from cyberdrop_dl.utils import json
-from cyberdrop_dl.utils.logger import log, log_spacer
+from cyberdrop_dl.utils.logger import log_spacer
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -18,6 +19,9 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.data_structures.url_objects import MediaItem
     from cyberdrop_dl.managers.manager import Manager
+
+
+logger = logging.getLogger(__name__)
 
 
 class LogManager:
@@ -99,7 +103,7 @@ class LogManager:
 
 def _update_last_forum_post(input_file: Path, last_post_log: Path) -> None:
     log_spacer(20)
-    log("Updating Last Forum Posts...\n", 20)
+    logger.info("Updating Last Forum Posts...\n")
 
     current_urls, current_base_urls, new_urls, new_base_urls = [], [], [], []
     try:
@@ -115,13 +119,13 @@ def _update_last_forum_post(input_file: Path, last_post_log: Path) -> None:
                     current_urls.append(url)
                     current_base_urls.append(base_url)
     except UnicodeDecodeError:
-        log("Unable to read input file, skipping update_last_forum_post", 40)
+        logger.exception("Unable to read input file, skipping update_last_forum_post")
         return
 
     with last_post_log.open(encoding="utf8") as f:
         reader = csv.DictReader(f.readlines())
         for row in reader:
-            new_url = base_url = row.get("url").strip().removesuffix("/")  # type: ignore
+            new_url = base_url = row["url"].strip().removesuffix("/")  # type: ignore
 
             if "https" in new_url and "/post-" in new_url:
                 base_url = new_url.rsplit("/post", 1)[0]
@@ -138,11 +142,11 @@ def _update_last_forum_post(input_file: Path, last_post_log: Path) -> None:
             old_url = current_urls[index]
             if old_url == new_url:
                 continue
-            log(f"Updating {base}\n  {old_url = }\n  {new_url = }", 20)
+            logger.info(f"Updating {base}\n  {old_url = }\n  {new_url = }")
             updated_urls[index] = new_url
 
     if updated_urls == current_urls:
-        log("No URLs updated", 20)
+        logger.info("No URLs updated")
         return
 
     with input_file.open("w", encoding="utf8") as f:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 from contextlib import asynccontextmanager
 from dataclasses import field
@@ -22,7 +23,7 @@ from cyberdrop_dl.ui.progress.hash_progress import HashProgress
 from cyberdrop_dl.ui.progress.scraping_progress import ScrapingProgress
 from cyberdrop_dl.ui.progress.sort_progress import SortProgress
 from cyberdrop_dl.ui.progress.statistic_progress import DownloadStatsProgress, ScrapeStatsProgress
-from cyberdrop_dl.utils.logger import log, log_spacer, log_with_color
+from cyberdrop_dl.utils.logger import log_spacer, log_with_color
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -32,6 +33,9 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.managers.manager import Manager
     from cyberdrop_dl.ui.progress.statistic_progress import UiFailureTotal
+
+
+logger = logging.getLogger(__name__)
 
 log_cyan = partial(log_with_color, style="cyan", level=20)
 log_yellow = partial(log_with_color, style="yellow", level=20)
@@ -144,7 +148,7 @@ class ProgressManager:
         total_data_written = ByteSize(self.file_progress.total_data_written).human_readable(decimal=True)
 
         log_spacer(20)
-        log("Printing Stats...\n", 20)
+        logger.info("Printing Stats...\n")
         config_path = self.manager.path_manager.config_folder / self.manager.config_manager.loaded_config
         config_path_text = get_console_hyperlink(config_path, text=self.manager.config_manager.loaded_config)
         input_file_text = get_input(self.manager)

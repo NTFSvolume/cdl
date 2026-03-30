@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import itertools
+import logging
 import time
 from collections.abc import Generator
 from http import HTTPStatus
@@ -16,7 +17,6 @@ from cyberdrop_dl.constants import FILE_FORMATS
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, InvalidContentTypeError, SlowDownloadError
 from cyberdrop_dl.utils import dates
-from cyberdrop_dl.utils.logger import log, log_debug
 from cyberdrop_dl.utils.utilities import get_size_or_none
 
 if TYPE_CHECKING:
@@ -29,6 +29,9 @@ if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import MediaItem
     from cyberdrop_dl.managers.client_manager import ClientManager
     from cyberdrop_dl.managers.manager import Manager
+
+
+logger = logging.getLogger(__name__)
 
 
 _CONTENT_TYPES_OVERRIDES: dict[str, str] = {"text/vnd.trolltech.linguist": "video/MP2T"}
@@ -142,7 +145,7 @@ class DownloadClient:
             if not proceed:
                 if media_item.is_segment:
                     return True
-                log(f"Skipping {media_item.url} as it has already been downloaded", 10)
+                logger.info(f"Skipping {media_item.url} as it has already been downloaded")
                 self.manager.progress_manager.download_progress.add_previously_completed(False)
                 await self.process_completed(media_item, domain)
                 await self.handle_media_item_completion(media_item, downloaded=False)
@@ -157,8 +160,9 @@ class DownloadClient:
             and not media_item.uploaded_at
             and (last_modified := get_last_modified(resp.headers))
         ):
-            msg = f"Unable to parse upload date for {media_item.url}, using `Last-Modified` header as file datetime"
-            log(msg, 30)
+            logger.warning(
+                f"Unable to parse upload date for {media_item.url}, using `Last-Modified` header as file datetime"
+            )
             media_item.uploaded_at = last_modified
 
         task_id = media_item.task_id
@@ -229,12 +233,14 @@ class DownloadClient:
                     else:
                         fallback_count += 1
                         msg = f" with fallback URL #{fallback_count} {download_url} failed, retrying with new fallback URL: "
-                    log(f"Download of {media_item.url}{msg}{next_download_url}", 40)
+                    logger.error(f"Download of {media_item.url}{msg}{next_download_url}")
                     download_url = next_download_url
                     continue
                 raise
 
-    async def _append_content(self, media_item: MediaItem, content: aiohttp.StreamReader | AbstractResponse) -> None:
+    async def _append_content(
+        self, media_item: MediaItem, content: aiohttp.StreamReader | AbstractResponse[Any]
+    ) -> None:
         """Appends content to a file."""
 
         assert media_item.task_id is not None
@@ -289,7 +295,7 @@ class DownloadClient:
     async def download_file(self, domain: str, media_item: MediaItem) -> bool:
         """Starts a file."""
         if self.manager.config.download_options.skip_download_mark_completed and not media_item.is_segment:
-            log(f"Download Removed {media_item.url} due to mark completed option", 10)
+            logger.info(f"Download removed {media_item.url} due to mark completed option")
             self.manager.progress_manager.download_progress.add_skipped()
             # set completed path
             await self.process_completed(media_item, domain)
@@ -304,7 +310,7 @@ class DownloadClient:
                 proceed = await self.client_manager.check_file_duration(media_item)
                 await self.manager.db_manager.history_table.add_duration(domain, media_item)
                 if not proceed:
-                    log(f"Download Skip {media_item.url} due to runtime restrictions", 10)
+                    logger.info(f"Download skipped {media_item.url} due to runtime restrictions")
                     await asyncio.to_thread(media_item.path.unlink)
                     await self.mark_incomplete(media_item, domain)
                     self.manager.progress_manager.download_progress.add_skipped()
@@ -342,7 +348,7 @@ class DownloadClient:
             await self.manager.hash_manager.hash_client.hash_item_during_download(media_item)
             self.manager.path_manager.add_completed(media_item)
         except Exception:
-            log(f"Error handling media item completion of: {media_item.path}", 10, exc_info=True)
+            logger.exception(f"Error handling media item completion of: {media_item.path}")
 
     """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
 
@@ -372,14 +378,11 @@ class DownloadClient:
         proceed = True
         skip = False
 
-        if not TYPE_CHECKING:
-            log = log_debug if media_item.is_segment else globals()["log"]
-
         while True:
             if expected_size and not media_item.is_segment:
                 file_size_check = self.check_filesize_limits(media_item)
                 if not file_size_check:
-                    log(f"Download Skip {media_item.url} due to filesize restrictions", 10)
+                    logger.info(f"Download skipped {media_item.url} due to filesize restrictions")
                     proceed = False
                     skip = True
                     return proceed, skip
@@ -388,7 +391,7 @@ class DownloadClient:
                 break
 
             if media_item.path.exists() and media_item.path.stat().st_size == media_item.filesize:
-                log(f"Found {media_item.path.name} locally, skipping download")
+                logger.info(f"Found {media_item.path.name} locally, skipping download")
                 proceed = False
                 break
 
@@ -405,18 +408,17 @@ class DownloadClient:
 
             if media_item.filename == downloaded_filename:
                 if media_item.partial_file.exists():
-                    log(f"Found {downloaded_filename} locally, trying to resume")
+                    logger.info(f"Found {downloaded_filename} locally, trying to resume")
                     assert media_item.filesize
                     size = media_item.partial_file.stat().st_size
-                    if size >= media_item.filesize != 0:
-                        log(f"Deleting partial file {media_item.partial_file}")
+                    if size >= media_item.filesize:
+                        logger.info(f"Deleting partial file {media_item.partial_file}. Size is out of bound")
                         media_item.partial_file.unlink()
 
                     elif size == media_item.filesize:
                         if media_item.path.exists():
-                            log(
-                                f"Found conflicting complete file '{media_item.path}' locally, iterating filename",
-                                30,
+                            logger.warning(
+                                f"Found conflicting complete file '{media_item.path}' locally, iterating filename"
                             )
                             new_complete_filename, new_partial_file = await self.iterate_filename(
                                 media_item.path,
@@ -430,17 +432,16 @@ class DownloadClient:
                         else:
                             proceed = False
                             media_item.partial_file.rename(media_item.path)
-                        log(
+                        logger.info(
                             f"Renaming found partial file '{media_item.partial_file}' to complete file {media_item.path}"
                         )
                 elif media_item.path.exists():
                     if media_item.path.stat().st_size == media_item.filesize:
-                        log(f"Found complete file '{media_item.path}' locally, skipping download")
+                        logger.info(f"Found complete file '{media_item.path}' locally, skipping download")
                         proceed = False
                     else:
-                        log(
-                            f"Found conflicting complete file '{media_item.path}' locally, iterating filename",
-                            30,
+                        logger.warning(
+                            f"Found conflicting complete file '{media_item.path}' locally, iterating filename"
                         )
                         media_item.path, media_item.partial_file = await self.iterate_filename(
                             media_item.path,

@@ -5,6 +5,7 @@ import contextlib
 import datetime
 import importlib
 import inspect
+import logging
 import pkgutil
 import re
 import weakref
@@ -54,24 +55,24 @@ from cyberdrop_dl.utils.utilities import (
     truncate_str,
 )
 
-P = ParamSpec("P")
-R = TypeVar("R")
-T = TypeVar("T")
-_T_co = TypeVar("_T_co", covariant=True)
-
-
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable, Coroutine, Generator, Iterable
     from http.cookies import BaseCookie
 
     from bs4 import BeautifulSoup, Tag
+    from curl_cffi.requests.impersonate import BrowserTypeLiteral
     from rich.progress import TaskID
 
     from cyberdrop_dl.clients.response import AbstractResponse
     from cyberdrop_dl.managers.manager import Manager
 
+logger = logging.getLogger(__name__)
 
-OneOrTuple: TypeAlias = T | tuple[T, ...]
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+_T = TypeVar("_T")
+_T_co = TypeVar("_T_co", covariant=True)
+OneOrTuple: TypeAlias = _T | tuple[_T, ...]
 SupportedPaths: TypeAlias = dict[str, OneOrTuple[str]]
 SupportedDomains: TypeAlias = OneOrTuple[str]
 RateLimit = tuple[float, float]
@@ -155,7 +156,7 @@ class Registry:
 
 class HTTPClientProxy:
     DOMAIN: ClassVar[str]
-    _IMPERSONATE: ClassVar[str | bool | None] = None
+    _IMPERSONATE: ClassVar[BrowserTypeLiteral | bool | None] = None
     client: ScraperClient  # pyright: ignore[reportUninitializedInstanceVariable]
 
     @classmethod
@@ -181,7 +182,7 @@ class HTTPClientProxy:
     @signature.copy(ScraperClient._request)
     @contextlib.asynccontextmanager
     async def request(
-        self, *args, impersonate: str | bool | None = None, **kwargs
+        self, *args, impersonate: BrowserTypeLiteral | bool | None = None, **kwargs
     ) -> AsyncGenerator[AbstractResponse[Any]]:
         if impersonate is None:
             impersonate = self._IMPERSONATE
@@ -365,7 +366,7 @@ class Crawler(ABC, HTTPClientProxy):
         try:
             yield
         except Exception:
-            self.log(f"[{self.FOLDER_DOMAIN}] {msg}. Crawler has been disabled", 40)
+            logger.error(f"[{self.FOLDER_DOMAIN}] {msg}. Crawler has been disabled")
             self.disabled = True
             raise
 
@@ -387,7 +388,7 @@ class Crawler(ABC, HTTPClientProxy):
                 scrape_item.url = url = self.transform_url(scrape_item.url)
 
             if url.path_qs in self.scraped_items:
-                return log(f"Skipping {url} as it has already been scraped", 10)
+                return logger.info(f"Skipping {url} as it has already been scraped")
 
             self.scraped_items.add(url.path_qs)
             async with self._fetch_context(scrape_item):
@@ -431,7 +432,7 @@ class Crawler(ABC, HTTPClientProxy):
     @contextlib.contextmanager
     def new_task_id(self, url: AbsoluteHttpURL) -> Generator[TaskID]:
         """Creates a new task_id (shows the URL in the UI and logs)"""
-        log(f"Scraping [{self.FOLDER_DOMAIN}]: {url}", 20)
+        logger.info(f"Scraping [{self.FOLDER_DOMAIN}]: {url}")
         task_id = self.manager.progress_manager.scraping_progress.add_task(url)
         try:
             yield task_id
@@ -456,7 +457,7 @@ class Crawler(ABC, HTTPClientProxy):
 
         filename = f"{name}.metadata"  # we won't write to fs, so we skip name sanitization
         download_folder = get_download_path(self.manager, scrape_item, self.FOLDER_DOMAIN)
-        url = scrape_item.url.with_scheme("metadata")
+        url = AbsoluteHttpURL(scrape_item.url.with_scheme("metadata"))
         media_item = MediaItem.from_item(
             scrape_item,
             url,
@@ -532,18 +533,12 @@ class Crawler(ABC, HTTPClientProxy):
         db_path = self.create_db_path(url)
         check_complete = await self.manager.db_manager.history_table.check_complete(self.DOMAIN, url, referer, db_path)
         if check_complete:
-            log(f"Skipping {url} as it has already been downloaded", 10)
+            logger.info(f"Skipping {url} as it has already been downloaded")
             self.manager.progress_manager.download_progress.add_previously_completed()
         return check_complete
 
     async def handle_media_item(self, media_item: MediaItem, m3u8: m3u8.RenditionGroup | None = None) -> None:
         await self.manager.states.RUNNING.wait()
-        if media_item.uploaded_at and not isinstance(media_item.uploaded_at, int):
-            msg = (
-                f"Invalid datetime from '{self.FOLDER_DOMAIN}' crawler . Got {media_item.uploaded_at!r}, expected int."
-            )
-            log(msg, bug=True)
-
         check_complete = await self.check_complete(media_item.url, media_item.referer)
         if check_complete:
             if media_item.album_id:
@@ -561,17 +556,17 @@ class Crawler(ABC, HTTPClientProxy):
         media_host = media_item.url.host
 
         if (hosts := self.manager.config.ignore_options.skip_hosts) and any(host in media_host for host in hosts):
-            log(f"Download skip {media_item.url} due to skip_hosts config", 10)
+            logger.info(f"Download skipped {media_item.url} due to skip_hosts config")
             return True
 
         if (hosts := self.manager.config.ignore_options.only_hosts) and not any(host in media_host for host in hosts):
-            log(f"Download skip {media_item.url} due to only_hosts config", 10)
+            logger.info(f"Download skipped {media_item.url} due to only_hosts config")
             return True
 
         if (regex := self.manager.config.ignore_options.filename_regex_filter) and re.search(
             regex, media_item.filename
         ):
-            log(f"Download skip {media_item.url} due to filename regex filter config", 10)
+            logger.info(f"Download skipped {media_item.url} due to filename regex filter config")
             return True
 
         return False
@@ -588,7 +583,7 @@ class Crawler(ABC, HTTPClientProxy):
         domain = None if any_crawler else self.DOMAIN
         downloaded = await self.manager.db_manager.history_table.check_complete_by_referer(domain, url)
         if downloaded:
-            log(f"Skipping {url} as it has already been downloaded", 10)
+            logger.info(f"Skipping {url} as it has already been downloaded")
             self.manager.progress_manager.download_progress.add_previously_completed()
             return True
         return False
@@ -601,7 +596,7 @@ class Crawler(ABC, HTTPClientProxy):
         downloaded = await self.manager.db_manager.hash_table.check_hash_exists(hash_type, hash_value)
         if downloaded:
             url = scrape_item if isinstance(scrape_item, URL) else scrape_item.url
-            log(f"Skipping {url} as its hash ({hash_type}:{hash_value}) has already been downloaded", 10)
+            logger.info(f"Skipping {url} as its hash ({hash_type}:{hash_value}) has already been downloaded")
             self.manager.progress_manager.download_progress.add_previously_completed()
         return downloaded
 
@@ -637,7 +632,7 @@ class Crawler(ABC, HTTPClientProxy):
             return False
         url_path = self.create_db_path(url)
         if url_path in album_results and album_results[url_path] != 0:
-            log(f"Skipping {url} as it has already been downloaded")
+            logger.info(f"Skipping {url} as it has already been downloaded")
             self.manager.progress_manager.download_progress.add_previously_completed()
             return True
         return False
@@ -829,7 +824,9 @@ class Crawler(ABC, HTTPClientProxy):
             page_url = self.parse_url(page_url_str, **kwargs)
 
     @error_handling_wrapper
-    async def direct_file(self, scrape_item: ScrapeItem, url: URL | None = None, assume_ext: str | None = None) -> None:
+    async def direct_file(
+        self, scrape_item: ScrapeItem, url: AbsoluteHttpURL | None = None, assume_ext: str | None = None
+    ) -> None:
         """Download a direct link file. Filename will be the url slug"""
         link = url or scrape_item.url
         filename, ext = self.get_filename_and_ext(link.name or link.parent.name, assume_ext=assume_ext)
@@ -946,7 +943,7 @@ class Crawler(ABC, HTTPClientProxy):
                 f"Important information was removed while creating a filename. "
                 f"\n{calling_args}"
             )
-            log(msg, bug=True)
+            logger.warning(msg)
         return filename
 
     @final
@@ -1042,7 +1039,7 @@ def _create_subclass(url: yarl.URL | str, base_class: type[_CrawlerT]) -> type[_
     domain = primary_url.host.removeprefix("www.")
     class_name = _make_crawler_name(domain)
     class_attributes = Site(primary_url, domain)._asdict()
-    return type(class_name, (base_class,), class_attributes)  # type: ignore
+    return type(class_name, (base_class,), class_attributes)  # type: ignore  # pyright: ignore[reportReturnType]
 
 
 def _make_crawler_name(input_string: str) -> str:
@@ -1091,12 +1088,12 @@ def _sort_supported_paths(supported_paths: SupportedPaths) -> dict[str, OneOrTup
 
 
 def auto_task_id(
-    func: Callable[Concatenate[_CrawlerT, ScrapeItem, P], R | Coroutine[None, None, R]],
-) -> Callable[Concatenate[_CrawlerT, ScrapeItem, P], Coroutine[None, None, R]]:
+    func: Callable[Concatenate[_CrawlerT, ScrapeItem, _P], _R | Coroutine[None, None, _R]],
+) -> Callable[Concatenate[_CrawlerT, ScrapeItem, _P], Coroutine[None, None, _R]]:
     """Autocreate a new `task_id` from the scrape_item of the method"""
 
     @wraps(func)
-    async def wrapper(self: _CrawlerT, scrape_item: ScrapeItem, *args: P.args, **kwargs: P.kwargs) -> R:
+    async def wrapper(self: _CrawlerT, scrape_item: ScrapeItem, *args: _P.args, **kwargs: _P.kwargs) -> _R:
         await self.manager.states.RUNNING.wait()
         with self.new_task_id(scrape_item.url):
             result = func(self, scrape_item, *args, **kwargs)
