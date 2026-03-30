@@ -134,35 +134,35 @@ class MediaItem:
     download_folder: Path
     filename: str
     original_filename: str
-    download_filename: str | None = field(default=None)
-    filesize: int | None = field(default=None, compare=False)
+    download_filename: str | None = None
+    filesize: int | None = None
     ext: str
     db_path: str
 
-    debrid_link: AbsoluteHttpURL | None = field(default=None, compare=False)
-    duration: float | None = field(default=None, compare=False)
+    debrid_link: AbsoluteHttpURL | None = None
+    duration: float | None = None
     is_segment: bool = False
     fallbacks: Callable[[aiohttp.ClientResponse, int], AbsoluteHttpURL] | list[AbsoluteHttpURL] | None = field(
-        default=None, compare=False
+        default=None
     )
     album_id: str | None = None
-    uploaded_at: int | None = field(default=None, compare=False)
-    parents: list[AbsoluteHttpURL] = field(default_factory=list, compare=False)
-    parent_threads: set[AbsoluteHttpURL] = field(default_factory=set, compare=False)
+    uploaded_at: int | None = None
 
-    current_attempt: int = field(default=0, compare=False)
+    parents: list[AbsoluteHttpURL] = field(default_factory=list)
+    parent_threads: set[AbsoluteHttpURL] = field(default_factory=set)
+
+    attempts: int = field(default=0)
     partial_file: Path = None  # type: ignore
     complete_file: Path = None  # type: ignore
-    hash: str | None = field(default=None, compare=False)
-    downloaded: bool = field(default=False, compare=False)
+    hash: str | None = None
+    downloaded: bool = field(default=False)
 
-    parent_media_item: MediaItem | None = field(default=None, compare=False)
-    _task_id: TaskID | None = field(default=None, compare=False)
-    metadata: object = field(init=False, default_factory=dict, compare=False)
+    parent_media_item: MediaItem | None = None
+    _task_id: TaskID | None = None
+    metadata: object = field(init=False, default_factory=dict)
+
     uploaded_at_date: datetime.datetime | None = field(init=False, default=None)
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}(domain={self.domain!r}, url={self.url!r}, referer={self.referer!r}, filename={self.filename!r}"
+    extra_info: dict[str, Any] = field(init=False, default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.url.scheme == "metadata":
@@ -220,7 +220,6 @@ class MediaItem:
 
     def __json__(self) -> dict[str, Any]:
         me = asdict(self)
-        me["attempts"] = me.pop("current_attempt")
         if self.hash:
             me["hash"] = f"xxh128:{self.hash}"
         for name in ("fallbacks", "_task_id", "is_segment", "parent_media_item"):

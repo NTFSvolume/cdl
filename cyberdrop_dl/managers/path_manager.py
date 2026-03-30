@@ -31,10 +31,7 @@ class PathManager:
         self.history_db: Path = field(init=False)
         self.cache_db: Path = field(init=False)
 
-        self._completed_downloads: set[MediaItem] = set()
-        self._completed_downloads_paths: set[Path] = set()
-        self._prev_downloads: set[MediaItem] = set()
-        self._prev_downloads_paths: set[Path] = set()
+        self._completed_downloads: list[MediaItem] = []
 
         self.main_log: Path = field(init=False)
         self.last_forum_post_log: Path = field(init=False)
@@ -156,17 +153,8 @@ class PathManager:
     def add_completed(self, media_item: MediaItem) -> None:
         if media_item.is_segment:
             return
-        self._completed_downloads.add(media_item)
-        self._completed_downloads_paths.add(media_item.complete_file)
-
-    def add_prev(self, media_item: MediaItem) -> None:
-        self._prev_downloads.add(media_item)
-        self._prev_downloads_paths.add(media_item.complete_file)
+        self._completed_downloads.append(media_item)
 
     @property
-    def completed_downloads(self) -> set[MediaItem]:
+    def completed_downloads(self) -> list[MediaItem]:
         return self._completed_downloads
-
-    @property
-    def prev_downloads(self) -> set[MediaItem]:
-        return self._prev_downloads

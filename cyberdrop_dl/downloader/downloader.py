@@ -99,13 +99,15 @@ def retry(func: Callable[P, Coroutine[None, None, R]]) -> Callable[P, Coroutine[
 
                 self.attempt_task_removal(media_item)
                 if e.status != 999:
-                    media_item.current_attempt += 1
+                    media_item.attempts += 1
 
                 log(f"{self.log_prefix} failed: {media_item.url} with error: {e!s}", 40)
-                if media_item.current_attempt >= self.max_attempts:
+                if media_item.attempts >= self.max_attempts:
                     raise
 
-                retry_msg = f"Retrying {self.log_prefix.lower()}: {media_item.url} , retry attempt: {media_item.current_attempt + 1}"
+                retry_msg = (
+                    f"Retrying {self.log_prefix.lower()}: {media_item.url} , retry attempt: {media_item.attempts + 1}"
+                )
                 log(retry_msg, 20)
 
     return wrapper
@@ -153,7 +155,7 @@ class Downloader:
     @contextlib.asynccontextmanager
     async def _download_context(self, media_item: MediaItem):
         await self.manager.states.RUNNING.wait()
-        media_item.current_attempt = 0
+        media_item.attempts = 0
         await self.client.mark_incomplete(media_item, self.domain)
         if media_item.is_segment:
             yield
@@ -448,7 +450,7 @@ class Downloader:
         try:
             await self.manager.states.RUNNING.wait()
             self.client.client_manager.check_domain_errors(self.domain)
-            media_item.current_attempt = media_item.current_attempt or 1
+            media_item.attempts = media_item.attempts or 1
             if not media_item.is_segment:
                 media_item.duration = await self.manager.db_manager.history_table.get_duration(self.domain, media_item)
                 await self.check_file_can_download(media_item)

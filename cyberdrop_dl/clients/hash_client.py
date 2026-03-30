@@ -41,7 +41,7 @@ class HashClient:
         self.xxhash = "xxh128"
         self.md5 = "md5"
         self.sha256 = "sha256"
-        self.hashed_media_items: set[MediaItem] = set()
+        self.hashed_media_items: list[MediaItem] = []
         self.hashes_dict: defaultdict[str, defaultdict[int, set[Path]]] = defaultdict(lambda: defaultdict(set))
         self._sem = asyncio.BoundedSemaphore(20)
 
@@ -150,7 +150,7 @@ class HashClient:
         absolute_path = await asyncio.to_thread(media_item.complete_file.resolve)
         size = await asyncio.to_thread(get_size_or_none, media_item.complete_file)
         assert size
-        self.hashed_media_items.add(media_item)
+        self.hashed_media_items.append(media_item)
         if hash:
             media_item.hash = hash
         self.hashes_dict[hash][size].add(absolute_path)
@@ -206,7 +206,7 @@ class HashClient:
 
     async def get_file_hashes_dict(self) -> dict:
         """Get a dictionary of files based on matching file hashes and file size."""
-        downloads = self.manager.path_manager.completed_downloads - self.hashed_media_items
+        downloads = self.manager.path_manager.completed_downloads
 
         async def exists(item: MediaItem) -> MediaItem | None:
             if await asyncio.to_thread(item.complete_file.is_file):
