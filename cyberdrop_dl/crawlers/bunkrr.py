@@ -45,7 +45,7 @@ _DEEP_SCRAPE_CDNS: frozenset[str] = frozenset(
         "static.scdn.st",
         "wiener",
     )
-)  # CDNs under maintanance, ignore them and try to get a cached URL
+)  # CDNs under maintenance, ignore them and try to get a cached URL
 
 known_bad_hosts: set[str] = set()
 
@@ -117,7 +117,6 @@ class BunkrrCrawler(Crawler):
     }
 
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://bunkr.site")
-    DATABASE_PRIMARY_HOST: ClassVar[str] = PRIMARY_URL.host
     DOMAIN: ClassVar[str] = "bunkr"
     _RATE_LIMIT: ClassVar[RateLimit] = 5, 1
     _USE_DOWNLOAD_SERVERS_LOCKS: ClassVar[bool] = True
@@ -164,11 +163,10 @@ class BunkrrCrawler(Crawler):
     @auto_task_id
     @error_handling_wrapper
     async def _album_file(self, scrape_item: ScrapeItem, file: File, results: dict[str, int]) -> None:
-        db_url = scrape_item.url.with_host(self.DATABASE_PRIMARY_HOST)
+        db_url = scrape_item.url.with_host(self.PRIMARY_URL.host)
         if await self.check_complete_from_referer(db_url):
             return
 
-        deep_scrape = False
         scrape_item.uploaded_at = self.parse_date(file.timestamp, "%H:%M:%S %d/%m/%Y")
 
         src = file.src
@@ -194,7 +192,7 @@ class BunkrrCrawler(Crawler):
 
     @error_handling_wrapper
     async def file(self, scrape_item: ScrapeItem) -> None:
-        db_url = scrape_item.url.with_host(self.DATABASE_PRIMARY_HOST)
+        db_url = scrape_item.url.with_host(self.PRIMARY_URL.host)
         if await self.check_complete_from_referer(db_url):
             return
 
@@ -225,7 +223,7 @@ class BunkrrCrawler(Crawler):
         link = link.update_query(n=name)
         filename, ext = self.get_filename_and_ext(name, assume_ext=".mp4")
         if not self.is_subdomain(scrape_item.url):
-            scrape_item.url = scrape_item.url.with_host(self.DATABASE_PRIMARY_HOST)
+            scrape_item.url = scrape_item.url.with_host(self.PRIMARY_URL.host)
         elif link.host == scrape_item.url.host:
             scrape_item.url = _REINFORCED_URL
         await self.handle_file(_override_cdn(link), scrape_item, name, ext, custom_filename=filename)
