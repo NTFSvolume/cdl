@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import logging
 import os
 import shutil
 import subprocess
@@ -26,8 +27,9 @@ from cyberdrop_dl.exceptions import (
     SkipDownloadError,
     TooManyCrawlerErrors,
 )
-from cyberdrop_dl.utils.logger import log, log_debug
 from cyberdrop_dl.utils.utilities import error_handling_wrapper, parse_url
+
+logger = logging.getLogger(__name__)
 
 # Windows epoch is January 1, 1601. Unix epoch is January 1, 1970
 WIN_EPOCH_OFFSET = 116444736e9
@@ -101,14 +103,13 @@ def retry(func: Callable[P, Coroutine[None, None, R]]) -> Callable[P, Coroutine[
                 if e.status != 999:
                     media_item.attempts += 1
 
-                log(f"{self.log_prefix} failed: {media_item.url} with error: {e!s}", 40)
+                logger.error(f"{self.log_prefix} failed: {media_item.url} with error: {e!s}")
                 if media_item.attempts >= self.max_attempts:
                     raise
 
-                retry_msg = (
+                logger.info(
                     f"Retrying {self.log_prefix.lower()}: {media_item.url} , retry attempt: {media_item.attempts + 1}"
                 )
-                log(retry_msg, 20)
 
     return wrapper
 
@@ -271,11 +272,10 @@ class Downloader:
             try:
                 subtitles = await download(m3u8_group.subtitle)
             except Exception as e:
-                log(f"Unable to download subtitles for {media_item.url}, Skipping. {e!r}", 40)
+                logger.exception(f"Unable to download subtitles for {media_item.url}, Skipping. {e!r}")
             else:
-                log(
-                    f"Found subtitles for {media_item.url}, but CDL is currently unable to merge them. Subtitle were saved at {subtitles} ",
-                    30,
+                logger.warning(
+                    f"Found subtitles for {media_item.url}, but CDL is currently unable to merge them. Subtitle were saved at {subtitles} "
                 )
 
         if m3u8_group.audio:
@@ -326,7 +326,7 @@ class Downloader:
             await self.set_file_datetime(media_item, media_item.path)
         self.attempt_task_removal(media_item)
         self.manager.progress_manager.download_progress.add_completed()
-        log(f"Download finished: {media_item.url}", 20)
+        logger.info(f"Download finished: {media_item.url}")
 
     """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
 
@@ -348,7 +348,7 @@ class Downloader:
         if self.manager.config_manager.settings_data.download_options.disable_file_timestamps:
             return
         if not media_item.uploaded_at:
-            log(f"Unable to parse upload date for {media_item.url}, using current datetime as file datetime", 30)
+            logger.warning(f"Unable to parse upload date for {media_item.url}, using current datetime as file datetime")
             return
 
         # TODO: Make this entire method async (run in another thread)
@@ -431,14 +431,14 @@ class Downloader:
             return False
 
         if not media_item.is_segment:
-            log(f"{self.log_prefix} starting: {media_item.url}", 20)
+            logger.info(f"{self.log_prefix} starting: {media_item.url}")
 
         async with self._file_lock_vault[media_item.filename]:
-            log_debug(f"Lock for {media_item.filename} acquired", 20)
+            logger.debug(f"Lock for {media_item.filename} acquired")
             try:
                 return bool(await self.download(media_item))
             finally:
-                log_debug(f"Lock for {media_item.filename} released", 20)
+                logger.debug(f"Lock for {media_item.filename} released")
 
     @error_handling_wrapper
     @retry
@@ -460,13 +460,13 @@ class Downloader:
                 if not media_item.is_segment:
                     await self.set_file_datetime(media_item, media_item.path)
                     self.manager.progress_manager.download_progress.add_completed()
-                    log(f"Download finished: {media_item.url}", 20)
+                    logger.info(f"Download finished: {media_item.url}")
             self.attempt_task_removal(media_item)
             return downloaded
 
         except SkipDownloadError as e:
             if not media_item.is_segment:
-                log(f"Download skipped {media_item.url}: {e}", 10)
+                logger.info(f"Download skipped {media_item.url}: {e}")
                 self.manager.progress_manager.download_progress.add_skipped()
             self.attempt_task_removal(media_item)
 
@@ -499,8 +499,10 @@ class Downloader:
         exc_info: Exception | None = None,
     ) -> None:
         self.attempt_task_removal(media_item)
-        full_message = f"{self.log_prefix} Failed: {media_item.url} ({error_log_msg.main_log_msg}) \n -> Referer: {media_item.referer}"
-        log(full_message, 40, exc_info=exc_info)
+        logger.error(
+            f"{self.log_prefix} Failed: {media_item.url} ({error_log_msg.main_log_msg}) \n -> Referer: {media_item.referer}",
+            exc_info=exc_info,
+        )
         self.manager.log_manager.write_download_error_log(media_item, error_log_msg.csv_log_msg)
         self.manager.progress_manager.download_stats_progress.add_failure(error_log_msg.ui_failure)
         self.manager.progress_manager.download_progress.add_failed()
