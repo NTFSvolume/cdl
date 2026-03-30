@@ -37,6 +37,7 @@ from pydantic import ValidationError
 from yarl import URL
 
 from cyberdrop_dl import constants
+from cyberdrop_dl.constants import FileExt
 from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import (
     CDLBaseError,
@@ -241,7 +242,7 @@ def get_filename_and_ext(filename: str, forum: bool = False, mime_type: str | No
         ext = ext.rsplit(".")[0]
         ext_w_dot = f".{ext}".lower()
         full_name = f"{name}.{ext}"
-        if ext_w_dot not in constants.MEDIA_EXTENSIONS:
+        if ext_w_dot not in FileExt.MEDIA:
             raise InvalidExtensionError(full_name)
 
         filename_as_path = Path(full_name)
@@ -275,7 +276,7 @@ def remove_file_id(manager: Manager, filename: str, ext: str) -> str:
     if re.match(constants.RAR_MULTIPART_PATTERN, tail_no_dot) and ext == ".rar" and "-" in filename:
         filename, part = filename.rsplit("-", 1)
         filename = f"{filename}.{part}"
-    elif ext_no_dot.isdigit() and tail in constants.FILE_FORMATS["7z"] and "-" in filename:
+    elif ext_no_dot.isdigit() and tail in FileExt.SEVEN_Z and "-" in filename:
         filename, _7z_ext = filename.rsplit("-", 1)
         filename = f"{filename}.{_7z_ext}"
     if not filename.endswith(ext):

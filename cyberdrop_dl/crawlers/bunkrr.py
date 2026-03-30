@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from aiohttp import ClientConnectorError
 
-from cyberdrop_dl.constants import FILE_FORMATS
+from cyberdrop_dl.constants import FileExt
 from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths, auto_task_id
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError
@@ -35,7 +35,6 @@ class Selector:
     IMAGE_PREVIEW = "img.max-h-full.w-auto.object-cover.relative"
 
 
-VIDEO_AND_IMAGE_EXTS: set[str] = FILE_FORMATS["Images"] | FILE_FORMATS["Videos"]
 _HOST_OPTIONS: frozenset[str] = frozenset(("bunkr.site", "bunkr.cr", "bunkr.ph"))
 _DEEP_SCRAPE_CDNS: frozenset[str] = frozenset(
     (
@@ -101,7 +100,7 @@ class File:
 
         src = thumb.with_path(thumb.path.replace("/thumbs/", "/")).with_suffix(Path(self.name).suffix)
 
-        if src.suffix.lower() not in FILE_FORMATS["Images"]:
+        if src.suffix.lower() not in FileExt.IMAGE:
             src = src.with_host(src.host.replace("i-", ""))
 
         self.src = _override_cdn(src)
@@ -177,7 +176,7 @@ class BunkrrCrawler(Crawler):
             return
 
         deep_scrape = (
-            src.suffix.lower() not in VIDEO_AND_IMAGE_EXTS
+            src.suffix.lower() not in FileExt.VIDEO_OR_IMAGE
             or "no-image" in src.name
             or self.deep_scrape
             or any(cdn in src.host for cdn in _DEEP_SCRAPE_CDNS)

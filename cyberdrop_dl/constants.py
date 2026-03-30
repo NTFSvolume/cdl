@@ -3,7 +3,7 @@ from dataclasses import field
 from datetime import UTC, datetime
 from enum import auto
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Final, final
 
 from aiohttp.resolver import AsyncResolver, ThreadedResolver
 from rich.text import Text
@@ -31,13 +31,7 @@ MAX_NAME_LENGTHS = {"FILE": 95, "FOLDER": 60}
 DEFAULT_CONSOLE_WIDTH = 240
 CSV_DELIMITER = ","
 LOG_OUTPUT_TEXT = Text("")
-RICH_HANDLER_CONFIG: dict[str, Any] = {"rich_tracebacks": True, "tracebacks_show_locals": False}
-RICH_HANDLER_DEBUG_CONFIG = RICH_HANDLER_CONFIG | {
-    "tracebacks_show_locals": True,
-    "locals_max_string": DEFAULT_CONSOLE_WIDTH,
-    "tracebacks_extra_lines": 2,
-    "locals_max_length": 20,
-}
+
 VALIDATION_ERROR_FOOTER = """Please delete the file or fix the errors. Read the documentation to learn what's the expected format and values: https://script-ware.gitbook.io/cyberdrop-dl/reference/configuration-options
 \nThis is not a bug. Do not open issues related to this"""
 
@@ -128,74 +122,82 @@ class NotificationResult(Enum):
     NONE = Text("No Notifications Sent", "yellow")
 
 
-# file formats
-FILE_FORMATS = {
-    "Images": {
-        ".gif",
-        ".gifv",
-        ".heic",
-        ".jfif",
-        ".jif",
-        ".jpe",
-        ".jpeg",
-        ".jpg",
-        ".jxl",
-        ".png",
-        ".svg",
-        ".tif",
-        ".tiff",
-        ".webp",
-    },
-    "Videos": {
-        ".3gp",
-        ".avchd",
-        ".avi",
-        ".f4v",
-        ".flv",
-        ".m2ts",
-        ".m4p",
-        ".m4v",
-        ".mkv",
-        ".mov",
-        ".mp2",
-        ".mp4",
-        ".mpe",
-        ".mpeg",
-        ".mpg",
-        ".mpv",
-        ".mts",
-        ".ogg",
-        ".ogv",
-        ".qt",
-        ".swf",
-        ".ts",
-        ".webm",
-        ".wmv",
-    },
-    "Audio": {
-        ".flac",
-        ".m4a",
-        ".mka",
-        ".mp3",
-        ".wav",
-    },
-    "Text": {
-        ".htm",
-        ".html",
-        ".md",
-        ".nfo",
-        ".txt",
-        ".vtt",
-        ".sub",
-    },
-    "7z": {
-        ".7z",
-        ".bz2",
-        ".gz",
-        ".tar",
-        ".zip",
-    },
-}
-
-
-MEDIA_EXTENSIONS = FILE_FORMATS["Audio"] | FILE_FORMATS["Videos"] | FILE_FORMATS["Images"]
+@final
+class FileExt:
+    IMAGE = frozenset(
+        {
+            ".gif",
+            ".gifv",
+            ".heic",
+            ".jfif",
+            ".jif",
+            ".jpe",
+            ".jpeg",
+            ".jpg",
+            ".jxl",
+            ".png",
+            ".svg",
+            ".tif",
+            ".tiff",
+            ".webp",
+        }
+    )
+    VIDEO = frozenset(
+        {
+            ".3gp",
+            ".avchd",
+            ".avi",
+            ".f4v",
+            ".flv",
+            ".m2ts",
+            ".m4p",
+            ".m4v",
+            ".mkv",
+            ".mov",
+            ".mp2",
+            ".mp4",
+            ".mpe",
+            ".mpeg",
+            ".mpg",
+            ".mpv",
+            ".mts",
+            ".ogg",
+            ".ogv",
+            ".qt",
+            ".swf",
+            ".ts",
+            ".webm",
+            ".wmv",
+        }
+    )
+    AUDIO = frozenset(
+        {
+            ".flac",
+            ".m4a",
+            ".mka",
+            ".mp3",
+            ".wav",
+        }
+    )
+    TEXT = frozenset(
+        {
+            ".htm",
+            ".html",
+            ".md",
+            ".nfo",
+            ".txt",
+            ".vtt",
+            ".sub",
+        }
+    )
+    SEVEN_Z = frozenset(
+        {
+            ".7z",
+            ".bz2",
+            ".gz",
+            ".tar",
+            ".zip",
+        }
+    )
+    VIDEO_OR_IMAGE = VIDEO | IMAGE
+    MEDIA = AUDIO | VIDEO_OR_IMAGE

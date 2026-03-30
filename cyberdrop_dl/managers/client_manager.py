@@ -23,6 +23,7 @@ from cyberdrop_dl.clients import HTTPClient
 from cyberdrop_dl.clients.download_client import DownloadClient
 from cyberdrop_dl.clients.flaresolverr import FlareSolverrClient
 from cyberdrop_dl.clients.response import AbstractResponse
+from cyberdrop_dl.constants import FileExt
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
 from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, ScrapeError, TooManyCrawlerErrors
 from cyberdrop_dl.ffmpeg import probe
@@ -45,9 +46,7 @@ except ImportError as e:
     _curl_import_error = e
 
 logger = logging.getLogger(__name__)
-_VALID_EXTENSIONS = (
-    constants.FILE_FORMATS["Images"] | constants.FILE_FORMATS["Videos"] | constants.FILE_FORMATS["Audio"]
-)
+
 
 _DOWNLOAD_ERROR_ETAGS = {
     "d835884373f4d6c8f24742ceabe74946": "Imgur image has been removed",
@@ -210,17 +209,17 @@ class ClientManager:
         token = b64encode(f"{username}:{password}".encode()).decode("ascii")
         return f"Basic {token}"
 
-    def check_allowed_filetype(self, media_item: MediaItem) -> bool:
+    def is_allowed_filetype(self, media_item: MediaItem) -> bool:
         """Checks if the file type is allowed to download."""
         ignore_options = self.manager.config_manager.settings_data.ignore_options
+        ext = media_item.ext.lower()
 
-        if media_item.ext.lower() in constants.FILE_FORMATS["Images"] and ignore_options.exclude_images:
-            return False
-        if media_item.ext.lower() in constants.FILE_FORMATS["Videos"] and ignore_options.exclude_videos:
-            return False
-        if media_item.ext.lower() in constants.FILE_FORMATS["Audio"] and ignore_options.exclude_audio:
-            return False
-        return not (ignore_options.exclude_other and media_item.ext.lower() not in _VALID_EXTENSIONS)
+        return not (
+            (ignore_options.exclude_images and ext in FileExt.IMAGE)
+            or (ignore_options.exclude_videos and ext in FileExt.VIDEO)
+            or (ignore_options.exclude_audio and ext in FileExt.AUDIO)
+            or (ignore_options.exclude_other and ext not in FileExt.MEDIA)
+        )
 
     def check_allowed_date_range(self, media_item: MediaItem) -> bool:
         """Checks if the file was uploaded within the config date range"""
@@ -392,8 +391,8 @@ class ClientManager:
         if media_item.is_segment:
             return True
 
-        is_video = media_item.ext.lower() in constants.FILE_FORMATS["Videos"]
-        is_audio = media_item.ext.lower() in constants.FILE_FORMATS["Audio"]
+        is_video = media_item.ext.lower() in FileExt.VIDEO
+        is_audio = media_item.ext.lower() in FileExt.AUDIO
         if not (is_video or is_audio):
             return True
 
