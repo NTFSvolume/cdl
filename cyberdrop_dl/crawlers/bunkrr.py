@@ -120,9 +120,9 @@ class BunkrrCrawler(Crawler):
     DOMAIN: ClassVar[str] = "bunkr"
     _RATE_LIMIT: ClassVar[RateLimit] = 5, 1
     _USE_DOWNLOAD_SERVERS_LOCKS: ClassVar[bool] = True
+    _known_good_host: ClassVar[str | None] = None
 
     def __post_init__(self) -> None:
-        self._known_good_host: str | None = None
         self._parse_album_files = _make_album_parser()
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
@@ -247,7 +247,7 @@ class BunkrrCrawler(Crawler):
                 raise
         else:
             if not self._known_good_host:
-                self._known_good_host = resp.url.host
+                type(self)._known_good_host = resp.url.host
             if url.query.get("advanced") and url.query != resp.url.query:
                 soup = await self.request_soup(resp.url.with_query(url.query))
             return soup
