@@ -22,7 +22,7 @@ from cyberdrop_dl.aio import WeakAsyncLocks
 from cyberdrop_dl.clients.download_client import DownloadClient
 from cyberdrop_dl.clients.flaresolverr import FlareSolverrClient
 from cyberdrop_dl.clients.response import AbstractResponse
-from cyberdrop_dl.clients.scraper_client import ScraperClient
+from cyberdrop_dl.clients.scraper_client import HTTPClient
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
 from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, ScrapeError, TooManyCrawlerErrors
 from cyberdrop_dl.ffmpeg import probe
@@ -136,7 +136,7 @@ class ClientManager:
         self.download_slots: dict[str, int] = {}
         self.global_rate_limiter = AsyncLimiter(self.rate_limiting_options.rate_limit, 1)
         self.global_download_slots = asyncio.Semaphore(self.rate_limiting_options.max_simultaneous_downloads)
-        self.scraper_client = ScraperClient(self)
+        self.scraper_client = HTTPClient.from_client(self)
         self.speed_limiter = DownloadSpeedLimiter(self.rate_limiting_options.download_speed_limit)
         self.download_client = DownloadClient(manager, self)
         self._flaresolverr: FlareSolverrClient | None = None

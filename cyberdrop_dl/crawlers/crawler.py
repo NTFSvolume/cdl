@@ -32,8 +32,8 @@ import yarl
 from aiolimiter import AsyncLimiter
 from yarl import URL
 
-from cyberdrop_dl import constants, signature
-from cyberdrop_dl.clients.scraper_client import ScraperClient
+from cyberdrop_dl import constants
+from cyberdrop_dl.clients.scraper_client import HTTPClient, HTTPClientProxy
 from cyberdrop_dl.data_structures.mediaprops import ISO639Subtitle, Resolution
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
 from cyberdrop_dl.downloader.downloader import Downloader
@@ -60,10 +60,8 @@ if TYPE_CHECKING:
     from http.cookies import BaseCookie
 
     from bs4 import BeautifulSoup, Tag
-    from curl_cffi.requests.impersonate import BrowserTypeLiteral
     from rich.progress import TaskID
 
-    from cyberdrop_dl.clients.response import AbstractResponse
     from cyberdrop_dl.managers.manager import Manager
 
 logger = logging.getLogger(__name__)
@@ -154,63 +152,7 @@ class Registry:
                 cls._import(module_info.name)
 
 
-class HTTPClientProxy:
-    DOMAIN: ClassVar[str]
-    _IMPERSONATE: ClassVar[BrowserTypeLiteral | bool | None] = None
-    client: ScraperClient  # pyright: ignore[reportUninitializedInstanceVariable]
-
-    @classmethod
-    def __json_resp_check__(cls, json_resp: Any, resp: AbstractResponse[Any], /) -> None:
-        """Custom check for JSON responses.
-
-        This method is called automatically by the `HttpClient` when a JSON response is received from `cls.DOMAIN`
-        and it was **NOT** successful (`4xx` or `5xx` HTTP code).
-
-        Override this method in subclasses to raise a custom `ScrapeError` instead of the default HTTP error
-
-        Example:
-            ```python
-            if isinstance(json, dict) and json.get("status") == "error":
-                raise ScrapeError(422, f"API error: {json['message']}")
-            ```
-
-        IMPORTANT:
-            Cases were the response **IS** successful (200, OK) but the JSON indicates an error
-            should be handled by the crawler itself
-        """
-
-    @signature.copy(ScraperClient._request)
-    @contextlib.asynccontextmanager
-    async def request(
-        self, *args, impersonate: BrowserTypeLiteral | bool | None = None, **kwargs
-    ) -> AsyncGenerator[AbstractResponse[Any]]:
-        if impersonate is None:
-            impersonate = self._IMPERSONATE
-
-        with self.client.client_manager.set_json_checker(self.__json_resp_check__):
-            async with (
-                self.client._limiter(self.DOMAIN),
-                self.client._request(*args, impersonate=impersonate, **kwargs) as resp,
-            ):
-                yield resp
-
-    @signature.copy(request)
-    async def request_json(self, *args, **kwargs) -> Any:
-        async with self.request(*args, **kwargs) as resp:
-            return await resp.json()
-
-    @signature.copy(request)
-    async def request_soup(self, *args, **kwargs) -> BeautifulSoup:
-        async with self.request(*args, **kwargs) as resp:
-            return await resp.soup()
-
-    @signature.copy(request)
-    async def request_text(self, *args, **kwargs) -> str:
-        async with self.request(*args, **kwargs) as resp:
-            return await resp.text()
-
-
-class Crawler(ABC, HTTPClientProxy):
+class Crawler(HTTPClientProxy, ABC):
     OLD_DOMAINS: ClassVar[tuple[str, ...]] = ()
     SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = ()
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {}
@@ -235,7 +177,7 @@ class Crawler(ABC, HTTPClientProxy):
     def __init__(self, manager: Manager) -> None:
         self.manager = manager
         self.downloader: Downloader = field(init=False)
-        self.client: ScraperClient = field(init=False)
+        self.client: HTTPClient = field(init=False)
         self.startup_lock = asyncio.Lock()
         self.ready: bool = False
         self.disabled: bool = False

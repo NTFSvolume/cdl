@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import dataclasses
 import logging
 import time
 import uuid
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Self, cast
 
-from cyberdrop_dl import constants, ddos_guard
+from multidict import CIMultiDict
+
+from cyberdrop_dl import constants, ddos_guard, signature
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.exceptions import DDOSGuardError
 from cyberdrop_dl.utils.cookie_management import make_simple_cookie
@@ -17,6 +20,7 @@ from cyberdrop_dl.utils.utilities import sanitize_filename
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Mapping
 
+    from bs4 import BeautifulSoup
     from curl_cffi.requests.impersonate import BrowserTypeLiteral
     from curl_cffi.requests.session import HttpMethod
 
@@ -24,16 +28,27 @@ if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
     from cyberdrop_dl.managers.client_manager import ClientManager
 
+
 logger = logging.getLogger(__name__)
 
 
-class ScraperClient:
-    """AIOHTTP / CURL operations for scraping."""
+@dataclasses.dataclass(slots=True)
+class HTTPClient:
+    client_manager: ClientManager
+    _save_pages_html: bool
+    _resp_folder: Path
 
-    def __init__(self, client_manager: ClientManager) -> None:
-        self.client_manager = client_manager
-        self._save_pages_html = client_manager.manager.config_manager.settings_data.files.save_pages_html
-        self._resp_folder = self.client_manager.manager.path_manager.pages_folder
+    @classmethod
+    def from_client(cls, client_manager: ClientManager) -> Self:
+        return cls(
+            client_manager,
+            client_manager.manager.config_manager.settings_data.files.save_pages_html,
+            client_manager.manager.path_manager.pages_folder,
+        )
+
+    @property
+    def _default_headers(self) -> dict[Any, Any]:
+        return {}
 
     @contextlib.asynccontextmanager
     async def _limiter(self, domain: str) -> AsyncGenerator[None]:
@@ -43,13 +58,27 @@ class ScraperClient:
                 await self.client_manager.manager.states.RUNNING.wait()
                 yield
 
+    def _prepare_headers(self, headers: Mapping[str, str] | None = None) -> CIMultiDict[str]:
+        """Add default headers and transform it to CIMultiDict"""
+        combined = CIMultiDict(self._default_headers or {})
+        if headers:
+            headers = CIMultiDict(headers)
+            new: set[str] = set()
+            for key, value in headers.items():
+                if key in new:
+                    combined.add(key, value)
+                else:
+                    combined[key] = value
+                    new.add(key)
+        return combined
+
     @contextlib.asynccontextmanager
-    async def _request(
+    async def request(
         self: object,
         url: AbsoluteHttpURL,
         /,
         method: HttpMethod = "GET",
-        headers: dict[str, str] | None = None,
+        headers: Mapping[str, str] | None = None,
         impersonate: BrowserTypeLiteral | bool | None = None,
         data: Any = None,
         json: Any = None,
@@ -66,8 +95,8 @@ class ScraperClient:
         - Saves the HTML content to disk if the config option is enabled.
         - Closes underliying response on exit.
         """
-        self = cast("ScraperClient", self)
-        request_params["headers"] = headers = headers or {}
+        self = cast("HTTPClient", self)
+        request_params["headers"] = headers = self._prepare_headers(headers)
         request_params["data"] = data
         request_params["json"] = json
 
@@ -202,3 +231,59 @@ def _write_resp_to_disk(
         _ = file.write_text(content, "utf8")
     except OSError:
         pass
+
+
+class HTTPClientProxy:
+    DOMAIN: ClassVar[str]
+    _IMPERSONATE: ClassVar[BrowserTypeLiteral | bool | None] = None
+    client: HTTPClient  # pyright: ignore[reportUninitializedInstanceVariable]
+
+    @classmethod
+    def __json_resp_check__(cls, json_resp: Any, resp: AbstractResponse[Any], /) -> None:
+        """Custom check for JSON responses.
+
+        This method is called automatically by the `HttpClient` when a JSON response is received from `cls.DOMAIN`
+        and it was **NOT** successful (`4xx` or `5xx` HTTP code).
+
+        Override this method in subclasses to raise a custom `ScrapeError` instead of the default HTTP error
+
+        Example:
+            ```python
+            if isinstance(json, dict) and json.get("status") == "error":
+                raise ScrapeError(422, f"API error: {json['message']}")
+            ```
+
+        IMPORTANT:
+            Cases were the response **IS** successful (200, OK) but the JSON indicates an error
+            should be handled by the crawler itself
+        """
+
+    @signature.copy(HTTPClient.request)
+    @contextlib.asynccontextmanager
+    async def request(
+        self, *args, impersonate: BrowserTypeLiteral | bool | None = None, **kwargs
+    ) -> AsyncGenerator[AbstractResponse[Any]]:
+        if impersonate is None:
+            impersonate = self._IMPERSONATE
+
+        with self.client.client_manager.set_json_checker(self.__json_resp_check__):
+            async with (
+                self.client._limiter(self.DOMAIN),
+                self.client.request(*args, impersonate=impersonate, **kwargs) as resp,
+            ):
+                yield resp
+
+    @signature.copy(request)
+    async def request_json(self, *args, **kwargs) -> Any:
+        async with self.request(*args, **kwargs) as resp:
+            return await resp.json()
+
+    @signature.copy(request)
+    async def request_soup(self, *args, **kwargs) -> BeautifulSoup:
+        async with self.request(*args, **kwargs) as resp:
+            return await resp.soup()
+
+    @signature.copy(request)
+    async def request_text(self, *args, **kwargs) -> str:
+        async with self.request(*args, **kwargs) as resp:
+            return await resp.text()
