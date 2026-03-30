@@ -47,8 +47,7 @@ class ScrapeMapper:
         self.manager = manager
         self.existing_crawlers: dict[str, Crawler] = {}
         self.direct_crawler = DirectHttpFile(self.manager)
-        self.jdownloader = JDownloader(self.manager)
-        self.jdownloader_whitelist = self.manager.config_manager.settings_data.runtime_options.jdownloader_whitelist
+        self.jdownloader = JDownloader.from_manager(self.manager)
         self.using_input_file = False
         self.groups = set()
         self.count = 0
@@ -101,7 +100,7 @@ class ScrapeMapper:
         """Starts the orchestra."""
         self.start_scrapers()
         await self.manager.db_manager.history_table.update_previously_unsupported(self.existing_crawlers)
-        self.jdownloader.connect()
+        await self.jdownloader.connect()
         await self.start_real_debrid()
         self.direct_crawler._init_downloader()
         async for item in self.get_input_items():
@@ -213,9 +212,6 @@ class ScrapeMapper:
         """Maps URLs to their respective handlers."""
         scrape_item.url = remove_trailing_slash(scrape_item.url)
         crawler_match = match_url_to_crawler(self.existing_crawlers, scrape_item.url)
-        jdownloader_whitelisted = True
-        if self.jdownloader_whitelist:
-            jdownloader_whitelisted = any(domain in scrape_item.url.host for domain in self.jdownloader_whitelist)
 
         if crawler_match:
             if not crawler_match.ready:
@@ -235,13 +231,13 @@ class ScrapeMapper:
         except (NoExtensionError, ValueError):
             pass
 
-        if self.jdownloader.enabled and jdownloader_whitelisted:
+        if self.jdownloader.enabled and self.jdownloader.is_whitelisted(scrape_item.url):
             logger.info(f"Sending unsupported URL to JDownloader: {scrape_item.url}")
             success = False
             try:
                 download_folder = get_download_path(self.manager, scrape_item, "jdownloader")
                 relative_download_dir = download_folder.relative_to(self.manager.path_manager.download_folder)
-                self.jdownloader.direct_unsupported_to_jdownloader(
+                await self.jdownloader.send(
                     scrape_item.url,
                     scrape_item.parent_title,
                     relative_download_dir,
