@@ -65,7 +65,7 @@ class RealDebridCrawler(Crawler):
     _RATE_LIMIT: ClassVar[RateLimit] = 250, 60
 
     @classmethod
-    def _json_response_check(cls, json_resp: dict[str, Any]) -> None:
+    def __json_resp_check__(cls, json_resp: dict[str, Any], _) -> None:
         if code := json_resp.get("error_code"):
             code = 7 if code == 16 else code
             msg = _ERROR_CODES.get(code, "Unknown error").capitalize()

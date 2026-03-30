@@ -11,6 +11,7 @@ from cyberdrop_dl.utils.utilities import error_handling_wrapper
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator
 
+    from cyberdrop_dl.clients.response import AbstractResponse
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
 # Primary URL needs `www.` to prevent redirect
@@ -52,9 +53,9 @@ class RedGifsCrawler(Crawler):
     _RATE_LIMIT: ClassVar[RateLimit] = 2, 3
 
     @classmethod
-    def _json_response_check(cls, json_resp: dict[str, Any]) -> None:
+    def __json_resp_check__(cls, json_resp: dict[str, Any], resp: AbstractResponse[Any]) -> None:
         if error := json_resp.get("error"):
-            raise ScrapeError(json_resp.get("status", 422), error["message"])
+            raise ScrapeError(resp.status, error["message"])
 
     def __post_init__(self) -> None:
         self.headers: dict[str, str] = {}

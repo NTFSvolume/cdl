@@ -9,9 +9,11 @@ from pydantic import BaseModel
 from cyberdrop_dl import env
 from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedDomains, SupportedPaths, auto_task_id
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils.utilities import error_handling_wrapper
 
 if TYPE_CHECKING:
+    from cyberdrop_dl.clients.response import AbstractResponse
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
 
@@ -112,12 +114,10 @@ class PixelDrainCrawler(Crawler):
             )
 
     @classmethod
-    def _json_response_check(cls, json_resp: dict[str, Any]) -> None:
-        # TODO: pass the resp obj to the json check functions
-        return
+    def __json_resp_check__(cls, json_resp: dict[str, Any], resp: AbstractResponse[Any]) -> None:
         if not json_resp["success"]:
             msg = f"{json_resp['message']} ({json_resp['value']})"
-            raise ValueError(422, msg)
+            raise ScrapeError(resp.status, msg)
 
     async def _api_request(self, api_url: AbsoluteHttpURL) -> str:
         return await self.request_text(api_url, headers=self._headers)

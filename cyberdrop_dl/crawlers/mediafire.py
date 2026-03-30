@@ -68,9 +68,10 @@ class MediaFireCrawler(Crawler):
         self.api = MediaFireAPI(self)
 
     @classmethod
-    def _json_response_check(cls, json_resp: Any) -> None:
+    def __json_resp_check__(cls, json_resp: Any, _) -> None:
         if not isinstance(json_resp, dict) or "response" not in json_resp:
             return
+
         resp: dict[str, Any] = json_resp["response"]
         if resp["result"] != "Success":
             code: int = resp["error"]

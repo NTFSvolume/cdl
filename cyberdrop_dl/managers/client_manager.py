@@ -5,6 +5,8 @@ import contextlib
 import ssl
 from base64 import b64encode
 from collections import defaultdict
+from collections.abc import Generator
+from contextvars import ContextVar
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any, Literal, Self
 
@@ -62,6 +64,8 @@ if TYPE_CHECKING:
     from cyberdrop_dl.managers.manager import Manager
 
 _null_context = contextlib.nullcontext()
+
+_JSON_CHECK: ContextVar[Callable[[Any, AbstractResponse[Any]], None] | None] = ContextVar("_JSON_CHECK", default=None)
 
 
 class DownloadSpeedLimiter(AsyncLimiter):
@@ -139,7 +143,14 @@ class ClientManager:
         self._session: aiohttp.ClientSession
         self._download_session: aiohttp.ClientSession
         self._curl_session: AsyncSession[CurlResponse]
-        self._json_response_checks: dict[str, Callable[[Any], None]] = {}
+
+    @contextlib.contextmanager
+    def set_json_checker(self, check: Callable[[Any, AbstractResponse[Any]], None] | None = None) -> Generator[None]:
+        token = _JSON_CHECK.set(check)
+        try:
+            yield
+        finally:
+            _JSON_CHECK.reset(token)
 
     @property
     def flaresolverr(self) -> FlareSolverrClient | None:
@@ -371,15 +382,9 @@ class ClientManager:
         if "json" not in response.content_type:
             return
 
-        if check := self._json_response_checks.get(response.url.host):
-            check(await response.json())
+        if check := _JSON_CHECK.get():
+            check(await response.json(), response)
             return
-
-        for domain, check in self._json_response_checks.items():
-            if domain in response.url.host:
-                self._json_response_checks[response.url.host] = check
-                check(await response.json())
-                return
 
     @staticmethod
     def check_content_length(headers: Mapping[str, Any]) -> None:

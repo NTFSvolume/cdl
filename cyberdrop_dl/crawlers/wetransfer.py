@@ -8,6 +8,7 @@ from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils.utilities import error_handling_wrapper
 
 if TYPE_CHECKING:
+    from cyberdrop_dl.clients.response import AbstractResponse
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
 _PRIMARY_URL = AbsoluteHttpURL("https://wetransfer.com/")
@@ -40,7 +41,7 @@ class WeTransferCrawler(Crawler):
                 raise ValueError
 
     @classmethod
-    def _json_response_check(cls, json_resp: dict[str, Any]) -> None:
+    def __json_resp_check__(cls, json_resp: dict[str, Any], resp: AbstractResponse[Any]) -> None:
         if json_resp.get("direct_link"):
             return
 
@@ -50,7 +51,7 @@ class WeTransferCrawler(Crawler):
         elif "Couldn't find Transfer" in msg:
             code = 410
         else:
-            code = 422
+            code = resp.status
         raise ScrapeError(code, msg)
 
     @error_handling_wrapper

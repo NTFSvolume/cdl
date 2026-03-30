@@ -3,7 +3,7 @@ from __future__ import annotations
 import itertools
 import time
 from hashlib import sha256
-from typing import TYPE_CHECKING, ClassVar, Literal, NotRequired, TypedDict, TypeGuard
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, NotRequired, TypedDict, TypeGuard
 
 from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import FILE_HOST_ALBUM, AbsoluteHttpURL, ScrapeItem
@@ -106,9 +106,7 @@ class GoFileCrawler(Crawler):
         return headers
 
     @classmethod
-    def _json_response_check(cls, json_resp: Response) -> None:
-        if not isinstance(json_resp, dict):
-            return
+    def __json_resp_check__(cls, json_resp: dict[str, Any], _=None) -> None:
         if "notFound" in json_resp["status"]:
             raise ScrapeError(404)
 
@@ -197,7 +195,7 @@ class GoFileCrawler(Crawler):
 
         for page in itertools.count(1):
             resp = await self.request_json(api_url.update_query(page=page), headers=self.headers)
-            self._json_response_check(resp)
+            self.__json_resp_check__(resp)
             folder = resp["data"]
             _check_node_is_accessible(folder)
             yield folder

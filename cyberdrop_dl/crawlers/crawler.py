@@ -135,11 +135,12 @@ class Crawler(ABC):
         if impersonate is None:
             impersonate = self._IMPERSONATE
 
-        async with (
-            self.client._limiter(self.DOMAIN),
-            self.client._request(*args, impersonate=impersonate, **kwargs) as resp,
-        ):
-            yield resp
+        with self.client.client_manager.set_json_checker(self.__json_resp_check__):
+            async with (
+                self.client._limiter(self.DOMAIN),
+                self.client._request(*args, impersonate=impersonate, **kwargs) as resp,
+            ):
+                yield resp
 
     @signature.copy(ScraperClient._request)
     async def request_json(self, *args, **kwargs) -> Any:
@@ -179,16 +180,8 @@ class Crawler(ABC):
 
     def __post_init__(self) -> None: ...  # noqa: B027
 
-    @final
-    def _register_response_checks(self) -> None:
-        if self._json_response_check.__func__ is Crawler._json_response_check.__func__:
-            return
-
-        for host in (self.DOMAIN, self.PRIMARY_URL.host):
-            self.client.client_manager._json_response_checks[host] = self._json_response_check
-
-    @classmethod
-    def _json_response_check(cls, json_resp: Any) -> None:
+    @classmethod  # noqa: B027
+    def __json_resp_check__(cls, json_resp: Any, resp: AbstractResponse[Any]) -> None:
         """Custom check for JSON responses.
 
         This method is called automatically by the `client_manager` when a JSON response is received from `cls.DOMAIN`
@@ -206,7 +199,6 @@ class Crawler(ABC):
             Cases were the response **IS** successful (200, OK) but the JSON indicates an error
             should be handled by the crawler itself
         """
-        raise NotImplementedError
 
     @final
     @staticmethod
@@ -288,7 +280,6 @@ class Crawler(ABC):
             if self._USE_DOWNLOAD_SERVERS_LOCKS:
                 self.manager.client_manager.download_client.server_locked_domains.add(self.DOMAIN)
             self.downloader = self._init_downloader()
-            self._register_response_checks()
             await self.async_startup()
             self.ready = True
 

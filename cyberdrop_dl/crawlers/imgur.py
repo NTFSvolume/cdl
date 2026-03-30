@@ -32,18 +32,13 @@ class ImgurCrawler(Crawler):
         self.client_id: str = ""
 
     @classmethod
-    def _json_response_check(cls, json_resp: dict[str, Any]) -> None:
+    def __json_resp_check__(cls, json_resp: dict[str, Any], _) -> None:
         if data := json_resp.get("data"):
             raise ScrapeError(json_resp["status"], data["error"])
 
     async def async_startup(self) -> None:
-        await self._get_client_id(self.PRIMARY_URL)
-
-    # TODO: cache this
-    @error_handling_wrapper
-    async def _get_client_id(self, _) -> None:
-        """Get public client id."""
-        with self.disable_on_error("Unable to get client id"):
+        with self.catch_errors(self.PRIMARY_URL), self.disable_on_error("Unable to get client id"):
+            # TODO: cache this
             soup = await self.request_soup(self.PRIMARY_URL)
             js_src = css.select(soup, "script[src*='/desktop-assets/js/main']", "src")
             js_text = await self.request_text(self.parse_url(js_src))
