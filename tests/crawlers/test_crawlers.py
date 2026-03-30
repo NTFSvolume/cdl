@@ -145,7 +145,7 @@ def _validate_results(crawler: Crawler, test_case: CrawlerTestCase, results: lis
     origin = getattr(crawler, "PRIMARY_URL", AbsoluteHttpURL("https://google.com"))
     for index, (expected, media_item) in enumerate(zip(expected_results, results, strict=False), 1):
         for attr_name, expected_value in expected.items():
-            result_value = getattr(media_item, attr_name)
+            result_value = getattr(media_item, attr_name if attr_name != "datetime" else "uploaded_at")
 
             match expected_value:
                 case type():
