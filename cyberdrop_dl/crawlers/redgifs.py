@@ -60,7 +60,11 @@ class RedGifsCrawler(Crawler):
         self.headers: dict[str, str] = {}
 
     async def async_startup(self) -> None:
-        await self.get_auth_token(API_ENTRYPOINT / "auth/temporary")
+        token_url = API_ENTRYPOINT / "auth/temporary"
+
+        with self.catch_errors(token_url), self.disable_on_error("Unable to get API token"):
+            token: str = (await self.request_json(token_url))["token"]
+            self.headers.update(Authorization=f"Bearer {token}")
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
@@ -91,8 +95,8 @@ class RedGifsCrawler(Crawler):
 
         def parse_unique_gifs(gifs: list[dict[str, str]]) -> Generator[Gif]:
             for gif_dict in gifs:
-                if gif_dict["id"] not in gif_ids:
-                    gif = Gif.from_dict(gif_dict)
+                gif = Gif.from_dict(gif_dict)
+                if gif.id not in gif_ids:
                     gif_ids.add(gif.id)
                     yield gif
 
@@ -137,11 +141,6 @@ class RedGifsCrawler(Crawler):
         scrape_item.possible_datetime = gif.create_date
         filename, ext = self.get_filename_and_ext(src.name)
         await self.handle_file(src, scrape_item, filename, ext)
-
-    @error_handling_wrapper
-    async def get_auth_token(self, token_url: AbsoluteHttpURL) -> None:
-        token: str = (await self.request_json(token_url))["token"]
-        self.headers.update(Authorization=f"Bearer {token}")
 
 
 def _id(name: str) -> str:

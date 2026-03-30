@@ -304,6 +304,8 @@ class Crawler(ABC):
 
     async def async_startup(self) -> None: ...  # noqa: B027
 
+    catch_errors = final(error_handling_context)
+
     @final
     async def run(self, scrape_item: ScrapeItem) -> None:
         """Runs the crawler loop."""
