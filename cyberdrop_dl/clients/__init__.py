@@ -35,8 +35,8 @@ logger = logging.getLogger(__name__)
 @dataclasses.dataclass(slots=True)
 class HTTPClient:
     client_manager: ClientManager
-    _save_pages_html: bool
-    _resp_folder: Path
+    _save_responses_to_disk: bool
+    _responses_folder: Path
 
     @classmethod
     def from_client(cls, client_manager: ClientManager) -> Self:
@@ -60,7 +60,7 @@ class HTTPClient:
 
     def _prepare_headers(self, headers: Mapping[str, str] | None = None) -> CIMultiDict[str]:
         """Add default headers and transform it to CIMultiDict"""
-        combined = CIMultiDict(self._default_headers or {})
+        combined = CIMultiDict(self._default_headers)
         if headers:
             headers = CIMultiDict(headers)
             new: set[str] = set()
@@ -85,16 +85,6 @@ class HTTPClient:
         cache_disabled: bool = False,
         **request_params: Any,
     ) -> AsyncGenerator[AbstractResponse[Any]]:
-        """
-        Asynchronous context manager for HTTP requests.
-
-        - If 'impersonate' is specified, uses curl_cffi for the request and updates cookies.
-        - Otherwise, uses aiohttp with optional cache control.
-        - Yield an AbstractResponse that wraps the underlying response with common methods.
-        - On DDOSGuardError, retries the request using FlareSolverr.
-        - Saves the HTML content to disk if the config option is enabled.
-        - Closes underliying response on exit.
-        """
         self = cast("HTTPClient", self)
         request_params["headers"] = headers = self._prepare_headers(headers)
         request_params["data"] = data
@@ -126,11 +116,11 @@ class HTTPClient:
                 raise
             finally:
                 logger.debug("Finishing {} request [id={}]\n{}", method, request_id, resp)
-                if self._save_pages_html:
+                if self._save_responses_to_disk:
                     _ = self.client_manager.manager.task_group.create_task(
                         asyncio.to_thread(
                             _write_resp_to_disk,
-                            self._resp_folder,
+                            self._responses_folder,
                             url,
                             resp,
                             exc,
@@ -222,9 +212,8 @@ def _write_resp_to_disk(
     max_stem_len = 245 - len(str(folder)) + len(constants.STARTUP_TIME_STR) + 10
 
     log_date = response.created_at.strftime(constants.LOGS_DATETIME_FORMAT)
-    url_str = str(url)
-    clean_url = sanitize_filename(Path(url_str).as_posix().replace("/", "-"))
-    filename = f"{clean_url[:max_stem_len]}_{log_date}.html"
+    path_safe_url = sanitize_filename(Path(str(url)).as_posix().replace("/", "-"))
+    filename = f"{path_safe_url[:max_stem_len]}_{log_date}.html"
     file = folder / filename
     content = response.create_report(exc)
     try:

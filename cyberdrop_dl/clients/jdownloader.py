@@ -28,7 +28,7 @@ class Config:
     device: str
     download_dir: Path
     autostart: bool
-    whitelist: list[str]
+    whitelist: tuple[str, ...]
 
     @staticmethod
     def from_manager(manager: Manager) -> Config:
@@ -40,7 +40,7 @@ class Config:
             password=manager.auth_config.jdownloader.password,
             download_dir=download_dir.resolve(),
             autostart=manager.config.runtime_options.jdownloader_autostart,
-            whitelist=manager.config.runtime_options.jdownloader_whitelist,
+            whitelist=tuple(manager.config.runtime_options.jdownloader_whitelist),
         )
 
 
@@ -63,7 +63,7 @@ class JDownloader:
     def __post_init__(self) -> None:
         self._enabled = self.config.enabled
 
-    def is_whitelisted(self, url: AbsoluteHttpURL) -> bool:
+    def is_enabled_for(self, url: AbsoluteHttpURL) -> bool:
         if not self.enabled:
             return False
         if not self.config.whitelist:
@@ -95,12 +95,7 @@ class JDownloader:
         logger.error(f"Failed to connect to jDownloader: {msg}")
         self._enabled = False
 
-    async def send(
-        self,
-        url: AbsoluteHttpURL,
-        title: str,
-        download_path: Path | None = None,
-    ) -> None:
+    async def send(self, url: AbsoluteHttpURL, title: str, download_path: Path | None = None) -> None:
         """Sends links to JDownloader."""
 
         assert self._device is not None

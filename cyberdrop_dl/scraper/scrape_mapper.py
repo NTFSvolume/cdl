@@ -227,7 +227,7 @@ class ScrapeMapper:
         except (NoExtensionError, ValueError):
             pass
 
-        if self.jdownloader.enabled and self.jdownloader.is_whitelisted(scrape_item.url):
+        if self.jdownloader.is_enabled_for(scrape_item.url):
             logger.info(f"Sending unsupported URL to JDownloader: {scrape_item.url}")
             success = False
             try:
