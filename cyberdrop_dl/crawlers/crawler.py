@@ -181,7 +181,7 @@ class Crawler(ABC):
     def __post_init__(self) -> None: ...  # noqa: B027
 
     @classmethod  # noqa: B027
-    def __json_resp_check__(cls, json_resp: Any, resp: AbstractResponse[Any]) -> None:
+    def __json_resp_check__(cls, json_resp: Any, resp: AbstractResponse[Any], /) -> None:
         """Custom check for JSON responses.
 
         This method is called automatically by the `client_manager` when a JSON response is received from `cls.DOMAIN`
