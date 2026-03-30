@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, Required, TypedDict
+from typing import TYPE_CHECKING, Any, ClassVar, Required, TypedDict
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
+from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils.utilities import error_handling_wrapper, parse_url
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator
+    from collections.abc import AsyncGenerator, Generator
 
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
     from cyberdrop_dl.utils.dates import TimeStamp
@@ -17,6 +17,8 @@ if TYPE_CHECKING:
 # Primary URL needs `www.` to prevent redirect
 PRIMARY_URL = AbsoluteHttpURL("https://www.redgifs.com/")
 API_ENTRYPOINT = AbsoluteHttpURL("https://api.redgifs.com/v2")
+_PAGE_LIMIT = 100
+_PAGE_COUNT = 100
 
 
 class Links(TypedDict, total=False):
@@ -24,7 +26,7 @@ class Links(TypedDict, total=False):
     hd: str
 
 
-@dataclasses.dataclass(frozen=True, slots=True)
+@dataclasses.dataclass(slots=True, order=True)
 class Gif:
     id: str
     urls: Links
@@ -49,11 +51,12 @@ class RedGifsCrawler(Crawler):
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = PRIMARY_URL
     DOMAIN: ClassVar[str] = "redgifs"
     FOLDER_DOMAIN: ClassVar[str] = "RedGifs"
+    _RATE_LIMIT: ClassVar[RateLimit] = 2, 3
 
     @classmethod
-    def _json_response_check(cls, json_resp: Any) -> None:
+    def _json_response_check(cls, json_resp: dict[str, Any]) -> None:
         if error := json_resp.get("error"):
-            raise ScrapeError(422, error["message"])
+            raise ScrapeError(json_resp.get("status", 422), error["message"])
 
     def __post_init__(self) -> None:
         self.headers: dict[str, str] = {}
@@ -84,41 +87,39 @@ class RedGifsCrawler(Crawler):
                 await self._handle_gif(new_scrape_item, gif)
                 scrape_item.add_children()
 
-    async def _profile_pager(self, user_id: str, init_page: int = 1) -> AsyncGenerator[list[Gif]]:
-        total_gifs: int = 0
+    async def _profile_pager(self, user_id: str, init_page: int = 1) -> AsyncGenerator[tuple[Gif, ...]]:
         gif_ids: set[str] = set()
-        page_limit = 100
-        page_count = 100
+        api_url = (API_ENTRYPOINT / "users" / user_id / "search").with_query(count=_PAGE_COUNT)
 
-        api_url = (API_ENTRYPOINT / "users" / user_id / "search").with_query(count=page_count)
+        def parse_unique_gifs(gifs: list[dict[str, str]]) -> Generator[Gif]:
+            for gif_dict in gifs:
+                if gif_dict["id"] not in gif_ids:
+                    gif = Gif.from_dict(gif_dict)
+                    gif_ids.add(gif.id)
+                    yield gif
 
-        async def request_gifs(order: Literal["new", "old"], page: int) -> list[Gif]:
-            nonlocal total_gifs
-            resp: dict[str, Any] = await self.request_json(
-                api_url.update_query(order=order, page=page),
-                headers=self.headers,
-            )
-            if not total_gifs:
-                total_gifs = resp["users"][0]["gifs"]
+        async def pagination(*, reverse: bool = False) -> AsyncGenerator[tuple[Gif, ...]]:
+            for page in range(1 if reverse else init_page, _PAGE_LIMIT + 1):
+                resp: dict[str, Any] = await self.request_json(
+                    api_url.update_query(
+                        order="old" if reverse else "new",
+                        page=page,
+                    ),
+                    headers=self.headers,
+                )
 
-            return [Gif.from_dict(gif) for gif in resp["gifs"]]
+                gifs = tuple(parse_unique_gifs(resp["gifs"]))
+                if not gifs:
+                    return
 
-        for page in range(init_page, page_limit + 1):
-            gifs = await request_gifs("new", page)
-            gif_ids.update(gif.id for gif in gifs)
+                yield gifs
+
+        async for gifs in pagination():
             yield gifs
 
-            if len(gif_ids) >= total_gifs:
-                return
-
-        # fetch gifs in reverse order to bypass API limit
-        for page in range(1, page_limit + 1):
-            gifs = [gif for gif in await request_gifs("old", page) if gif.id not in gif_ids]
-            gif_ids.update(gif.id for gif in gifs)
+        # fetch gifs in reverse order to bypass API pagination limit
+        async for gifs in pagination(reverse=True):
             yield gifs
-
-            if len(gifs) < page_count:
-                break
 
     @error_handling_wrapper
     async def gif(self, scrape_item: ScrapeItem, post_id: str) -> None:
