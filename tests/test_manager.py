@@ -121,7 +121,7 @@ async def test_async_db_close(running_manager: Manager) -> None:
     await running_manager.async_startup()
     assert not isinstance(running_manager.db_manager, Field)
     assert not isinstance(running_manager.hash_manager, Field)
-    assert "overwrite" not in str(running_manager.logs.main_log)
+    assert "overwrite" not in str(running_manager.logs.files.main_log)
     await running_manager.async_db_close()
     assert isinstance(running_manager.db_manager, Field)
     assert isinstance(running_manager.hash_manager, Field)
