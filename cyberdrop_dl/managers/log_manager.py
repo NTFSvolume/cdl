@@ -37,7 +37,7 @@ class LogFiles:
     def __iter__(self) -> Iterator[Path]:
         return iter(dataclasses.astuple(self))
 
-    def post_init(self) -> None:
+    def __post_init__(self) -> None:
         self.jsonl_file = self.main_log.with_suffix(".results.jsonl")
 
 
