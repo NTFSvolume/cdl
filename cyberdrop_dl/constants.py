@@ -9,7 +9,7 @@ from aiohttp.resolver import AsyncResolver, ThreadedResolver
 from rich.text import Text
 
 from cyberdrop_dl import env
-from cyberdrop_dl.compat import Enum, StrEnum
+from cyberdrop_dl.compat import CIStrEnum, Enum, StrEnum
 
 if TYPE_CHECKING:
     from cyberdrop_dl.utils.logger import LogHandler
@@ -92,14 +92,10 @@ class HashType(StrEnum):
     xxh128 = "xxh128"
 
 
-class Hashing(StrEnum):
+class Hashing(CIStrEnum):
     OFF = auto()
     IN_PLACE = auto()
     POST_DOWNLOAD = auto()
-
-    @classmethod
-    def _missing_(cls, value: object) -> "Hashing":
-        return cls[str(value).upper()]
 
 
 class BROWSERS(StrEnum):

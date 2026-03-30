@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, TypeVar
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
-T = TypeVar("T")
+_T = TypeVar("_T")
 
 
 if sys.version_info < (3, 12):
@@ -17,7 +17,7 @@ if sys.version_info < (3, 12):
         _member_names_: list[str]
         _member_map_: dict[str, enum.Enum]
 
-        def __contains__(cls: type[_EnumMemberT], member: object) -> bool:  # type: ignore[reportGeneralTypeIssues]
+        def __contains__(cls: type[_EnumMemberT], member: object) -> bool:  # type: ignore[reportGeneralTypeIssues]  # pyright: ignore[reportGeneralTypeIssues]
             if isinstance(member, cls):
                 return True
             try:
@@ -26,8 +26,8 @@ if sys.version_info < (3, 12):
             except ValueError:
                 return False
 
-        def __iter__(cls: type[_EnumMemberT]) -> Iterator[_EnumMemberT]:  # type: ignore[reportGeneralTypeIssues]
-            return (cls._member_map_[name] for name in cls._member_names_)  # type: ignore[reportReturnType]
+        def __iter__(cls: type[_EnumMemberT]) -> Iterator[_EnumMemberT]:  # type: ignore[reportGeneralTypeIssues]  # pyright: ignore[reportGeneralTypeIssues]
+            return (cls._member_map_[name] for name in cls._member_names_)  # type: ignore[reportReturnType]  # pyright: ignore[reportReturnType]
 
     class Enum(enum.Enum, metaclass=_ContainerEnumType): ...
 
@@ -42,10 +42,10 @@ else:
     StrEnum = enum.StrEnum
 
 
-class MayBeUpperStrEnum(StrEnum):
+class CIStrEnum(StrEnum):
     @classmethod
-    def _missing_(cls, value: object):
-        try:
-            return cls[str(value).upper()]
-        except KeyError as e:
-            raise e
+    def _missing_(cls, value: object) -> CIStrEnum | None:
+        value = str(value)
+        for member in cls:
+            if member.name.casefold() == value:
+                return member
