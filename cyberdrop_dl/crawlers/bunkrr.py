@@ -93,11 +93,12 @@ class File:
         if self.thumbnail.count("https://") != 1:
             return
 
-        if AbsoluteHttpURL(self.thumbnail, encoded="%" in self.thumbnail).parts[1:2] != ("thumbs",):
+        thumb = parse_url(self.thumbnail)
+        if thumb.parts[1:2] != ("thumbs",):
             return
 
-        src_str = self.thumbnail.replace("/thumbs/", "/")
-        src = parse_url(src_str).with_suffix(Path(self.name).suffix).with_query(None)
+        src = thumb.with_path(thumb.path.replace("/thumbs/", "/")).with_suffix(Path(self.name).suffix)
+
         if src.suffix.lower() not in FILE_FORMATS["Images"]:
             src = src.with_host(src.host.replace("i-", ""))
 
