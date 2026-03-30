@@ -107,7 +107,63 @@ class CrawlerInfo(NamedTuple):
     supported_paths: SupportedPaths
 
 
-class Crawler(ABC):
+class HTTPClientProxy:
+    DOMAIN: ClassVar[str]
+    _IMPERSONATE: ClassVar[str | bool | None] = None
+    client: ScraperClient  # pyright: ignore[reportUninitializedInstanceVariable]
+
+    @classmethod
+    def __json_resp_check__(cls, json_resp: Any, resp: AbstractResponse[Any], /) -> None:
+        """Custom check for JSON responses.
+
+        This method is called automatically by the `client_manager` when a JSON response is received from `cls.DOMAIN`
+        and it was **NOT** successful (`4xx` or `5xx` HTTP code).
+
+        Override this method in subclasses to raise a custom `ScrapeError` instead of the default HTTP error
+
+        Example:
+            ```python
+            if isinstance(json, dict) and json.get("status") == "error":
+                raise ScrapeError(422, f"API error: {json['message']}")
+            ```
+
+        IMPORTANT:
+            Cases were the response **IS** successful (200, OK) but the JSON indicates an error
+            should be handled by the crawler itself
+        """
+
+    @signature.copy(ScraperClient._request)
+    @contextlib.asynccontextmanager
+    async def request(
+        self, *args, impersonate: str | bool | None = None, **kwargs
+    ) -> AsyncGenerator[AbstractResponse[Any]]:
+        if impersonate is None:
+            impersonate = self._IMPERSONATE
+
+        with self.client.client_manager.set_json_checker(self.__json_resp_check__):
+            async with (
+                self.client._limiter(self.DOMAIN),
+                self.client._request(*args, impersonate=impersonate, **kwargs) as resp,
+            ):
+                yield resp
+
+    @signature.copy(request)
+    async def request_json(self, *args, **kwargs) -> Any:
+        async with self.request(*args, **kwargs) as resp:
+            return await resp.json()
+
+    @signature.copy(request)
+    async def request_soup(self, *args, **kwargs) -> BeautifulSoup:
+        async with self.request(*args, **kwargs) as resp:
+            return await resp.soup()
+
+    @signature.copy(request)
+    async def request_text(self, *args, **kwargs) -> str:
+        async with self.request(*args, **kwargs) as resp:
+            return await resp.text()
+
+
+class Crawler(ABC, HTTPClientProxy):
     OLD_DOMAINS: ClassVar[tuple[str, ...]] = ()
     SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = ()
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {}
@@ -125,37 +181,8 @@ class Crawler(ABC):
     _RATE_LIMIT: ClassVar[RateLimit] = 25, 1
     _DOWNLOAD_SLOTS: ClassVar[int | None] = None
     _USE_DOWNLOAD_SERVERS_LOCKS: ClassVar[bool] = False
-    _IMPERSONATE: ClassVar[str | bool | None] = None
 
     create_db_path = staticmethod(DBPathBuilder.path)
-
-    @signature.copy(ScraperClient._request)
-    @contextlib.asynccontextmanager
-    async def request(self, *args, impersonate: str | bool | None = None, **kwargs) -> AsyncGenerator[AbstractResponse]:
-        if impersonate is None:
-            impersonate = self._IMPERSONATE
-
-        with self.client.client_manager.set_json_checker(self.__json_resp_check__):
-            async with (
-                self.client._limiter(self.DOMAIN),
-                self.client._request(*args, impersonate=impersonate, **kwargs) as resp,
-            ):
-                yield resp
-
-    @signature.copy(ScraperClient._request)
-    async def request_json(self, *args, **kwargs) -> Any:
-        async with self.request(*args, **kwargs) as resp:
-            return await resp.json()
-
-    @signature.copy(ScraperClient._request)
-    async def request_soup(self, *args, **kwargs) -> BeautifulSoup:
-        async with self.request(*args, **kwargs) as resp:
-            return await resp.soup()
-
-    @signature.copy(ScraperClient._request)
-    async def request_text(self, *args, **kwargs) -> str:
-        async with self.request(*args, **kwargs) as resp:
-            return await resp.text()
 
     @final
     def __init__(self, manager: Manager) -> None:
@@ -178,27 +205,7 @@ class Crawler(ABC):
     def create_task(self, coro: Coroutine[Any, Any, _T_co]) -> asyncio.Task[_T_co]:
         return self.manager.task_group.create_task(coro)
 
-    def __post_init__(self) -> None: ...  # noqa: B027
-
-    @classmethod  # noqa: B027
-    def __json_resp_check__(cls, json_resp: Any, resp: AbstractResponse[Any], /) -> None:
-        """Custom check for JSON responses.
-
-        This method is called automatically by the `client_manager` when a JSON response is received from `cls.DOMAIN`
-        and it was **NOT** successful (`4xx` or `5xx` HTTP code).
-
-        Override this method in subclasses to raise a custom `ScrapeError` instead of the default HTTP error
-
-        Example:
-            ```python
-            if isinstance(json, dict) and json.get("status") == "error":
-                raise ScrapeError(422, f"API error: {json['message']}")
-            ```
-
-        IMPORTANT:
-            Cases were the response **IS** successful (200, OK) but the JSON indicates an error
-            should be handled by the crawler itself
-        """
+    def __post_init__(self) -> None: ...
 
     @final
     @staticmethod
@@ -293,7 +300,7 @@ class Crawler(ABC):
             self.disabled = True
             raise
 
-    async def async_startup(self) -> None: ...  # noqa: B027
+    async def async_startup(self) -> None: ...
 
     catch_errors = final(error_handling_context)
 
