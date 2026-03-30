@@ -1,17 +1,16 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import dataclasses
-import logging
 from typing import TYPE_CHECKING, Self
 
 from myjdapi import myjdapi
 
 from cyberdrop_dl.exceptions import JDownloaderError
 
-logger = logging.getLogger(__name__)
-
 if TYPE_CHECKING:
+    from collections.abc import Generator
     from pathlib import Path
 
     from myjdapi.myjdapi import Jddevice
@@ -71,35 +70,40 @@ class JDownloader:
 
         return any(domain in url.host for domain in self.config.whitelist)
 
+    @contextlib.contextmanager
+    def _wrap_errors(self) -> Generator[None]:
+        try:
+            yield
+        except myjdapi.MYJDDeviceNotFoundException:
+            raise JDownloaderError(f"Device not found ({self.config.device})") from None
+        except myjdapi.MYJDApiException as e:
+            raise JDownloaderError(str(e)) from e
+
     async def _connect(self) -> None:
-        if not all((self.config.username, self.config.password, self.config.device)):
-            raise JDownloaderError("JDownloader credentials were not provided.")
-
-        api = myjdapi.Myjdapi()
-        api.set_app_key("CYBERDROP-DL")
-        _ = await asyncio.to_thread(api.connect, self.config.username, self.config.password)
-        self._device = api.get_device(self.config.device)
-
-    async def connect(self) -> None:
         if not self._enabled or self._device is not None:
             return
+
+        if not all((self.config.username, self.config.password, self.config.device)):
+            raise JDownloaderError("JDownloader credentials were not provided")
+
+        with self._wrap_errors():
+            api = myjdapi.Myjdapi()
+            api.set_app_key("CYBERDROP-DL")
+            _ = await asyncio.to_thread(api.connect, self.config.username, self.config.password)
+            self._device = api.get_device(self.config.device)
+
+    async def connect(self) -> None:
         try:
             return await self._connect()
-        except JDownloaderError as e:
-            msg = e.message
-        except myjdapi.MYJDDeviceNotFoundException:
-            msg = f"Device not found ({self.config.device})"
-        except myjdapi.MYJDApiException as e:
-            msg = e
-
-        logger.error(f"Failed to connect to jDownloader: {msg}")
-        self._enabled = False
+        except Exception:
+            self._enabled = False
+            raise
 
     async def send(self, url: AbsoluteHttpURL, title: str, download_path: Path | None = None) -> None:
         """Sends links to JDownloader."""
 
-        assert self._device is not None
-        try:
+        assert self._device is not None and self.enabled
+        with self._wrap_errors():
             download_folder = self.config.download_dir
             if download_path:
                 download_folder = download_folder / download_path
@@ -116,5 +120,3 @@ class JDownloader:
                     },
                 ],
             )
-        except myjdapi.MYJDException as e:
-            raise JDownloaderError(str(e)) from e

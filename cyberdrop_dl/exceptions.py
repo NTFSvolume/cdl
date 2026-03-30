@@ -206,6 +206,10 @@ class LoginError(CDLBaseError):
 class JDownloaderError(CDLBaseError):
     """This error will be thrown for any Jdownloader error."""
 
+    def __init__(self, message: str | None = None) -> None:
+        ui_failure = "JDownloader Error"
+        super().__init__(ui_failure, message=message)
+
 
 class InvalidYamlError(CDLBaseError):
     def __init__(self, file: Path, e: YAMLError) -> None:

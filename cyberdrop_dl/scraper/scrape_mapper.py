@@ -96,7 +96,11 @@ class ScrapeMapper:
         """Starts the orchestra."""
         self.start_scrapers()
         await self.manager.db_manager.history_table.update_previously_unsupported(self.existing_crawlers)
-        await self.jdownloader.connect()
+        try:
+            await self.jdownloader.connect()
+        except JDownloaderError:
+            logger.exception("Failed to connect to jDownloader")
+
         await self.start_real_debrid()
         self.direct_crawler._init_downloader()
         async for item in self.get_input_items():
