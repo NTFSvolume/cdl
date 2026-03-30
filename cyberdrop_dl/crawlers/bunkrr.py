@@ -16,7 +16,7 @@ from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths, au
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError
 from cyberdrop_dl.utils import css, open_graph
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, xor_decrypt
+from cyberdrop_dl.utils.utilities import error_handling_wrapper, parse_url, xor_decrypt
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
@@ -97,7 +97,7 @@ class File:
             return
 
         src_str = self.thumbnail.replace("/thumbs/", "/")
-        src = AbsoluteHttpURL(src_str, encoded="%" in src_str).with_suffix(Path(self.name).suffix).with_query(None)
+        src = parse_url(src_str).with_suffix(Path(self.name).suffix).with_query(None)
         if src.suffix.lower() not in FILE_FORMATS["Images"]:
             src = src.with_host(src.host.replace("i-", ""))
 
