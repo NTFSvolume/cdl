@@ -424,7 +424,7 @@ class ClientManager:
                 return media_item.duration
 
             if media_item.downloaded:
-                properties = await probe(media_item.complete_file)
+                properties = await probe(media_item.path)
 
             else:
                 headers = self.download_client._get_download_headers(media_item.domain, media_item.referer)

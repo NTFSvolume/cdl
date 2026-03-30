@@ -97,7 +97,7 @@ class DownloadClient:
         downloaded_filename = await self.manager.db_manager.history_table.get_downloaded_filename(domain, media_item)
         download_dir = self.get_download_dir(media_item)
         if media_item.is_segment:
-            media_item.partial_file = media_item.complete_file = download_dir / media_item.filename
+            media_item.partial_file = media_item.path = download_dir / media_item.filename
         else:
             media_item.partial_file = download_dir / f"{downloaded_filename}{constants.TempExt.PART}"
 
@@ -133,7 +133,7 @@ class DownloadClient:
             _ = get_content_type(media_item.ext, resp.headers)
 
         media_item.filesize = int(resp.headers.get("Content-Length", "0")) or None
-        if not media_item.complete_file:
+        if not media_item.path:
             proceed, skip = await self.get_final_file_info(media_item, domain)
             self.client_manager.check_content_length(resp.headers)
             if skip:
@@ -299,13 +299,13 @@ class DownloadClient:
             downloaded = await self._download(domain, media_item)
 
         if downloaded:
-            await asyncio.to_thread(media_item.partial_file.rename, media_item.complete_file)
+            await asyncio.to_thread(media_item.partial_file.rename, media_item.path)
             if not media_item.is_segment:
                 proceed = await self.client_manager.check_file_duration(media_item)
                 await self.manager.db_manager.history_table.add_duration(domain, media_item)
                 if not proceed:
                     log(f"Download Skip {media_item.url} due to runtime restrictions", 10)
-                    await asyncio.to_thread(media_item.complete_file.unlink)
+                    await asyncio.to_thread(media_item.path.unlink)
                     await self.mark_incomplete(media_item, domain)
                     self.manager.progress_manager.download_progress.add_skipped()
                     return False
@@ -330,9 +330,9 @@ class DownloadClient:
         await self.manager.db_manager.history_table.mark_complete(domain, media_item)
 
     async def add_file_size(self, domain: str, media_item: MediaItem) -> None:
-        if not media_item.complete_file:
-            media_item.complete_file = self.get_file_location(media_item)
-        if await asyncio.to_thread(media_item.complete_file.is_file):
+        if not media_item.path:
+            media_item.path = self.get_file_location(media_item)
+        if await asyncio.to_thread(media_item.path.is_file):
             await self.manager.db_manager.history_table.add_filesize(domain, media_item)
 
     async def handle_media_item_completion(self, media_item: MediaItem, downloaded: bool = False) -> None:
@@ -342,7 +342,7 @@ class DownloadClient:
             await self.manager.hash_manager.hash_client.hash_item_during_download(media_item)
             self.manager.path_manager.add_completed(media_item)
         except Exception:
-            log(f"Error handling media item completion of: {media_item.complete_file}", 10, exc_info=True)
+            log(f"Error handling media item completion of: {media_item.path}", 10, exc_info=True)
 
     """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
 
@@ -364,9 +364,9 @@ class DownloadClient:
 
     async def get_final_file_info(self, media_item: MediaItem, domain: str) -> tuple[bool, bool]:
         """Complicated checker for if a file already exists, and was already downloaded."""
-        media_item.complete_file = self.get_file_location(media_item)
-        part_suffix = media_item.complete_file.suffix + constants.TempExt.PART
-        media_item.partial_file = media_item.complete_file.with_suffix(part_suffix)
+        media_item.path = self.get_file_location(media_item)
+        part_suffix = media_item.path.suffix + constants.TempExt.PART
+        media_item.partial_file = media_item.path.with_suffix(part_suffix)
 
         expected_size = media_item.filesize
         proceed = True
@@ -384,11 +384,11 @@ class DownloadClient:
                     skip = True
                     return proceed, skip
 
-            if not media_item.complete_file.exists() and not media_item.partial_file.exists():
+            if not media_item.path.exists() and not media_item.partial_file.exists():
                 break
 
-            if media_item.complete_file.exists() and media_item.complete_file.stat().st_size == media_item.filesize:
-                log(f"Found {media_item.complete_file.name} locally, skipping download")
+            if media_item.path.exists() and media_item.path.stat().st_size == media_item.filesize:
+                log(f"Found {media_item.path.name} locally, skipping download")
                 proceed = False
                 break
 
@@ -397,8 +397,8 @@ class DownloadClient:
                 media_item,
             )
             if not downloaded_filename:
-                media_item.complete_file, media_item.partial_file = await self.iterate_filename(
-                    media_item.complete_file,
+                media_item.path, media_item.partial_file = await self.iterate_filename(
+                    media_item.path,
                     media_item,
                 )
                 break
@@ -413,43 +413,43 @@ class DownloadClient:
                         media_item.partial_file.unlink()
 
                     elif size == media_item.filesize:
-                        if media_item.complete_file.exists():
+                        if media_item.path.exists():
                             log(
-                                f"Found conflicting complete file '{media_item.complete_file}' locally, iterating filename",
+                                f"Found conflicting complete file '{media_item.path}' locally, iterating filename",
                                 30,
                             )
                             new_complete_filename, new_partial_file = await self.iterate_filename(
-                                media_item.complete_file,
+                                media_item.path,
                                 media_item,
                             )
                             media_item.partial_file.rename(new_complete_filename)
                             proceed = False
 
-                            media_item.complete_file = new_complete_filename
+                            media_item.path = new_complete_filename
                             media_item.partial_file = new_partial_file
                         else:
                             proceed = False
-                            media_item.partial_file.rename(media_item.complete_file)
+                            media_item.partial_file.rename(media_item.path)
                         log(
-                            f"Renaming found partial file '{media_item.partial_file}' to complete file {media_item.complete_file}"
+                            f"Renaming found partial file '{media_item.partial_file}' to complete file {media_item.path}"
                         )
-                elif media_item.complete_file.exists():
-                    if media_item.complete_file.stat().st_size == media_item.filesize:
-                        log(f"Found complete file '{media_item.complete_file}' locally, skipping download")
+                elif media_item.path.exists():
+                    if media_item.path.stat().st_size == media_item.filesize:
+                        log(f"Found complete file '{media_item.path}' locally, skipping download")
                         proceed = False
                     else:
                         log(
-                            f"Found conflicting complete file '{media_item.complete_file}' locally, iterating filename",
+                            f"Found conflicting complete file '{media_item.path}' locally, iterating filename",
                             30,
                         )
-                        media_item.complete_file, media_item.partial_file = await self.iterate_filename(
-                            media_item.complete_file,
+                        media_item.path, media_item.partial_file = await self.iterate_filename(
+                            media_item.path,
                             media_item,
                         )
                 break
 
             media_item.filename = downloaded_filename
-        media_item.download_filename = media_item.complete_file.name
+        media_item.download_filename = media_item.path.name
         await self.manager.db_manager.history_table.add_download_filename(domain, media_item)
         return proceed, skip
 

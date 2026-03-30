@@ -209,7 +209,7 @@ class HistoryTable:
         """Adds the file size to the db."""
 
         url_path = media_item.db_path
-        file_size = media_item.complete_file.stat().st_size
+        file_size = media_item.path.stat().st_size
         query = """UPDATE media SET file_size=? WHERE domain = ? and url_path = ?"""
         await self.db_conn.execute(query, (file_size, domain, url_path))
         await self.db_conn.commit()

@@ -71,9 +71,7 @@ class HashClient:
     async def hash_item(self, media_item: MediaItem) -> None:
         if media_item.is_segment:
             return
-        hash = await self.update_db_and_retrive_hash(
-            media_item.complete_file, media_item.original_filename, media_item.referer
-        )
+        hash = await self.update_db_and_retrive_hash(media_item.path, media_item.original_filename, media_item.referer)
         await self.save_hash_data(media_item, hash)
 
     async def hash_item_during_download(self, media_item: MediaItem) -> None:
@@ -85,11 +83,11 @@ class HashClient:
         try:
             assert media_item.original_filename
             hash = await self.update_db_and_retrive_hash(
-                media_item.complete_file, media_item.original_filename, media_item.referer
+                media_item.path, media_item.original_filename, media_item.referer
             )
             await self.save_hash_data(media_item, hash)
         except Exception as e:
-            log(f"After hash processing failed: '{media_item.complete_file}' with error {e}", 40, exc_info=True)
+            log(f"After hash processing failed: '{media_item.path}' with error {e}", 40, exc_info=True)
 
     async def update_db_and_retrive_hash(
         self, file: Path | str, original_filename: str | None = None, referer: URL | None = None
@@ -147,8 +145,8 @@ class HashClient:
     async def save_hash_data(self, media_item: MediaItem, hash: str | None) -> None:
         if not hash:
             return
-        absolute_path = await asyncio.to_thread(media_item.complete_file.resolve)
-        size = await asyncio.to_thread(get_size_or_none, media_item.complete_file)
+        absolute_path = await asyncio.to_thread(media_item.path.resolve)
+        size = await asyncio.to_thread(get_size_or_none, media_item.path)
         assert size
         self.hashed_media_items.append(media_item)
         if hash:
@@ -209,7 +207,7 @@ class HashClient:
         downloads = self.manager.path_manager.completed_downloads
 
         async def exists(item: MediaItem) -> MediaItem | None:
-            if await asyncio.to_thread(item.complete_file.is_file):
+            if await asyncio.to_thread(item.path.is_file):
                 return item
 
         results = await asyncio.gather(*(exists(item) for item in downloads))
@@ -219,7 +217,7 @@ class HashClient:
             try:
                 await self.hash_item(media_item)
             except Exception as e:
-                msg = f"Unable to hash file = {media_item.complete_file}: {e}"
+                msg = f"Unable to hash file = {media_item.path}: {e}"
                 log(msg, 40)
         return self.hashes_dict
 

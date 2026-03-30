@@ -151,9 +151,9 @@ class MediaItem:
     parents: list[AbsoluteHttpURL] = field(default_factory=list)
     parent_threads: set[AbsoluteHttpURL] = field(default_factory=set)
 
-    attempts: int = field(default=0)
+    attempts: int = 0
     partial_file: Path = None  # type: ignore
-    complete_file: Path = None  # type: ignore
+    path: Path = None  # type: ignore
     hash: str | None = None
     downloaded: bool = field(default=False)
 
@@ -171,6 +171,14 @@ class MediaItem:
         if self.uploaded_at:
             assert isinstance(self.uploaded_at, int), f"Invalid {self.uploaded_at =!r} from {self.referer}"
             self.uploaded_at_date = datetime.datetime.fromtimestamp(self.uploaded_at, tz=datetime.UTC)
+
+    @property
+    def real_url(self) -> AbsoluteHttpURL:
+        return self.debrid_link or self.url
+
+    @property
+    def temp_path(self) -> Path:
+        return self.path.with_suffix(self.path.suffix + ".part")
 
     @staticmethod
     def from_item(
