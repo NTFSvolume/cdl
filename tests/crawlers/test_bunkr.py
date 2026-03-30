@@ -13,8 +13,8 @@ from cyberdrop_dl.crawlers import bunkrr
         )
     ],
 )
-def test_decrypt_api_resp(timestamp: int, url: str, expected: str) -> None:
-    url = bunkrr._decrypt_api_resp(url, timestamp, encrypted=True)
+def test_parse_api_resp(timestamp: int, url: str, expected: str) -> None:
+    url = bunkrr._parse_api_resp(url, timestamp, encrypted=True)
     assert url == expected
 
 

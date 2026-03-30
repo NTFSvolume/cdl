@@ -237,7 +237,7 @@ class BunkrrCrawler(Crawler):
             json={"id": file_id},
             headers={"Referer": str(_REINFORCED_URL)},
         )
-        return self.parse_url(_decrypt_api_resp(**resp))
+        return self.parse_url(_parse_api_resp(**resp))
 
     async def _try_request_soup(self, url: AbsoluteHttpURL) -> BeautifulSoup | None:
         try:
@@ -294,7 +294,7 @@ def _override_cdn(url: AbsoluteHttpURL) -> AbsoluteHttpURL:
     return url
 
 
-def _decrypt_api_resp(url: str, timestamp: int, encrypted: bool) -> str:
+def _parse_api_resp(url: str, timestamp: int, encrypted: bool) -> str:
     if not encrypted:
         return url
 
