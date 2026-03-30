@@ -80,7 +80,7 @@ class ScrapeMapper:
     async def start_real_debrid(self) -> None:
         """Starts RealDebrid."""
         self.existing_crawlers["real-debrid"] = self.real_debrid = real = RealDebridCrawler(self.manager)
-        await real.startup()
+        await real.__async_init__()
 
     @classmethod
     @contextlib.asynccontextmanager
@@ -217,7 +217,7 @@ class ScrapeMapper:
 
         if crawler_match:
             if not crawler_match.ready:
-                await crawler_match.startup()
+                await crawler_match.__async_init__()
             self.manager.task_group.create_task(crawler_match.run(scrape_item))
             return
 

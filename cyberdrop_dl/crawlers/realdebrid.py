@@ -96,7 +96,7 @@ class RealDebridCrawler(Crawler):
             return
 
         with self.disable_on_error("Setup failed. Unable to get URL regex"):
-            await self.api.startup()
+            await self.api.connect()
 
     @error_handling_wrapper
     async def folder(self, scrape_item: ScrapeItem) -> None:
@@ -144,7 +144,7 @@ class RealDebridAPI:
     def is_supported_folder(self, url: AbsoluteHttpURL) -> bool:
         return bool(self._folder_regex.search(str(url)))
 
-    async def startup(self) -> None:
+    async def connect(self) -> None:
         responses: tuple[list[str], list[str]] = await asyncio.gather(
             self._api_request("hosts/regex"),
             self._api_request("hosts/regexFolder"),
