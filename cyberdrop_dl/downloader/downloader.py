@@ -466,7 +466,7 @@ class Downloader:
 
         except SkipDownloadError as e:
             if not media_item.is_segment:
-                log(f"Download skip {media_item.url}: {e}", 10)
+                log(f"Download skipped {media_item.url}: {e}", 10)
                 self.manager.progress_manager.download_progress.add_skipped()
             self.attempt_task_removal(media_item)
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections import defaultdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
@@ -10,7 +11,6 @@ from send2trash import send2trash
 from cyberdrop_dl import constants
 from cyberdrop_dl.constants import Hashing
 from cyberdrop_dl.ui.prompts.basic_prompts import enter_to_continue
-from cyberdrop_dl.utils.logger import log
 from cyberdrop_dl.utils.utilities import get_size_or_none
 
 if TYPE_CHECKING:
@@ -19,6 +19,8 @@ if TYPE_CHECKING:
     from cyberdrop_dl.config.config_model import DupeCleanup
     from cyberdrop_dl.data_structures.url_objects import MediaItem
     from cyberdrop_dl.managers.manager import Manager
+
+logger = logging.getLogger(__name__)
 
 
 def hash_directory_scanner(manager: Manager, path: Path) -> None:
@@ -87,7 +89,7 @@ class HashClient:
             )
             await self.save_hash_data(media_item, hash)
         except Exception as e:
-            log(f"After hash processing failed: '{media_item.path}' with error {e}", 40, exc_info=True)
+            logger.exception(f"After hash processing failed: '{media_item.path}' with error {e}")
 
     async def update_db_and_retrive_hash(
         self, file: Path | str, original_filename: str | None = None, referer: URL | None = None
@@ -138,7 +140,7 @@ class HashClient:
                     referer,
                 )
         except Exception as e:
-            log(f"Error hashing '{file}' : {e}", 40, exc_info=True)
+            logger.exception(f"Error hashing '{file}' : {e}")
         else:
             return hash
 
@@ -187,7 +189,7 @@ class HashClient:
         try:
             deleted = await _delete_file(file, self._to_trash)
         except OSError as e:
-            log(f"Unable to remove '{file}' ({hash_string}): {e}", 40)
+            logger.exception(f"Unable to remove '{file}' ({hash_string}): {e}")
         else:
             if not deleted:
                 return
@@ -196,7 +198,7 @@ class HashClient:
                 f"Removed new download '{file}' [{self._deleted_file_suffix}]. "
                 f"File hash matches with a previous download ({hash_string})"
             )
-            log(msg, 10)
+            logger.info(msg)
             self.manager.progress_manager.hash_progress.add_removed_file()
 
         finally:
@@ -216,9 +218,8 @@ class HashClient:
                 continue
             try:
                 await self.hash_item(media_item)
-            except Exception as e:
-                msg = f"Unable to hash file = {media_item.path}: {e}"
-                log(msg, 40)
+            except Exception:
+                logger.exception(msg=f"Unable to hash '{media_item.path}'")
         return self.hashes_dict
 
 
