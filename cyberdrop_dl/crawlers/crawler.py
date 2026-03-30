@@ -842,25 +842,13 @@ class Crawler(ABC, HTTPClientProxy):
 
     @final
     @classmethod
-    def parse_date(cls, date_or_datetime: str, format: str | None = None, /) -> dates.TimeStamp | None:
-        if parsed_date := cls._parse_date(date_or_datetime, format):
-            return dates.to_timestamp(parsed_date)
+    def parse_date(cls, date_or_datetime: str, format: str) -> dates.TimeStamp | None:
+        return dates.to_timestamp(dates.parse_format(date_or_datetime, format))
 
     @final
     @classmethod
     def parse_iso_date(cls, date_or_datetime: str, /) -> dates.TimeStamp | None:
-        if parsed_date := cls._parse_date(date_or_datetime, None, iso=True):
-            return dates.to_timestamp(parsed_date)
-
-    @final
-    @classmethod
-    def _parse_date(
-        cls, date_or_datetime: str, format: str | None = None, /, *, iso: bool = False
-    ) -> datetime.datetime | None:
-        try:
-            return dates.parse(date_or_datetime, format, iso=iso)
-        except ValueError as e:
-            log(f"Date parsing for {cls.DOMAIN} seems to be broken: {e}", bug=True)
+        return dates.to_timestamp(dates.parse_iso(date_or_datetime))
 
     async def _get_redirect_url(self, url: AbsoluteHttpURL) -> AbsoluteHttpURL:
         async with self.request(url) as resp:
