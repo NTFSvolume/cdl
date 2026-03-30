@@ -92,7 +92,6 @@ class ScraperClient:
         logger.debug("Starting {} request to {} [id={}]\n{}", method, url, request_id, request_params)
 
         async with self.__request(url, method, request_params, impersonate=bool(impersonate)) as resp:
-            logger.debug("Finishing {} request [id={}]\n{}", method, request_id, resp)
             exc = None
             try:
                 yield await self._check_response(resp, url)
@@ -100,6 +99,7 @@ class ScraperClient:
                 exc = e
                 raise
             finally:
+                logger.debug("Finishing {} request [id={}]\n{}", method, request_id, resp)
                 await self.write_soup_to_disk(url, resp, exc)
 
     def __sync_session_cookies(self, url: AbsoluteHttpURL) -> None:
