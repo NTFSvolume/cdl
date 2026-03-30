@@ -18,7 +18,7 @@ from cyberdrop_dl.managers.client_manager import ClientManager
 from cyberdrop_dl.managers.config_manager import ConfigManager
 from cyberdrop_dl.managers.hash_manager import HashManager
 from cyberdrop_dl.managers.live_manager import LiveManager
-from cyberdrop_dl.managers.log_manager import LogManager
+from cyberdrop_dl.managers.logs import LogManager
 from cyberdrop_dl.managers.path_manager import PathManager
 from cyberdrop_dl.managers.progress_manager import ProgressManager
 from cyberdrop_dl.utils.logger import LogHandler, QueuedLogger
