@@ -465,7 +465,7 @@ class Crawler(HTTPClientProxy, ABC):
             return
 
         data = [media_item.__json__()]
-        await self.manager.log_manager.write_jsonl(data)
+        await self.manager.logs.write_jsonl(data)
 
     async def check_complete(self, url: AbsoluteHttpURL, referer: AbsoluteHttpURL) -> bool:
         """Checks if this URL has been download before.

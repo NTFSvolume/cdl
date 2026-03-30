@@ -99,11 +99,11 @@ class LogManager:
         """Writes to the last post log."""
         _ = self.task_group.create_task(self._write_to_csv(self.files.last_post_log, url=url))
 
-    def write_unsupported_urls_log(self, url: URL, origin: URL | None = None) -> None:
+    def write_unsupported(self, url: URL, origin: URL | None = None) -> None:
         """Writes to the unsupported urls log."""
         _ = self.task_group.create_task(self._write_to_csv(self.files.unsupported_urls_log, url=url, origin=origin))
 
-    def write_download_error_log(self, media_item: MediaItem, error_message: str) -> None:
+    def write_download_error(self, media_item: MediaItem, error_message: str) -> None:
         """Writes to the download error log."""
         origin = get_origin(media_item)
         _ = self.task_group.create_task(
@@ -116,7 +116,7 @@ class LogManager:
             )
         )
 
-    def write_scrape_error_log(self, url: URL | str, error_message: str, origin: URL | Path | None = None) -> None:
+    def write_scrape_error(self, url: URL | str, error_message: str, origin: URL | Path | None = None) -> None:
         """Writes to the scrape error log."""
         _ = self.task_group.create_task(
             self._write_to_csv(self.files.scrape_error_log, url=url, error=error_message, origin=origin)

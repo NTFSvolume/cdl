@@ -87,9 +87,8 @@ class ScrapeMapper:
         self = cls(manager)
         await self.manager.client_manager.load_cookie_files()
 
-        async with self.manager.client_manager, asyncio.TaskGroup() as tg:
+        async with self.manager.client_manager, self.manager.task_group:
             self.manager.scrape_mapper = self
-            self.manager.task_group = tg
             yield self
 
     async def run(self) -> None:
@@ -245,7 +244,7 @@ class ScrapeMapper:
                 success = True
             except JDownloaderError as e:
                 logger.error(f"Failed to send {scrape_item.url} to JDownloader\n{e.message}")
-                self.manager.log_manager.write_unsupported_urls_log(
+                self.manager.logs.write_unsupported(
                     scrape_item.url,
                     scrape_item.parents[0] if scrape_item.parents else None,
                 )
@@ -253,7 +252,7 @@ class ScrapeMapper:
             return
 
         logger.warning(f"Unsupported URL: {scrape_item.url}")
-        self.manager.log_manager.write_unsupported_urls_log(
+        self.manager.logs.write_unsupported(
             scrape_item.url,
             scrape_item.parents[0] if scrape_item.parents else None,
         )

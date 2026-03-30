@@ -503,6 +503,6 @@ class Downloader:
             f"{self.log_prefix} Failed: {media_item.url} ({error_log_msg.main_log_msg}) \n -> Referer: {media_item.referer}",
             exc_info=exc_info,
         )
-        self.manager.log_manager.write_download_error_log(media_item, error_log_msg.csv_log_msg)
+        self.manager.logs.write_download_error(media_item, error_log_msg.csv_log_msg)
         self.manager.progress_manager.download_stats_progress.add_failure(error_log_msg.ui_failure)
         self.manager.progress_manager.download_progress.add_failed()
