@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from aiohttp import ClientConnectorError
 
-from cyberdrop_dl import aio
 from cyberdrop_dl.constants import FILE_FORMATS
 from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths, auto_task_id
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
@@ -111,6 +110,7 @@ class BunkrrCrawler(Crawler):
         "Video": "/v/<slug>",
         "File": (
             "/f/<slug>",
+            "/d/<slug>",
             "/<slug>",
         ),
         "Direct links": "",
@@ -122,7 +122,6 @@ class BunkrrCrawler(Crawler):
     _USE_DOWNLOAD_SERVERS_LOCKS: ClassVar[bool] = True
 
     def __post_init__(self) -> None:
-        self.switch_host_locks: aio.WeakAsyncLocks[str] = aio.WeakAsyncLocks()
         self._known_good_host: str | None = None
         self._parse_album_files = _make_album_parser()
 
@@ -263,16 +262,12 @@ class BunkrrCrawler(Crawler):
         if self._known_good_host:
             return await self.request_soup(url.with_host(self._known_good_host))
 
-        async with self.switch_host_locks[url.host]:
+        async with self.startup_lock:
             if url.host not in known_bad_hosts:
                 if soup := await self._try_request_soup(url):
                     return soup
 
-        for host in _HOST_OPTIONS - known_bad_hosts:
-            async with self.switch_host_locks[host]:
-                if host in known_bad_hosts:
-                    continue
-
+            for host in _HOST_OPTIONS - known_bad_hosts:
                 if soup := await self._try_request_soup(url.with_host(host)):
                     return soup
 
