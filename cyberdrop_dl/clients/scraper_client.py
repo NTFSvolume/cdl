@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import logging
 import time
+import uuid
 from datetime import datetime
 from json import dumps as json_dumps
 from pathlib import Path
@@ -77,10 +78,21 @@ class ScraperClient:
         if method == "GET" and (data or json):
             method = "POST"
 
-        if not impersonate:
+        impersonate = self.client_manager.manager.parsed_args.cli_only_args.impersonate or impersonate
+        if impersonate:
+            self.client_manager.check_curl_cffi_is_available()
+            if impersonate is True:
+                impersonate = "chrome"
+            request_params["impersonate"] = impersonate
+
+        else:
             headers.setdefault("user-agent", self.client_manager.manager.global_config.general.user_agent)
 
-        async with self.__request_context(url, method, request_params, impersonate) as resp:
+        request_id = str(uuid.uuid4())
+        logger.debug("Starting {} request to {} [id={}]\n{}", method, url, request_id, request_params)
+
+        async with self.__request(url, method, request_params, impersonate=bool(impersonate)) as resp:
+            logger.debug("Finishing {} request [id={}]\n{}", method, request_id, resp)
             exc = None
             try:
                 yield await self._check_response(resp, url)
@@ -104,19 +116,16 @@ class ScraperClient:
             self.client_manager.cookies.update_cookies(simple_cookie, url)
 
     @contextlib.asynccontextmanager
-    async def __request_context(
+    async def __request(
         self,
         url: AbsoluteHttpURL,
         method: HttpMethod,
         request_params: dict[str, Any],
-        impersonate: BrowserTypeLiteral | bool | None,
+        *,
+        impersonate: bool,
     ) -> AsyncGenerator[AbstractResponse[Any]]:
-        impersonate = self.client_manager.manager.parsed_args.cli_only_args.impersonate or impersonate
+
         if impersonate:
-            self.client_manager.check_curl_cffi_is_available()
-            if impersonate is True:
-                impersonate = "chrome"
-            request_params["impersonate"] = impersonate
             curl_resp = await self.client_manager._curl_session.request(method, str(url), stream=True, **request_params)
             try:
                 yield AbstractResponse.create(curl_resp)

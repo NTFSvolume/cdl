@@ -411,8 +411,8 @@ class DownloadClient:
                     logger.info(f"Found {downloaded_filename} locally, trying to resume")
                     assert media_item.filesize
                     size = media_item.partial_file.stat().st_size
-                    if size >= media_item.filesize != 0:
-                        logger.info(f"Deleting partial file {media_item.partial_file}")
+                    if size >= media_item.filesize:
+                        logger.info(f"Deleting partial file {media_item.partial_file}. Size is out of bound")
                         media_item.partial_file.unlink()
 
                     elif size == media_item.filesize:

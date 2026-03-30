@@ -9,7 +9,7 @@ from collections import defaultdict
 from collections.abc import Generator
 from contextvars import ContextVar
 from http import HTTPStatus
-from typing import TYPE_CHECKING, Any, Literal, Self
+from typing import TYPE_CHECKING, Any, Self
 
 import aiohttp
 import certifi
@@ -160,8 +160,8 @@ class ClientManager:
         return self._flaresolverr
 
     def _startup(self) -> None:
-        self._session = self.new_scrape_session()
-        self._download_session = self.new_download_session()
+        self._session = self.create_aiohttp_session()
+        self._download_session = self.create_aiohttp_session()
         if _curl_import_error is not None:
             return
 
@@ -276,24 +276,16 @@ class ClientManager:
             cookies={cookie.key: cookie.value for cookie in self.cookies},
         )
 
-    def new_scrape_session(self) -> ClientSession:
-        trace_configs = _create_request_log_hooks("scrape")
-        return self._new_session(cached=True, trace_configs=trace_configs)
-
-    def new_download_session(self) -> ClientSession:
-        trace_configs = _create_request_log_hooks("download")
-        return self._new_session(cached=False, trace_configs=trace_configs)
-
-    def _new_session(
-        self, cached: bool = False, trace_configs: list[aiohttp.TraceConfig] | None = None
+    def create_aiohttp_session(
+        self,
     ) -> ClientSession:
-        timeout = self.rate_limiting_options._aiohttp_timeout
         return ClientSession(
-            headers={"user-agent": self.manager.global_config.general.user_agent},
+            headers={
+                "user-agent": self.manager.global_config.general.user_agent,
+            },
             raise_for_status=False,
             cookie_jar=self.cookies,
-            timeout=timeout,
-            trace_configs=trace_configs,
+            timeout=self.rate_limiting_options._aiohttp_timeout,
             proxy=self.manager.global_config.general.proxy,
             connector=self._new_tcp_connector(),
             requote_redirect_url=False,
@@ -477,20 +469,3 @@ async def _test_async_resolver(loop: asyncio.AbstractEventLoop | None = None) ->
 
     async with aiodns.DNSResolver(loop=loop, timeout=5.0) as resolver:
         _ = await resolver.query_dns("github.com", "A")
-
-
-def _create_request_log_hooks(client_type: Literal["scrape", "download"]) -> list[aiohttp.TraceConfig]:
-    async def on_request_start(*args) -> None:
-        params: aiohttp.TraceRequestStartParams = args[2]
-        logger.debug(f"Starting {client_type} {params.method} request to {params.url}")
-
-    async def on_request_end(*args) -> None:
-        params: aiohttp.TraceRequestEndParams = args[2]
-        msg = f"Finishing {client_type} {params.method} request to {params.url}"
-        msg += f" -> response status: {params.response.status}"
-        logger.debug(msg)
-
-    trace_config = aiohttp.TraceConfig()
-    trace_config.on_request_start.append(on_request_start)
-    trace_config.on_request_end.append(on_request_end)
-    return [trace_config]

@@ -76,7 +76,7 @@ async def send_webhook_message(manager: Manager) -> None:
     result = constants.NotificationResult.FAILED.value
 
     try:
-        async with manager.client_manager._new_session() as session, session.post(url, data=form) as response:
+        async with manager.client_manager.create_aiohttp_session() as session, session.post(url, data=form) as response:
             if response.ok:
                 result = constants.NotificationResult.SUCCESS.value
                 result_to_log = [result]

@@ -434,11 +434,11 @@ class Downloader:
             logger.info(f"{self.log_prefix} starting: {media_item.url}")
 
         async with self._file_lock_vault[media_item.filename]:
-            logger.debug(f"Lock for {media_item.filename} acquired")
+            logger.debug(f"Lock for '{media_item.filename}' acquired")
             try:
                 return bool(await self.download(media_item))
             finally:
-                logger.debug(f"Lock for {media_item.filename} released")
+                logger.debug(f"Lock for '{media_item.filename}' released")
 
     @error_handling_wrapper
     @retry
