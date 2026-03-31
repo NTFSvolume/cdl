@@ -98,7 +98,7 @@ markers = [
 minversion = "8.4.1"
 
 [tool.ruff]
-exclude = ["cyberdrop_dl/dependencies/_browser_cookie3.py"]
+exclude = ["cyberdrop_dl/dependencies/browser_cookie3.py"]
 line-length = 120
 target-version = "py311"
 

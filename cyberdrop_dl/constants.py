@@ -98,7 +98,7 @@ class Hashing(CIStrEnum):
     POST_DOWNLOAD = auto()
 
 
-class BROWSERS(StrEnum):
+class Browser(StrEnum):
     chrome = auto()
     firefox = auto()
     safari = auto()

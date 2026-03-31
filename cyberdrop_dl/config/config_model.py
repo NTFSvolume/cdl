@@ -7,7 +7,7 @@ from pathlib import Path
 from pydantic import BaseModel, ByteSize, Field, NonNegativeInt, field_serializer, field_validator
 
 from cyberdrop_dl import constants
-from cyberdrop_dl.constants import BROWSERS, DEFAULT_APP_STORAGE, DEFAULT_DOWNLOAD_STORAGE, Hashing
+from cyberdrop_dl.constants import DEFAULT_APP_STORAGE, DEFAULT_DOWNLOAD_STORAGE, Browser, Hashing
 from cyberdrop_dl.models import AliasModel, AppriseURL
 from cyberdrop_dl.models.types import (
     ByteSizeSerilized,
@@ -259,7 +259,7 @@ class Sorting(BaseModel):
 
 class BrowserCookies(BaseModel):
     auto_import: bool = False
-    browser: BROWSERS | None = BROWSERS.firefox
+    browser: Browser | None = Browser.firefox
     sites: list[NonEmptyStr] = SUPPORTED_SITES_DOMAINS
 
     def model_post_init(self, *_) -> None:

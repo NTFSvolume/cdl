@@ -27,7 +27,7 @@ from cyberdrop_dl.constants import FileExt
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
 from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, ScrapeError, TooManyCrawlerErrors
 from cyberdrop_dl.ffmpeg import probe
-from cyberdrop_dl.utils.cookie_management import get_cookies_from_browsers, read_netscape_files
+from cyberdrop_dl.utils.cookie_management import extract_cookies, read_netscape_files, split_and_save_cookies
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable, Mapping
@@ -323,9 +323,9 @@ class ClientManager:
     async def load_cookie_files(self) -> None:
         if self.manager.config_manager.settings_data.browser_cookies.auto_import:
             assert self.manager.config_manager.settings_data.browser_cookies.browser
-            get_cookies_from_browsers(
-                self.manager, browser=self.manager.config_manager.settings_data.browser_cookies.browser
-            )
+            cookies = await extract_cookies(browser=self.manager.config_manager.settings_data.browser_cookies.browser)
+            await split_and_save_cookies(self.manager, cookies)
+
         cookie_files = sorted(self.manager.appdata.cookies.glob("*.txt"))
         if not cookie_files:
             return
