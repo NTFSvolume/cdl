@@ -1,6 +1,6 @@
 """Pydantic models"""
 
-from typing import ClassVar, TypedDict, TypeVar
+from typing import ClassVar, TypedDict
 
 from pydantic import AnyUrl, BaseModel, Secret, SerializationInfo, model_serializer, model_validator
 
@@ -12,9 +12,6 @@ def get_model_fields(model: BaseModel, *, exclude_unset: bool = True) -> set[str
             fields.add(f"{submodel_name}.{field_name}")
 
     return fields
-
-
-_ModelT = TypeVar("_ModelT", bound=BaseModel)
 
 
 class AliasModel(BaseModel, populate_by_name=True, defer_build=True): ...
@@ -29,7 +26,7 @@ class AppriseURL(AliasModel):
     url: Secret[AnyUrl]
     tags: set[str] = set()
 
-    _OS_URLS: ClassVar[tuple[str, ...]] = "windows", "macosx", "dbus", "qt", "glib", "kde"
+    _OS_SCHEMES: ClassVar[tuple[str, ...]] = "windows", "macosx", "dbus", "qt", "glib", "kde"
     _VALID_TAGS: ClassVar[set[str]] = {"no_logs", "attach_logs", "simplified"}
 
     def model_post_init(self, *_) -> None:
@@ -43,8 +40,12 @@ class AppriseURL(AliasModel):
         return self._format(dump_secret=True)
 
     @property
+    def scheme(self) -> str:
+        return self.url.get_secret_value().scheme
+
+    @property
     def is_os_url(self) -> bool:
-        return any(scheme in self.url.get_secret_value().scheme for scheme in self._OS_URLS)
+        return any(scheme in self.scheme for scheme in self._OS_SCHEMES)
 
     @property
     def attach_logs(self) -> bool:
