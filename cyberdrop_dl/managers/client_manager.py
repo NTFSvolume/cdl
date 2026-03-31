@@ -326,7 +326,7 @@ class ClientManager:
             cookies = await extract_cookies(self.manager.config.browser_cookies.browser)
             await split_and_save_cookies(cookies, self.manager.appdata.cookies)
 
-        cookie_files = sorted(self.manager.appdata.cookies.glob("*.txt"))
+        cookie_files = await asyncio.to_thread(lambda: sorted(self.manager.appdata.cookies.glob("*.txt")))
         if not cookie_files:
             return
 
