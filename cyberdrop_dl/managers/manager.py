@@ -5,7 +5,7 @@ import json
 import logging
 from dataclasses import Field, field
 from time import perf_counter
-from typing import TYPE_CHECKING, Any, NamedTuple, TypeVar
+from typing import TYPE_CHECKING, Any, NamedTuple, Self, TypeVar
 
 from pydantic import BaseModel
 
@@ -82,6 +82,19 @@ class Manager:
     def global_config(self):
         return self.config_manager.global_settings_data
 
+    async def __aenter__(self) -> Self:
+        cache_file = self.path_manager.cache_folder / "cache.yaml"
+        try:
+            self.cache.update(yaml.load(self.path_manager.cache_folder / "cache.yaml"))
+        except FileNotFoundError:
+            cache_file.parent.mkdir(exist_ok=True, parents=True)
+            cache_file.touch()
+        return self
+
+    async def __aexit__(self, *_) -> None:
+        self.cache["version"] = __version__
+        yaml.save(self.path_manager.cache_folder / "cache.yaml", self.cache)
+
     def startup(self) -> None:
         """Startup process for the manager."""
 
@@ -90,10 +103,6 @@ class Manager:
 
         self.path_manager = PathManager(self)
         self.path_manager.pre_startup()
-        try:
-            self.cache.update(yaml.load(self.path_manager.cache_folder / "cache.yaml"))
-        except FileNotFoundError:
-            pass
 
         self.config_manager = ConfigManager(self)
         self.config_manager.startup()

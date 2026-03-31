@@ -51,7 +51,7 @@ def pytest_collection_modifyitems(config: Config, items: list[pytest.Item]) -> N
         items[:] = selected_tests
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def tmp_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.chdir(tmp_path)
     return tmp_path
