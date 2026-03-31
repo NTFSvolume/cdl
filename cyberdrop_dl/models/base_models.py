@@ -1,9 +1,8 @@
 """Pydantic models"""
 
-from collections.abc import Iterator, Mapping, Sequence
-from typing import TypeVar
+from collections.abc import Iterator, Sequence
+from typing import ClassVar, TypedDict, TypeVar
 
-import yarl
 from pydantic import (
     AnyUrl,
     BaseModel,
@@ -15,40 +14,11 @@ from pydantic import (
     model_validator,
 )
 
-from cyberdrop_dl.models.types import HttpURL
-from cyberdrop_dl.models.validators import to_apprise_url_dict
-
 _ModelT = TypeVar("_ModelT", bound=BaseModel)
 
 
 class AliasModel(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
-
-
-class FrozenModel(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-
-class AppriseURLModel(FrozenModel):
-    url: Secret[AnyUrl]
-    tags: set[str] = set()
-
-    @model_serializer()
-    def serialize(self, info: SerializationInfo) -> str:
-        dump_secret = info.mode != "json"
-        url = self.url.get_secret_value() if dump_secret else self.url
-        tags = self.tags - set("no_logs")
-        tags = sorted(tags)
-        return f"{','.join(tags)}{'=' if tags else ''}{url}"
-
-    @model_validator(mode="before")
-    @staticmethod
-    def parse_input(value: yarl.URL | dict | str) -> Mapping:
-        return to_apprise_url_dict(value)
-
-
-class HttpAppriseURL(AppriseURLModel):
-    url: Secret[HttpURL]
 
 
 class SequenceModel(RootModel[list[_ModelT]], Sequence[_ModelT]):
@@ -63,3 +33,74 @@ class SequenceModel(RootModel[list[_ModelT]], Sequence[_ModelT]):
 
     def __bool__(self) -> bool:
         return bool(len(self))
+
+
+class _AppriseURLDict(TypedDict):
+    url: str
+    tags: set[str]
+
+
+class AppriseURLModel(AliasModel):
+    url: Secret[AnyUrl]
+    tags: set[str] = set()
+
+    _OS_URLS: ClassVar[tuple[str, ...]] = "windows://", "macosx://", "dbus://", "qt://", "glib://", "kde://"
+    _VALID_TAGS: ClassVar[set[str]] = {"no_logs", "attach_logs", "simplified"}
+
+    def model_post_init(self, *_) -> None:
+        if not self.tags.intersection(self._VALID_TAGS):
+            self.tags = self.tags | {"no_logs"}
+
+        if self.is_os_url:
+            self.tags = (self.tags - self._VALID_TAGS) | {"simplified"}
+
+    def __str__(self) -> str:
+        return self._format(dump_secret=True)
+
+    @property
+    def is_os_url(self) -> bool:
+        return any(scheme in str(self).casefold() for scheme in self._OS_URLS)
+
+    @property
+    def attach_logs(self) -> bool:
+        return "attach_logs" in self.tags
+
+    @model_serializer()
+    def serialize(self, info: SerializationInfo) -> str:
+        return self._format(dump_secret=info.mode != "json")
+
+    def _format(self, dump_secret: bool) -> str:
+        url = str(self.url.get_secret_value() if dump_secret else self.url)
+        if not self.tags:
+            return url
+        return f"{','.join(sorted(self.tags))}={url}"
+
+    @model_validator(mode="before")
+    @classmethod
+    def parse(cls, value: object) -> _AppriseURLDict:
+        match value:
+            case str():
+                return cls._parse_url(value)
+
+            case dict():
+                tags = value.get("tags") or set()
+                url = str(value.get("url", ""))
+                if not tags:
+                    return cls._parse_url(url)
+
+                return {"url": url, "tags": tags}
+
+            case _:
+                return {"url": str(value), "tags": set()}
+
+    @staticmethod
+    def _parse_url(value: str) -> _AppriseURLDict:
+        match value.split("://", 1)[0].split("=", 1):
+            case [tags_, _scheme]:
+                tags = set(tags_.split(","))
+                url = value.split("=", 1)[-1]
+            case _:
+                tags: set[str] = set()
+                url: str = value
+
+        return {"url": url, "tags": tags}

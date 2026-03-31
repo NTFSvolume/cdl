@@ -86,7 +86,7 @@ def get_apprise_urls(*, file: Path | None = None, urls: list[str] | None = None)
         logger.warning("Found apprise URLs for notifications but apprise is not installed. Ignoring")
         return []
 
-    return _simplify_urls([AppriseURLModel.model_validate({"url": url}) for url in set(urls)])
+    return _simplify_urls([AppriseURLModel.model_validate(url) for url in set(urls)])
 
 
 def _simplify_urls(apprise_urls: list[AppriseURLModel]) -> list[AppriseURL]:

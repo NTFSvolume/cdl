@@ -44,13 +44,13 @@ class General(BaseModel):
         return sorted(set(value))
 
     @field_serializer("flaresolverr", "proxy")
-    def serialize(self, value: URL | str) -> str | None:
-        return falsy_as(value, None, str)
+    def serialize(self, value: URL | str) -> URL | str | None:
+        return falsy_as(value, None)
 
     @field_validator("flaresolverr", "proxy", mode="before")
     @classmethod
     def convert_to_str(cls, value: str) -> str | None:
-        return falsy_as(value, None, str)
+        return falsy_as(value, None)
 
     @field_validator("required_free_space", mode="after")
     @classmethod
