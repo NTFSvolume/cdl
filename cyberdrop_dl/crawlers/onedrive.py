@@ -102,8 +102,8 @@ class OneDriveCrawler(Crawler):
     FOLDER_DOMAIN: ClassVar[str] = "OneDrive"
 
     def __post_init__(self) -> None:
-        badger_token: str = self.manager.cache_manager.get("onedrive_badger_token") or ""
-        badger_token_expires: str = self.manager.cache_manager.get("onedrive_badger_token_expires") or ""
+        badger_token: str = ""
+        badger_token_expires: str = ""
         self.auth_headers = {}
         expired = True
         if badger_token_expires:
@@ -224,10 +224,7 @@ class OneDriveCrawler(Crawler):
             json={"appId": APP_UUID},
         )
         badger_token: str = json_resp["token"]
-        badger_token_expires: str = json_resp["expiryTimeUtc"]
         self.auth_headers = {"Prefer": "autoredeem", "Authorization": f"Badger {badger_token}"}
-        self.manager.cache_manager.save("onedrive_badger_token", badger_token)
-        self.manager.cache_manager.save("onedrive_badger_token_expires", badger_token_expires)
 
 
 def is_share_link(url: AbsoluteHttpURL) -> bool:

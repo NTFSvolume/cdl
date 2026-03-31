@@ -118,7 +118,6 @@ class ProgramUI:
     ) -> Choice | bool | None:
         """Checks prompt answer and executes corresponding function."""
         if answer == EXIT_CHOICE.value:
-            asyncio.run(self.manager.cache_manager.close())
             sys.exit(0)
         if answer == DONE_CHOICE.value:
             return DONE_CHOICE

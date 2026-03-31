@@ -33,12 +33,11 @@ class ConfigManager:
         self.authentication_data: AuthSettings = field(init=False)
         self.settings_data: ConfigSettings = field(init=False)
         self.global_settings_data: GlobalSettings = field(init=False)
-        self.pydantic_config: str | None = None
         self.apprise_file: Path
 
     def startup(self) -> None:
         """Startup process for the config manager."""
-        self.loaded_config = self.get_default_config()
+        self.loaded_config = self.manager.cache.get("default_config", "Default")
         self.settings = self.manager.path_manager.config_folder / self.loaded_config / "settings.yaml"
         self.global_settings = self.manager.path_manager.config_folder / "global_settings.yaml"
         self.authentication_settings = self.manager.path_manager.config_folder / "authentication.yaml"
@@ -48,11 +47,7 @@ class ConfigManager:
             self.authentication_settings = auth_override
 
         self.settings.parent.mkdir(parents=True, exist_ok=True)
-        self.pydantic_config = self.manager.cache_manager.get("pydantic_config")
         self.load_configs()
-
-    def get_default_config(self) -> str:
-        return self.manager.cache_manager.get("default_config") or "Default"
 
     def load_configs(self) -> None:
         """Loads all the configs."""
@@ -78,7 +73,7 @@ class ConfigManager:
         if self.authentication_settings.is_file():
             self.authentication_data = AuthSettings.model_validate(yaml.load(self.authentication_settings))
             set_fields = self.get_model_fields(self.authentication_data)
-            if posible_fields == set_fields and not needs_update and self.pydantic_config:
+            if posible_fields == set_fields and not needs_update:
                 return
 
         else:
@@ -99,7 +94,7 @@ class ConfigManager:
             set_fields = self.get_model_fields(self.settings_data)
             self.deep_scrape = self.settings_data.runtime_options.deep_scrape
             self.settings_data.runtime_options.deep_scrape = False
-            if posible_fields == set_fields and not needs_update and self.pydantic_config:
+            if posible_fields == set_fields and not needs_update:
                 return
         else:
             self.settings_data = ConfigSettings()
@@ -122,7 +117,7 @@ class ConfigManager:
         if self.global_settings.is_file():
             self.global_settings_data = GlobalSettings.model_validate(yaml.load(self.global_settings))
             set_fields = self.get_model_fields(self.global_settings_data)
-            if posible_fields == set_fields and not needs_update and self.pydantic_config:
+            if posible_fields == set_fields and not needs_update:
                 return
         else:
             self.global_settings_data = GlobalSettings()
