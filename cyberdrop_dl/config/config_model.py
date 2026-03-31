@@ -1,5 +1,5 @@
-import itertools
 import re
+from collections.abc import Generator
 from datetime import date, datetime, timedelta
 from logging import DEBUG
 from pathlib import Path
@@ -92,28 +92,38 @@ class Logs(AliasModel):
         if value := falsy_as(input_date, None):
             return to_timedelta(value)
 
+    def _files(self) -> Generator[tuple[str, Path]]:
+        for name, log_file in vars(self).items():
+            if name == "log_folder" or not isinstance(log_file, Path) or log_file.suffix not in (".csv", ".log"):
+                continue
+            yield name, log_file
+
     def _set_output_filenames(self, now: datetime) -> None:
         self.log_folder.mkdir(exist_ok=True, parents=True)
         current_time_file_iso: str = now.strftime(constants.LOGS_DATETIME_FORMAT)
         current_time_folder_iso: str = now.strftime(constants.LOGS_DATE_FORMAT)
-        for attr, log_file in vars(self).items():
-            if not isinstance(log_file, Path) or log_file.suffix not in (".csv", ".log"):
-                continue
-
+        for name, log_file in self._files():
             if self.rotate_logs:
                 new_name = f"{log_file.stem}_{current_time_file_iso}{log_file.suffix}"
                 log_file = log_file.parent / current_time_folder_iso / new_name
-                setattr(self, attr, self.log_folder / log_file)
 
+            setattr(self, name, self.log_folder / log_file)
+
+    def mkdirs(self):
+        for _, log_file in self._files():
             log_file.parent.mkdir(exist_ok=True, parents=True)
 
-    def _delete_old_logs_and_folders(self, now: datetime | None = None) -> None:
-        if now and self.logs_expire_after:
-            for file in itertools.chain(self.log_folder.rglob("*.log"), self.log_folder.rglob("*.csv")):
-                file_date = file.stat().st_ctime
-                t_delta = now - datetime.fromtimestamp(file_date)
-                if t_delta > self.logs_expire_after:
-                    file.unlink(missing_ok=True)
+    def _delete_old_logs_and_folders(self, now: datetime) -> None:
+        if not self.logs_expire_after:
+            return
+
+        for file in self.log_folder.rglob("*"):
+            if file.suffix.lower() not in (".log", ".csv"):
+                continue
+
+            if (now - datetime.fromtimestamp(file.stat().st_ctime)) > self.logs_expire_after:
+                file.unlink()
+
         purge_dir_tree(self.log_folder)
 
 

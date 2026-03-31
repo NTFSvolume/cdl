@@ -38,10 +38,10 @@ class ConfigManager:
     def startup(self) -> None:
         """Startup process for the config manager."""
         self.loaded_config = self.manager.cache.get("default_config", "Default")
-        self.settings = self.manager.path_manager.config_folder / self.loaded_config / "settings.yaml"
-        self.global_settings = self.manager.path_manager.config_folder / "global_settings.yaml"
-        self.authentication_settings = self.manager.path_manager.config_folder / "authentication.yaml"
-        auth_override = self.manager.path_manager.config_folder / self.loaded_config / "authentication.yaml"
+        self.settings = self.manager.appdata.config_folder / self.loaded_config / "settings.yaml"
+        self.global_settings = self.manager.appdata.config_folder / "global_settings.yaml"
+        self.authentication_settings = self.manager.appdata.config_folder / "authentication.yaml"
+        auth_override = self.manager.appdata.config_folder / self.loaded_config / "authentication.yaml"
 
         if auth_override.is_file():
             self.authentication_settings = auth_override
@@ -54,7 +54,7 @@ class ConfigManager:
         self._load_authentication_config()
         self._load_global_settings_config()
         self._load_settings_config()
-        self.apprise_file = self.manager.path_manager.config_folder / self.loaded_config / "apprise.txt"
+        self.apprise_file = self.manager.appdata.config_folder / self.loaded_config / "apprise.txt"
         self.apprise_urls = get_apprise_urls(file=self.apprise_file)
 
     @staticmethod
@@ -98,15 +98,11 @@ class ConfigManager:
                 return
         else:
             self.settings_data = ConfigSettings()
-            self.settings_data.files.input_file = (
-                self.manager.path_manager.appdata / "Configs" / self.loaded_config / "URLs.txt"
-            )
+            self.settings_data.files.input_file = self.manager.appdata.config_folder / self.loaded_config / "URLs.txt"
             downloads = self.manager.path_manager.cwd / "Downloads"
             self.settings_data.sorting.sort_folder = downloads / "Cyberdrop-DL Sorted Downloads"
             self.settings_data.files.download_folder = downloads / "Cyberdrop-DL Downloads"
-            self.settings_data.logs.log_folder = (
-                self.manager.path_manager.appdata / "Configs" / self.loaded_config / "Logs"
-            )
+            self.settings_data.logs.log_folder = self.manager.appdata.config_folder / self.loaded_config / "Logs"
 
         yaml.save(self.settings, self.settings_data)
 

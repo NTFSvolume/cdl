@@ -58,7 +58,7 @@ def test_hash_directory_scanner(manager: Manager, expected_results: set[tuple[st
     manager.config.dupe_cleanup_options.add_sha256_hash = "sha256" in algos
 
     manager.path_manager.download_folder.mkdir(parents=True)
-    db_path = manager.path_manager.history_db
+    db_path = manager.appdata.db_file
     hash_directory_scanner(manager, manager.path_manager.download_folder)
     assert not get_hashes(db_path)
     create_files(manager.path_manager.download_folder, n_files)

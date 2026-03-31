@@ -206,7 +206,7 @@ class HashClient:
 
     async def get_file_hashes_dict(self) -> dict:
         """Get a dictionary of files based on matching file hashes and file size."""
-        downloads = self.manager.path_manager.completed_downloads
+        downloads = self.manager.completed_downloads
 
         async def exists(item: MediaItem) -> MediaItem | None:
             if await asyncio.to_thread(item.path.is_file):

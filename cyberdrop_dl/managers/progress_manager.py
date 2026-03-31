@@ -149,7 +149,7 @@ class ProgressManager:
 
         log_spacer(20)
         logger.info("Printing Stats...\n")
-        config_path = self.manager.path_manager.config_folder / self.manager.config_manager.loaded_config
+        config_path = self.manager.appdata.config_folder / self.manager.config_manager.loaded_config
         config_path_text = get_console_hyperlink(config_path, text=self.manager.config_manager.loaded_config)
         input_file_text = get_input(self.manager)
         log_folder_text = get_console_hyperlink(self.manager.path_manager.log_folder)
