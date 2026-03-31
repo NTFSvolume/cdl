@@ -63,30 +63,30 @@ class AppriseURL(AliasModel):
 
     @model_validator(mode="before")
     @classmethod
-    def parse(cls, value: object) -> _AppriseURLDict:
-        match value:
+    def _validate(cls, obj: object) -> _AppriseURLDict:
+        match obj:
             case str():
-                return cls._parse_url(value)
+                return cls._parse_url(obj)
 
             case dict():
-                tags = value.get("tags") or set()
-                url = str(value.get("url", ""))
+                tags = obj.get("tags") or set()
+                url = str(obj.get("url", ""))
                 if not tags:
                     return cls._parse_url(url)
 
                 return {"url": url, "tags": tags}
 
             case _:
-                return {"url": str(value), "tags": set()}
+                return {"url": str(obj), "tags": set()}
 
     @staticmethod
-    def _parse_url(value: str) -> _AppriseURLDict:
-        match value.split("://", 1)[0].split("=", 1):
+    def _parse_url(obj: str) -> _AppriseURLDict:
+        match obj.split("://", 1)[0].split("=", 1):
             case [tags_, _scheme]:
                 tags = set(tags_.split(","))
-                url = value.split("=", 1)[-1]
+                url = obj.split("=", 1)[-1]
             case _:
                 tags: set[str] = set()
-                url: str = value
+                url: str = obj
 
         return {"url": url, "tags": tags}
