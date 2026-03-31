@@ -83,7 +83,7 @@ async def send_notification(test_case: AppriseTestCase) -> None:
     if test_case.urls and any(test_case.urls):
         FAKE_MANAGER.config_manager.apprise_urls = apprise.get_apprise_urls(urls=test_case.urls)
     FAKE_MANAGER.path_manager = PathManager(FAKE_MANAGER)
-    FAKE_MANAGER.path_manager.main_log = test_case.file or TEST_FILES_PATH / "valid_single_url.txt"
+    FAKE_MANAGER.config.logs.main_log = test_case.file or TEST_FILES_PATH / "valid_single_url.txt"
     constants.LOG_OUTPUT_TEXT = Text(test_case.name)
     result, logs = await apprise.send_apprise_notifications(FAKE_MANAGER)
     assert result.value == test_case.result.value, f"Result for this case should be {test_case.result.value}"

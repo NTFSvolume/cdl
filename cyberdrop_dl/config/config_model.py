@@ -99,6 +99,7 @@ class Logs(AliasModel):
             yield name, log_file
 
     def _set_output_filenames(self, now: datetime) -> None:
+        self.log_folder = self.log_folder.resolve()
         self.log_folder.mkdir(exist_ok=True, parents=True)
         current_time_file_iso: str = now.strftime(constants.LOGS_DATETIME_FORMAT)
         current_time_folder_iso: str = now.strftime(constants.LOGS_DATE_FORMAT)
@@ -114,15 +115,13 @@ class Logs(AliasModel):
             log_file.parent.mkdir(exist_ok=True, parents=True)
 
     def _delete_old_logs_and_folders(self, now: datetime) -> None:
-        if not self.logs_expire_after:
-            return
+        if self.logs_expire_after:
+            for file in self.log_folder.rglob("*"):
+                if file.suffix.lower() not in (".log", ".csv"):
+                    continue
 
-        for file in self.log_folder.rglob("*"):
-            if file.suffix.lower() not in (".log", ".csv"):
-                continue
-
-            if (now - datetime.fromtimestamp(file.stat().st_ctime)) > self.logs_expire_after:
-                file.unlink()
+                if (now - datetime.fromtimestamp(file.stat().st_ctime)) > self.logs_expire_after:
+                    file.unlink()
 
         purge_dir_tree(self.log_folder)
 

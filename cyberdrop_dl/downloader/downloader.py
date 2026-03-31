@@ -144,9 +144,9 @@ class Downloader:
         self.client = self.manager.client_manager.download_client
         self._semaphore = asyncio.Semaphore(self.manager.client_manager.get_download_slots(self.domain))
 
-        self.manager.path_manager.download_folder.mkdir(parents=True, exist_ok=True)
+        self.manager.config.files.download_folder.mkdir(parents=True, exist_ok=True)
         if self.manager.config_manager.settings_data.sorting.sort_downloads:
-            self.manager.path_manager.sorted_folder.mkdir(parents=True, exist_ok=True)
+            self.manager.config.sorting.sort_folder.mkdir(parents=True, exist_ok=True)
 
     def update_queued_files(self, increase_total: bool = True):
         queued_files = self.manager.progress_manager.file_progress.get_queue_length()

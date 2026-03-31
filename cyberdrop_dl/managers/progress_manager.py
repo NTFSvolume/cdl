@@ -152,7 +152,7 @@ class ProgressManager:
         config_path = self.manager.appdata.config_folder / self.manager.config_manager.loaded_config
         config_path_text = get_console_hyperlink(config_path, text=self.manager.config_manager.loaded_config)
         input_file_text = get_input(self.manager)
-        log_folder_text = get_console_hyperlink(self.manager.path_manager.log_folder)
+        log_folder_text = get_console_hyperlink(self.manager.config.logs.log_folder)
 
         log_concat("Run Stats (config: ", config_path_text, ")", style="cyan")
         log_concat("  Input File: ", input_file_text, style="yellow")
@@ -218,7 +218,7 @@ def get_input(manager: Manager) -> Text | str:
     if manager.parsed_args.cli_only_args.retry_maintenance:
         return "--retry-maintenance"
     if manager.scrape_mapper.using_input_file:
-        return get_console_hyperlink(manager.path_manager.input_file)
+        return get_console_hyperlink(manager.config.files.input_file)
     return "--links (CLI args)"
 
 

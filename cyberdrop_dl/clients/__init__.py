@@ -43,7 +43,7 @@ class HTTPClient:
         return cls(
             client_manager,
             client_manager.manager.config_manager.settings_data.files.save_pages_html,
-            client_manager.manager.path_manager.pages_folder,
+            client_manager.manager.config.logs.main_log.parent / "cdl_responses",
         )
 
     @property

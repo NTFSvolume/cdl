@@ -135,7 +135,7 @@ class ScrapeMapper:
 
     async def parse_input_file_groups(self) -> AsyncGenerator[tuple[str, list[AbsoluteHttpURL]]]:
         """Split URLs from input file by their groups."""
-        input_file = self.manager.path_manager.input_file
+        input_file = self.manager.config.files.input_file
         if not await asyncio.to_thread(input_file.is_file):
             yield ("", [])
             return
@@ -235,7 +235,7 @@ class ScrapeMapper:
             success = False
             try:
                 download_folder = get_download_path(self.manager, scrape_item, "jdownloader")
-                relative_download_dir = download_folder.relative_to(self.manager.path_manager.download_folder)
+                relative_download_dir = download_folder.relative_to(self.manager.config.files.download_folder)
                 await self.jdownloader.send(
                     scrape_item.url,
                     scrape_item.parent_title,

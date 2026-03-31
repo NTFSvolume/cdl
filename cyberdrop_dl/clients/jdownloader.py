@@ -31,7 +31,7 @@ class Config:
 
     @staticmethod
     def from_manager(manager: Manager) -> Config:
-        download_dir = manager.config.runtime_options.jdownloader_download_dir or manager.path_manager.download_folder
+        download_dir = manager.config.runtime_options.jdownloader_download_dir or manager.config.files.download_folder
         return Config(
             enabled=manager.config.runtime_options.send_unsupported_to_jdownloader,
             device=manager.auth_config.jdownloader.device,

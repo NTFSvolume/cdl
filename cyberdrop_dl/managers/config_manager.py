@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import field
+from pathlib import Path
 from time import sleep
 from typing import TYPE_CHECKING
 
@@ -11,8 +12,6 @@ from cyberdrop_dl.managers.logs import LogManager
 from cyberdrop_dl.utils.apprise import get_apprise_urls
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from pydantic import BaseModel
 
     from cyberdrop_dl.managers.manager import Manager
@@ -99,7 +98,7 @@ class ConfigManager:
         else:
             self.settings_data = ConfigSettings()
             self.settings_data.files.input_file = self.manager.appdata.config_folder / self.loaded_config / "URLs.txt"
-            downloads = self.manager.path_manager.cwd / "Downloads"
+            downloads = Path("Downloads").resolve()
             self.settings_data.sorting.sort_folder = downloads / "Cyberdrop-DL Sorted Downloads"
             self.settings_data.files.download_folder = downloads / "Cyberdrop-DL Downloads"
             self.settings_data.logs.log_folder = self.manager.appdata.config_folder / self.loaded_config / "Logs"

@@ -71,7 +71,7 @@ async def send_webhook_message(manager: Manager) -> None:
 
     rich.print("\nSending Webhook Notifications.. ")
     url = cast("AbsoluteHttpURL", webhook.url.get_secret_value())
-    form = await _prepare_form(webhook, manager.path_manager.main_log)
+    form = await _prepare_form(webhook, manager.config.logs.main_log)
 
     result = constants.NotificationResult.FAILED.value
 

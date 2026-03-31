@@ -32,8 +32,8 @@ async def get_modified_date(file: Path) -> datetime:
 class Sorter:
     def __init__(self, manager: Manager) -> None:
         self.manager = manager
-        self.download_folder = manager.path_manager.scan_folder or manager.path_manager.download_folder
-        self.sorted_folder = manager.path_manager.sorted_folder
+        self.download_folder = manager.config.sorting.scan_folder or manager.config.files.download_folder
+        self.sorted_folder = manager.config.sorting.sort_folder
         self.incrementer_format: str = manager.config_manager.settings_data.sorting.sort_incrementer_format
         self.db_manager = manager.db_manager
 
