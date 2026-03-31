@@ -71,7 +71,7 @@ class LogManager:
 
     async def write_jsonl(self, data: Iterable[dict[str, Any]]) -> None:
         async with self._file_locks[self.files.jsonl_file]:
-            await json.dump_jsonl(data, self.files.jsonl_file)
+            await asyncio.to_thread(json.dump_jsonl, data, self.files.jsonl_file)
 
     async def _write_to_csv(self, file: Path, **row: object) -> None:
         async with self._file_locks[file]:
