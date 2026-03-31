@@ -36,7 +36,7 @@ class FilesterCrawler(Crawler):
     }
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://filester.me")
     DOMAIN: ClassVar[str] = "filester"
-    _RATE_LIMIT: ClassVar[RateLimit] = 10, 1
+    _RATE_LIMIT: ClassVar[RateLimit] = 3, 2
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:

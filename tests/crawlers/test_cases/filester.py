@@ -4,7 +4,7 @@ TEST_CASES = [
         "https://filester.me/d/Y9Vkbpq",
         [
             {
-                "url": "re:https://cache1.filester.me/d/",
+                "url": "re:.filester.me/d/",
                 "filename": "lilcanadiangirl_Stranger-in-the-Theatre.mp4",
                 "referer": "https://filester.me/d/Y9Vkbpq",
                 "album_id": None,
@@ -13,10 +13,20 @@ TEST_CASES = [
         ],
     ),
     (
+        "https://filester.me/d/4h9lQtR",
+        [
+            {
+                "url": "re:.filester.me/d/",
+                "filename": "Linda Lan - Meanbitches slave orders.mp4",
+                "album_id": None,
+            }
+        ],
+    ),
+    (
         "https://filester.me/f/c3bf3e1da9982845",
         [
             {
-                "url": "re:https://cache1.filester.me/d/",
+                "url": "re:.filester.me/d/",
                 "download_folder": "re:mirror_post-410_1771095844 (Filester)",
                 "album_id": "c3bf3e1da9982845",
             }
