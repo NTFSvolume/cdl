@@ -49,22 +49,22 @@ class _DataclassInstance(Protocol):
     __dataclass_fields__: ClassVar[dict[str, dataclasses.Field[Any]]]
 
 
-def default(o: object) -> Any:
-    if isinstance(o, datetime.date):
-        return o.isoformat()
-    if isinstance(o, enum.Enum):
-        return o.value
-    if isinstance(o, set):
-        return sorted(o)
-    if callable(serialize := getattr(o, "__json__", None)):
+def default(obj: object, /) -> Any:
+    if isinstance(obj, datetime.date):
+        return obj.isoformat()
+    if isinstance(obj, enum.Enum):
+        return obj.value
+    if isinstance(obj, set):
+        return sorted(obj)
+    if callable(serialize := getattr(obj, "__json__", None)):
         return serialize()
-    if _is_namedtuple_instance(o):
-        return o._asdict()
-    if _is_dataclass_instance(o):
-        return dataclasses.asdict(o)
-    if _is_pydantic_instance(o):
-        return o.model_dump()
-    return str(o)
+    if _is_namedtuple_instance(obj):
+        return obj._asdict()
+    if _is_dataclass_instance(obj):
+        return dataclasses.asdict(obj)
+    if _is_pydantic_instance(obj):
+        return obj.model_dump()
+    return str(obj)
 
 
 class LenientJSONEncoder(json.JSONEncoder):
@@ -77,7 +77,7 @@ class JSDecoder(json.JSONDecoder):
 
     It can only handle simple js objects"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.parse_string = _parse_js_string
         self.scan_once = _py_make_scanner(self)
@@ -186,8 +186,8 @@ class JSONWebToken:
         return cls(headers["alg"], headers, cls._decode(b64_payload), b64_signature, jwt)
 
     @classmethod
-    def _decode(cls, value: str, /) -> dict[str, Any]:
-        return loads(base64.urlsafe_b64decode(f"{value}==="))
+    def _decode(cls, payload: str, /) -> dict[str, Any]:
+        return loads(base64.urlsafe_b64decode(f"{payload}==="))
 
     def is_expired(self, threshold: int = 0) -> bool:
         """Checks if the token has expired or is about to expire.
