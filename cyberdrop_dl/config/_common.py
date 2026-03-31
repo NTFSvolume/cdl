@@ -1,8 +1,6 @@
 from pathlib import Path
 from typing import Self
 
-from pydantic import BaseModel
-
 from cyberdrop_dl import yaml
 from cyberdrop_dl.exceptions import InvalidYamlError
 from cyberdrop_dl.models import AliasModel, get_model_fields
@@ -29,18 +27,6 @@ class ConfigModel(AliasModel):
 
     def save_to_file(self, file: Path) -> None:
         yaml.save(file, self)
-
-    def resolve_paths(self) -> None:
-        self._resolve_paths(self)
-
-    @classmethod
-    def _resolve_paths(cls, model: BaseModel) -> None:
-        for name, value in vars(model).items():
-            if isinstance(value, Path):
-                setattr(model, name, value.resolve())
-
-            elif isinstance(value, BaseModel):
-                cls._resolve_paths(value)
 
 
 def _is_in_file(search_value: str, file: Path) -> bool:

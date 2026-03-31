@@ -66,14 +66,14 @@ class DownloadOptions(BaseModel):
 class Files(AliasModel):
     download_folder: Path = Field(default=DEFAULT_DOWNLOAD_STORAGE, validation_alias="d")
     dump_json: bool = Field(default=False, validation_alias="j")
-    input_file: Path = Field(default=DEFAULT_APP_STORAGE / "Configs/{config}/URLs.txt", validation_alias="i")
+    input_file: Path = Field(default=Path("URLs.txt"), validation_alias="i")
     save_pages_html: bool = False
 
 
 class Logs(AliasModel):
     download_error_urls: LogPath = Path("Download_Error_URLs.csv")
     last_forum_post: LogPath = Path("Last_Scraped_Forum_Posts.csv")
-    log_folder: Path = DEFAULT_APP_STORAGE / "Configs/{config}/Logs"
+    log_folder: Path = DEFAULT_APP_STORAGE / "Logs"
     logs_expire_after: timedelta | None = None
     main_log: MainLogPath = Path("downloader.log")
     rotate_logs: bool = False
@@ -104,11 +104,12 @@ class Logs(AliasModel):
         current_time_file_iso: str = now.strftime(constants.LOGS_DATETIME_FORMAT)
         current_time_folder_iso: str = now.strftime(constants.LOGS_DATE_FORMAT)
         for name, log_file in self._files():
+            log_file = self.log_folder / log_file
             if self.rotate_logs:
                 new_name = f"{log_file.stem}_{current_time_file_iso}{log_file.suffix}"
                 log_file = log_file.parent / current_time_folder_iso / new_name
 
-            setattr(self, name, self.log_folder / log_file)
+            setattr(self, name, log_file)
 
     def mkdirs(self):
         for _, log_file in self._files():
@@ -301,3 +302,27 @@ class ConfigSettings(ConfigModel):
     logs: Logs = Logs()
     runtime_options: RuntimeOptions = RuntimeOptions()
     sorting: Sorting = Sorting()
+    _resolved: bool = False
+
+    def resolve_paths(self) -> None:
+        if self._resolved:
+            return
+
+        now = datetime.now()
+        self.logs._set_output_filenames(now)
+        self._resolve_paths(self)
+        self.logs._delete_old_logs_and_folders(now)
+        self.logs.mkdirs()
+        self._resolved = True
+
+    @classmethod
+    def _resolve_paths(cls, model: BaseModel) -> None:
+
+        for name, value in vars(model).items():
+            if isinstance(value, Path):
+                if "{config}" in str(value):
+                    raise RuntimeError(f"Using '{{config}}' as reference on a path is no longer support: {value}")
+                setattr(model, name, value.expanduser().resolve().absolute())
+
+            elif isinstance(value, BaseModel):
+                cls._resolve_paths(value)
