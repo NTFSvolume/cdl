@@ -2,7 +2,7 @@
 
 from typing import ClassVar, TypedDict, TypeVar
 
-from pydantic import AnyUrl, BaseModel, ConfigDict, Secret, SerializationInfo, model_serializer, model_validator
+from pydantic import AnyUrl, BaseModel, Secret, SerializationInfo, model_serializer, model_validator
 
 
 def get_model_fields(model: BaseModel, *, exclude_unset: bool = True) -> set[str]:
@@ -17,8 +17,7 @@ def get_model_fields(model: BaseModel, *, exclude_unset: bool = True) -> set[str
 _ModelT = TypeVar("_ModelT", bound=BaseModel)
 
 
-class AliasModel(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+class AliasModel(BaseModel, populate_by_name=True, defer_build=True): ...
 
 
 class _AppriseURLDict(TypedDict):
@@ -30,7 +29,7 @@ class AppriseURL(AliasModel):
     url: Secret[AnyUrl]
     tags: set[str] = set()
 
-    _OS_URLS: ClassVar[tuple[str, ...]] = "windows://", "macosx://", "dbus://", "qt://", "glib://", "kde://"
+    _OS_URLS: ClassVar[tuple[str, ...]] = "windows", "macosx", "dbus", "qt", "glib", "kde"
     _VALID_TAGS: ClassVar[set[str]] = {"no_logs", "attach_logs", "simplified"}
 
     def model_post_init(self, *_) -> None:
@@ -45,7 +44,7 @@ class AppriseURL(AliasModel):
 
     @property
     def is_os_url(self) -> bool:
-        return any(scheme in str(self).casefold() for scheme in self._OS_URLS)
+        return any(scheme in self.url.get_secret_value().scheme for scheme in self._OS_URLS)
 
     @property
     def attach_logs(self) -> bool:
