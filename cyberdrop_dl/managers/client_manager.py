@@ -27,8 +27,7 @@ from cyberdrop_dl.constants import FileExt
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
 from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, ScrapeError, TooManyCrawlerErrors
 from cyberdrop_dl.ffmpeg import probe
-from cyberdrop_dl.ui.prompts.user_prompts import get_cookies_from_browsers
-from cyberdrop_dl.utils.cookie_management import read_netscape_files
+from cyberdrop_dl.utils.cookie_management import get_cookies_from_browsers, read_netscape_files
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable, Mapping
