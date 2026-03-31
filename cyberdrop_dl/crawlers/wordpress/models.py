@@ -5,9 +5,9 @@ from typing import Annotated, Literal, NewType, TypeVar
 
 from bs4 import BeautifulSoup
 from pydantic import AfterValidator, AliasPath, BaseModel, Field
+from pydantic.type_adapter import TypeAdapter
 
 from cyberdrop_dl.compat import StrEnum
-from cyberdrop_dl.models import SequenceModel
 
 _ModelT = TypeVar("_ModelT", bound=BaseModel)
 
@@ -64,13 +64,13 @@ class Tag(Category):
     _type: ColletionType = ColletionType.TAG
 
 
-class PostSequence(SequenceModel[Post]): ...
+PostSequence = TypeAdapter(list[Post])
 
 
-class TagSequence(SequenceModel[Tag]): ...
+TagSequence = TypeAdapter(list[Tag])
 
 
-class CategorySequence(SequenceModel[Category]): ...
+CategorySequence = TypeAdapter(list[Category])
 
 
 class PostExtraData(Post):

@@ -1,18 +1,8 @@
 """Pydantic models"""
 
-from collections.abc import Iterator, Sequence
 from typing import ClassVar, TypedDict, TypeVar
 
-from pydantic import (
-    AnyUrl,
-    BaseModel,
-    ConfigDict,
-    RootModel,
-    Secret,
-    SerializationInfo,
-    model_serializer,
-    model_validator,
-)
+from pydantic import AnyUrl, BaseModel, ConfigDict, Secret, SerializationInfo, model_serializer, model_validator
 
 
 def get_model_fields(model: BaseModel, *, exclude_unset: bool = True) -> set[str]:
@@ -29,20 +19,6 @@ _ModelT = TypeVar("_ModelT", bound=BaseModel)
 
 class AliasModel(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
-
-
-class SequenceModel(RootModel[list[_ModelT]], Sequence[_ModelT]):
-    def __len__(self) -> int:
-        return len(self.root)
-
-    def __iter__(self) -> Iterator[_ModelT]:
-        yield from self.root
-
-    def __getitem__(self, index: int) -> _ModelT:
-        return self.root[index]
-
-    def __bool__(self) -> bool:
-        return bool(len(self))
 
 
 class _AppriseURLDict(TypedDict):

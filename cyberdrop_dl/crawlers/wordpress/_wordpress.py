@@ -28,6 +28,8 @@ from .models import HTML, Category, CategorySequence, ColletionType, Post, PostS
 if TYPE_CHECKING:
     from collections.abc import AsyncIterable, Iterable
 
+    from pydantic.type_adapter import TypeAdapter
+
     from cyberdrop_dl.crawlers.crawler import SupportedPaths
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
 
@@ -230,9 +232,13 @@ class WordPressMediaCrawler(WordPressBaseCrawler, is_generic=True):
         async for post in self.post_pager(api_url):
             await self.filter_post(scrape_item, post)
 
-    async def __make_request(self, model_cls: type[_ModelT], api_url: AbsoluteHttpURL) -> _ModelT:
+    async def __make_request(
+        self, model_cls: TypeAdapter[_ModelT] | type[_ModelT], api_url: AbsoluteHttpURL
+    ) -> _ModelT:
         json_text = await self.request_text(api_url)
-        return model_cls.model_validate_json(json_text)
+        if callable(model_cls):
+            return model_cls.model_validate_json(json_text)
+        return model_cls.validate_json(json_text)
 
     async def __handle_collection(
         self, scrape_item: ScrapeItem, collection: Category | Tag, date_range: QueryDatetimeRange | None = None
