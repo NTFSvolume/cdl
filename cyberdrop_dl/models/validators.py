@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from datetime import timedelta
-from typing import TYPE_CHECKING, Literal, ParamSpec, SupportsIndex, SupportsInt, TypeAlias, TypeVar
+from typing import TYPE_CHECKING, Literal, SupportsIndex, SupportsInt, TypeAlias, TypeVar
 
 from pydantic import ByteSize, TypeAdapter
 
@@ -18,9 +18,7 @@ _DATE_PATTERN = re.compile(_DATE_PATTERN_REGEX, re.IGNORECASE)
 _BYTE_SIZE_ADAPTER = TypeAdapter(ByteSize)
 
 _ConvertibleToInt: TypeAlias = str | SupportsInt | SupportsIndex
-_P = ParamSpec("_P")
 _T = TypeVar("_T")
-_R = TypeVar("_R")
 _T2 = TypeVar("_T2")
 
 
@@ -51,8 +49,8 @@ def change_path_suffix(suffix: str) -> Callable[[Path], Path]:
 def _str_to_timedelta(input_date: str) -> timedelta:
     time_str = input_date.casefold()
     matches: list[str] = re.findall(_DATE_PATTERN, time_str)
-    seen_units = set()
-    time_dict = {"days": 0}
+    seen_units: set[str] = set()
+    time_dict: dict[str, int] = {"days": 0}
 
     for value, unit in matches:
         value = int(value)
