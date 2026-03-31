@@ -3,8 +3,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import sys
-from functools import wraps
-from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar
+from typing import TYPE_CHECKING, Any
 
 from requests import request
 from rich.console import Console
@@ -27,22 +26,9 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.managers.manager import Manager
 
-_P = ParamSpec("_P")
-_R = TypeVar("_R")
 
 console = Console()
 ERROR_PREFIX = Text("ERROR: ", style="bold red")
-
-
-def repeat_until_done(func: Callable[_P, _R]) -> Callable[_P, _R]:
-    @wraps(func)
-    def wrapper(*args, **kwargs) -> _R:
-        done = False
-        while not done:
-            done = func(*args, **kwargs)
-        return done
-
-    return wrapper
 
 
 class ProgramUI:
@@ -59,8 +45,13 @@ class ProgramUI:
             sys.exit(1)
         enter_to_continue()
 
-    @repeat_until_done
     def run(self) -> bool | None:
+        done = False
+        while not done:
+            done = self._run()
+        return done
+
+    def _run(self) -> bool | None:
         """Program UI."""
         clear_term()
         options_map = {

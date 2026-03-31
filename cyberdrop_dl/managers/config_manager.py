@@ -38,7 +38,7 @@ class ConfigManager:
 
     def startup(self) -> None:
         """Startup process for the config manager."""
-        self.loaded_config = self.get_loaded_config()
+        self.loaded_config = self.get_default_config()
         self.settings = self.manager.path_manager.config_folder / self.loaded_config / "settings.yaml"
         self.global_settings = self.manager.path_manager.config_folder / "global_settings.yaml"
         self.authentication_settings = self.manager.path_manager.config_folder / "authentication.yaml"
@@ -50,9 +50,6 @@ class ConfigManager:
         self.settings.parent.mkdir(parents=True, exist_ok=True)
         self.pydantic_config = self.manager.cache_manager.get("pydantic_config")
         self.load_configs()
-
-    def get_loaded_config(self):
-        return self.loaded_config or self.get_default_config()
 
     def get_default_config(self) -> str:
         return self.manager.cache_manager.get("default_config") or "Default"
@@ -131,10 +128,6 @@ class ConfigManager:
             self.global_settings_data = GlobalSettings()
 
         yaml.save(self.global_settings, self.global_settings_data)
-
-    def write_updated_settings_config(self) -> None:
-        """Write updated settings data."""
-        yaml.save(self.settings, self.settings_data)
 
     def reload_config(self) -> None:
         self.startup()
