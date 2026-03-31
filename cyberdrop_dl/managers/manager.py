@@ -235,7 +235,7 @@ class Manager:
             else:
                 path = Path("AppData")
 
-            self._appdata = AppData(path.resolve())
+            self._appdata = AppData.from_path(path.resolve())
 
         return self._appdata
 
@@ -280,7 +280,7 @@ def merge_models(default: M, new: M) -> M:
     return default.model_validate(updated_dict)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass(slots=True, frozen=True, kw_only=True)
 class AppData:
     path: Path
     cache_file: Path
@@ -291,17 +291,19 @@ class AppData:
     cookies: Path
     configs: Path
 
-    def __init__(self, path: Path) -> None:
+    @classmethod
+    def from_path(cls, path: Path) -> Self:
         assert path.is_absolute()
-        self.path = path
-
-        self.cache = path / "Cache"
-        self.configs = path / "Configs"
-        self.cookies = path / "Cookies"
-
-        self.config_file = path / "config.yaml"
-        self.cache_file = self.cache / "cache.yaml"
-        self.db_file = self.cache / "cyberdrop.db"
+        cache = path / "Cache"
+        return cls(
+            path=path,
+            cache=cache,
+            configs=path / "Configs",
+            cookies=path / "Cookies",
+            config_file=path / "config.yaml",
+            cache_file=cache / "cache.yaml",
+            db_file=cache / "cyberdrop.db",
+        )
 
     def __truediv__(self, other: PathLike[str]):
         try:
