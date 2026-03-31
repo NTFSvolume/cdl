@@ -24,10 +24,10 @@ from cyberdrop_dl.clients.download_client import DownloadClient
 from cyberdrop_dl.clients.flaresolverr import FlareSolverrClient
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.constants import FileExt
+from cyberdrop_dl.cookies import extract_cookies, read_netscape_files, split_and_save_cookies
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
 from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, ScrapeError, TooManyCrawlerErrors
 from cyberdrop_dl.ffmpeg import probe
-from cyberdrop_dl.utils.cookie_management import extract_cookies, read_netscape_files, split_and_save_cookies
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable, Mapping
