@@ -3,7 +3,7 @@ from __future__ import annotations  #
 import random
 from typing import TYPE_CHECKING, ClassVar
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
+from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, open_graph
 from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_text_between
@@ -17,13 +17,15 @@ _CDN_URLS = AbsoluteHttpURL("https://cache1.filester.me"), AbsoluteHttpURL("http
 class Selector:
     FILES = ".file-item[onclick]"
     NEXT_PAGE = "a.page-link:-soup-contains(→)"
+    FILE_DETAILS = "#detailsContent"
 
     @staticmethod
     def file_attr(name: str) -> str:
-        return f"#detailsContent span:-soup-contains({name}) + span"
+        return f"span:-soup-contains({name}) + span"
 
     MIME_TYPE = file_attr("Type")
     SHA_256 = file_attr("SHA-256")
+    MD5 = file_attr("MD5")
     UPLOAD_DATE = file_attr("Uploaded")
 
 
@@ -34,7 +36,7 @@ class FilesterCrawler(Crawler):
     }
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://filester.me")
     DOMAIN: ClassVar[str] = "filester"
-    _RATE_LIMIT = 10, 1
+    _RATE_LIMIT: ClassVar[RateLimit] = 10, 1
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
@@ -74,14 +76,20 @@ class FilesterCrawler(Crawler):
             return
 
         soup = await self.request_soup(scrape_item.url)
-        checksum = css.select_text(soup, Selector.SHA_256)
-        if await self.check_complete_by_hash(scrape_item, "sha256", checksum):
+        file = css.select(soup, Selector.FILE_DETAILS)
+
+        try:
+            hash, checksum = "sha256", css.select_text(file, Selector.SHA_256)
+        except css.SelectorError:
+            hash, checksum = "md5", css.select_text(file, Selector.MD5)
+
+        if await self.check_complete_by_hash(scrape_item, hash, checksum):
             return
 
         dl_link = await self._request_download(slug)
         name = open_graph.title(soup)
-        mime_type = css.select_text(soup, Selector.MIME_TYPE)
-        scrape_item.uploaded_at = self.parse_iso_date(css.select_text(soup, Selector.UPLOAD_DATE))
+        mime_type = css.select_text(file, Selector.MIME_TYPE)
+        scrape_item.uploaded_at = self.parse_iso_date(css.select_text(file, Selector.UPLOAD_DATE))
         filename, ext = self.get_filename_and_ext(name, mime_type=mime_type)
         await self.handle_file(scrape_item.url, scrape_item, name, ext, custom_filename=filename, debrid_link=dl_link)
 
