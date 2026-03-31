@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import os
-import shutil
 from dataclasses import field
 from time import sleep
 from typing import TYPE_CHECKING
@@ -36,6 +34,7 @@ class ConfigManager:
         self.settings_data: ConfigSettings = field(init=False)
         self.global_settings_data: GlobalSettings = field(init=False)
         self.pydantic_config: str | None = None
+        self.apprise_file: Path
 
     def startup(self) -> None:
         """Startup process for the config manager."""
@@ -65,8 +64,6 @@ class ConfigManager:
         self._load_settings_config()
         self.apprise_file = self.manager.path_manager.config_folder / self.loaded_config / "apprise.txt"
         self.apprise_urls = get_apprise_urls(file=self.apprise_file)
-        self._set_apprise_fixed()
-        self._set_pydantic_config()
 
     @staticmethod
     def get_model_fields(model: BaseModel, *, exclude_unset: bool = True) -> set[str]:
@@ -79,7 +76,7 @@ class ConfigManager:
 
     def _load_authentication_config(self) -> None:
         """Verifies the authentication config file and creates it if it doesn't exist."""
-        needs_update = is_in_file("socialmediagirls_username:", self.authentication_settings)
+        needs_update = _is_in_file("socialmediagirls_username:", self.authentication_settings)
         posible_fields = self.get_model_fields(AuthSettings(), exclude_unset=False)
         if self.authentication_settings.is_file():
             self.authentication_data = AuthSettings.model_validate(yaml.load(self.authentication_settings))
@@ -94,7 +91,7 @@ class ConfigManager:
 
     def _load_settings_config(self) -> None:
         """Verifies the settings config file and creates it if it doesn't exist."""
-        needs_update = is_in_file("download_error_urls_filename:", self.settings)
+        needs_update = _is_in_file("download_error_urls_filename:", self.settings)
         posible_fields = self.get_model_fields(ConfigSettings(), exclude_unset=False)
         if self.manager.parsed_args.cli_only_args.config_file:
             self.settings = self.manager.parsed_args.cli_only_args.config_file
@@ -123,7 +120,7 @@ class ConfigManager:
 
     def _load_global_settings_config(self) -> None:
         """Verifies the global settings config file and creates it if it doesn't exist."""
-        needs_update = is_in_file("Dupe_Cleanup_Options:", self.global_settings)
+        needs_update = _is_in_file("Dupe_Cleanup_Options:", self.global_settings)
         posible_fields = self.get_model_fields(GlobalSettings(), exclude_unset=False)
         if self.global_settings.is_file():
             self.global_settings_data = GlobalSettings.model_validate(yaml.load(self.global_settings))
@@ -135,79 +132,19 @@ class ConfigManager:
 
         yaml.save(self.global_settings, self.global_settings_data)
 
-    """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
-
-    def save_as_new_config(self, new_settings: Path, settings_data: ConfigSettings) -> None:
-        """Creates a new settings config file."""
-        yaml.save(new_settings, settings_data)
-
-    def write_updated_authentication_config(self) -> None:
-        """Write updated authentication data."""
-        yaml.save(self.authentication_settings, self.authentication_data)
-
     def write_updated_settings_config(self) -> None:
         """Write updated settings data."""
         yaml.save(self.settings, self.settings_data)
 
-    def write_updated_global_settings_config(self) -> None:
-        """Write updated global settings data."""
-        yaml.save(self.global_settings, self.global_settings_data)
-
-    """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
-
-    def get_configs(self) -> list:
-        """Returns a list of all the configs."""
-        configs = [config.name for config in self.manager.path_manager.config_folder.iterdir() if config.is_dir()]
-        configs.sort()
-        return configs
-
-    def change_default_config(self, config_name: str) -> None:
-        """Changes the default config."""
-        self.manager.cache_manager.save("default_config", config_name)
-
-    def delete_config(self, config_name: str) -> None:
-        """Deletes a config."""
-        configs = self.get_configs()
-        configs.remove(config_name)
-
-        if self.manager.cache_manager.get("default_config") == config_name:
-            self.manager.cache_manager.save("default_config", configs[0])
-
-        config = self.manager.path_manager.config_folder / config_name
-        shutil.rmtree(config)
-
-    def change_config(self, config_name: str) -> None:
-        """Changes the config."""
-        self.loaded_config = config_name
+    def reload_config(self) -> None:
         self.startup()
-
         self.manager.path_manager.startup()
         sleep(1)
         self.manager.logs = LogManager.from_manager(self.manager)
         sleep(1)
 
-    def _set_apprise_fixed(self):
-        apprise_fixed = self.manager.cache_manager.get("apprise_fixed")
-        if apprise_fixed:
-            return
-        if os.name == "nt":
-            try:
-                import win32con  # noqa: F401
-            except ImportError:
-                pass
-            else:
-                with self.apprise_file.open("a", encoding="utf8") as f:
-                    f.write("windows://\n")
-        self.manager.cache_manager.save("apprise_fixed", True)
 
-    def _set_pydantic_config(self):
-        if self.pydantic_config:
-            return
-        self.manager.cache_manager.save("pydantic_config", True)
-        self.pydantic_config = True
-
-
-def is_in_file(search_value: str, file: Path) -> bool:
+def _is_in_file(search_value: str, file: Path) -> bool:
     if not file.is_file():
         return False
     try:
