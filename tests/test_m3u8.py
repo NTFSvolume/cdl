@@ -100,7 +100,7 @@ def test_get_resolution_from_url(url: str, resolution: tuple[int, int], name: st
     [
         ("https://example.com/780/playlist.m3u8", RuntimeError),
         ("https://example.com", RuntimeError),
-        ("/example.com", AttributeError),
+        ("/example.com", InvalidURLError),
         ("", InvalidURLError),
     ],
 )
