@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
     from cyberdrop_dl.managers.manager import Manager
-    from cyberdrop_dl.models.base_models import AppriseURL
+    from cyberdrop_dl.models import AppriseURL
 
 logger = logging.getLogger(__name__)
 _DEFAULT_DIFF_LINE_FORMAT: str = "{}"
