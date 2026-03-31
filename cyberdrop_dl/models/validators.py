@@ -15,12 +15,13 @@ from typing import (
     overload,
 )
 
-import yarl
-from pydantic import AnyUrl, ByteSize, HttpUrl, TypeAdapter
+from pydantic import ByteSize, TypeAdapter
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
+
+    import yarl
 
 
 _DATE_PATTERN_REGEX = r"(\d+)\s*(second|seconds|minute|minutes|hour|hours|day|days|week|weeks|month|months|year|years)"
@@ -39,20 +40,13 @@ def bytesize_to_str(value: _ConvertibleToInt) -> str:
     return value.human_readable(decimal=True)
 
 
-def to_yarl_url(value: AnyUrl | str, *args, **kwargs) -> yarl.URL:
+def to_yarl_url(value: object) -> yarl.URL:
     from cyberdrop_dl.utils.utilities import parse_url
 
     try:
-        return parse_url(str(value), *args, **kwargs)
+        return parse_url(str(value))
     except Exception as e:
         raise ValueError(str(e)) from e
-
-
-def to_yarl_url_w_pydantyc_validation(value: str) -> yarl.URL:
-    if isinstance(value, yarl.URL):
-        value = str(value)
-    url = HttpUrl(value)
-    return to_yarl_url(url)
 
 
 def to_bytesize(value: ByteSize | str | int) -> ByteSize:

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import datetime
 import logging
 import re
-from datetime import date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Self
 
@@ -21,23 +21,38 @@ from cyberdrop_dl.crawlers.realdebrid import RealDebridCrawler
 from cyberdrop_dl.crawlers.wordpress import WordPressHTMLCrawler, WordPressMediaCrawler
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.exceptions import JDownloaderError, NoExtensionError
-from cyberdrop_dl.scraper.filters import is_in_domain_list, is_outside_date_range, is_valid_url
+from cyberdrop_dl.managers.manager import Manager
 from cyberdrop_dl.utils.logger import log_spacer
 from cyberdrop_dl.utils.utilities import get_download_path, remove_trailing_slash
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Generator
+    from collections.abc import AsyncGenerator, Generator, Sequence
 
     import aiosqlite
 
     from cyberdrop_dl.config.global_model import GenericCrawlerInstances, GlobalSettings
-    from cyberdrop_dl.crawlers import Crawler
-    from cyberdrop_dl.managers.manager import Manager
+
 
 logger = logging.getLogger(__name__)
 existing_crawlers: dict[str, Crawler] = {}
 _seen_urls: set[AbsoluteHttpURL] = set()
 _crawlers_disabled_at_runtime: set[str] = set()
+
+
+def is_outside_date_range(scrape_item: ScrapeItem, before: datetime.date | None, after: datetime.date | None) -> bool:
+    skip = False
+    item_date = scrape_item.completed_at or scrape_item.created_at
+    if not item_date:
+        return False
+    date = datetime.datetime.fromtimestamp(item_date).date()
+    if (after and date < after) or (before and date > before):
+        skip = True
+
+    return skip
+
+
+def is_in_domain_list(scrape_item: ScrapeItem, domain_list: Sequence[str]) -> bool:
+    return any(domain in scrape_item.url.host for domain in domain_list)
 
 
 class ScrapeMapper:
@@ -186,8 +201,8 @@ class ScrapeMapper:
 
     async def load_all_links(self) -> AsyncGenerator[ScrapeItem]:
         """Loads all links from database."""
-        after = self.manager.parsed_args.cli_only_args.completed_after or date.min
-        before = self.manager.parsed_args.cli_only_args.completed_before or datetime.now().date()
+        after = self.manager.parsed_args.cli_only_args.completed_after or datetime.date.min
+        before = self.manager.parsed_args.cli_only_args.completed_before or datetime.date.today()
         async for rows in self.manager.db_manager.history_table.get_all_items(after, before):
             for row in rows:
                 yield _create_item_from_row(row)
@@ -260,8 +275,6 @@ class ScrapeMapper:
 
     def filter_items(self, scrape_item: ScrapeItem) -> bool:
         """Pre-filter scrape items base on URL."""
-        if not is_valid_url(scrape_item):
-            return False
 
         if scrape_item.url in _seen_urls:
             return False
@@ -339,9 +352,9 @@ def _create_item_from_row(row: aiosqlite.Row) -> ScrapeItem:
     url = AbsoluteHttpURL(referer, encoded="%" in referer)
     item = ScrapeItem(url=url, retry_path=Path(row["download_path"]), part_of_album=True)
     if completed_at := row["completed_at"]:
-        item.completed_at = int(datetime.fromisoformat(completed_at).timestamp())
+        item.completed_at = int(datetime.datetime.fromisoformat(completed_at).timestamp())
     if created_at := row["created_at"]:
-        item.created_at = int(datetime.fromisoformat(created_at).timestamp())
+        item.created_at = int(datetime.datetime.fromisoformat(created_at).timestamp())
     return item
 
 
@@ -353,9 +366,8 @@ def get_crawlers_mapping(manager: Manager | None = None, include_generics: bool 
     If manager is `None`, the `MOCK_MANAGER` will be used, which means the crawlers won't be able to actually run"""
 
     from cyberdrop_dl.crawlers import CRAWLERS
-    from cyberdrop_dl.managers.mock_manager import MOCK_MANAGER
 
-    manager_ = manager or MOCK_MANAGER
+    manager_ = manager or Manager()
     global existing_crawlers
     if not existing_crawlers:
         for crawler in CRAWLERS:
