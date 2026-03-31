@@ -45,7 +45,7 @@ else:
 class CIStrEnum(StrEnum):
     @classmethod
     def _missing_(cls, value: object) -> CIStrEnum | None:
-        value = str(value)
+        value = str(value).casefold()
         for member in cls:
             if member.name.casefold() == value:
                 return member
