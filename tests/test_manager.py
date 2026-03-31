@@ -98,7 +98,7 @@ class TestMergeDicts:
 @pytest.mark.parametrize(
     "webhook, output",
     [
-        ("https://example.com", "**********"),
+        ("https://example.com", "no_logs=**********"),
         ("attach_logs=https://example.com", "attach_logs=**********"),
     ],
 )
