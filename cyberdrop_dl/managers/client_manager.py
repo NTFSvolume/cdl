@@ -326,7 +326,7 @@ class ClientManager:
             get_cookies_from_browsers(
                 self.manager, browser=self.manager.config_manager.settings_data.browser_cookies.browser
             )
-        cookie_files = sorted(self.manager.appdata.cookies_dir.glob("*.txt"))
+        cookie_files = sorted(self.manager.appdata.cookies.glob("*.txt"))
         if not cookie_files:
             return
         async for domain, cookie in read_netscape_files(cookie_files):

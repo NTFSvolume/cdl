@@ -283,21 +283,31 @@ def merge_models(default: M, new: M) -> M:
 @dataclasses.dataclass(slots=True)
 class AppData:
     path: Path
-    cache_file: Path = dataclasses.field(init=False)
-    default_config: Path = dataclasses.field(init=False)
-    db_file: Path = dataclasses.field(init=False)
-    cache_folder: Path = dataclasses.field(init=False)
-    cookies_dir: Path = dataclasses.field(init=False)
-    config_folder: Path = dataclasses.field(init=False)
+    cache_file: Path
+    db_file: Path
+    config_file: Path
 
-    def __post_init__(self) -> None:
-        self.default_config = self.path / "config.yaml"
-        self.cache_folder = self.path / "Cache"
-        self.config_folder = self.path / "Configs"
-        self.cookies_dir = self.path / "Cookies"
+    cache: Path
+    cookies: Path
+    configs: Path
 
-        self.cache_file = self.cache_folder / "cache.yaml"
-        self.db_file = self.cache_folder / "cyberdrop.db"
+    def __init__(self, path: Path) -> None:
+        assert path.is_absolute()
+        self.path = path
+
+        self.cache = path / "Cache"
+        self.configs = path / "Configs"
+        self.cookies = path / "Cookies"
+
+        self.config_file = path / "config.yaml"
+        self.cache_file = self.cache / "cache.yaml"
+        self.db_file = self.cache / "cyberdrop.db"
+
+    def __truediv__(self, other: PathLike[str]):
+        try:
+            return self.path / other
+        except TypeError:
+            return NotImplemented
 
     def __fspath__(self) -> str:
         return str(self)
@@ -306,11 +316,5 @@ class AppData:
         return str(self.path)
 
     def mkdirs(self) -> None:
-        for dir in (self.cache_folder, self.config_folder, self.cookies_dir):
+        for dir in (self.cache, self.configs, self.cookies):
             dir.mkdir(parents=True, exist_ok=True)
-
-    def __truediv__(self, key: PathLike[str]):
-        try:
-            return self.path / key
-        except TypeError:
-            return NotImplemented
