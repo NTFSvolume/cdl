@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Final
 from cyberdrop_dl.dependencies import browser_cookie3
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator
+    from collections.abc import AsyncGenerator, Generator
     from pathlib import Path
 
     from cyberdrop_dl.constants import Browser
@@ -101,34 +101,39 @@ async def split_and_save_cookies(manager: Manager, extracted_cookies: CookieJar)
     )
 
 
-async def read_netscape_files(cookie_files: list[Path]) -> AsyncGenerator[tuple[str, SimpleCookie]]:
-    now = int(time.time())
-    domains_seen = set()
-    cookie_jars = await asyncio.gather(*(_read_netscape_file(file) for file in cookie_files))
-    for file, cookie_jar in zip(cookie_files, cookie_jars, strict=True):
+async def read_netscape_files(cookie_files: list[Path]) -> AsyncGenerator[SimpleCookie]:
+    for fut in asyncio.as_completed(asyncio.create_task(_read_netscape_file(file)) for file in cookie_files):
+        cookie_jar = await fut
         if not cookie_jar:
             continue
-        current_cookie_file_domains: set[str] = set()
-        expired_cookies_domains: set[str] = set()
-        for cookie in cookie_jar:
-            if not cookie.value:
-                continue
-            simplified_domain = cookie.domain.removeprefix(".")
-            if simplified_domain not in current_cookie_file_domains:
-                logger.info(f"Found cookies for {simplified_domain} in file '{file.name}'")
-                current_cookie_file_domains.add(simplified_domain)
-                if simplified_domain in domains_seen:
-                    logger.warning(
-                        f"Previous cookies for domain {simplified_domain} detected. They will be overwritten"
-                    )
 
-            if (simplified_domain not in expired_cookies_domains) and cookie.is_expired(now):  # type: ignore
-                expired_cookies_domains.add(simplified_domain)
-                logger.warning(f"Cookies for {simplified_domain} are expired")
+        for cookie in _parse_cookie_jar(cookie_jar):
+            yield cookie
 
-            domains_seen.add(simplified_domain)
-            simple_cookie = make_simple_cookie(cookie, now)
-            yield cookie.domain, simple_cookie
+
+def _parse_cookie_jar(cookie_jar: MozillaCookieJar) -> Generator[SimpleCookie]:
+    now = int(time.time())
+    domains_seen: set[str] = set()
+    domains: set[str] = set()
+    has_expired_cookies: set[str] = set()
+    for cookie in cookie_jar:
+        if not cookie.value:
+            continue
+
+        domain = cookie.domain.lstrip(".").removeprefix("www.")
+        if domain not in domains:
+            logger.info(f"Found cookies for {domain}")
+            domains.add(domain)
+            if domain in domains_seen:
+                logger.warning(f"Previous cookies for {domain} detected. They will be overwritten")
+
+        if (domain not in has_expired_cookies) and cookie.is_expired(now):
+            has_expired_cookies.add(domain)
+            logger.info(f"Cookies for {domain} are expired")
+
+        domains_seen.add(domain)
+
+        yield make_simple_cookie(cookie, now)
 
 
 async def _read_netscape_file(file: Path) -> MozillaCookieJar | None:

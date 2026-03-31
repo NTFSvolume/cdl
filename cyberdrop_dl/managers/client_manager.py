@@ -247,7 +247,7 @@ class ClientManager:
     async def startup(self) -> None:
         await _set_dns_resolver()
 
-    def new_curl_cffi_session(self) -> AsyncSession:
+    def new_curl_cffi_session(self) -> AsyncSession[CurlResponse]:
         # Calling code should have validated if curl is actually available
         import warnings
 
@@ -329,8 +329,9 @@ class ClientManager:
         cookie_files = sorted(self.manager.appdata.cookies.glob("*.txt"))
         if not cookie_files:
             return
-        async for domain, cookie in read_netscape_files(cookie_files):
-            self.cookies.update_cookies(cookie, response_url=AbsoluteHttpURL(f"https://{domain}"))
+
+        async for cookie in read_netscape_files(cookie_files):
+            self.cookies.update_cookies(cookie)
 
     def get_rate_limiter(self, domain: str) -> AsyncLimiter:
         """Get a rate limiter for a domain."""
