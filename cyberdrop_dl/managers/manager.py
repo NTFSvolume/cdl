@@ -90,7 +90,11 @@ class Manager:
 
         self.path_manager = PathManager(self)
         self.path_manager.pre_startup()
-        self.cache.update(yaml.load(self.path_manager.cache_folder / "cache.yaml"))
+        try:
+            self.cache.update(yaml.load(self.path_manager.cache_folder / "cache.yaml"))
+        except FileNotFoundError:
+            pass
+
         self.config_manager = ConfigManager(self)
         self.config_manager.startup()
 
