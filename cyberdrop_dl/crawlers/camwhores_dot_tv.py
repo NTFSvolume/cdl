@@ -25,17 +25,13 @@ class CamwhoresTVCrawler(KernelVideoSharingCrawler):
 
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://www.camwhores.tv")
     DOMAIN: ClassVar[str] = "camwhores.tv"
+    DEFAULT_TRIM_URLS: ClassVar[bool] = False
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         # Returns 404 without the trailing slash
         if scrape_item.url.name:
             scrape_item.url = scrape_item.url / ""
         await super().fetch(scrape_item)
-
-    def parse_url(
-        self, link_str: str, relative_to: AbsoluteHttpURL | None = None, *, trim: bool | None = None
-    ) -> AbsoluteHttpURL:
-        return super().parse_url(link_str, relative_to, trim=False)
 
     async def picture(self, scrape_item: ScrapeItem) -> None:
         # images are encrypted, similar to the video URLS

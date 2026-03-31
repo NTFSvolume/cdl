@@ -147,8 +147,9 @@ class DiscourseCrawler(MessageBoardCrawler, is_generic=True):
 
         return unique(iter_links())
 
+    @classmethod
     def parse_url(
-        self, link_str: str, relative_to: AbsoluteHttpURL | None = None, *, trim: bool | None = None
+        cls, link_str: str, relative_to: AbsoluteHttpURL | None = None, *, trim: bool | None = None
     ) -> AbsoluteHttpURL:
         return _clean_url(super().parse_url(link_str, relative_to, trim=trim))
 

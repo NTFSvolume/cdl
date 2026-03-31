@@ -170,7 +170,8 @@ class WordPressBaseCrawler(Crawler, is_abc=True):
             if link:
                 await self.handle_link(scrape_item, link)
 
-    def parse_url(self, link: str) -> AbsoluteHttpURL:
+    @classmethod
+    def parse_url(cls, link: str) -> AbsoluteHttpURL:
         # TODO: handle more domains and move it to the base crawler
         link = _get_original_quality_link(link)
         url = super().parse_url(link)

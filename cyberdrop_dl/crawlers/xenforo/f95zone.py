@@ -29,8 +29,9 @@ class F95ZoneCrawler(XenforoCrawler):
     def thumbnail_to_img(cls, url: AbsoluteHttpURL) -> AbsoluteHttpURL:
         return url.with_path(url.path.replace("/thumb/", ""))
 
-    def parse_url(self, link: str) -> AbsoluteHttpURL:
+    @classmethod
+    def parse_url(cls, link: str) -> AbsoluteHttpURL:
         url = super().parse_url(link)
-        if self.is_thumbnail(url):
-            return self.thumbnail_to_img(url)
+        if cls.is_thumbnail(url):
+            return cls.thumbnail_to_img(url)
         return url

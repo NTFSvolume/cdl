@@ -16,8 +16,9 @@ class TitsInTopsCrawler(XenforoCrawler):
     DOMAIN: ClassVar[str] = "titsintops"
     FOLDER_DOMAIN: ClassVar[str] = "TitsInTops"
 
-    def parse_url(self, link: str) -> AbsoluteHttpURL:
-        return super().parse_url(fix_link(link))
+    @classmethod
+    def parse_url(cls, link: str) -> AbsoluteHttpURL:
+        return super().parse_url(_query_to_path(link))
 
     def is_username_or_attachment(self, link_obj: Tag) -> bool:
         text = css.text(link_obj)
@@ -29,7 +30,7 @@ class TitsInTopsCrawler(XenforoCrawler):
         return super().is_username_or_attachment(link_obj)
 
 
-def fix_link(link: str) -> str:
+def _query_to_path(link: str) -> str:
     return (
         link.replace("index.php%3F", "index.php/")
         .replace("index.php?", "index.php/")

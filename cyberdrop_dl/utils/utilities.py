@@ -55,29 +55,32 @@ from cyberdrop_dl.utils.logger import log_with_color
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Generator, Iterable, Mapping
 
-    from cyberdrop_dl.crawlers import Crawler
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
     from cyberdrop_dl.downloader.downloader import Downloader
     from cyberdrop_dl.managers.manager import Manager
-
-    CrawerOrDownloader = TypeVar("CrawerOrDownloader", bound=Crawler | Downloader)
-    Origin = TypeVar("Origin", bound=ScrapeItem | MediaItem | URL)
 
     _P = ParamSpec("_P")
     _T = TypeVar("_T")
     _R = TypeVar("_R")
 
     class Dataclass(Protocol):
-        __dataclass_fields__: ClassVar[dict]
+        __dataclass_fields__: ClassVar[dict[str, Any]]
+
+    class _HasManager(Protocol):
+        manager: Manager
+
+    _HasManagerT = TypeVar("_HasManagerT", bound=_HasManager)
+    Origin = TypeVar("Origin", bound=ScrapeItem | MediaItem | URL)
 
 
 logger = logging.getLogger(__name__)
+
 _ALLOWED_FILEPATH_PUNCTUATION = " .-_!#$%'()+,;=@[]^{}~"
 _BLOB_OR_SVG = ("data:", "blob:", "javascript:")
 
 
 @contextlib.contextmanager
-def error_handling_context(self: Crawler | Downloader, item: ScrapeItem | MediaItem | URL) -> Generator[None]:
+def error_handling_context(self: _HasManager, item: ScrapeItem | MediaItem | URL) -> Generator[None]:
     link: URL = item if isinstance(item, URL) else item.url
     error_log_msg = origin = exc_info = None
     link_to_show: URL | str = ""
@@ -147,32 +150,32 @@ def error_handling_context(self: Crawler | Downloader, item: ScrapeItem | MediaI
 
 @overload
 def error_handling_wrapper(
-    func: Callable[Concatenate[CrawerOrDownloader, Origin, _P], _R],
-) -> Callable[Concatenate[CrawerOrDownloader, Origin, _P], _R]: ...
+    func: Callable[Concatenate[_HasManagerT, Origin, _P], _R],
+) -> Callable[Concatenate[_HasManagerT, Origin, _P], _R]: ...
 
 
 @overload
 def error_handling_wrapper(
-    func: Callable[Concatenate[CrawerOrDownloader, Origin, _P], Coroutine[None, None, _R]],
-) -> Callable[Concatenate[CrawerOrDownloader, Origin, _P], Coroutine[None, None, _R]]: ...
+    func: Callable[Concatenate[_HasManagerT, Origin, _P], Coroutine[None, None, _R]],
+) -> Callable[Concatenate[_HasManagerT, Origin, _P], Coroutine[None, None, _R]]: ...
 
 
 def error_handling_wrapper(
-    func: Callable[Concatenate[CrawerOrDownloader, Origin, _P], _R | Coroutine[None, None, _R]],
-) -> Callable[Concatenate[CrawerOrDownloader, Origin, _P], _R | Coroutine[None, None, _R]]:
+    func: Callable[Concatenate[_HasManagerT, Origin, _P], _R | Coroutine[None, None, _R]],
+) -> Callable[Concatenate[_HasManagerT, Origin, _P], _R | Coroutine[None, None, _R]]:
     """Wrapper handles errors for url scraping."""
 
     if inspect.iscoroutinefunction(func):
 
         @wraps(func)
-        async def async_wrapper(self: CrawerOrDownloader, item: Origin, *args: _P.args, **kwargs: _P.kwargs) -> _R:
+        async def async_wrapper(self: _HasManagerT, item: Origin, *args: _P.args, **kwargs: _P.kwargs) -> _R:
             with error_handling_context(self, item):
                 return await func(self, item, *args, **kwargs)
 
         return async_wrapper
 
     @wraps(func)
-    def wrapper(self: CrawerOrDownloader, item: Origin, *args: _P.args, **kwargs: _P.kwargs) -> _R:
+    def wrapper(self: _HasManagerT, item: Origin, *args: _P.args, **kwargs: _P.kwargs) -> _R:
         with error_handling_context(self, item):
             result = func(self, item, *args, **kwargs)
             assert not inspect.isawaitable(result)
@@ -397,15 +400,7 @@ def get_text_between(original_text: str, start: str, end: str) -> str:
     return original_text[start_index:end_index].strip()
 
 
-def parse_url(link_str: str, relative_to: AbsoluteHttpURL | None = None, *, trim: bool = True) -> AbsoluteHttpURL:
-    """Parse a string into an absolute URL, handling relative URLs, encoding and optionally removes trailing slash (trimming).
-    Raises:
-        InvalidURLError: If the input string is not a valid URL or if any other error occurs during parsing.
-        TypeError: If `relative_to` is `None` and the parsed URL is relative or has no scheme.
-    """
-
-    base: AbsoluteHttpURL = relative_to  # type: ignore
-
+def _str_to_url(link_str: str) -> URL:
     def fix_query_params_encoding(link: str) -> str:
         if "?" not in link:
             return link
@@ -416,24 +411,37 @@ def parse_url(link_str: str, relative_to: AbsoluteHttpURL | None = None, *, trim
     def fix_multiple_slashes(link_str: str) -> str:
         return re.sub(r"(?:https?)?:?(\/{3,})", "//", link_str)
 
-    try:
-        assert link_str, "link_str is empty"
-        assert isinstance(link_str, str), f"link_str must be a string object, got: {link_str!r}"
-        clean_link_str = fix_multiple_slashes(fix_query_params_encoding(link_str))
-        is_encoded = "%" in clean_link_str
-        new_url = URL(clean_link_str, encoded=is_encoded)
+    if not link_str:
+        raise InvalidURLError("link_str is empty", url=link_str)
 
-    except (AssertionError, AttributeError, ValueError, TypeError) as e:
+    try:
+        clean_link_str = fix_multiple_slashes(fix_query_params_encoding(link_str))
+        return URL(clean_link_str, encoded="%" in clean_link_str)
+
+    except (AttributeError, ValueError, TypeError) as e:
         raise InvalidURLError(str(e), url=link_str) from e
 
-    if not new_url.absolute:
-        new_url = base.join(new_url)
-    if not new_url.scheme:
-        new_url = new_url.with_scheme(base.scheme or "https")
-    assert is_absolute_http_url(new_url)
+
+def parse_url(
+    link_str: AbsoluteHttpURL | URL | str, relative_to: AbsoluteHttpURL | None = None, *, trim: bool = True
+) -> AbsoluteHttpURL:
+    """Parse a string into an absolute URL, handling relative URLs, encoding and optionally removes trailing slash (trimming).
+    Raises:
+        InvalidURLError: If the input string is not a valid URL or if any other error occurs during parsing.
+        TypeError: If `relative_to` is `None` and the parsed URL is relative or has no scheme.
+    """
+
+    url = _str_to_url(link_str) if isinstance(link_str, str) else link_str
+    if not url.absolute:
+        if not relative_to:
+            raise InvalidURLError("Relative URL with no known base", url=link_str)
+        url = relative_to.join(url)
+    if not url.scheme:
+        url = url.with_scheme(relative_to.scheme if relative_to else "https")
+    assert is_absolute_http_url(url)
     if not trim:
-        return new_url
-    return remove_trailing_slash(new_url)
+        return url
+    return remove_trailing_slash(url)
 
 
 def is_absolute_http_url(url: URL) -> TypeGuard[AbsoluteHttpURL]:
