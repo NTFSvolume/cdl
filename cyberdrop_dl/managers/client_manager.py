@@ -322,9 +322,9 @@ class ClientManager:
 
     async def load_cookie_files(self) -> None:
         if self.manager.config_manager.settings_data.browser_cookies.auto_import:
-            assert self.manager.config_manager.settings_data.browser_cookies.browser
-            cookies = await extract_cookies(browser=self.manager.config_manager.settings_data.browser_cookies.browser)
-            await split_and_save_cookies(self.manager, cookies)
+            assert self.manager.config.browser_cookies.browser
+            cookies = await extract_cookies(self.manager.config.browser_cookies.browser)
+            await split_and_save_cookies(cookies, self.manager.appdata.cookies)
 
         cookie_files = sorted(self.manager.appdata.cookies.glob("*.txt"))
         if not cookie_files:

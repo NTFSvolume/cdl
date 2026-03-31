@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from cyberdrop_dl.constants import Browser
-    from cyberdrop_dl.managers.manager import Manager
+
 
 if sys.version_info < (3, 14):
     from http import cookies
@@ -86,14 +86,15 @@ async def extract_cookies(browser: Browser) -> CookieJar:
     raise browser_cookie3.BrowserCookieError(f"{msg}\n\nNothing has been saved.")
 
 
-async def split_and_save_cookies(manager: Manager, extracted_cookies: CookieJar) -> None:
-    manager.appdata.cookies.mkdir(parents=True, exist_ok=True)
+async def split_and_save_cookies(extracted_cookies: CookieJar, output_folder: Path) -> None:
+    await asyncio.to_thread(output_folder.mkdir, parents=True, exist_ok=True)
+
     cookie_jars: dict[str, MozillaCookieJar] = {}
 
     for domain, cookie in ((cookie.domain.lstrip(".").removeprefix("www."), cookie) for cookie in extracted_cookies):
         cookie_jar = cookie_jars.get(domain)
         if cookie_jar is None:
-            cookie_jar = MozillaCookieJar(manager.appdata.cookies / f"{domain}.txt")
+            cookie_jar = MozillaCookieJar(output_folder / f"{domain}.txt")
         cookie_jar.set_cookie(cookie)
 
     _ = await asyncio.gather(
