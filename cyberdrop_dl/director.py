@@ -163,7 +163,7 @@ def _setup_debug_logger(manager: Manager) -> Path | None:
 def _setup_main_logger(manager: Manager) -> None:
     logger = logging.getLogger("cyberdrop_dl")
     file_io = manager.config.logs.main_log.open("w", encoding="utf8")
-    settings_data = manager.config_manager.settings_data.logs.main_log
+    settings_data = manager.config_manager.settings_data
     log_level = settings_data.runtime_options.log_level
     logger.setLevel(log_level)
 
