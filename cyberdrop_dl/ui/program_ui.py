@@ -17,9 +17,9 @@ from cyberdrop_dl.dependencies import browser_cookie3
 from cyberdrop_dl.ui.prompts import user_prompts
 from cyberdrop_dl.ui.prompts.basic_prompts import ask_dir_path, enter_to_continue
 from cyberdrop_dl.ui.prompts.defaults import DONE_CHOICE, EXIT_CHOICE
+from cyberdrop_dl.utils import text_editor
 from cyberdrop_dl.utils.cookie_management import clear_cookies
 from cyberdrop_dl.utils.sorting import Sorter
-from cyberdrop_dl.utils.text_editor import open_in_text_editor
 from cyberdrop_dl.utils.utilities import clear_term
 
 if TYPE_CHECKING:
@@ -228,7 +228,7 @@ class ProgramUI:
 
     def _open_in_text_editor(self, file_path: Path, *, reload_config: bool = True):
         try:
-            open_in_text_editor(file_path)
+            text_editor.open(file_path)
         except ValueError as e:
             self.print_error(str(e))
             return
