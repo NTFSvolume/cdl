@@ -20,7 +20,6 @@ from cyberdrop_dl.managers.config_manager import ConfigManager
 from cyberdrop_dl.managers.hash_manager import HashManager
 from cyberdrop_dl.managers.live_manager import LiveManager
 from cyberdrop_dl.managers.logs import LogManager
-from cyberdrop_dl.managers.path_manager import PathManager
 from cyberdrop_dl.managers.progress_manager import ProgressManager
 from cyberdrop_dl.utils.logger import LogHandler, QueuedLogger
 from cyberdrop_dl.utils.utilities import close_if_defined, get_system_information
@@ -49,7 +48,6 @@ class Manager:
 
         self.parsed_args: ParsedArgs = field(init=False)
         self.cache: dict[str, Any] = {}
-        self.path_manager: PathManager = field(init=False)
         self.config_manager: ConfigManager = field(init=False)
         self.hash_manager: HashManager = field(init=False)
 
@@ -107,15 +105,13 @@ class Manager:
         if isinstance(self.parsed_args, Field):
             self.parsed_args = parse_args(self.args)
 
-        self.path_manager = PathManager(self)
         self.appdata.mkdirs()
 
         self.config_manager = ConfigManager(self)
         self.config_manager.startup()
 
         self.args_consolidation()
-
-        self.path_manager.startup()
+        self.config.resolve_paths()
         self.logs = LogManager.from_manager(self)
 
     def add_completed(self, media_item: MediaItem) -> None:

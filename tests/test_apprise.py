@@ -10,7 +10,6 @@ from cyberdrop_dl import constants
 from cyberdrop_dl.constants import NotificationResult
 from cyberdrop_dl.managers.config_manager import ConfigManager
 from cyberdrop_dl.managers.manager import Manager
-from cyberdrop_dl.managers.path_manager import PathManager
 from cyberdrop_dl.utils import apprise
 
 TEST_FILES_PATH = Path(__file__).parent / "test_files/apprise"
@@ -82,7 +81,6 @@ async def send_notification(test_case: AppriseTestCase) -> None:
     FAKE_MANAGER.config_manager.apprise_urls = []
     if test_case.urls and any(test_case.urls):
         FAKE_MANAGER.config_manager.apprise_urls = apprise.get_apprise_urls(urls=test_case.urls)
-    FAKE_MANAGER.path_manager = PathManager(FAKE_MANAGER)
     FAKE_MANAGER.config.logs.main_log = test_case.file or TEST_FILES_PATH / "valid_single_url.txt"
     constants.LOG_OUTPUT_TEXT = Text(test_case.name)
     result, logs = await apprise.send_apprise_notifications(FAKE_MANAGER)

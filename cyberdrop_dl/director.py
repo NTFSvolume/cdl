@@ -62,7 +62,7 @@ def _ui_error_handling_wrapper(
 @_ui_error_handling_wrapper
 async def _run_manager(manager: Manager) -> None:
     """Runs the program and handles the UI."""
-    manager.path_manager.startup()
+    manager.config.resolve_paths()
     manager.logs.delete_old_logs()
     debug_log_file_path = _setup_debug_logger(manager)
     start_time = manager.start_time

@@ -121,7 +121,7 @@ class ConfigManager:
 
     def reload_config(self) -> None:
         self.startup()
-        self.manager.path_manager.startup()
+        self.manager.config.resolve_paths()
         sleep(1)
         self.manager.logs = LogManager.from_manager(self.manager)
         sleep(1)
