@@ -16,27 +16,13 @@ from rich.text import Text
 
 from cyberdrop_dl import constants
 from cyberdrop_dl.dependencies import apprise
-from cyberdrop_dl.models import AppriseURLModel
+from cyberdrop_dl.models import AppriseURL
 from cyberdrop_dl.utils.logger import log_spacer
 
 if TYPE_CHECKING:
     from cyberdrop_dl.managers.manager import Manager
 
 logger = logging.getLogger(__name__)
-
-
-@dataclass
-class AppriseURL:
-    url: str
-    tags: set[str]
-
-    @property
-    def raw_url(self):
-        tags = sorted(self.tags)
-        return f"{','.join(tags)}{'=' if tags else ''}{self.url}"
-
-
-_OS_URLS = ["windows://", "macosx://", "dbus://", "qt://", "glib://", "kde://"]
 
 
 class LogLevel(IntEnum):
@@ -86,27 +72,7 @@ def get_apprise_urls(*, file: Path | None = None, urls: list[str] | None = None)
         logger.warning("Found apprise URLs for notifications but apprise is not installed. Ignoring")
         return []
 
-    return _simplify_urls([AppriseURLModel.model_validate(url) for url in set(urls)])
-
-
-def _simplify_urls(apprise_urls: list[AppriseURLModel]) -> list[AppriseURL]:
-    final_urls = []
-    valid_tags = {"no_logs", "attach_logs", "simplified"}
-
-    def use_simplified(url: str) -> bool:
-        special_urls = _OS_URLS
-        return any(key in url.casefold() for key in special_urls)
-
-    for apprise_url in apprise_urls:
-        url = str(apprise_url.url.get_secret_value())
-        tags = apprise_url.tags or {"no_logs"}
-        if not any(tag in tags for tag in valid_tags):
-            tags = tags | {"no_logs"}
-        if use_simplified(url):
-            tags = tags - valid_tags | {"simplified"}
-        entry = AppriseURL(url=url, tags=tags)
-        final_urls.append(entry)
-    return sorted(final_urls, key=lambda x: x.url)
+    return [AppriseURL.model_validate(url) for url in set(urls)]
 
 
 def _process_results(
@@ -186,11 +152,15 @@ async def send_apprise_notifications(manager: Manager) -> tuple[constants.Notifi
     constants.LOG_OUTPUT_TEXT = Text("")
 
     apprise_obj = apprise.Apprise()
-    for apprise_url in apprise_urls:
-        apprise_obj.add(apprise_url.url, tag=list(apprise_url.tags))
+
+    attach_logs: bool = False
+    for webhook in apprise_urls:
+        if not attach_logs:
+            attach_logs = webhook.attach_logs
+        _ = apprise_obj.add(str(webhook.url.get_secret_value()), tag=sorted(webhook.tags))
 
     main_log = manager.config.logs.main_log
-    all_urls = [x.raw_url for x in apprise_urls]
+    all_urls = [str(x) for x in apprise_urls]
     log_lines = []
 
     with (

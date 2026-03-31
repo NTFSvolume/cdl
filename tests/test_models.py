@@ -1,7 +1,7 @@
 import pytest
 import yarl
 
-from cyberdrop_dl.models import AppriseURLModel
+from cyberdrop_dl.models import AppriseURL
 
 
 @pytest.mark.parametrize(
@@ -45,7 +45,7 @@ from cyberdrop_dl.models import AppriseURLModel
     ],
 )
 def test_apprise_url_model(value: object, expected_url: str, expected_tags: set[str]) -> None:
-    result = AppriseURLModel.model_validate(value)
+    result = AppriseURL.model_validate(value)
     assert str(result.url.get_secret_value()) == expected_url
-    assert result.tags.intersection(AppriseURLModel._VALID_TAGS)
+    assert result.tags.intersection(AppriseURL._VALID_TAGS)
     assert result.tags == expected_tags

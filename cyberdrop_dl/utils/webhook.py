@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
     from cyberdrop_dl.managers.manager import Manager
-    from cyberdrop_dl.models.base_models import AppriseURLModel
+    from cyberdrop_dl.models.base_models import AppriseURL
 
 logger = logging.getLogger(__name__)
 _DEFAULT_DIFF_LINE_FORMAT: str = "{}"
@@ -43,7 +43,7 @@ def _prepare_diff_text() -> str:
     return "\n".join(prepare_lines())
 
 
-async def _prepare_form(webhook: AppriseURLModel, main_log: Path) -> FormData:
+async def _prepare_form(webhook: AppriseURL, main_log: Path) -> FormData:
     diff_text = _prepare_diff_text()
     form = FormData()
 

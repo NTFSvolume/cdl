@@ -40,7 +40,7 @@ class _AppriseURLDict(TypedDict):
     tags: set[str]
 
 
-class AppriseURLModel(AliasModel):
+class AppriseURL(AliasModel):
     url: Secret[AnyUrl]
     tags: set[str] = set()
 

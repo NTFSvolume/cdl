@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from pydantic import BaseModel
 
     from cyberdrop_dl.managers.manager import Manager
-    from cyberdrop_dl.utils.apprise import AppriseURL
+    from cyberdrop_dl.models import AppriseURL
 
 
 class ConfigManager:

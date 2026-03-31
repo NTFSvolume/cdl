@@ -8,7 +8,7 @@ from pydantic import BaseModel, ByteSize, Field, NonNegativeInt, field_serialize
 
 from cyberdrop_dl import constants
 from cyberdrop_dl.constants import BROWSERS, DEFAULT_APP_STORAGE, DEFAULT_DOWNLOAD_STORAGE, Hashing
-from cyberdrop_dl.models import AliasModel, AppriseURLModel
+from cyberdrop_dl.models import AliasModel, AppriseURL
 from cyberdrop_dl.models.types import (
     ByteSizeSerilized,
     ListNonEmptyStr,
@@ -79,7 +79,7 @@ class Logs(AliasModel):
     rotate_logs: bool = False
     scrape_error_urls: LogPath = Path("Scrape_Error_URLs.csv")
     unsupported_urls: LogPath = Path("Unsupported_URLs.csv")
-    webhook: AppriseURLModel | None = None
+    webhook: AppriseURL | None = None
 
     @field_validator("webhook", mode="before")
     @classmethod
