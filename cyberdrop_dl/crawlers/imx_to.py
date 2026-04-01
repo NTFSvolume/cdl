@@ -33,7 +33,7 @@ class ImxToCrawler(Crawler):
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://imx.to")
     DOMAIN: ClassVar[str] = "imx.to"
 
-    async def async_startup(self) -> None:
+    async def __async_post_init__(self) -> None:
         self.update_cookies({"continue": 1})
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:

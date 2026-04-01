@@ -17,7 +17,7 @@ class NekohouseCrawler(KemonoBaseCrawler):
     DOMAIN: ClassVar[str] = "nekohouse"
     SERVICES = "fanbox", "fantia", "fantia_products", "subscribestar", "twitter"
 
-    async def async_startup(self) -> None:
+    async def __async_post_init__(self) -> None:
         await super().async_startup()
 
         # Only this API endpoint is available

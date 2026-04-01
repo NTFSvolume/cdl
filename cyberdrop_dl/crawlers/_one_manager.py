@@ -44,7 +44,7 @@ class OneManagerCrawler(Crawler, is_abc=True):
             self.init_item(scrape_item)
         await self.process_path(scrape_item)
 
-    async def async_startup(self) -> None:
+    async def __async_post_init__(self) -> None:
         self.manager.client_manager.download_slots.update({self.DOMAIN: 2})
 
     @error_handling_wrapper

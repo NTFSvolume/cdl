@@ -193,7 +193,7 @@ class MessageBoardCrawler(Crawler, is_abc=True):
         # Implementation of this method MUST return `None` instead of raising an error
         raise NotImplementedError
 
-    async def async_startup(self) -> None:
+    async def __async_post_init__(self) -> None:
         await self.login()
 
     @final

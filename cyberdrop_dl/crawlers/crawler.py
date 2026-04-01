@@ -190,10 +190,6 @@ class Crawler(HTTPClientProxy, ABC):
         self._semaphore = asyncio.Semaphore(20)
         self.__post_init__()
 
-    @final
-    def create_task(self, coro: Coroutine[Any, Any, _T_co]) -> asyncio.Task[_T_co]:
-        return self.manager.task_group.create_task(coro)
-
     def __post_init__(self) -> None:
         """Override in subclasses to add custom init logic
 
@@ -212,10 +208,8 @@ class Crawler(HTTPClientProxy, ABC):
             if self._USE_DOWNLOAD_SERVERS_LOCKS:
                 self.manager.client_manager.download_client.server_locked_domains.add(self.DOMAIN)
             self.downloader = self._init_downloader()
-            await self.async_startup()
+            await self.__async_post_init__()
             self.ready = True
-
-    async def async_startup(self) -> None: ...
 
     async def __async_post_init__(self) -> None:
         """Perform additional setup that requires I/O
@@ -223,12 +217,6 @@ class Crawler(HTTPClientProxy, ABC):
         ex: login, getting API tokens, etc..
 
         This method its called once and only if the crawler is actually going to be scrape something"""
-
-    @final
-    @staticmethod
-    def _assert_fields_overrides(subclass: type[Crawler], *fields: str) -> None:
-        for field_name in fields:
-            assert getattr(subclass, field_name, None), f"Subclass {subclass.__name__} must override: {field_name}"
 
     def __init_subclass__(
         cls,
@@ -268,11 +256,11 @@ class Crawler(HTTPClientProxy, ABC):
 
         cls.REPLACE_OLD_DOMAINS_REGEX: str | None = "|".join(cls.OLD_DOMAINS) if cls.OLD_DOMAINS else None
         if cls.OLD_DOMAINS:
-            if not cls.SUPPORTED_DOMAINS:
-                cls.SUPPORTED_DOMAINS = ()  # pyright: ignore[reportConstantRedefinition]
-            elif isinstance(cls.SUPPORTED_DOMAINS, str):
-                cls.SUPPORTED_DOMAINS = (cls.SUPPORTED_DOMAINS,)  # pyright: ignore[reportConstantRedefinition]
-            cls.SUPPORTED_DOMAINS = tuple(sorted({*cls.OLD_DOMAINS, *cls.SUPPORTED_DOMAINS, cls.PRIMARY_URL.host}))  # pyright: ignore[reportConstantRedefinition]
+            supported_domains = cls.SUPPORTED_DOMAINS
+            if isinstance(supported_domains, str):
+                supported_domains = (supported_domains,)
+
+            cls.SUPPORTED_DOMAINS = tuple(sorted({*cls.OLD_DOMAINS, *supported_domains, cls.PRIMARY_URL.host}))  # pyright: ignore[reportConstantRedefinition]
 
         _validate_supported_paths(cls)
         cls.SCRAPE_MAPPER_KEYS: tuple[str, ...] = _make_scrape_mapper_keys(cls)  # pyright: ignore[reportConstantRedefinition]
@@ -285,10 +273,19 @@ class Crawler(HTTPClientProxy, ABC):
         )
         Registry.concrete.add(cls)
 
+    @final
+    @staticmethod
+    def _assert_fields_overrides(subclass: type[Crawler], *fields: str) -> None:
+        for field_name in fields:
+            assert getattr(subclass, field_name, None), f"Subclass {subclass.__name__} must override: {field_name}"
+
+    @final
+    def create_task(self, coro: Coroutine[Any, Any, _T_co]) -> asyncio.Task[_T_co]:
+        return self.manager.task_group.create_task(coro)
+
     @abstractmethod
     async def fetch(self, scrape_item: ScrapeItem) -> None: ...
 
-    @final
     @property
     def allow_no_extension(self) -> bool:
         return not self.manager.config_manager.settings_data.ignore_options.exclude_files_with_no_extension
@@ -934,10 +931,7 @@ class Crawler(HTTPClientProxy, ABC):
 
 
 def _make_scrape_mapper_keys(cls: type[Crawler] | Crawler) -> tuple[str, ...]:
-    if cls.SUPPORTED_DOMAINS:
-        hosts = cls.SUPPORTED_DOMAINS
-    else:
-        hosts = cls.DOMAIN
+    hosts = cls.SUPPORTED_DOMAINS or cls.DOMAIN
     if isinstance(hosts, str):
         hosts = (hosts,)
     return tuple(sorted({host.removeprefix("www.") for host in hosts}))

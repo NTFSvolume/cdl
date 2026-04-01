@@ -116,7 +116,7 @@ class OneDriveCrawler(Crawler):
         if badger_token and not expired:
             self.auth_headers = {"Prefer": "autoredeem", "Authorization": f"Badger {badger_token}"}
 
-    async def async_startup(self) -> None:
+    async def __async_post_init__(self) -> None:
         if self.auth_headers:
             return
         await self.get_badger_token(BADGER_URL)

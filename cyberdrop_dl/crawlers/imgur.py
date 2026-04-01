@@ -36,7 +36,7 @@ class ImgurCrawler(Crawler):
         if data := json_resp.get("data"):
             raise ScrapeError(json_resp["status"], data["error"])
 
-    async def async_startup(self) -> None:
+    async def __async_post_init__(self) -> None:
         with self.catch_errors(self.PRIMARY_URL), self.disable_on_error("Unable to get client id"):
             # TODO: cache this
             soup = await self.request_soup(self.PRIMARY_URL)
