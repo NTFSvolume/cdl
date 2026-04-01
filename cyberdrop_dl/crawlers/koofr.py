@@ -5,7 +5,7 @@ from typing import Any, ClassVar, Literal
 
 from pydantic import dataclasses
 
-from cyberdrop_dl.crawlers.crawler import Crawler, DBPathBuilder, SupportedDomains, SupportedPaths
+from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.exceptions import DownloadError, PasswordProtectedError, ScrapeError
 from cyberdrop_dl.utils.utilities import error_handling_wrapper
@@ -26,7 +26,7 @@ class Node:
     hash: str = ""  # md5
 
 
-class KooFrCrawler(Crawler):
+class KooFrCrawler(Crawler, db_path="path_qs_frag"):
     SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = "koofr.net", "koofr.eu", _SHORT_LINK_CDN.host
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "Public Share": (
@@ -36,7 +36,6 @@ class KooFrCrawler(Crawler):
     }
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = _PRIMARY_URL
     DOMAIN: ClassVar[str] = "koofr"
-    create_db_path = staticmethod(DBPathBuilder.path_qs_frag)
 
     def __post_init__(self) -> None:
         self.api = KooFrAPI(self)

@@ -91,6 +91,19 @@ class PlaceHolderConfig:
 
 _placeholder_config = PlaceHolderConfig()
 
+_DB_PATH_BUILDERS: dict[str, Callable[[AbsoluteHttpURL], str]] = {
+    "url": lambda url: str(url),
+    "name": lambda url: url.name,
+    "path": lambda url: url.path,
+    "path_qs": lambda url: url.path_qs,
+    "path_qs_frag": lambda url: f"{url.path_qs}#{frag}" if (frag := url.fragment) else url.path_qs,
+    "path_frag": lambda url: f"{url.path}#{frag}" if (frag := url.fragment) else url.path,
+}
+
+
+def _url(item: ScrapeItem | AbsoluteHttpURL) -> AbsoluteHttpURL:
+    return item if isinstance(item, AbsoluteHttpURL) else item.url
+
 
 class DBPathBuilder:
     @staticmethod
@@ -171,7 +184,7 @@ class Crawler(HTTPClientProxy, ABC):
     _DOWNLOAD_SLOTS: ClassVar[int | None] = None
     _USE_DOWNLOAD_SERVERS_LOCKS: ClassVar[bool] = False
 
-    create_db_path = staticmethod(DBPathBuilder.path)
+    create_db_path = staticmethod(_DB_PATH_BUILDERS["name"])
 
     @final
     def __init__(self, manager: Manager) -> None:
@@ -239,6 +252,9 @@ class Crawler(HTTPClientProxy, ABC):
         cls.IS_GENERIC: bool = is_generic
         cls.SUPPORTED_PATHS = _sort_supported_paths(cls.SUPPORTED_PATHS)  # pyright: ignore[reportConstantRedefinition]
         cls.IS_ABC: bool = is_abc
+
+        if db_path:
+            cls._db_path_ = staticmethod(_DB_PATH_BUILDERS[db_path])
 
         if cls.IS_GENERIC:
             cls.GENERIC_NAME: str = generic_name or cls.NAME
