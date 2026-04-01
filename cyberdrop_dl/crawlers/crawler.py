@@ -28,9 +28,7 @@ from typing import (
     final,
 )
 
-import yarl
 from aiolimiter import AsyncLimiter
-from yarl import URL
 
 from cyberdrop_dl import constants
 from cyberdrop_dl.clients import HTTPClient, HTTPClientProxy
@@ -59,8 +57,10 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable, Coroutine, Generator, Iterable
     from http.cookies import BaseCookie
 
+    import yarl
     from bs4 import BeautifulSoup, Tag
     from rich.progress import TaskID
+    from yarl import URL
 
     from cyberdrop_dl.managers.manager import Manager
 
@@ -103,28 +103,6 @@ _DB_PATH_BUILDERS: dict[str, Callable[[AbsoluteHttpURL], str]] = {
 
 def _url(item: ScrapeItem | AbsoluteHttpURL) -> AbsoluteHttpURL:
     return item if isinstance(item, AbsoluteHttpURL) else item.url
-
-
-class DBPathBuilder:
-    @staticmethod
-    def url(url: yarl.URL) -> str:
-        return str(url)
-
-    @staticmethod
-    def name(url: yarl.URL) -> str:
-        return url.name
-
-    @staticmethod
-    def path(url: yarl.URL) -> str:
-        return url.path
-
-    @staticmethod
-    def path_qs(url: yarl.URL) -> str:
-        return url.path_qs
-
-    @staticmethod
-    def path_qs_frag(url: yarl.URL) -> str:
-        return f"{url.path_qs}#{frag}" if (frag := url.fragment) else url.path_qs
 
 
 class CrawlerInfo(NamedTuple):
@@ -530,13 +508,13 @@ class Crawler(HTTPClientProxy, ABC):
 
     @final
     async def check_complete_from_referer(
-        self: Crawler, scrape_item: ScrapeItem | URL, any_crawler: bool = False
+        self: Crawler, scrape_item: ScrapeItem | AbsoluteHttpURL, any_crawler: bool = False
     ) -> bool:
         """Checks if the scrape item has already been scraped.
 
         if `any_crawler` is `True`, checks database entries for all crawlers and returns `True` if at least 1 of them has marked it as completed
         """
-        url = scrape_item if isinstance(scrape_item, URL) else scrape_item.url
+        url = _url(scrape_item)
         domain = None if any_crawler else self.DOMAIN
         downloaded = await self.manager.db_manager.history_table.check_complete_by_referer(domain, url)
         if downloaded:
@@ -547,12 +525,12 @@ class Crawler(HTTPClientProxy, ABC):
 
     @final
     async def check_complete_by_hash(
-        self: Crawler, scrape_item: ScrapeItem | URL, hash_type: Literal["md5", "sha256"], hash_value: str
+        self: Crawler, scrape_item: ScrapeItem | AbsoluteHttpURL, hash_type: Literal["md5", "sha256"], hash_value: str
     ) -> bool:
         """Returns `True` if at least 1 file with this hash is recorded on the database"""
         downloaded = await self.manager.db_manager.hash_table.check_hash_exists(hash_type, hash_value)
         if downloaded:
-            url = scrape_item if isinstance(scrape_item, URL) else scrape_item.url
+            url = _url(scrape_item)
             logger.info(f"Skipping {url} as its hash ({hash_type}:{hash_value}) has already been downloaded")
             self.manager.progress_manager.download_progress.add_previously_completed()
         return downloaded
@@ -643,7 +621,7 @@ class Crawler(HTTPClientProxy, ABC):
 
     @classmethod
     def parse_url(
-        cls, link_str: str, relative_to: AbsoluteHttpURL | None = None, *, trim: bool | None = None
+        cls, link_str: URL | str, relative_to: AbsoluteHttpURL | None = None, *, trim: bool | None = None
     ) -> AbsoluteHttpURL:
         """Wrapper around `utils.parse_url` to use `self.PRIMARY_URL` as base"""
         base = relative_to or cls.PRIMARY_URL
@@ -934,7 +912,7 @@ class Crawler(HTTPClientProxy, ABC):
         counter = Counter()
         video_stem = Path(video_filename).stem
         for sub in subtitles:
-            link = self.parse_url(sub.url) if isinstance(sub.url, str) else sub.url
+            link = self.parse_url(sub.url)
             counter[sub.lang_code] += 1
             if (count := counter[sub.lang_code]) > 1:
                 suffix = f"{sub.lang_code}.{count}{link.suffix}"
