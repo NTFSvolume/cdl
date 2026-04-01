@@ -118,7 +118,7 @@ def parse_args(args: Sequence[str] | None = None) -> ParsedArgs:
 def show_supported_sites() -> NoReturn:
     from rich import print
 
-    from cyberdrop_dl.supported_domains import get_crawlers_info_as_rich_table
+    from cyberdrop_dl.supported_sites import get_crawlers_info_as_rich_table
 
     table = get_crawlers_info_as_rich_table()
     print(table)
