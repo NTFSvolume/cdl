@@ -29,9 +29,6 @@ if sys.version_info < (3, 14):
 logger = logging.getLogger(__name__)
 
 
-class UnsupportedBrowserError(browser_cookie3.BrowserCookieError): ...
-
-
 _COOKIE_EXTRACTORS: Final = {func.__name__: func for func in browser_cookie3.all_browsers}
 _CHROMIUM_BROWSERS = frozenset(
     (
@@ -47,25 +44,10 @@ _CHROMIUM_BROWSERS = frozenset(
 )
 
 
-async def _extract_cookies(browser: Browser) -> CookieJar:
+async def extract_cookies(browser: Browser) -> CookieJar:
     extract = _COOKIE_EXTRACTORS[browser]
     try:
         return await asyncio.to_thread(extract)
-    except browser_cookie3.BrowserCookieError as e:
-        if (
-            "Unable to get key for cookie decryption" in (msg := str(e))
-            and browser in _CHROMIUM_BROWSERS
-            and os.name == "nt"
-        ):
-            msg = f"Cookie extraction from {browser.capitalize()} is not supported on Windows - {msg}"
-            raise UnsupportedBrowserError(msg) from None
-        raise
-
-
-async def extract_cookies(browser: Browser) -> CookieJar:
-
-    try:
-        return await _extract_cookies(browser)
     except PermissionError as e:
         msg = (
             "We've encountered a Permissions Error. Please close all browsers and try again\n"
@@ -73,15 +55,23 @@ async def extract_cookies(browser: Browser) -> CookieJar:
             f"ERROR: {e!s}"
         )
 
-    except (ValueError, UnsupportedBrowserError) as e:
+    except ValueError as e:
         msg = f"ERROR: {e!s}"
 
     except browser_cookie3.BrowserCookieError as e:
-        msg = (
-            "Browser extraction ran into an error, the selected browser may not be available on your system\n"
-            "If you are still having issues, make sure all browsers processes are closed in Task Manager.\n"
-            f"ERROR: {e!s}"
-        )
+        if (
+            "Unable to get key for cookie decryption" in (msg := str(e))
+            and browser in _CHROMIUM_BROWSERS
+            and os.name == "nt"
+        ):
+            msg = f"ERROR: Cookie extraction from {browser.capitalize()} is not supported on Windows - {msg}"
+
+        else:
+            msg = (
+                "Browser extraction ran into an error, the selected browser may not be available on your system\n"
+                "If you are still having issues, make sure all browsers processes are closed in Task Manager.\n"
+                f"ERROR: {e!s}"
+            )
 
     raise browser_cookie3.BrowserCookieError(f"{msg}\n\nNothing has been saved.")
 
