@@ -29,6 +29,7 @@ from typing import (
 )
 
 from aiolimiter import AsyncLimiter
+from typing_extensions import deprecated
 
 from cyberdrop_dl import aio, constants, signature
 from cyberdrop_dl.clients import HTTPClient, HTTPClientProxy
@@ -203,7 +204,7 @@ class HLSParser(ABC):
         return m3u8.M3U8(content, url.parent, media_type)
 
 
-class Crawler(HTTPClientProxy, ABC):
+class Crawler(HLSParser, HTTPClientProxy, ABC):
     OLD_DOMAINS: ClassVar[tuple[str, ...]] = ()
     SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = ()
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {}
@@ -866,41 +867,41 @@ class Crawler(HTTPClientProxy, ABC):
         scrape_item.url = redirect
         self.create_task(self.run(scrape_item))
 
+    @deprecated("Use self.request_m3u8 instead")
     async def get_m3u8_from_playlist_url(
         self,
         m3u8_playlist_url: AbsoluteHttpURL,
         /,
-        headers: dict[str, str] | None = None,
+        headers: Mapping[str, str] | None = None,
         *,
         only: Iterable[str] = (),
         exclude: Iterable[str] = ("vp09",),
     ) -> tuple[m3u8.RenditionGroup, m3u8.RenditionGroupDetails]:
         """Get m3u8 rendition group from a playlist m3u8 (variant m3u8), selecting the best format"""
-        m3u8_playlist = await self._get_m3u8(m3u8_playlist_url, headers)
-        rendition_group_info = m3u8.get_best_group_from_playlist(m3u8_playlist, only=only, exclude=exclude)
-        renditions_urls = rendition_group_info.urls
-        video = await self._get_m3u8(renditions_urls.video, headers, "video")
-        audio = await self._get_m3u8(renditions_urls.audio, headers, "audio") if renditions_urls.audio else None
-        subtitle = (
-            await self._get_m3u8(renditions_urls.subtitle, headers, "subtitles") if renditions_urls.subtitle else None
-        )
-        return m3u8.RenditionGroup(video, audio, subtitle), rendition_group_info
+        playlist, info = await self.request_m3u8(m3u8_playlist_url, headers, only=only, exclude=exclude)
+        if info is None:
+            raise ScrapeError(422, "Not a variant m3u8", origin=m3u8_playlist_url)
+        return playlist, info
 
+    @deprecated("Use self.request_m3u8 instead")
     async def get_m3u8_from_index_url(
-        self, url: AbsoluteHttpURL, /, headers: dict[str, str] | None = None
+        self, url: AbsoluteHttpURL, /, headers: Mapping[str, str] | None = None
     ) -> m3u8.RenditionGroup:
         """Get m3u8 rendition group from an index that only has 1 rendition, a video (non variant m3u8)"""
-        return m3u8.RenditionGroup(await self._get_m3u8(url, headers, "video"))
+        playlist, info = await self.request_m3u8(url, headers)
+        if info is not None:
+            raise ScrapeError(422, "This is a variant m3u8", origin=url)
+        return playlist
 
+    @deprecated("Use self._request_m3u8 instead")
     async def _get_m3u8(
         self,
         url: AbsoluteHttpURL,
         /,
-        headers: dict[str, str] | None = None,
-        media_type: Literal["video", "audio", "subtitles"] | None = None,
+        headers: Mapping[str, str] | None = None,
+        media_type: Literal["video", "audio", "subtitle"] | None = None,
     ) -> m3u8.M3U8:
-        content = await self.request_text(url, headers=headers)
-        return m3u8.M3U8(content, url.parent, media_type)
+        return await self._request_m3u8(url, headers, media_type)
 
     def create_custom_filename(
         self,
