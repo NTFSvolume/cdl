@@ -83,15 +83,15 @@ VALID_RESOLUTION_NAMES = "4K", "8K", "HQ", "Unknown"
 
 
 @dataclasses.dataclass(slots=True, frozen=True)
-class PlaceHolderConfig:
-    include_file_id: bool = True
-    include_video_codec: bool = True
-    include_audio_codec: bool = True
-    include_resolution: bool = True
-    include_hash: bool = True
+class _PlaceHolderConfigInclude:
+    file_id: bool = True
+    video_codec: bool = True
+    audio_codec: bool = True
+    resolution: bool = True
+    hash: bool = True
 
 
-_placeholder_config = PlaceHolderConfig()
+_include = _PlaceHolderConfigInclude()
 
 _DB_PATH_BUILDERS: dict[str, Callable[[AbsoluteHttpURL], str]] = {
     "url": lambda url: str(url),
@@ -218,7 +218,6 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         cls,
         is_abc: bool = False,
         is_generic: bool = False,
-        generic_name: str = "",
         db_path: Literal["url", "name", "path", "path_qs", "path_qs_frag", "path_frag"] | None = None,
         **kwargs,
     ) -> None:
@@ -240,9 +239,8 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
             cls.__db_path__ = staticmethod(_DB_PATH_BUILDERS[db_path])
 
         if cls.IS_GENERIC:
-            cls.GENERIC_NAME: str = generic_name or cls.NAME
             cls.SCRAPE_MAPPER_KEYS = ()
-            cls.INFO: CrawlerInfo = CrawlerInfo.generic(cls.GENERIC_NAME, cls.SUPPORTED_PATHS)
+            cls.INFO: CrawlerInfo = CrawlerInfo.generic(cls.NAME, cls.SUPPORTED_PATHS)
             Registry.generic.add(cls)
             return
 
@@ -861,30 +859,25 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         calling_args = {name: value for name, value in locals().items() if value is not None and name not in ("self",)}
         # remove OS separators (if any)
         stem = sanitize_filename(Path(name).as_posix().replace("/", "-")).strip().removesuffix(ext).strip()
-        extra_info: list[str] = []
 
-        if _placeholder_config.include_file_id and file_id:
-            extra_info.append(file_id)
-        if _placeholder_config.include_video_codec and video_codec:
-            extra_info.append(video_codec)
-        if _placeholder_config.include_audio_codec and audio_codec:
-            extra_info.append(audio_codec)
+        def extra_info() -> Generator[str]:
+            if _include.file_id and file_id:
+                yield file_id
+            if _include.video_codec and video_codec:
+                yield video_codec
+            if _include.audio_codec and audio_codec:
+                yield audio_codec
 
-        if (
-            _placeholder_config.include_resolution
-            and resolution
-            and resolution not in [Resolution.highest(), Resolution.unknown()]
-        ):
-            if not isinstance(resolution, Resolution):
-                resolution = Resolution.parse(resolution)
-            extra_info.append(resolution.name)
+            if _include.resolution and resolution and resolution not in (Resolution.highest(), Resolution.unknown()):
+                res = resolution if type(resolution) is Resolution else Resolution.parse(resolution)
+                yield res.name
 
-        if _placeholder_config.include_hash and hash_string:
-            assert any(hash_string.startswith(x) for x in HASH_PREFIXES), f"Invalid: {hash_string = }"
-            extra_info.append(hash_string)
+            if _include.hash and hash_string:
+                assert any(hash_string.startswith(x) for x in HASH_PREFIXES), f"Invalid: {hash_string = }"
+                yield hash_string
 
-        filename, extra_info_had_invalid_chars = _make_custom_filename(stem, ext, extra_info, only_truncate_stem)
-        if extra_info_had_invalid_chars:
+        filename, had_invalid_chars = _make_custom_filename(stem, ext, list(extra_info()), only_truncate_stem)
+        if had_invalid_chars:
             msg = (
                 f"Custom filename creation for {self.FOLDER_DOMAIN} seems to be broken. "
                 f"Important information was removed while creating a filename. "

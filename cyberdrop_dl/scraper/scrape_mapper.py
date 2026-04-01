@@ -396,7 +396,7 @@ def register_crawler(
     from_user: bool | Literal["raise"] = False,
 ) -> None:
     if crawler.IS_GENERIC and include_generics:
-        keys = (crawler.GENERIC_NAME,)
+        keys = (crawler.NAME,)
     else:
         keys = crawler.SCRAPE_MAPPER_KEYS
 
@@ -407,7 +407,7 @@ def register_crawler(
                 other = match
             if other:
                 msg = (
-                    f"Unable to assign {crawler.PRIMARY_URL} to generic crawler {crawler.GENERIC_NAME}. "
+                    f"Unable to assign {crawler.PRIMARY_URL} to generic crawler {crawler.NAME}. "
                     f"URL conflicts with URL format of builtin crawler {other.NAME}. "
                     "URL will be ignored"
                 )
@@ -416,7 +416,7 @@ def register_crawler(
                 logger.error(msg)
                 continue
             else:
-                logger.info(f"Successfully mapped {crawler.PRIMARY_URL} to generic crawler {crawler.GENERIC_NAME}")
+                logger.info(f"Successfully mapped {crawler.PRIMARY_URL} to crawler {crawler.NAME}")
 
         elif other:
             msg = f"{domain} from {crawler.NAME} already registered by {other}"

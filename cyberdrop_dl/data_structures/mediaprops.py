@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from fractions import Fraction
-from typing import TYPE_CHECKING, Final, NamedTuple
+from typing import TYPE_CHECKING, Final, NamedTuple, final
 
 from cyberdrop_dl.exceptions import ScrapeError
 
@@ -49,6 +49,7 @@ class Codecs(NamedTuple):
         return Codecs(video_codec, audio_codec)
 
 
+@final
 class Resolution(NamedTuple):
     width: int
     height: int
