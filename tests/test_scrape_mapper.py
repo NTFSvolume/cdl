@@ -4,19 +4,12 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from cyberdrop_dl.crawlers._chevereto import CheveretoCrawler
 from cyberdrop_dl.crawlers.crawler import create_crawlers
 from cyberdrop_dl.scraper import scrape_mapper
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.crawlers.crawler import Crawler
     from cyberdrop_dl.managers.manager import Manager
-
-
-@pytest.fixture()
-def test_crawler() -> type[Crawler]:
-    from cyberdrop_dl.crawlers.crawler import Registry
-
-    return next(iter(Registry.generic))
 
 
 @pytest.mark.parametrize(
@@ -31,14 +24,12 @@ def test_crawler() -> type[Crawler]:
     ],
 )
 def test_generic_crawlers_that_match_supported_crawlers_should_not_be_created(
-    running_manager: Manager,
-    link: str,
-    test_crawler: type[Crawler],
+    running_manager: Manager, link: str
 ) -> None:
     _ = scrape_mapper.get_crawlers_mapping(running_manager)
-    crawler = next(iter(create_crawlers([link], test_crawler)))
+    crawler = next(iter(create_crawlers([link], CheveretoCrawler)))
     with pytest.raises(ValueError) as exc_info:
-        scrape_mapper.register_crawler(scrape_mapper.existing_crawlers, crawler(running_manager), from_user="raise")
+        scrape_mapper.register_crawler(scrape_mapper.existing_crawlers, crawler, from_user="raise")
     assert f"Unable to assign {link.split('/')[0]}" in str(exc_info.value)
 
 
@@ -53,14 +44,13 @@ def test_generic_crawlers_that_match_supported_crawlers_should_not_be_created(
 def test_generic_crawlers_that_do_no_match_supported_crawlers_should_be_created(
     running_manager: Manager,
     link: str,
-    test_crawler: type[Crawler],
 ) -> None:
     _ = scrape_mapper.get_crawlers_mapping(running_manager)
-    crawler = next(iter(create_crawlers([link], test_crawler)))
+    crawler = next(iter(create_crawlers([link], CheveretoCrawler)))
     existing_crawlers = scrape_mapper.existing_crawlers.copy()
     crawlers_before = set(existing_crawlers.values())
-    scrape_mapper.register_crawler(existing_crawlers, crawler(running_manager), from_user="raise")
+    scrape_mapper.register_crawler(existing_crawlers, crawler, from_user="raise")
     new_crawlers = set(existing_crawlers.values()) - crawlers_before
     assert len(new_crawlers) == 1
     created_crawler = next(iter(new_crawlers))
-    assert issubclass(type(created_crawler), test_crawler)
+    assert issubclass(created_crawler, CheveretoCrawler)
