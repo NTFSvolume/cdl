@@ -83,7 +83,7 @@ class ScrapeMapper:
         """Starts all scrapers."""
         from cyberdrop_dl import plugins
 
-        crawlers = get_crawlers_mapping(self.manager)
+        crawlers = get_crawlers_mapping()
 
         generic_crawlers = create_generic_crawlers_by_config(self.global_settings.generic_crawlers_instances)
         for crawler in generic_crawlers:
@@ -91,9 +91,7 @@ class ScrapeMapper:
 
         disable_crawlers_by_config(crawlers, self.global_settings.general.disable_crawlers)
 
-        self.existing_crawlers = {
-            domain: crawler(self.manager) for domain, crawler in get_crawlers_mapping(self.manager).items()
-        }
+        self.existing_crawlers = {domain: crawler(self.manager) for domain, crawler in crawlers.items()}
 
         plugins.load(self.manager)
 
@@ -366,7 +364,7 @@ def _create_item_from_row(row: aiosqlite.Row) -> ScrapeItem:
     return item
 
 
-def get_crawlers_mapping(manager: Manager | None = None, include_generics: bool = False) -> dict[str, type[Crawler]]:
+def get_crawlers_mapping(include_generics: bool = False) -> dict[str, type[Crawler]]:
     """Returns a mapping with an instance of all crawlers.
 
     Crawlers are only created on the first calls. Future calls always return a reference to the same crawlers
