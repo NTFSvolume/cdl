@@ -33,4 +33,14 @@ TEST_CASES = [
         ],
         53,
     ),
+    (
+        "https://filester.me/f/c1a31c9ca510870b",
+        [
+            {
+                "url": "re:.filester.me/d/",
+                "download_folder": "re:Natalie (Filester)/Pics",
+            }
+        ],
+        range(150, 160),
+    ),
 ]

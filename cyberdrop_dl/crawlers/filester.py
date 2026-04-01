@@ -32,7 +32,7 @@ class FilesterCrawler(Crawler):
     }
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://filester.me")
     DOMAIN: ClassVar[str] = "filester"
-    _RATE_LIMIT: ClassVar[RateLimit] = 3, 2
+    _RATE_LIMIT: ClassVar[RateLimit] = 4, 1
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
@@ -45,9 +45,7 @@ class FilesterCrawler(Crawler):
 
     @error_handling_wrapper
     async def folder(self, scrape_item: ScrapeItem, album_id: str) -> None:
-        soup = await self.request_soup(scrape_item.url)
         title: str = ""
-
         subfolders: list[str] = []
 
         async for soup in self._folder_pager(scrape_item.url):
