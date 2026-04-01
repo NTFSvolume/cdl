@@ -2,14 +2,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
+from typing_extensions import override
+
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css
 from cyberdrop_dl.utils.utilities import error_handling_wrapper
 
 if TYPE_CHECKING:
-    import yarl
-
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
 
@@ -35,13 +35,12 @@ class EHentaiCrawler(Crawler):
     NEXT_PAGE_SELECTOR: ClassVar[str] = _SELECTORS.NEXT_PAGE
     DOMAIN: ClassVar[str] = "e-hentai"
     FOLDER_DOMAIN: ClassVar[str] = "E-Hentai"
+    _warnings_set: bool = False
 
+    @override
     @staticmethod
-    def create_db_path(url: yarl.URL) -> str:
+    def __db_path__(url: AbsoluteHttpURL, /) -> str:
         return url.path.split("keystamp")[0][:-1]
-
-    def __post_init__(self) -> None:
-        self._warnings_set = False
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         if "g" in scrape_item.url.parts:
