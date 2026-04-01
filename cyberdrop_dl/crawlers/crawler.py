@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import dataclasses
 import datetime
 import importlib
 import inspect
@@ -11,7 +12,6 @@ import re
 import weakref
 from abc import ABC, abstractmethod
 from collections import Counter
-from dataclasses import dataclass, field
 from functools import wraps
 from pathlib import Path
 from typing import (
@@ -60,7 +60,6 @@ if TYPE_CHECKING:
     import yarl
     from bs4 import BeautifulSoup, Tag
     from rich.progress import TaskID
-    from yarl import URL
 
     from cyberdrop_dl.managers.manager import Manager
 
@@ -80,7 +79,7 @@ HASH_PREFIXES = "md5:", "sha1:", "sha256:", "xxh128:"
 VALID_RESOLUTION_NAMES = "4K", "8K", "HQ", "Unknown"
 
 
-@dataclass(slots=True, frozen=True)
+@dataclasses.dataclass(slots=True, frozen=True)
 class PlaceHolderConfig:
     include_file_id: bool = True
     include_video_codec: bool = True
@@ -107,7 +106,7 @@ def _url(item: ScrapeItem | AbsoluteHttpURL) -> AbsoluteHttpURL:
 
 class CrawlerInfo(NamedTuple):
     site: str
-    primary_url: URL
+    primary_url: AbsoluteHttpURL
     supported_domains: tuple[str, ...]
     supported_paths: SupportedPaths
 
@@ -169,8 +168,8 @@ class Crawler(HTTPClientProxy, ABC):
     @final
     def __init__(self, manager: Manager) -> None:
         self.manager = manager
-        self.downloader: Downloader = field(init=False)
-        self.client: HTTPClient = field(init=False)
+        self.downloader: Downloader = dataclasses.field(init=False)
+        self.client: HTTPClient = dataclasses.field(init=False)
         self.startup_lock = asyncio.Lock()
         self.ready: bool = False
         self.disabled: bool = False
@@ -621,7 +620,7 @@ class Crawler(HTTPClientProxy, ABC):
 
     @classmethod
     def parse_url(
-        cls, link_str: URL | str, relative_to: AbsoluteHttpURL | None = None, *, trim: bool | None = None
+        cls, link_str: yarl.URL | str, relative_to: AbsoluteHttpURL | None = None, *, trim: bool | None = None
     ) -> AbsoluteHttpURL:
         """Wrapper around `utils.parse_url` to use `self.PRIMARY_URL` as base"""
         base = relative_to or cls.PRIMARY_URL
@@ -631,7 +630,7 @@ class Crawler(HTTPClientProxy, ABC):
         return parse_url(link_str, base, trim=trim)
 
     @final
-    def update_cookies(self, cookies: dict[str, Any], url: URL | None = None) -> None:
+    def update_cookies(self, cookies: dict[str, Any], url: yarl.URL | None = None) -> None:
         """Update cookies for the provided URL
 
         If `url` is `None`, defaults to `self.PRIMARY_URL`
@@ -967,14 +966,15 @@ class Site(NamedTuple):
 _CrawlerT = TypeVar("_CrawlerT", bound=Crawler)
 
 
-def create_crawlers(urls: Iterable[str] | Iterable[yarl.URL], base_crawler: type[_CrawlerT]) -> set[type[_CrawlerT]]:
+def create_crawlers(
+    urls: Iterable[str] | Iterable[AbsoluteHttpURL], base_crawler: type[_CrawlerT]
+) -> set[type[_CrawlerT]]:
     """Creates new subclasses of the base crawler from the urls"""
     return {_create_subclass(url, base_crawler) for url in urls}
 
 
-def _create_subclass(url: yarl.URL | str, base_class: type[_CrawlerT]) -> type[_CrawlerT]:
-    if isinstance(url, str):
-        url = AbsoluteHttpURL(url)
+def _create_subclass(url: AbsoluteHttpURL | str, base_class: type[_CrawlerT]) -> type[_CrawlerT]:
+    url = AbsoluteHttpURL(url)
     assert is_absolute_http_url(url)
     primary_url = remove_trailing_slash(url)
     domain = primary_url.host.removeprefix("www.")
