@@ -256,7 +256,7 @@ class Crawler(HTTPClientProxy, ABC):
 
         cls.REPLACE_OLD_DOMAINS_REGEX: str | None = "|".join(cls.OLD_DOMAINS) if cls.OLD_DOMAINS else None
         if cls.OLD_DOMAINS:
-            supported_domains = cls.SUPPORTED_DOMAINS
+            supported_domains = cls.SUPPORTED_DOMAINS or ()
             if isinstance(supported_domains, str):
                 supported_domains = (supported_domains,)
 
