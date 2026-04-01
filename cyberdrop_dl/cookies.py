@@ -104,7 +104,7 @@ async def split_and_save_cookies(extracted_cookies: CookieJar, output_folder: Pa
 
 async def read_netscape_files(cookie_files: list[Path]) -> AsyncGenerator[SimpleCookie]:
     now = int(time.time())
-    for fut in asyncio.as_completed(asyncio.create_task(_read_netscape_file(file)) for file in cookie_files):
+    for fut in asyncio.as_completed([asyncio.create_task(_read_netscape_file(file)) for file in cookie_files]):
         cookie_jar = await fut
         if not cookie_jar:
             continue
