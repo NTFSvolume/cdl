@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from rich.table import Table
+from rich.text import Text
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
@@ -13,7 +14,11 @@ _COLUMNS = ("site", "primary URL", "supported domains", "supported paths")
 
 
 def get_crawlers_info_as_rich_table() -> Table:
-    table = Table(title="cyberdrop-dl supported sites")
+    table = Table(
+        title=Text.assemble("cyberdrop-dl supported sites", style="green"),
+        show_lines=True,
+        highlight=True,
+    )
     for column in _COLUMNS[0:3]:
         table.add_column(column, no_wrap=True)
 
