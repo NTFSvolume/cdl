@@ -9,6 +9,10 @@ from cyberdrop_dl.utils import css, open_graph
 from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_text_between
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator
+
+    from bs4 import BeautifulSoup
+
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
 _CDN_URLS = AbsoluteHttpURL("https://cache1.filester.me"), AbsoluteHttpURL("https://cache6.filester.me")
@@ -16,6 +20,7 @@ _CDN_URLS = AbsoluteHttpURL("https://cache1.filester.me"), AbsoluteHttpURL("http
 
 class Selector:
     FILES = ".file-item[onclick]"
+    SUBFOLDER = ".subfolder-item[href]"
     NEXT_PAGE = "a.page-link:-soup-contains(→)"
     FILE_DETAILS = "#detailsContent"
 
@@ -41,25 +46,40 @@ class FilesterCrawler(Crawler):
     @error_handling_wrapper
     async def folder(self, scrape_item: ScrapeItem, album_id: str) -> None:
         soup = await self.request_soup(scrape_item.url)
-        name = open_graph.title(soup)
-        title = self.create_title(name, album_id)
-        scrape_item.setup_as_album(title, album_id=album_id)
+        title: str = ""
 
-        while True:
-            for row in soup.select(Selector.FILES):
-                url = get_text_between(css.attr(row, "onclick"), "'", "'")
-                web_url = self.parse_url(url)
+        subfolders: list[str] = []
+
+        async for soup in self._folder_pager(scrape_item.url):
+            if not title:
+                name = open_graph.title(soup)
+                title = self.create_title(name, album_id)
+                scrape_item.setup_as_album(title, album_id=album_id)
+
+            for on_click in css.iselect(soup, Selector.FILES, "onclick"):
+                web_url = self.parse_url(get_text_between(on_click, "'", "'"))
                 new_scrape_item = scrape_item.create_child(web_url)
                 self.create_task(self.run(new_scrape_item))
                 scrape_item.add_children()
 
+            subfolders.extend(css.iselect(soup, Selector.SUBFOLDER, "href"))
+
+        for subfolder in dict.fromkeys(subfolders):
+            new_scrape_item = scrape_item.create_child(self.parse_url(subfolder))
+            self.create_task(self.run(new_scrape_item))
+            scrape_item.add_children()
+
+    async def _folder_pager(self, url: AbsoluteHttpURL) -> AsyncGenerator[BeautifulSoup]:
+        next_page = url
+        while True:
+            soup = await self.request_soup(next_page)
+            yield soup
             try:
                 query = css.select(soup, Selector.NEXT_PAGE, "href")
             except css.SelectorError:
                 break
 
-            next_page = scrape_item.url.with_query(query.strip("?"))
-            soup = await self.request_soup(next_page)
+            next_page = next_page.with_query(query.strip("?"))
 
     @error_handling_wrapper
     async def file(self, scrape_item: ScrapeItem, slug: str) -> None:
