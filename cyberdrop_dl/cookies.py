@@ -104,17 +104,21 @@ async def split_and_save_cookies(extracted_cookies: CookieJar, output_folder: Pa
 
 async def read_netscape_files(cookie_files: list[Path]) -> AsyncGenerator[SimpleCookie]:
     now = int(time.time())
+    domains: set[str] = set()
     for fut in asyncio.as_completed([asyncio.create_task(_read_netscape_file(file)) for file in cookie_files]):
         cookie_jar = await fut
         if not cookie_jar:
             continue
 
-        for cookie in _parse_cookie_jar(cookie_jar, now):
+        for domain, cookie in _parse_cookie_jar(cookie_jar, now):
+            if domain in domains:
+                logger.warning(f"Multiple files have cookies for {domain}. They will be overwritten")
+            domains.add(domain)
             yield cookie
 
 
-def _parse_cookie_jar(cookie_jar: MozillaCookieJar, now: int) -> Generator[SimpleCookie]:
-    domains_seen: set[str] = set()
+def _parse_cookie_jar(cookie_jar: MozillaCookieJar, now: int) -> Generator[tuple[str, SimpleCookie]]:
+
     domains: set[str] = set()
     has_expired_cookies: set[str] = set()
     for cookie in cookie_jar:
@@ -125,16 +129,12 @@ def _parse_cookie_jar(cookie_jar: MozillaCookieJar, now: int) -> Generator[Simpl
         if domain not in domains:
             logger.info(f"Found cookies for {domain} in {cookie_jar.filename}")
             domains.add(domain)
-            if domain in domains_seen:
-                logger.warning(f"Previous cookies for {domain} detected. They will be overwritten")
 
         if (domain not in has_expired_cookies) and cookie.is_expired(now):
             has_expired_cookies.add(domain)
             logger.warning(f"Cookies for {domain} are expired")
 
-        domains_seen.add(domain)
-
-        yield make_simple_cookie(cookie, now)
+        yield domain, make_simple_cookie(cookie, now)
 
 
 async def _read_netscape_file(file: Path) -> MozillaCookieJar | None:
