@@ -365,12 +365,13 @@ def get_crawlers_mapping(manager: Manager | None = None, include_generics: bool 
 
     If manager is `None`, the `MOCK_MANAGER` will be used, which means the crawlers won't be able to actually run"""
 
-    from cyberdrop_dl.crawlers import CRAWLERS
+    from cyberdrop_dl.crawlers.crawler import Registry
 
     manager_ = manager or Manager()
+    crawlers = Registry.generic | Registry.concrete
     global existing_crawlers
     if not existing_crawlers:
-        for crawler in CRAWLERS:
+        for crawler in crawlers:
             crawler_instance = crawler(manager_)
             register_crawler(existing_crawlers, crawler_instance, include_generics)
     return existing_crawlers
