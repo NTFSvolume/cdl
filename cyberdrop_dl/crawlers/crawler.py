@@ -30,7 +30,7 @@ from typing import (
 
 from aiolimiter import AsyncLimiter
 
-from cyberdrop_dl import constants
+from cyberdrop_dl import aio, constants, signature
 from cyberdrop_dl.clients import HTTPClient, HTTPClientProxy
 from cyberdrop_dl.data_structures.mediaprops import ISO639Subtitle, Resolution
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
@@ -54,7 +54,7 @@ from cyberdrop_dl.utils.utilities import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Callable, Coroutine, Generator, Iterable
+    from collections.abc import AsyncGenerator, Callable, Coroutine, Generator, Iterable, Mapping
     from http.cookies import BaseCookie
     from types import ModuleType
 
@@ -142,6 +142,65 @@ class Registry:
             sub_module = importlib.import_module(sub_module_info.name)
             if sub_module_info.ispkg:
                 cls._import_from(sub_module)
+
+
+class HLSParser(ABC):
+    """Class to fetch and parse HTTP live streams
+
+    For multi variant m3u8, the best resolution will be automatically selected"""
+
+    @abstractmethod
+    @signature.copy(HTTPClientProxy.request_text)
+    async def request_text(self, *args, **kwargs) -> str: ...
+
+    async def request_m3u8(
+        self,
+        url: AbsoluteHttpURL,
+        /,
+        headers: Mapping[str, str] | None = None,
+        *,
+        only: Iterable[str] = (),
+        exclude: Iterable[str] = ("vp09",),
+    ) -> tuple[m3u8.RenditionGroup, m3u8.RenditionGroupDetails | None]:
+        m3u8_obj = await self._request_m3u8(url, headers)
+        if m3u8_obj.is_variant:
+            return await self._select_best_rendition(m3u8_obj, headers, only=only, exclude=exclude)
+        m3u8_obj.media_type = "video"
+        return m3u8.RenditionGroup(m3u8_obj), None
+
+    async def _select_best_rendition(
+        self,
+        m3u8_playlist: m3u8.M3U8,
+        /,
+        headers: Mapping[str, str] | None = None,
+        *,
+        only: Iterable[str] = (),
+        exclude: Iterable[str] = (),
+    ):
+        rendition = m3u8.get_best_group_from_playlist(m3u8_playlist, only=only, exclude=exclude)
+        video, *audio_and_subs = await aio.gather(
+            *(
+                self._request_m3u8(url, headers, name)
+                for name, url in zip(
+                    ("video", "audio", "subtitle"),
+                    rendition.urls,
+                    strict=False,
+                )
+                if url
+            )
+        )
+
+        return m3u8.RenditionGroup(video, *audio_and_subs), rendition
+
+    async def _request_m3u8(
+        self,
+        url: AbsoluteHttpURL,
+        /,
+        headers: Mapping[str, str] | None = None,
+        media_type: Literal["video", "audio", "subtitle"] | None = None,
+    ) -> m3u8.M3U8:
+        content = await self.request_text(url, headers=headers)
+        return m3u8.M3U8(content, url.parent, media_type)
 
 
 class Crawler(HTTPClientProxy, ABC):

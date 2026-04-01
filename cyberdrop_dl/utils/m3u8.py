@@ -139,11 +139,11 @@ class M3U8(_M3U8):
         self,
         content: str,
         base_uri: AbsoluteHttpURL | None = None,
-        media_type: Literal["video", "audio", "subtitles"] | None = None,
+        media_type: Literal["video", "audio", "subtitle"] | None = None,
     ) -> None:
         if base_uri and base_uri.suffix.casefold() == ".m3u8":
             base_uri = base_uri.parent
-        self.media_type: Literal["video", "audio", "subtitles"] | None = media_type
+        self.media_type: Literal["video", "audio", "subtitle"] | None = media_type
         super().__init__(content, base_uri=str(base_uri) if base_uri else None)
 
     def __repr__(self) -> str:
