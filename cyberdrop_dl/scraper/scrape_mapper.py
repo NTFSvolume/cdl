@@ -6,7 +6,7 @@ import datetime
 import logging
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, Self
+from typing import TYPE_CHECKING, Literal, Self, TypeVar
 
 import aiofiles
 from yarl import URL
@@ -21,7 +21,6 @@ from cyberdrop_dl.crawlers.realdebrid import RealDebridCrawler
 from cyberdrop_dl.crawlers.wordpress import WordPressHTMLCrawler, WordPressMediaCrawler
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.exceptions import JDownloaderError, NoExtensionError
-from cyberdrop_dl.managers.manager import Manager
 from cyberdrop_dl.utils.logger import log_spacer
 from cyberdrop_dl.utils.utilities import get_download_path, remove_trailing_slash
 
@@ -31,10 +30,12 @@ if TYPE_CHECKING:
     import aiosqlite
 
     from cyberdrop_dl.config.global_model import GenericCrawlerInstances, GlobalSettings
+    from cyberdrop_dl.managers.manager import Manager
 
-
+_T = TypeVar("_T")
+_CrawlerT = TypeVar("_CrawlerT", bound=Crawler)
 logger = logging.getLogger(__name__)
-existing_crawlers: dict[str, Crawler] = {}
+existing_crawlers: dict[str, type[Crawler]] = {}
 _seen_urls: set[AbsoluteHttpURL] = set()
 _crawlers_disabled_at_runtime: set[str] = set()
 
@@ -82,11 +83,18 @@ class ScrapeMapper:
         """Starts all scrapers."""
         from cyberdrop_dl import plugins
 
-        self.existing_crawlers = get_crawlers_mapping(self.manager)
+        crawlers = get_crawlers_mapping(self.manager)
+
         generic_crawlers = create_generic_crawlers_by_config(self.global_settings.generic_crawlers_instances)
         for crawler in generic_crawlers:
-            register_crawler(self.existing_crawlers, crawler(self.manager), from_user=True)
-        disable_crawlers_by_config(self.existing_crawlers, self.global_settings.general.disable_crawlers)
+            register_crawler(crawlers, crawler, from_user=True)
+
+        disable_crawlers_by_config(crawlers, self.global_settings.general.disable_crawlers)
+
+        self.existing_crawlers = {
+            domain: crawler(self.manager) for domain, crawler in get_crawlers_mapping(self.manager).items()
+        }
+
         plugins.load(self.manager)
 
     async def start_real_debrid(self) -> None:
@@ -358,7 +366,7 @@ def _create_item_from_row(row: aiosqlite.Row) -> ScrapeItem:
     return item
 
 
-def get_crawlers_mapping(manager: Manager | None = None, include_generics: bool = False) -> dict[str, Crawler]:
+def get_crawlers_mapping(manager: Manager | None = None, include_generics: bool = False) -> dict[str, type[Crawler]]:
     """Returns a mapping with an instance of all crawlers.
 
     Crawlers are only created on the first calls. Future calls always return a reference to the same crawlers
@@ -367,19 +375,25 @@ def get_crawlers_mapping(manager: Manager | None = None, include_generics: bool 
 
     from cyberdrop_dl.crawlers.crawler import Registry
 
-    manager_ = manager or Manager()
-    crawlers = Registry.generic | Registry.concrete
     global existing_crawlers
-    if not existing_crawlers:
-        for crawler in crawlers:
-            crawler_instance = crawler(manager_)
-            register_crawler(existing_crawlers, crawler_instance, include_generics)
+    if existing_crawlers:
+        return existing_crawlers
+
+    Registry.import_all()
+    crawlers = Registry.generic | Registry.concrete
+
+    for crawler in crawlers:
+        register_crawler(existing_crawlers, crawler, include_generics)
+
+    copy = existing_crawlers.copy()
+    existing_crawlers.clear()
+    existing_crawlers.update(sorted(copy.items()))
     return existing_crawlers
 
 
 def register_crawler(
-    existing_crawlers: dict[str, Crawler],
-    crawler: Crawler,
+    existing_crawlers: dict[str, type[Crawler]],
+    crawler: type[Crawler],
     include_generics: bool = False,
     from_user: bool | Literal["raise"] = False,
 ) -> None:
@@ -412,10 +426,6 @@ def register_crawler(
         existing_crawlers[domain] = crawler
 
 
-def get_unique_crawlers() -> list[Crawler]:
-    return sorted(set(get_crawlers_mapping(include_generics=True).values()), key=lambda x: x.INFO.site)
-
-
 def create_generic_crawlers_by_config(generic_crawlers: GenericCrawlerInstances) -> set[type[Crawler]]:
     new_crawlers: set[type[Crawler]] = set()
     if generic_crawlers.wordpress_html:
@@ -429,7 +439,7 @@ def create_generic_crawlers_by_config(generic_crawlers: GenericCrawlerInstances)
     return new_crawlers
 
 
-def disable_crawlers_by_config(existing_crawlers: dict[str, Crawler], crawlers_to_disable: list[str]) -> None:
+def disable_crawlers_by_config(existing_crawlers: dict[str, type[Crawler]], crawlers_to_disable: list[str]) -> None:
     if not crawlers_to_disable:
         return
 
@@ -452,13 +462,14 @@ def disable_crawlers_by_config(existing_crawlers: dict[str, Crawler], crawlers_t
         existing_crawlers.clear()
         existing_crawlers.update(new_crawlers_mapping)
         crawlers_info = "\n".join(
-            str({info.site: info.supported_domains}) for info in sorted(crawlers.INFO for crawlers in disabled_crawlers)
+            str({info.site: info.supported_domains}) for info in sorted(c.INFO for c in disabled_crawlers)
         )
         logger.info(f"Crawlers disabled by config: \n{crawlers_info}")
+
     log_spacer(10)
 
 
-def match_url_to_crawler(existing_crawlers: dict[str, Crawler], url: AbsoluteHttpURL) -> Crawler | None:
+def match_url_to_crawler(existing_crawlers: dict[str, _T], url: AbsoluteHttpURL) -> _T | None:
     # match exact domain
     if crawler := existing_crawlers.get(url.host):
         return crawler
