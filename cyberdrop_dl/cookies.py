@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Final
 from cyberdrop_dl.dependencies import browser_cookie3
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Generator
+    from collections.abc import AsyncGenerator, Generator, Sequence
     from pathlib import Path
 
     from cyberdrop_dl.constants import Browser
@@ -76,23 +76,35 @@ async def extract_cookies(browser: Browser) -> CookieJar:
     raise browser_cookie3.BrowserCookieError(f"{msg}\n\nNothing has been saved.")
 
 
-async def split_and_save_cookies(extracted_cookies: CookieJar, output_folder: Path) -> None:
-    await asyncio.to_thread(output_folder.mkdir, parents=True, exist_ok=True)
-
+def split_cookies(extracted_cookies: CookieJar) -> dict[str, MozillaCookieJar]:
     cookie_jars: dict[str, MozillaCookieJar] = {}
 
     for domain, cookie in ((cookie.domain.lstrip(".").removeprefix("www."), cookie) for cookie in extracted_cookies):
         cookie_jar = cookie_jars.get(domain)
         if cookie_jar is None:
-            cookie_jar = MozillaCookieJar(output_folder / f"{domain}.txt")
+            cookie_jar = MozillaCookieJar()
         cookie_jar.set_cookie(cookie)
 
+    return cookie_jars
+
+
+async def export_cookies(cookies: CookieJar, output_path: Path) -> None:
+    cookie_jars = split_cookies(cookies)
+    await asyncio.to_thread(output_path.mkdir, parents=True, exist_ok=True)
     _ = await asyncio.gather(
-        *(asyncio.to_thread(cj.save, ignore_discard=True, ignore_expires=True) for cj in cookie_jars.values())
+        *(
+            asyncio.to_thread(
+                cj.save,
+                str(output_path / f"{domain}.txt"),
+                ignore_discard=True,
+                ignore_expires=True,
+            )
+            for domain, cj in cookie_jars.items()
+        )
     )
 
 
-async def read_netscape_files(cookie_files: list[Path]) -> AsyncGenerator[SimpleCookie]:
+async def read_netscape_files(cookie_files: Sequence[Path]) -> AsyncGenerator[SimpleCookie]:
     now = int(time.time())
     domains: set[str] = set()
     for fut in asyncio.as_completed([asyncio.create_task(_read_netscape_file(file)) for file in cookie_files]):
