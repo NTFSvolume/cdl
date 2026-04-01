@@ -136,7 +136,7 @@ def test_create_db_path(url: str, expected: str) -> None:
     url_ = parse_url(url)
     crawler = scrape_mapper.match_url_to_crawler(crawlers, url_)
     assert crawler
-    path = crawler.create_db_path(url_)
+    path = crawler.__db_path__(url_)
     assert path == expected
 
 

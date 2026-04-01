@@ -56,7 +56,7 @@ class ArchiveBateCrawler(MixDropCrawler):
 
         url = scrape_item.url
         # Can't use check_complete_by_referer. We need the mixdrop url for that
-        db_path = self.create_db_path(url)
+        db_path = self.__db_path__(url)
         check_complete = await self.manager.db_manager.history_table.check_complete(self.DOMAIN, url, url, db_path)
         if check_complete:
             self.log(f"Skipping {scrape_item.url} as it has already been downloaded", 10)

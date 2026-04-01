@@ -184,7 +184,9 @@ class Crawler(HTTPClientProxy, ABC):
     _DOWNLOAD_SLOTS: ClassVar[int | None] = None
     _USE_DOWNLOAD_SERVERS_LOCKS: ClassVar[bool] = False
 
-    create_db_path = staticmethod(_DB_PATH_BUILDERS["name"])
+    @staticmethod
+    def __db_path__(url: AbsoluteHttpURL, /) -> str:
+        return url.path
 
     @final
     def __init__(self, manager: Manager) -> None:
@@ -254,7 +256,7 @@ class Crawler(HTTPClientProxy, ABC):
         cls.IS_ABC: bool = is_abc
 
         if db_path:
-            cls._db_path_ = staticmethod(_DB_PATH_BUILDERS[db_path])
+            cls.__db_path__ = staticmethod(_DB_PATH_BUILDERS[db_path])
 
         if cls.IS_GENERIC:
             cls.GENERIC_NAME: str = generic_name or cls.NAME
@@ -451,7 +453,7 @@ class Crawler(HTTPClientProxy, ABC):
             self.DOMAIN,
             filename=custom_filename or filename,
             download_folder=download_folder,
-            db_path=self.create_db_path(url),
+            db_path=self.__db_path__(url),
             original_filename=filename,
             ext=ext,
         )
@@ -485,7 +487,7 @@ class Crawler(HTTPClientProxy, ABC):
 
         This method is called automatically on a created media item,
         but Crawler code can use it to skip unnecessary requests"""
-        db_path = self.create_db_path(url)
+        db_path = self.__db_path__(url)
         check_complete = await self.manager.db_manager.history_table.check_complete(self.DOMAIN, url, referer, db_path)
         if check_complete:
             logger.info(f"Skipping {url} as it has already been downloaded")
@@ -581,17 +583,19 @@ class Crawler(HTTPClientProxy, ABC):
                 return get_filename_and_ext(filename + assume_ext, forum, mime_type)
             raise
 
-    def check_album_results(self, url: URL, album_results: dict[str, Any]) -> bool:
+    @final
+    def check_album_results(self, url: AbsoluteHttpURL, album_results: dict[str, Any]) -> bool:
         """Checks whether an album has completed given its domain and album id."""
         if not album_results:
             return False
-        url_path = self.create_db_path(url)
+        url_path = self.__db_path__(url)
         if url_path in album_results and album_results[url_path] != 0:
             logger.info(f"Skipping {url} as it has already been downloaded")
             self.manager.progress_manager.download_progress.add_previously_completed()
             return True
         return False
 
+    @final
     def create_title(self, title: str, album_id: str | None = None, thread_id: int | None = None) -> str:
         """Creates the title for the scrape item."""
         if not title:
@@ -618,6 +622,7 @@ class Crawler(HTTPClientProxy, ABC):
     def separate_posts(self) -> bool:
         return self.manager.config.download_options.separate_posts
 
+    @final
     def create_separate_post_title(
         self,
         title: str | None = None,
@@ -647,6 +652,7 @@ class Crawler(HTTPClientProxy, ABC):
             trim = cls.DEFAULT_TRIM_URLS
         return parse_url(link_str, base, trim=trim)
 
+    @final
     def update_cookies(self, cookies: dict[str, Any], url: URL | None = None) -> None:
         """Update cookies for the provided URL
 
@@ -655,6 +661,7 @@ class Crawler(HTTPClientProxy, ABC):
         response_url = url or self.PRIMARY_URL
         self.client.client_manager.cookies.update_cookies(cookies, response_url)
 
+    @final
     def iter_tags(
         self,
         soup: Tag,
@@ -686,6 +693,7 @@ class Crawler(HTTPClientProxy, ABC):
             thumb = self.parse_url(thumb_str) if thumb_str and not is_blob_or_svg(thumb_str) else None
             yield thumb, link
 
+    @final
     def iter_children(
         self,
         scrape_item: ScrapeItem,
