@@ -47,9 +47,6 @@ class SortProgress(DequeProgress):
             padding=(1, 1),
         )
 
-    def set_queue_length(self, length: int) -> None:
-        self.queue_length = length
-
     def add_task(self, folder: str, expected_size: int | None) -> TaskID:
         """Adds a new task to the progress bar."""
         # description = f'Sorting {folder}'

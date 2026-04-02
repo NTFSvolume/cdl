@@ -79,6 +79,7 @@ class Sorter:
         for fut in asyncio.as_completed(asyncio.to_thread(_get_files, f) for f in folders):
             folder, files = await fut
             folder_name = folder.name
+            self.tui.sort_progress.queue_length += len(files)
             task_id = self.tui.sort_progress.add_task(folder_name, len(files))
             try:
 
@@ -87,6 +88,7 @@ class Sorter:
                         await self.__sort(name, file)
                     finally:
                         self.tui.sort_progress.advance_folder(task_id)
+                        self.tui.sort_progress.queue_length -= 1
 
                 _ = await asyncio.gather(*map(sort, files))
             finally:
