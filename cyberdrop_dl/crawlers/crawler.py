@@ -27,7 +27,6 @@ from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem,
 from cyberdrop_dl.downloader.downloader import Downloader
 from cyberdrop_dl.exceptions import MaxChildrenError, NoExtensionError, ScrapeError
 from cyberdrop_dl.utils import css, dates, m3u8
-from cyberdrop_dl.utils.logger import log_debug
 from cyberdrop_dl.utils.strings import safe_format
 from cyberdrop_dl.utils.utilities import (
     error_handling_context,
@@ -137,12 +136,12 @@ class Registry:
 
 
 class _CrawlerLogger(logging.LoggerAdapter[logging.Logger]):
-    def __init__(self, name: str) -> None:
-        self._crawler = name
+    def __init__(self, crawler_name: str) -> None:
+        self._crawler_name: str = crawler_name
         super().__init__(logger)
 
     def process(self, msg: object, kwargs: Any) -> tuple[str, Any]:
-        return f"[{self._crawler}] {msg}", kwargs
+        return f"[{self._crawler_name}] {msg}", kwargs
 
 
 class Crawler(HTTPClientProxy, HLSParser, ABC):
@@ -180,12 +179,11 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         self._scraped_items: set[str] = set()
 
         self._logger: _CrawlerLogger = _CrawlerLogger(self.FOLDER_DOMAIN)
-        self.log_debug = log_debug
         self._semaphore: asyncio.Semaphore = asyncio.Semaphore(20)
         self.__post_init__()
 
-    @property
     @final
+    @property
     def log(self) -> _CrawlerLogger:
         return self._logger
 
