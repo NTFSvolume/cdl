@@ -213,7 +213,10 @@ class Sorter:
         )
 
         dest = Path(dest)
-        return await asyncio.to_thread(_move_file, file, dest, self.incrementer_format)
+        dest = await asyncio.to_thread(_move_file, file, dest, self.incrementer_format)
+        if dest:
+            logger.debug("Moved '{}' to '{}'", file, dest)
+        return bool(dest)
 
 
 def _subfolders(directory: Path) -> tuple[Path, ...]:
@@ -242,12 +245,11 @@ def _move_file(
     incrementer_format: str = "{i}",
     *,
     max_retries: int = 10,
-) -> bool:
-    """Moves a file to a destination folder."""
+) -> Path | None:
 
     dest = dest.resolve()
     if source == dest:
-        return True
+        return dest
 
     dest_parent = dest.parent
     dest_parent.mkdir(parents=True, exist_ok=True)
@@ -260,8 +262,7 @@ def _move_file(
         for auto_index in range(1, max_retries + 1):
             if source_size == dest.stat().st_size:
                 source.unlink()
-                logger.debug("Moved '{}' to '{}'", source, dest)
-                return True
+                return dest
 
             new_filename = f"{dest_stem}{incrementer_format.format(i=auto_index)}{dest.suffix}"
             logger.warning(
@@ -277,20 +278,19 @@ def _move_file(
                 continue
             except OSError:
                 logger.exception("Unable to move '{}'", source)
-                return False
+                return
             else:
-                return True
+                return dest
         else:
             logger.error("Unable to move '{}'. Giving up after {} attempts", source, max_retries)
-            return False
+            return
 
     except OSError:
         logger.exception("Unable to move '{}'", source)
-        return False
+        return
 
     else:
-        logger.debug("Moved '{}' to '{}'", source, dest)
-        return True
+        return dest
 
 
 async def _try_probe(kind: str, file: Path) -> ffmpeg.FFprobeResult | None:
