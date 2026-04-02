@@ -5,6 +5,7 @@ import dataclasses
 import datetime
 import itertools
 import logging
+import shutil
 from pathlib import Path
 from subprocess import CalledProcessError
 from typing import TYPE_CHECKING, Self
@@ -100,13 +101,13 @@ class Sorter:
             return
 
         if ext in FileExt.AUDIO:
-            await self.sort_audio(file, folder_name)
-        elif ext in FileExt.IMAGE:
-            await self.sort_image(file, folder_name)
-        elif ext in FileExt.VIDEO:
-            await self.sort_video(file, folder_name)
-        else:
-            await self.sort_other(file, folder_name)
+            return await self.sort_audio(file, folder_name)
+        if ext in FileExt.IMAGE:
+            return await self.sort_image(file, folder_name)
+        if ext in FileExt.VIDEO:
+            return await self.sort_video(file, folder_name)
+
+        await self.sort_other(file, folder_name)
 
     async def sort_audio(self, file: Path, base_name: str) -> None:
         """Sorts an audio file into the sorted audio folder."""
@@ -236,33 +237,39 @@ def _get_files(directory: Path) -> tuple[Path, tuple[Path, ...]]:
     return directory, tuple(walk())
 
 
-def _move_file(old_path: Path, new_path: Path, incrementer_format: str) -> bool:
+def _move_file(source: Path, dest: Path, incrementer_format: str = "{i}") -> bool:
     """Moves a file to a destination folder."""
 
-    new_path = new_path.resolve()
-    if old_path == new_path:
+    dest = dest.resolve()
+    if source == dest:
         return True
 
-    new_path.parent.mkdir(parents=True, exist_ok=True)
+    dest_parent = dest.parent
+    dest_parent.mkdir(parents=True, exist_ok=True)
+    source_size = source.stat().st_size
 
     try:
-        _ = old_path.rename(new_path)
+        _ = shutil.move(source, dest)
     except FileExistsError:
-        if old_path.stat().st_size == new_path.stat().st_size:
-            old_path.unlink()
-            return True
+        dest_stem = dest.stem
         for auto_index in itertools.count(1):
-            new_filename = f"{new_path.stem}{incrementer_format.format(i=auto_index)}{new_path.suffix}"
-            possible_new_path = new_path.parent / new_filename
+            if source_size == dest.stat().st_size:
+                source.unlink()
+                return True
+
+            new_filename = f"{dest_stem}{incrementer_format.format(i=auto_index)}{dest.suffix}"
+            dest = dest_parent / new_filename
             try:
-                _ = old_path.rename(possible_new_path)
-                break
+                _ = shutil.move(source, dest)
             except FileExistsError:
                 continue
+            else:
+                return True
+
     except OSError:
         return False
 
-    return True
+    raise RuntimeError
 
 
 async def _try_probe(kind: str, file: Path) -> ffmpeg.FFprobeResult | None:
