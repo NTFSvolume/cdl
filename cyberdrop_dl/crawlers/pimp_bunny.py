@@ -7,7 +7,7 @@ from cyberdrop_dl.crawlers._kvs import extract_kvs_video
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures import AbsoluteHttpURL, Resolution
 from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, filter_query
+from cyberdrop_dl.utils.utilities import error_handling_wrapper
 
 if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
@@ -35,10 +35,10 @@ class Selector:
 
 
 def _pagination_query(url: AbsoluteHttpURL) -> dict[str, Any]:
-    per_page_params = {
+    return {
         "albums_per_page" if "albums" in url.parts else "videos_per_page": _PER_PAGE,
+        "sort_by": url.query.get("sort_by", "post_date"),
     }
-    return filter_query(url.update_query(per_page_params).query, ("sort_by", "post_date"), "duration")
 
 
 class PimpBunnyCrawler(Crawler):
@@ -91,6 +91,7 @@ class PimpBunnyCrawler(Crawler):
         name: str = ""
 
         query = _pagination_query(scrape_item.url)
+        has_albums: bool = False
         async for soup in self.web_pager(model_url.with_query(query)):
             if not name:
                 name = css.select_text(soup, Selector.MODEL_NAME)
@@ -99,7 +100,9 @@ class PimpBunnyCrawler(Crawler):
             for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.ITEM):
                 self.create_task(self.run(new_scrape_item))
 
-        has_albums = soup.select_one(Selector.ALBUM_TAB)
+            if not has_albums:
+                has_albums = bool(soup.select_one(Selector.ALBUM_TAB))
+
         if has_albums:
             await self.model_albums(scrape_item, model_name)
 

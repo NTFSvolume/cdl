@@ -22,7 +22,6 @@ from typing import (
     Concatenate,
     ParamSpec,
     Protocol,
-    SupportsInt,
     TypeGuard,
     TypeVar,
     cast,
@@ -70,7 +69,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_ALLOWED_FILEPATH_PUNCTUATION = " .-_!#$%'()+,;=@[]^{}~"
 _BLOB_OR_SVG = ("data:", "blob:", "javascript:")
 
 
@@ -485,42 +483,3 @@ def xor_decrypt(encrypted_data: bytes, key: bytes) -> str:
 
 log_yellow = partial(log_with_color, style="yellow", level=20)
 log_red = partial(log_with_color, style="red", level=20)
-
-
-def filter_query(
-    query: Mapping[str, str | SupportsInt | float],
-    *keep: str | tuple[str, str | SupportsInt | float],
-) -> dict[str, str | SupportsInt | float]:
-    """Returns a dictionary with only the `keep` keys.
-
-     Each `keep` argument can be either:
-    - A string: The key will be kept only if was present in `query`
-    - A tuple `(key, default_value)`: If `key` is not found in `query`, it will be added with `default_value`.
-    """
-
-    defaults: dict[str, str | SupportsInt | float] = {}
-    keys: set[str] = set()
-    for key in keep:
-        if isinstance(key, str):
-            keys.add(key)
-            continue
-        name, default = key
-        defaults[name] = default
-        keys.add(name)
-
-    def get_key(key: str):
-        if key in query:
-            return query[key]
-        return defaults.get(key)
-
-    return {k: value for k in sorted(keys) if (value := get_key(k)) is not None}
-
-
-def keep_query_params(url: AbsoluteHttpURL, *keep: str | tuple[str, str | SupportsInt | float]) -> AbsoluteHttpURL:
-    """Returns a new URL with only the `keep` keys as query params.
-
-    Each `keep` argument can be either:
-    - A string: The key will be kept only if was present in `url.query`
-    - A tuple `(key, default_value)`: If `key` is not found in `url.query`, it will be added with `default_value`.
-    """
-    return url.with_query(filter_query(url.query, *keep))
