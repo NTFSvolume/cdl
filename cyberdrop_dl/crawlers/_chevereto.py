@@ -10,7 +10,7 @@ from cyberdrop_dl.utils import css, json, open_graph
 from cyberdrop_dl.utils.utilities import error_handling_wrapper
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Generator
+    from collections.abc import Generator, Mapping
 
     from bs4 import BeautifulSoup
 
@@ -109,16 +109,10 @@ class CheveretoCrawler(Crawler, is_generic=True):
 
         return url
 
-    async def web_pager(
-        self, url: AbsoluteHttpURL, next_page_selector: str | None = None, *, cffi: bool = False, **kwargs: Any
-    ) -> AsyncGenerator[BeautifulSoup]:
-        async for soup in super().web_pager(_sort_by_new(url), next_page_selector, cffi=cffi, trim=False, **kwargs):
-            yield soup
-
     @error_handling_wrapper
     async def profile(self, scrape_item: ScrapeItem, *, albums: bool = False) -> None:
         title: str = ""
-        async for soup in self.web_pager(scrape_item.url):
+        async for soup in self.web_pager(_sort_by_new(scrape_item.url), trim=False):
             if not title:
                 title = self.create_title(open_graph.title(soup))
                 scrape_item.setup_as_profile(title)
@@ -133,12 +127,12 @@ class CheveretoCrawler(Crawler, is_generic=True):
 
     @error_handling_wrapper
     async def album(self, scrape_item: ScrapeItem, album_id: str) -> None:
-        results: dict[str, int] = {}
+        results: dict[str, bool] = {}
         title: str = ""
 
         scrape_item.url = await self._get_final_album_url(scrape_item.url)
 
-        async for soup in self.web_pager(scrape_item.url):
+        async for soup in self.web_pager(_sort_by_new(scrape_item.url), trim=False):
             if not title:
                 if soup.select_one("form"):
                     await self._unlock_pw_protected_album(scrape_item, soup)
@@ -151,12 +145,15 @@ class CheveretoCrawler(Crawler, is_generic=True):
 
             self._iter_album_files(scrape_item, soup, results)
 
-        async for soup in self.web_pager(scrape_item.url / "sub"):
+        async for soup in self.web_pager(_sort_by_new(scrape_item.url / "sub"), trim=False):
             for _, sub_album in self.iter_children(scrape_item, soup, Selector.ITEM):
                 self.create_task(self.run(sub_album))
 
     def _iter_album_files(
-        self, scrape_item: ScrapeItem, soup: BeautifulSoup, results: dict[str, int] | None = None
+        self,
+        scrape_item: ScrapeItem,
+        soup: BeautifulSoup,
+        results: Mapping[str, bool] | None = None,
     ) -> None:
         results = results or {}
         for web_url, src_url in self._get_album_files(soup):

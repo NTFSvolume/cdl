@@ -62,6 +62,7 @@ if TYPE_CHECKING:
 
     import yarl
     from bs4 import BeautifulSoup, Tag
+    from curl_cffi.requests.impersonate import BrowserTypeLiteral
     from rich.progress import TaskID
 
     from cyberdrop_dl.managers.manager import Manager
@@ -698,24 +699,13 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
             scrape_item.add_children()
 
     async def web_pager(
-        self, url: AbsoluteHttpURL, next_page_selector: str | None = None, *, cffi: bool = False, **kwargs: Any
-    ) -> AsyncGenerator[BeautifulSoup]:
-        """Generator of website pages.
-
-        :param next_page_selector: If `None`, `self.next_page_selector` will be used
-        :param cffi: If `True`, uses `curl_cffi` to get the soup for each page. Otherwise, `aiohttp` will be used
-        :param **kwargs: Will be forwarded to `self.parse_url` to parse each new page"""
-
-        async for soup in self._web_pager(url, next_page_selector, cffi=cffi, **kwargs):
-            yield soup
-
-    async def _web_pager(
         self,
         url: AbsoluteHttpURL,
         selector: Callable[[BeautifulSoup], str | None] | str | None = None,
         *,
-        cffi: bool = False,
-        **kwargs: Any,
+        impersonate: BrowserTypeLiteral | bool | None = False,
+        relative_to: AbsoluteHttpURL | None = None,
+        trim: bool | None = None,
     ) -> AsyncGenerator[BeautifulSoup]:
         """Generator of website pages.
 
@@ -723,7 +713,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         :param cffi: If `True`, uses `curl_cffi` to get the soup for each page. Otherwise, `aiohttp` will be used
         :param **kwargs: Will be forwarded to `self.parse_url` to parse each new page"""
 
-        kwargs.setdefault("relative_to", url.origin())
+        relative_to = relative_to or url.origin()
         page_url = url
         if callable(selector):
             get_next_page = selector
@@ -738,12 +728,12 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
                     return
 
         while True:
-            soup = await self.request_soup(page_url, impersonate=cffi or None)
+            soup = await self.request_soup(page_url, impersonate=impersonate or None)
             yield soup
             page_url_str = get_next_page(soup)
             if not page_url_str:
                 break
-            page_url = self.parse_url(page_url_str, **kwargs)
+            page_url = self.parse_url(page_url_str, relative_to=relative_to, trim=trim)
 
     @error_handling_wrapper
     async def direct_file(

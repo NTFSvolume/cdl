@@ -53,7 +53,7 @@ class NHentaiCrawler(Crawler):
     @error_handling_wrapper
     async def collection(self, scrape_item: ScrapeItem, collection_type: str) -> None:
         title: str = ""
-        async for soup in self.web_pager(scrape_item.url, cffi=True):
+        async for soup in self.web_pager(scrape_item.url, impersonate=True):
             if not title:
                 if collection_type == "favorites":
                     title_tag = css.select(soup, Selector.FAVORITES_TITLE)

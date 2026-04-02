@@ -104,14 +104,14 @@ class AShemaleTubeCrawler(Crawler):
 
     @error_handling_wrapper
     async def gallery(self, scrape_item: ScrapeItem) -> None:
-        async for soup in self.web_pager(scrape_item.url, cffi=True):
+        async for soup in self.web_pager(scrape_item.url, impersonate=True):
             for _, new_scrape_item in self.iter_children(scrape_item, soup, _SELECTORS.GALLERY_ALBUM):
                 self.create_task(self.run(new_scrape_item))
 
     @error_handling_wrapper
     async def album(self, scrape_item: ScrapeItem) -> None:
         album_title = ""
-        async for soup in self.web_pager(scrape_item.url, cffi=True):
+        async for soup in self.web_pager(scrape_item.url, impersonate=True):
             if not album_title:
                 album_title = self.create_collection_title(soup, CollectionType.ALBUM)
                 scrape_item.setup_as_album(album_title)
@@ -122,7 +122,7 @@ class AShemaleTubeCrawler(Crawler):
     @error_handling_wrapper
     async def collection(self, scrape_item: ScrapeItem, collection_type: CollectionType) -> None:
         collection_title = ""
-        async for soup in self.web_pager(scrape_item.url, cffi=True):
+        async for soup in self.web_pager(scrape_item.url, impersonate=True):
             if not collection_title:
                 collection_title = self.create_collection_title(soup, collection_type)
                 if collection_type == CollectionType.MODEL:

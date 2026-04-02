@@ -535,7 +535,7 @@ class HTMLMessageBoardCrawler(MessageBoardCrawler, is_abc=True):
             yield get_text_between(css.attr(lazy_media, selector.attribute), "loadMedia(this, '", "')")
 
     async def thread_pager(self, scrape_item: ScrapeItem) -> AsyncGenerator[BeautifulSoup]:
-        async for soup in self._web_pager(scrape_item.url, self.get_next_page):
+        async for soup in self.web_pager(scrape_item.url, self.get_next_page):
             yield soup
 
     def get_next_page(self, soup: BeautifulSoup) -> str | None:

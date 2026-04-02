@@ -21,7 +21,6 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Mapping
 
     from bs4 import BeautifulSoup
-    from curl_cffi.requests.impersonate import BrowserTypeLiteral
     from curl_cffi.requests.session import HttpMethod
 
     from cyberdrop_dl.clients import flaresolverr
@@ -78,7 +77,7 @@ class HTTPClient:
         /,
         method: HttpMethod = "GET",
         headers: Mapping[str, str] | None = None,
-        impersonate: BrowserTypeLiteral | bool | None = None,
+        impersonate: str | bool | None = None,
         data: Any = None,
         json: Any = None,
         cache_disabled: bool = False,
@@ -223,7 +222,7 @@ def _write_resp_to_disk(
 
 class HTTPClientProxy:
     DOMAIN: ClassVar[str]
-    _IMPERSONATE: ClassVar[BrowserTypeLiteral | bool | None] = None
+    _IMPERSONATE: ClassVar[str | bool | None] = None
     client: HTTPClient  # pyright: ignore[reportUninitializedInstanceVariable]
 
     @classmethod
@@ -249,7 +248,7 @@ class HTTPClientProxy:
     @signature.copy(HTTPClient.request)
     @contextlib.asynccontextmanager
     async def request(
-        self, *args, impersonate: BrowserTypeLiteral | bool | None = None, **kwargs
+        self, *args, impersonate: str | bool | None = None, **kwargs
     ) -> AsyncGenerator[AbstractResponse[Any]]:
         if impersonate is None:
             impersonate = self._IMPERSONATE

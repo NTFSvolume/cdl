@@ -49,7 +49,7 @@ class MissAVCrawler(Crawler):
         title = self.create_title(f"{name} [{collection_type}]")
         scrape_item.setup_as_album(title)
 
-        async for soup in self.web_pager(scrape_item.url.update_query(page=1), cffi=True):
+        async for soup in self.web_pager(scrape_item.url.update_query(page=1), impersonate=True):
             for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.ITEM):
                 self.create_task(self.run(new_scrape_item))
 
