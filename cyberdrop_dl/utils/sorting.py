@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import datetime
+import hashlib
 import logging
 import shutil
 from pathlib import Path
@@ -25,11 +26,6 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
-
-
-async def _get_modified_date(file: Path) -> datetime.datetime:
-    stat = await asyncio.to_thread(file.stat)
-    return datetime.datetime.fromtimestamp(stat.st_mtime).replace(microsecond=0)
 
 
 @dataclasses.dataclass(slots=True, frozen=True)
@@ -220,6 +216,21 @@ def _get_files(directory: Path) -> tuple[Path, tuple[Path, ...]]:
     return directory, tuple(path for path in directory.resolve().rglob("*") if path.is_file())
 
 
+def _move_but_not_overwrite(source: Path, dest: Path) -> Path:
+    if dest.exists():
+        raise FileExistsError(dest)
+    _ = shutil.move(source, dest)
+    return dest
+
+
+def _have_same_content(source: Path, dest: Path) -> bool:
+    if source.stat().st_size != dest.stat().st_size:
+        return False
+
+    with source.open("rb") as f_in, dest.open("rb") as f_out:
+        return hashlib.file_digest(f_in, "md5").hexdigest() == hashlib.file_digest(f_out, "md5").hexdigest()
+
+
 def _move_file(
     source: Path,
     dest: Path,
@@ -236,42 +247,34 @@ def _move_file(
     dest_parent.mkdir(parents=True, exist_ok=True)
 
     try:
-        _ = shutil.move(source, dest)
-    except FileExistsError:
-        dest_stem = dest.stem
-        source_size = source.stat().st_size
-        for auto_index in range(1, max_retries + 1):
-            if source_size == dest.stat().st_size:
-                source.unlink()
-                return dest
+        try:
+            return _move_but_not_overwrite(source, dest)
+        except FileExistsError:
+            dest_stem = dest.stem
+            for auto_index in range(1, max_retries + 1):
+                if _have_same_content(source, dest):
+                    source.unlink()
+                    return dest
 
-            new_filename = f"{dest_stem}{incrementer_format.format(i=auto_index)}{dest.suffix}"
-            logger.warning(
-                "Found name collision when moving '{}' to '{}'. Retring with '{}'",
-                source,
-                dest,
-                dest := dest_parent / new_filename,
-            )
+                new_filename = f"{dest_stem}{incrementer_format.format(i=auto_index)}{dest.suffix}"
+                logger.warning(
+                    "Found name collision when moving '{}' to '{}'. Retring with '{}'",
+                    source,
+                    dest,
+                    dest := dest_parent / new_filename,
+                )
 
-            try:
-                _ = shutil.move(source, dest)
-            except FileExistsError:
-                continue
-            except OSError:
-                logger.exception("Unable to move '{}'", source)
-                return
+                try:
+                    return _move_but_not_overwrite(source, dest)
+                except FileExistsError:
+                    continue
+
             else:
-                return dest
-        else:
-            logger.error("Unable to move '{}'. Giving up after {} attempts", source, max_retries)
-            return
-
+                logger.error("Unable to move '{}'. Giving up after {} attempts", source, max_retries)
+                return
     except OSError:
         logger.exception("Unable to move '{}'", source)
         return
-
-    else:
-        return dest
 
 
 async def _try_probe(kind: str, file: Path) -> ffmpeg.FFprobeResult | None:
@@ -279,3 +282,8 @@ async def _try_probe(kind: str, file: Path) -> ffmpeg.FFprobeResult | None:
         return await ffmpeg.probe(file)
     except (RuntimeError, CalledProcessError, OSError):
         logger.exception(f"Unable to get {kind} properties of '{file}'")
+
+
+async def _get_modified_date(file: Path) -> datetime.datetime:
+    stat = await asyncio.to_thread(file.stat)
+    return datetime.datetime.fromtimestamp(stat.st_mtime).replace(microsecond=0)
