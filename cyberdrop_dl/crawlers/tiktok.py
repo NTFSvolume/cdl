@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, Self
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, auto_task_id
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, type_adapter
+from cyberdrop_dl.utils.utilities import DictDataclass, error_handling_wrapper
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator
+    from collections.abc import AsyncGenerator, Mapping
 
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
     from cyberdrop_dl.utils import m3u8
@@ -23,7 +23,7 @@ _API_USER_POST_URL = _API_URL / "user/posts"
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
-class Author:
+class Author(DictDataclass):
     id: str
     unique_id: str
     nickname: str
@@ -33,7 +33,7 @@ class Author:
 
 
 @dataclasses.dataclass(slots=True)
-class Post:
+class Post(DictDataclass):
     id: str
     title: str
     play: str
@@ -49,17 +49,21 @@ class Post:
         part = "photo" if self.images else "video"
         self.canonical_url = _PRIMARY_URL / str(self.author) / part / self.id
 
-    @staticmethod
-    def from_dict(video: dict[str, Any]) -> Post:
-        video.update(
-            author=_parse_author(video["author"]),
-            music_info=_parse_music(video["music_info"]),
+    @classmethod
+    def from_dict(cls, video: Mapping[str, Any], /) -> Self:
+        return super(Post, cls).from_dict(
+            dict(
+                **video,
+                author=Author.from_dict(video["author"]),
+                music_info=MusicInfo.from_dict(video["music_info"]),
+                id=video.get("id") or video["video_id"],
+                play=video.get("play") or video["play_url"],
+            )
         )
-        return _parse_post(video)
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
-class MusicInfo:
+class MusicInfo(DictDataclass):
     title: str
     id: str
     play: str
@@ -71,11 +75,6 @@ class MusicInfo:
         if "original-sound" in safe_title or "original-audio" in safe_title:
             safe_title = "original-audio"
         return _PRIMARY_URL / "music" / f"{safe_title}-{self.id}"
-
-
-_parse_author = type_adapter(Author)
-_parse_music = type_adapter(MusicInfo)
-_parse_post = type_adapter(Post, aliases={"id": "video_id", "play": "play_url"})
 
 
 class TikTokCrawler(Crawler):

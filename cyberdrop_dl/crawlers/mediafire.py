@@ -12,7 +12,7 @@ from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, auto_task_id
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, is_blob_or_svg, type_adapter
+from cyberdrop_dl.utils.utilities import DictDataclass, error_handling_wrapper, is_blob_or_svg
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -34,7 +34,7 @@ class Folder:
 
 
 @dataclasses.dataclass(slots=True, frozen=True)
-class File:
+class File(DictDataclass):
     quickkey: str
     filename: str
     created: str
@@ -111,7 +111,7 @@ class MediaFireCrawler(Crawler, db_path="name"):
         if folder.has_files:
             async for files in self.api.folder_content(folder_key, "files"):
                 for file in files:
-                    file_ = self.api.parse_file(file)
+                    file_ = File.from_dict(file)
                     url = _PRIMARY_URL / "file" / file_.quickkey
                     new_scrape_item = scrape_item.create_child(url)
                     self.create_task(self._file_task(new_scrape_item, file_))
@@ -155,7 +155,6 @@ class MediaFireCrawler(Crawler, db_path="name"):
 class MediaFireAPI:
     def __init__(self, crawler: Crawler) -> None:
         self._crawler = crawler
-        self.parse_file = type_adapter(File)
 
     async def _api_request(self, path: str, **params: int | str) -> dict[str, Any]:
         assert params
@@ -204,7 +203,7 @@ class MediaFireAPI:
                 quick_key=quick_key,
             )
         )["file_info"]
-        return self.parse_file(resp)
+        return File.from_dict(resp)
 
 
 def _extract_download_link(soup: BeautifulSoup) -> str:

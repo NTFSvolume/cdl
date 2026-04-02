@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import LoginError, ScrapeError
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, type_adapter
+from cyberdrop_dl.utils.utilities import DictDataclass, error_handling_wrapper
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -19,14 +19,11 @@ _FOLDERS_API_ENDPOINT = _PRIMARY_URL / "list_shared_link_folder_entries"
 
 
 @dataclasses.dataclass(slots=True)
-class Node:
+class Node(DictDataclass):
     is_dir: bool
     href: str
     filename: str
     secureHash: str = ""  # noqa: N815
-
-
-_parse_node = type_adapter(Node)
 
 
 class DropboxCrawler(Crawler):
@@ -122,7 +119,7 @@ class DropboxCrawler(Crawler):
             scrape_item.add_to_parent_title(self.create_title(folder_name))
 
             for entry, token in zip(resp["entries"], resp["share_tokens"], strict=True):
-                node = _parse_node(token | entry)
+                node = Node.from_dict(token | entry)
                 view_url = self.parse_url(node.href)
                 new_scrape_item = scrape_item.create_child(view_url)
                 if node.is_dir:

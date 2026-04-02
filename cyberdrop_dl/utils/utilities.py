@@ -22,6 +22,7 @@ from typing import (
     Concatenate,
     ParamSpec,
     Protocol,
+    Self,
     TypeGuard,
     TypeVar,
     cast,
@@ -68,6 +69,29 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+
+
+_FIELDS_CACHE: dict[type, tuple[str, ...]] = {}
+
+
+def _fields(cls: type) -> tuple[str, ...]:
+    if fields := _FIELDS_CACHE.get(cls):
+        return fields
+    fields = _FIELDS_CACHE[cls] = tuple(f.name for f in dataclasses.fields(cls))
+    return fields
+
+
+class DictDataclass:
+    __dataclass_fields__: ClassVar[dict[str, dataclasses.Field[Any]]]
+
+    @classmethod
+    def filter_dict(cls, data: Mapping[str, Any], /) -> dict[str, Any]:
+        return {name: data.get(name) for name in _fields(cls)}
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any], /) -> Self:
+        return cls(**cls.filter_dict(data))
+
 
 _BLOB_OR_SVG = ("data:", "blob:", "javascript:")
 
@@ -457,23 +481,6 @@ def get_valid_kwargs(
 
 def call_w_valid_kwargs(cls: Callable[..., _R], kwargs: Mapping[str, Any]) -> _R:
     return cls(**get_valid_kwargs(cls, kwargs))
-
-
-def type_adapter(func: Callable[..., _R], aliases: dict[str, str] | None = None) -> Callable[[dict[str, Any]], _R]:
-    """Like `pydantic.TypeAdapter`, but without type validation of attributes (faster)
-
-    Ignores attributes with `None` as value"""
-    param_names = inspect.signature(func).parameters.keys()
-
-    def call(kwargs: dict[str, Any]):
-        if aliases:
-            for original, alias in aliases.items():
-                if original not in kwargs:
-                    kwargs[original] = kwargs.get(alias)
-
-        return func(**{name: value for name in param_names if (value := kwargs.get(name)) is not None})
-
-    return call
 
 
 def xor_decrypt(encrypted_data: bytes, key: bytes) -> str:

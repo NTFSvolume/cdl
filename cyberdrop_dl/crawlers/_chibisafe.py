@@ -18,7 +18,7 @@ from pydantic import Field
 from cyberdrop_dl.crawlers.crawler import Crawler
 from cyberdrop_dl.models import AliasModel
 from cyberdrop_dl.utils.dates import to_timestamp
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, type_adapter
+from cyberdrop_dl.utils.utilities import DictDataclass, error_handling_wrapper
 
 if TYPE_CHECKING:
     from cyberdrop_dl.crawlers.crawler import SupportedPaths
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
 
 @dataclasses.dataclass(slots=True)
-class File:
+class File(DictDataclass):
     name: str
     url: str
     createdAt: datetime.datetime | None = None  # noqa: N815
@@ -37,9 +37,6 @@ class Album(AliasModel):
     id: str = ""
     name: str = Field(validation_alias="title")
     files: list[File]
-
-
-_parse_file = type_adapter(File)
 
 
 class ChibiSafeCrawler(Crawler, is_abc=True):
@@ -60,7 +57,7 @@ class ChibiSafeCrawler(Crawler, is_abc=True):
     @error_handling_wrapper
     async def file(self, scrape_item: ScrapeItem, file_id: str) -> None:
         content: dict[str, Any] = await self.request_json(self.PRIMARY_URL / "api/file" / file_id)
-        file = _parse_file(content)
+        file = File.from_dict(content)
         self._handle_file(scrape_item, file)
 
     @error_handling_wrapper
