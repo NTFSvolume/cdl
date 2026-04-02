@@ -54,18 +54,19 @@ if TYPE_CHECKING:
     from cyberdrop_dl.downloader.downloader import Downloader
     from cyberdrop_dl.managers.manager import Manager
 
-    _P = ParamSpec("_P")
-    _T = TypeVar("_T")
-    _R = TypeVar("_R")
-
-    class Dataclass(Protocol):
-        __dataclass_fields__: ClassVar[dict[str, Any]]
-
     class _HasManager(Protocol):
         manager: Manager
 
     _HasManagerT = TypeVar("_HasManagerT", bound=_HasManager)
-    Origin = TypeVar("Origin", bound=ScrapeItem | MediaItem | URL)
+    _Origin = TypeVar("_Origin", bound=ScrapeItem | MediaItem | URL)
+
+_P = ParamSpec("_P")
+_T = TypeVar("_T")
+_R = TypeVar("_R")
+
+
+class Dataclass(Protocol):
+    __dataclass_fields__: ClassVar[dict[str, Any]]
 
 
 logger = logging.getLogger(__name__)
@@ -81,9 +82,7 @@ def _fields(cls: type) -> tuple[str, ...]:
     return fields
 
 
-class DictDataclass:
-    __dataclass_fields__: ClassVar[dict[str, dataclasses.Field[Any]]]
-
+class DictDataclass(Dataclass, Protocol):
     @classmethod
     def filter_dict(cls, data: Mapping[str, Any], /) -> dict[str, Any]:
         return {name: data.get(name) for name in _fields(cls)}
@@ -167,32 +166,32 @@ def error_handling_context(self: _HasManager, item: ScrapeItem | MediaItem | URL
 
 @overload
 def error_handling_wrapper(
-    func: Callable[Concatenate[_HasManagerT, Origin, _P], _R],
-) -> Callable[Concatenate[_HasManagerT, Origin, _P], _R]: ...
+    func: Callable[Concatenate[_HasManagerT, _Origin, _P], _R],
+) -> Callable[Concatenate[_HasManagerT, _Origin, _P], _R]: ...
 
 
 @overload
 def error_handling_wrapper(
-    func: Callable[Concatenate[_HasManagerT, Origin, _P], Coroutine[None, None, _R]],
-) -> Callable[Concatenate[_HasManagerT, Origin, _P], Coroutine[None, None, _R]]: ...
+    func: Callable[Concatenate[_HasManagerT, _Origin, _P], Coroutine[None, None, _R]],
+) -> Callable[Concatenate[_HasManagerT, _Origin, _P], Coroutine[None, None, _R]]: ...
 
 
 def error_handling_wrapper(
-    func: Callable[Concatenate[_HasManagerT, Origin, _P], _R | Coroutine[None, None, _R]],
-) -> Callable[Concatenate[_HasManagerT, Origin, _P], _R | Coroutine[None, None, _R]]:
+    func: Callable[Concatenate[_HasManagerT, _Origin, _P], _R | Coroutine[None, None, _R]],
+) -> Callable[Concatenate[_HasManagerT, _Origin, _P], _R | Coroutine[None, None, _R]]:
     """Wrapper handles errors for url scraping."""
 
     if inspect.iscoroutinefunction(func):
 
         @wraps(func)
-        async def async_wrapper(self: _HasManagerT, item: Origin, *args: _P.args, **kwargs: _P.kwargs) -> _R:
+        async def async_wrapper(self: _HasManagerT, item: _Origin, *args: _P.args, **kwargs: _P.kwargs) -> _R:
             with error_handling_context(self, item):
                 return await func(self, item, *args, **kwargs)
 
         return async_wrapper
 
     @wraps(func)
-    def wrapper(self: _HasManagerT, item: Origin, *args: _P.args, **kwargs: _P.kwargs) -> _R:
+    def wrapper(self: _HasManagerT, item: _Origin, *args: _P.args, **kwargs: _P.kwargs) -> _R:
         with error_handling_context(self, item):
             result = func(self, item, *args, **kwargs)
             assert not inspect.isawaitable(result)
