@@ -323,7 +323,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         try:
             yield
         except Exception:
-            logger.error(f"[{self.FOLDER_DOMAIN}] {msg}. Crawler has been disabled")
+            self.log.error(f"{msg}. Crawler has been disabled")
             self.disabled = True
             raise
 
@@ -374,7 +374,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
     @contextlib.contextmanager
     def new_task_id(self, url: AbsoluteHttpURL) -> Generator[TaskID]:
         """Creates a new task_id (shows the URL in the UI and logs)"""
-        logger.info(f"Scraping [{self.FOLDER_DOMAIN}]: {url}")
+        self.log.info(f"Scraping {url}")
         task_id = self.manager.progress_manager.scraping_progress.add_task(url)
         try:
             yield task_id
@@ -852,11 +852,11 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         filename, had_invalid_chars = _make_custom_filename(stem, ext, list(extra_info()), only_truncate_stem)
         if had_invalid_chars:
             msg = (
-                f"Custom filename creation for {self.FOLDER_DOMAIN} seems to be broken. "
+                f"Custom filename creation seems to be broken. "
                 f"Important information was removed while creating a filename. "
                 f"\n{calling_args}"
             )
-            logger.warning(msg)
+            self.log.warning(msg)
         return filename
 
     @final
