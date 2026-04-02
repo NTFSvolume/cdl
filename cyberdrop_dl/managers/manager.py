@@ -21,6 +21,7 @@ from cyberdrop_dl.managers.hash_manager import HashManager
 from cyberdrop_dl.managers.live_manager import LiveManager
 from cyberdrop_dl.managers.logs import LogManager
 from cyberdrop_dl.managers.progress_manager import ProgressManager
+from cyberdrop_dl.utils import filepath
 from cyberdrop_dl.utils.logger import LogHandler, QueuedLogger
 from cyberdrop_dl.utils.utilities import close_if_defined, get_system_information
 
@@ -131,8 +132,8 @@ class Manager:
 
         await self.async_db_hash_startup()
 
-        constants.MAX_NAME_LENGTHS["FILE"] = self.config_manager.global_settings_data.general.max_file_name_length
-        constants.MAX_NAME_LENGTHS["FOLDER"] = self.config_manager.global_settings_data.general.max_folder_name_length
+        filepath.MAX_FILE_LEN.set(self.config_manager.global_settings_data.general.max_file_name_length)
+        filepath.MAX_FOLDER_LEN.set(self.config_manager.global_settings_data.general.max_folder_name_length)
 
     async def async_db_hash_startup(self) -> None:
         if not isinstance(self.db_manager, Database):

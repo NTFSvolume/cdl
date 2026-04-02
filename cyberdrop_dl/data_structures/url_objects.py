@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Self, overload
 
 import yarl
 
+from cyberdrop_dl.utils.filepath import sanitize_folder
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator
 
@@ -289,7 +291,6 @@ class ScrapeItem:
 
     def add_to_parent_title(self, title: str) -> None:
         """Adds a title to the parent title."""
-        from cyberdrop_dl.utils.utilities import sanitize_folder
 
         if not title or self.retry_path:
             return

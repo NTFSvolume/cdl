@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from cyberdrop_dl.exceptions import InvalidExtensionError, NoExtensionError
-from cyberdrop_dl.utils.utilities import get_filename_and_ext
+from cyberdrop_dl.utils.filepath import get_filename_and_ext
 
 
 class TestGetFilenameAndExt:
@@ -80,7 +80,7 @@ class TestGetFilenameAndExt:
         ],
     )
     def test_forum_filename(self, name: str, expected_name: str, expected_ext: str) -> None:
-        name, ext = get_filename_and_ext(name, forum=True)
+        name, ext = get_filename_and_ext(name, xenforo=True)
         assert ext == expected_ext
         assert name == expected_name
 
