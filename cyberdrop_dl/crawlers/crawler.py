@@ -182,11 +182,6 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         self._semaphore: asyncio.Semaphore = asyncio.Semaphore(20)
         self.__post_init__()
 
-    @final
-    @property
-    def log(self) -> _CrawlerLogger:
-        return self._logger
-
     def __post_init__(self) -> None:
         """Override in subclasses to add custom init logic
 
@@ -295,7 +290,12 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         """Here goes the main logic to parse URL paths.
 
-        This method MUST NOT raise any exceptions other that ValueError to indiated that the path is not supported"""
+        This method MUST NOT raise any exceptions other that ValueError to indicate that the path is not supported"""
+
+    @final
+    @property
+    def log(self) -> _CrawlerLogger:
+        return self._logger
 
     @final
     @property
