@@ -112,15 +112,11 @@ class Sorter:
             return
 
         bitrate = duration = sample_rate = None
-        try:
-            probe_output = await ffmpeg.probe(file)
-            if audio := probe_output.audio:
-                duration = audio.duration or probe_output.format.duration
-                bitrate = audio.bitrate
-                sample_rate = audio.sample_rate
-
-        except (RuntimeError, CalledProcessError, OSError):
-            logger.exception(f"Unable to get audio properties of '{file}'")
+        probe_output = await _try_probe("audio", file)
+        if probe_output and (audio := probe_output.audio):
+            duration = audio.duration or probe_output.format.duration
+            bitrate = audio.bitrate
+            sample_rate = audio.sample_rate
 
         if await self._move_file(
             file,
@@ -143,9 +139,6 @@ class Sorter:
             width, height = await asyncio.to_thread(imagesize.get, file)
             if width > 0 and height > 0:
                 resolution = f"{width}x{height}"
-            else:
-                # imagesize returns (-1, -1) for unsupported/corrupted images
-                width = height = resolution = None
 
         except (OSError, ValueError):
             logger.exception(f"Unable to get some image properties of '{file}'")
@@ -166,19 +159,14 @@ class Sorter:
             return
 
         codec = duration = framerate = height = resolution = width = None
-
-        try:
-            probe_output = await ffmpeg.probe(file)
-            if video := probe_output.video:
-                width = video.width
-                height = video.height
-                resolution = video.resolution
-                codec = video.codec
-                duration = video.duration or probe_output.format.duration
-                framerate = video.fps
-
-        except (RuntimeError, CalledProcessError, OSError):
-            logger.exception(f"Unable to get some video properties of '{file}'")
+        probe_output = await _try_probe("video", file)
+        if probe_output and (video := probe_output.video):
+            width = video.width
+            height = video.height
+            resolution = video.resolution
+            codec = video.codec
+            duration = video.duration or probe_output.format.duration
+            framerate = video.fps
 
         if await self._move_file(
             file,
@@ -273,3 +261,11 @@ def _move_file(old_path: Path, new_path: Path, incrementer_format: str) -> bool:
         return False
 
     return True
+
+
+async def _try_probe(kind: str, file: Path) -> ffmpeg.FFprobeResult | None:
+    try:
+        return await ffmpeg.probe(file)
+
+    except (RuntimeError, CalledProcessError, OSError):
+        logger.exception(f"Unable to get {kind} properties of '{file}'")
