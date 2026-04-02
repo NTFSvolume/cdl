@@ -47,13 +47,13 @@ class Sorter:
 
     @classmethod
     def from_manager(cls, manager: Manager) -> Self:
-        settings = manager.config_manager.settings_data.sorting
+        settings = manager.config.sorting
         return cls(
             manager.live_manager,
             tui=manager.progress_manager,
-            input_dir=manager.config.sorting.scan_folder or manager.config.files.download_folder,
-            output_dir=manager.config.sorting.sort_folder,
-            incrementer_format=manager.config_manager.settings_data.sorting.sort_incrementer_format,
+            input_dir=settings.scan_folder or manager.config.files.download_folder,
+            output_dir=settings.sort_folder,
+            incrementer_format=settings.sort_incrementer_format,
             audio_format=settings.sorted_audio,
             image_format=settings.sorted_image,
             video_format=settings.sorted_video,
@@ -61,7 +61,6 @@ class Sorter:
         )
 
     async def run(self) -> None:
-        """Sorts the files in the download directory into their respective folders."""
         if not await asyncio.to_thread(self.input_dir.is_dir):
             logger.error(f"Sort directory ('{self.input_dir}' does not exist", extra={"color": "red"})
             return
@@ -109,7 +108,6 @@ class Sorter:
         await self.sort_other(file, folder_name)
 
     async def sort_audio(self, file: Path, base_name: str) -> None:
-        """Sorts an audio file into the sorted audio folder."""
         if not self.audio_format:
             return
 
@@ -132,7 +130,6 @@ class Sorter:
             self.tui.sort_progress.increment_audio()
 
     async def sort_image(self, file: Path, base_name: str) -> None:
-        """Sorts an image file into the sorted image folder."""
         if not self.image_format:
             return
 
@@ -156,7 +153,6 @@ class Sorter:
             self.tui.sort_progress.increment_image()
 
     async def sort_video(self, file: Path, base_name: str) -> None:
-        """Sorts a video file into the sorted video folder."""
         if not self.video_format:
             return
 
@@ -176,6 +172,7 @@ class Sorter:
             self.video_format,
             codec=codec,
             duration=duration,
+            length=duration,
             fps=framerate,
             height=height,
             resolution=resolution,
@@ -194,10 +191,6 @@ class Sorter:
         file_date = await _get_modified_date(file)
         file_date_us = file_date.strftime("%Y-%d-%m")
         file_date_iso = file_date.strftime("%Y-%m-%d")
-
-        duration = kwargs.get("duration") or kwargs.get("length")
-        if duration is not None:
-            kwargs["duration"] = kwargs["length"] = duration
 
         dest, _ = strings.safe_format(
             format_str,
@@ -220,23 +213,11 @@ class Sorter:
 
 
 def _subfolders(directory: Path) -> tuple[Path, ...]:
-    def walk():
-        for subfolder in directory.resolve().iterdir():
-            if subfolder.is_dir():
-                yield subfolder
-
-    return tuple(walk())
+    return tuple(path for path in directory.resolve().iterdir() if path.is_dir())
 
 
 def _get_files(directory: Path) -> tuple[Path, tuple[Path, ...]]:
-    """Finds all files in a directory and returns them in a list."""
-
-    def walk():
-        for file in directory.resolve().rglob("*"):
-            if file.is_file():
-                yield file
-
-    return directory, tuple(walk())
+    return directory, tuple(path for path in directory.resolve().rglob("*") if path.is_file())
 
 
 def _move_file(
@@ -253,12 +234,12 @@ def _move_file(
 
     dest_parent = dest.parent
     dest_parent.mkdir(parents=True, exist_ok=True)
-    source_size = source.stat().st_size
 
     try:
         _ = shutil.move(source, dest)
     except FileExistsError:
         dest_stem = dest.stem
+        source_size = source.stat().st_size
         for auto_index in range(1, max_retries + 1):
             if source_size == dest.stat().st_size:
                 source.unlink()
@@ -296,6 +277,5 @@ def _move_file(
 async def _try_probe(kind: str, file: Path) -> ffmpeg.FFprobeResult | None:
     try:
         return await ffmpeg.probe(file)
-
     except (RuntimeError, CalledProcessError, OSError):
         logger.exception(f"Unable to get {kind} properties of '{file}'")
