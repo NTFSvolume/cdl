@@ -44,13 +44,18 @@ class EromeCrawler(Crawler):
     async def profile(self, scrape_item: ScrapeItem, name: str) -> None:
         title = self.create_title(name)
         scrape_item.setup_as_profile(title)
-        await self.crawl_children(scrape_item, Selector.ALBUM)
+
+        async for soup in self.web_pager(scrape_item.url):
+            for _, new_item in self.iter_children(scrape_item, soup, Selector.ALBUM):
+                self.create_task(self.run(new_item))
 
     @error_handling_wrapper
     async def search(self, scrape_item: ScrapeItem, query: str) -> None:
         title = self.create_title(f"{query} [search]")
         scrape_item.setup_as_album(title)
-        await self.crawl_children(scrape_item, Selector.ALBUM)
+        async for soup in self.web_pager(scrape_item.url):
+            for _, new_item in self.iter_children(scrape_item, soup, Selector.ALBUM):
+                self.create_task(self.run(new_item))
 
     @error_handling_wrapper
     async def album(self, scrape_item: ScrapeItem, album_id: str) -> None:
