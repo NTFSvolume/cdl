@@ -340,16 +340,13 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
 
             with self.new_task_id(scrape_item.url):
                 try:
-                    self.pre_check_scrape_item(scrape_item)
+                    if not self.SKIP_PRE_CHECK and scrape_item.url.path == "/":
+                        raise ValueError
                     await self.fetch(scrape_item)
                 except ValueError:
                     self.raise_exc(scrape_item, ScrapeError("Unknown URL path"))
                 except MaxChildrenError as e:
                     self.raise_exc(scrape_item, e)
-
-    def pre_check_scrape_item(self, scrape_item: ScrapeItem) -> None:
-        if not self.SKIP_PRE_CHECK and scrape_item.url.path == "/":
-            raise ValueError
 
     @classmethod
     def transform_url(cls, url: AbsoluteHttpURL) -> AbsoluteHttpURL:
@@ -477,9 +474,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         return check_complete
 
     async def handle_media_item(self, media_item: MediaItem, m3u8: m3u8.Rendition | None = None) -> None:
-
-        check_complete = await self.check_complete(media_item.url, media_item.referer)
-        if check_complete:
+        if await self.check_complete(media_item.url, media_item.referer):
             if media_item.album_id:
                 await self.manager.db_manager.history_table.set_album_id(self.DOMAIN, media_item)
             return
@@ -493,18 +488,17 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
     @final
     async def check_skip_by_config(self, media_item: MediaItem) -> bool:
         media_host = media_item.url.host
+        ignore_options = self.manager.config.ignore_options
 
-        if (hosts := self.manager.config.ignore_options.skip_hosts) and any(host in media_host for host in hosts):
+        if (hosts := ignore_options.skip_hosts) and any(host in media_host for host in hosts):
             logger.info(f"Download skipped {media_item.url} due to skip_hosts config")
             return True
 
-        if (hosts := self.manager.config.ignore_options.only_hosts) and not any(host in media_host for host in hosts):
+        if (hosts := ignore_options.only_hosts) and not any(host in media_host for host in hosts):
             logger.info(f"Download skipped {media_item.url} due to only_hosts config")
             return True
 
-        if (regex := self.manager.config.ignore_options.filename_regex_filter) and re.search(
-            regex, media_item.filename
-        ):
+        if (regex := ignore_options.filename_regex_filter) and re.search(regex, media_item.filename):
             logger.info(f"Download skipped {media_item.url} due to filename regex filter config")
             return True
 
@@ -524,8 +518,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         if downloaded:
             logger.info(f"Skipping {url} as it has already been downloaded")
             self.manager.progress_manager.download_progress.add_previously_completed()
-            return True
-        return False
+        return downloaded
 
     @final
     async def check_complete_by_hash(
@@ -539,20 +532,26 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
             self.manager.progress_manager.download_progress.add_previously_completed()
         return downloaded
 
-    async def get_album_results(self, album_id: str) -> dict[str, int]:
+    @final
+    async def get_album_results(self, album_id: str) -> dict[str, bool]:
         """Checks whether an album has completed given its domain and album id."""
         return await self.manager.db_manager.history_table.check_album(self.DOMAIN, album_id)
 
+    @final
     def handle_external_links(self, scrape_item: ScrapeItem, reset: bool = True) -> None:
         """Maps external links to the scraper class."""
         if reset:
             scrape_item.reset()
         self.create_task(self.manager.scrape_mapper.filter_and_send_to_crawler(scrape_item))
 
-    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
+    @final
     def get_filename_and_ext(
-        self, filename: str, forum: bool = False, assume_ext: str | None = ".mp4", *, mime_type: str | None = None
+        self,
+        filename: str,
+        forum: bool = False,
+        assume_ext: str | None = ".mp4",
+        *,
+        mime_type: str | None = None,
     ) -> tuple[str, str]:
         """Wrapper around `utils.get_filename_and_ext`.
         Calls it as is.
@@ -566,12 +565,13 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
             raise
 
     @final
-    def check_album_results(self, url: AbsoluteHttpURL, album_results: dict[str, Any]) -> bool:
+    def check_album_results(self, url: AbsoluteHttpURL, album_results: Mapping[str, bool]) -> bool:
         """Checks whether an album has completed given its domain and album id."""
         if not album_results:
             return False
+
         url_path = self.__db_path__(url)
-        if url_path in album_results and album_results[url_path] != 0:
+        if album_results.get(url_path) is True:
             logger.info(f"Skipping {url} as it has already been downloaded")
             self.manager.progress_manager.download_progress.add_previously_completed()
             return True
@@ -580,10 +580,8 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
     @final
     def create_title(self, title: str, album_id: str | None = None, thread_id: int | None = None) -> str:
         """Creates the title for the scrape item."""
-        if not title:
-            title = "Untitled"
+        title = (title or "Untitled").strip()
 
-        title = title.strip()
         if album_id and self.manager.config.download_options.include_album_id_in_folder_name:
             title = f"{title} {album_id}"
 
@@ -594,10 +592,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
             title = f"{title} ({self.FOLDER_DOMAIN})"
 
         # Remove double spaces
-        while True:
-            title = title.replace("  ", " ")
-            if "  " not in title:
-                break
+        title = " ".join(title.split(""))
         return title
 
     @property
@@ -625,14 +620,19 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
 
     @classmethod
     def parse_url(
-        cls, link_str: yarl.URL | str, relative_to: AbsoluteHttpURL | None = None, *, trim: bool | None = None
+        cls,
+        url: yarl.URL | str,
+        /,
+        relative_to: AbsoluteHttpURL | None = None,
+        *,
+        trim: bool | None = None,
     ) -> AbsoluteHttpURL:
         """Wrapper around `utils.parse_url` to use `self.PRIMARY_URL` as base"""
         base = relative_to or cls.PRIMARY_URL
         assert is_absolute_http_url(base)
         if trim is None:
             trim = cls.DEFAULT_TRIM_URLS
-        return parse_url(link_str, base, trim=trim)
+        return parse_url(url, base, trim=trim)
 
     @final
     def update_cookies(self, cookies: dict[str, Any], url: yarl.URL | None = None) -> None:
@@ -651,7 +651,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         /,
         attribute: str = "href",
         *,
-        results: dict[str, int] | None = None,
+        results: Mapping[str, bool] | None = None,
     ) -> Generator[tuple[AbsoluteHttpURL | None, AbsoluteHttpURL]]:
         """Generates tuples with an URL from the `src` value of the first image tag (AKA the thumbnail) and an URL from the value of `attribute`
 
@@ -684,7 +684,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         /,
         attribute: str = "href",
         *,
-        results: dict[str, int] | None = None,
+        results: Mapping[str, bool] | None = None,
         **kwargs: Any,
     ) -> Generator[tuple[AbsoluteHttpURL | None, ScrapeItem]]:
         """Generates tuples with an URL from the `src` value of the first image tag (AKA the thumbnail) and a new scrape item from the value of `attribute`
@@ -705,7 +705,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         /,
         attribute: str = "href",
         *,
-        results: dict[str, int] | None = None,
+        results: Mapping[str, bool] | None = None,
         next_page_selector: str | None = None,
         coro_factory: Callable[[ScrapeItem], Coroutine[Any, Any, Any]] | None = None,
     ) -> None:
@@ -846,6 +846,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
     ) -> m3u8.M3U8:
         return await self._request_m3u8(url, headers, media_type)
 
+    @final
     def create_custom_filename(
         self,
         name: str,

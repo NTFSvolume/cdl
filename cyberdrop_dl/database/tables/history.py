@@ -119,7 +119,7 @@ class HistoryTable:
 
         return completed
 
-    async def check_album(self, domain: str, album_id: str) -> dict[str, int]:
+    async def check_album(self, domain: str, album_id: str) -> dict[str, bool]:
         """Checks whether an album has completed given its domain and album id."""
         if self._database.ignore_history:
             return {}
@@ -127,7 +127,7 @@ class HistoryTable:
         query = "SELECT url_path, completed FROM media WHERE domain = ? and album_id = ?"
         cursor = await self.db_conn.execute(query, (domain, album_id))
         rows = await cursor.fetchall()
-        return {row[0]: row[1] for row in rows}
+        return {row[0]: bool(row[1]) for row in rows}
 
     async def set_album_id(self, domain: str, media_item: MediaItem) -> None:
         """Sets an album_id in the database."""
