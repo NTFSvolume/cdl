@@ -19,6 +19,7 @@ from typing import (
     Any,
     ClassVar,
     Concatenate,
+    Final,
     Literal,
     NamedTuple,
     ParamSpec,
@@ -57,7 +58,6 @@ from cyberdrop_dl.utils.utilities import (
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable, Coroutine, Generator, Iterable, Mapping
-    from http.cookies import BaseCookie
     from types import ModuleType
 
     import yarl
@@ -289,8 +289,8 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
             assert getattr(subclass, field_name, None), f"Subclass {subclass.__name__} must override: {field_name}"
 
     @final
-    def create_task(self, coro: Coroutine[Any, Any, _T_co]) -> asyncio.Task[_T_co]:
-        return self.manager.task_group.create_task(coro)
+    def create_task(self, coro: Coroutine[Any, Any, _T_co]) -> None:
+        _ = self.manager.task_group.create_task(coro)
 
     @abstractmethod
     async def fetch(self, scrape_item: ScrapeItem) -> None: ...
@@ -319,13 +319,11 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
             self.disabled = True
             raise
 
-    catch_errors = final(error_handling_context)
+    catch_errors: Final = error_handling_context
 
     @final
     async def run(self, scrape_item: ScrapeItem) -> None:
         """Runs the crawler loop."""
-        if not scrape_item.url.host:
-            return
         if self.disabled:
             return
 
@@ -462,17 +460,18 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         data = [media_item.__json__()]
         await self.manager.logs.write_jsonl(data)
 
+    @final
     async def check_complete(self, url: AbsoluteHttpURL, referer: AbsoluteHttpURL) -> bool:
         """Checks if this URL has been download before.
 
         This method is called automatically on a created media item,
         but Crawler code can use it to skip unnecessary requests"""
         db_path = self.__db_path__(url)
-        check_complete = await self.manager.db_manager.history_table.check_complete(self.DOMAIN, url, referer, db_path)
-        if check_complete:
+        was_completed = await self.manager.db_manager.history_table.check_complete(self.DOMAIN, url, referer, db_path)
+        if was_completed:
             logger.info(f"Skipping {url} as it has already been downloaded")
             self.manager.progress_manager.download_progress.add_previously_completed()
-        return check_complete
+        return was_completed
 
     async def handle_media_item(self, media_item: MediaItem, m3u8: m3u8.Rendition | None = None) -> None:
         if await self.check_complete(media_item.url, media_item.referer):
@@ -636,6 +635,11 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         return parse_url(url, base, trim=trim)
 
     @final
+    def get_cookie_value(self, name: str) -> str | None:
+        if morsel := self.client.client_manager.cookies.filter_cookies(self.PRIMARY_URL).get(name):
+            return morsel.value
+
+    @final
     def update_cookies(self, cookies: dict[str, Any], url: yarl.URL | None = None) -> None:
         """Update cookies for the provided URL
 
@@ -669,11 +673,13 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
             link = self.parse_url(link_str)
             if self.check_album_results(link, album_results):
                 continue
-            if t_tag := tag.select_one("img"):
-                thumb_str: str | None = css.attr_or_none(t_tag, "src")
+            try:
+                thumb_str: str | None = css.select(tag, "img", "src")
+            except css.SelectorError:
+                thumb = None
             else:
-                thumb_str = None
-            thumb = self.parse_url(thumb_str) if thumb_str and not is_blob_or_svg(thumb_str) else None
+                thumb = None if is_blob_or_svg(thumb_str) else self.parse_url(thumb_str)
+
             yield thumb, link
 
     @final
@@ -701,7 +707,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
     async def web_pager(
         self,
         url: AbsoluteHttpURL,
-        selector: Callable[[BeautifulSoup], str | None] | str | None = None,
+        selector: Callable[[BeautifulSoup], yarl.URL | str | None] | str | None = None,
         *,
         impersonate: BrowserTypeLiteral | bool | None = False,
         relative_to: AbsoluteHttpURL | None = None,
@@ -717,11 +723,12 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         page_url = url
         if callable(selector):
             get_next_page = selector
+
         else:
             selector = selector or self.NEXT_PAGE_SELECTOR
             assert selector, f"No selector was provided and {self.DOMAIN} does define a next_page_selector"
 
-            def get_next_page(soup: BeautifulSoup, /) -> str | None:
+            def get_next_page(soup: BeautifulSoup, /) -> yarl.URL | str | None:
                 try:
                     return css.select(soup, selector, "href")
                 except css.SelectorError:
@@ -753,7 +760,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
 
     @final
     @classmethod
-    def parse_date(cls, date_or_datetime: str, format: str) -> dates.TimeStamp | None:
+    def parse_date(cls, date_or_datetime: str, /, format: str) -> dates.TimeStamp | None:
         return dates.to_timestamp(dates.parse_format(date_or_datetime, format))
 
     @final
@@ -853,23 +860,6 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
             )
             logger.warning(msg)
         return filename
-
-    @final
-    def get_cookies(self, partial_match_domain: bool = False) -> Iterable[tuple[str, BaseCookie[str]]]:
-        if partial_match_domain:
-            yield from self.client.client_manager.filter_cookies_by_word_in_domain(self.DOMAIN)
-        else:
-            yield str(self.PRIMARY_URL.host), self.client.client_manager.cookies.filter_cookies(self.PRIMARY_URL)
-
-    @final
-    def get_cookie_value(self, cookie_name: str, partial_match_domain: bool = False) -> str | None:
-        def get_morsels_by_name():
-            for _, cookie in self.get_cookies(partial_match_domain):
-                if morsel := cookie.get(cookie_name):
-                    yield morsel
-
-        if newest := max(get_morsels_by_name(), key=lambda x: int(x["max-age"] or 0), default=None):
-            return newest.value
 
     @final
     def handle_subs(self, scrape_item: ScrapeItem, video_filename: str, subtitles: Iterable[ISO639Subtitle]) -> None:
