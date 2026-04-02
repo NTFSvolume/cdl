@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from cyberdrop_dl.utils.filepath import sanitize_filename, sanitize_unicode_emojis_and_symbols
+from cyberdrop_dl.utils.filepath import remove_emojis_and_symbols, sanitize_filename
 
 IS_MACOS = sys.platform == "darwin"
 
@@ -15,12 +15,12 @@ pytestmark = pytest.mark.filterwarnings("ignore:invalid escape sequence.*::Synta
 
 
 def test_sanitize_macos_problematic_unicode_symbol() -> None:
-    assert sanitize_unicode_emojis_and_symbols(INVALID_UNICODE9_STRING) == "Bubblz"
+    assert remove_emojis_and_symbols(INVALID_UNICODE9_STRING) == "Bubblz"
 
 
 @pytest.mark.parametrize("name", FOREIGN_LENGUAGE_STRINGS)
 def test_sanitization_must_keep_other_languages_chars(name: str) -> None:
-    assert sanitize_unicode_emojis_and_symbols(name) == name
+    assert remove_emojis_and_symbols(name) == name
 
 
 @pytest.mark.skipif(not IS_MACOS, reason="Only fails in older macOS with APFS")

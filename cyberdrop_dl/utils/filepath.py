@@ -13,11 +13,12 @@ from cyberdrop_dl.exceptions import InvalidExtensionError, NoExtensionError
 _ALLOWED_FILEPATH_PUNCTUATION = " .-_!#$%'()+,;=@[]^{}~"
 _SANITIZE_FILENAME_PATTERN = r'[<>:"/\\|?*\']'
 _RAR_MULTIPART_PATTERN = r"^part\d+"
+
 MAX_FILE_LEN: ContextVar[int] = ContextVar("_MAX_FILE_LEN", default=95)
 MAX_FOLDER_LEN: ContextVar[int] = ContextVar("_MAX_FOLDER_LEN", default=60)
 
 
-def sanitize_unicode_emojis_and_symbols(filename: str) -> str:
+def remove_emojis_and_symbols(filename: str) -> str:
     """Allow all Unicode letters/numbers/marks, plus safe filename punctuation, but not symbols or emoji."""
     return "".join(
         char
@@ -27,10 +28,11 @@ def sanitize_unicode_emojis_and_symbols(filename: str) -> str:
 
 
 def sanitize_filename(name: str, sub: str = "") -> str:
-    clean_name = re.sub(_SANITIZE_FILENAME_PATTERN, sub, name)
+    clean_name = re.sub(_SANITIZE_FILENAME_PATTERN, sub, name).strip()
     if platform.system() in ("Windows", "Darwin"):
-        return sanitize_unicode_emojis_and_symbols(clean_name)
-    return clean_name
+        clean_name = remove_emojis_and_symbols(clean_name)
+    path = Path(clean_name)
+    return path.stem.strip() + path.suffix
 
 
 def sanitize_folder(title: str, max_len: int | None = None) -> str:
@@ -41,25 +43,27 @@ def sanitize_folder(title: str, max_len: int | None = None) -> str:
 
     if all(char in title for char in ("(", ")")):
         new_title, domain_part = title.rsplit("(", 1)
-        new_title = _truncate_str(new_title, max_len)
+        new_title = _truncate_text(new_title, max_len)
         return f"{new_title} ({domain_part.strip()}"
 
-    return _truncate_str(title, max_len)
+    return _truncate_text(title, max_len)
 
 
-def _truncate_str(text: str, max_bytes: int) -> str:
+def _truncate_text(text: str, max_bytes: int) -> str:
     str_bytes = text.encode("utf-8")[:max_bytes]
     return str_bytes.decode("utf-8", "ignore").strip()
 
 
 def get_filename_and_ext(
     filename: str,
+    /,
     mime_type: str | None = None,
     *,
     xenforo: bool = False,
     max_len: int | None = None,
 ) -> tuple[str, str]:
-    filename_as_path = Path(Path(filename).as_posix().replace("/", "-"))  # remove OS separators
+    filename_as_path = Path(remove_os_sep(filename))
+
     if not filename_as_path.suffix:
         if mime_type and (ext := mimetypes.guess_extension(mime_type)):
             filename_as_path = filename_as_path.with_suffix(ext)
@@ -75,41 +79,33 @@ def get_filename_and_ext(
 
         filename_as_path = Path(filename)
 
-    return _get_filename_and_ext(filename_as_path, max_len or MAX_FILE_LEN.get())
-
-
-def _get_filename_and_ext(filename_as_path: Path, max_len: int) -> tuple[str, str]:
     if len(filename_as_path.suffix) > 5:
         raise InvalidExtensionError(str(filename_as_path))
 
-    filename_as_path = filename_as_path.with_suffix(filename_as_path.suffix.lower())
-    filename = _truncate_str(filename_as_path.stem, max_len - len(filename_as_path.suffix)) + filename_as_path.suffix
-    filename_as_path = Path(sanitize_filename(filename))
+    filename_as_path = Path(compose_filename(filename_as_path.stem, filename_as_path.suffix, max_len=max_len))
     return filename_as_path.name, filename_as_path.suffix
 
 
-def compose_custom_filename(
-    stem: str,
-    ext: str,
-    *extras: str,
-    max_len: int | None = None,
-) -> tuple[str, bool]:
-    max_len = max_len or MAX_FILE_LEN.get()
-    truncate_len = max_len - len(ext)
-    has_invalid_extra_info_chars = False
+def remove_os_sep(filename: str) -> str:
+    return Path(filename).as_posix().replace("/", "-")
+
+
+def compose_filename(name: str, suffix: str, *extras: str, max_len: int | None = None) -> str:
+    assert suffix.startswith(".")
+    name = sanitize_filename(remove_os_sep(name)).removesuffix(suffix)
+
+    max_len = (max_len or MAX_FILE_LEN.get()) - len(suffix)
     if extras:
-        extra = "".join(f"[{info}]" for info in extras)
-        clean_extras = sanitize_filename(extra)
-        has_invalid_extra_info_chars = clean_extras != extra
-        if (new_truncate_len := truncate_len - len(clean_extras) - 1) > 0:
-            truncated_stem = f"{_truncate_str(stem, new_truncate_len)} {clean_extras}"
+        extra_info = sanitize_filename("".join(f"[{info}]" for info in extras))
+        if (new_max_len := max_len - len(extra_info) - 1) > 0:
+            truncated_stem = f"{_truncate_text(name, new_max_len)} {extra_info}"
         else:
-            truncated_stem = _truncate_str(f"{stem} {clean_extras}", truncate_len)
+            truncated_stem = _truncate_text(f"{name} {extra_info}", max_len)
 
     else:
-        truncated_stem = _truncate_str(stem, truncate_len)
+        truncated_stem = _truncate_text(name, max_len)
 
-    return f"{truncated_stem}{ext}", has_invalid_extra_info_chars
+    return f"{truncated_stem}{suffix.lower()}"
 
 
 def remove_file_id(filename: str, ext: str) -> str:

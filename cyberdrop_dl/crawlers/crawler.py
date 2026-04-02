@@ -26,7 +26,7 @@ from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem,
 from cyberdrop_dl.downloader.downloader import Downloader
 from cyberdrop_dl.exceptions import MaxChildrenError, NoExtensionError, ScrapeError
 from cyberdrop_dl.utils import css, dates, m3u8
-from cyberdrop_dl.utils.filepath import compose_custom_filename, get_filename_and_ext, remove_file_id, sanitize_filename
+from cyberdrop_dl.utils.filepath import compose_filename, get_filename_and_ext, remove_file_id
 from cyberdrop_dl.utils.strings import safe_format
 from cyberdrop_dl.utils.utilities import (
     error_handling_context,
@@ -425,7 +425,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
 
         ext = ext or Path(filename).suffix
         if self.DOMAIN in ["cyberdrop"]:
-            custom_filename = remove_file_id(self.manager, filename, ext)
+            custom_filename = remove_file_id(filename, ext)
 
         download_folder = get_download_path(self.manager, scrape_item, self.FOLDER_DOMAIN)
         media_item = MediaItem.from_item(
@@ -814,7 +814,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
     @final
     def create_custom_filename(
         self,
-        name: str,
+        name: str,  # can be the full name or just the stem
         ext: str,
         /,
         *,
@@ -823,11 +823,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         audio_codec: str | None = None,
         resolution: Resolution | str | int | None = None,
         hash_string: str | None = None,
-        only_truncate_stem: bool = True,
     ) -> str:
-        calling_args = {name: value for name, value in locals().items() if value is not None and name not in ("self",)}
-        # remove OS separators (if any)
-        stem = sanitize_filename(Path(name).as_posix().replace("/", "-")).strip().removesuffix(ext).strip()
 
         def extra_info() -> Generator[str]:
             if _include.file_id and file_id:
@@ -845,15 +841,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
                 assert any(hash_string.startswith(x) for x in _HASH_PREFIXES), f"Invalid: {hash_string = }"
                 yield hash_string
 
-        filename, had_invalid_chars = compose_custom_filename(stem, ext, *extra_info())
-        if had_invalid_chars:
-            msg = (
-                f"Custom filename creation seems to be broken. "
-                f"Important information was removed while creating a filename. "
-                f"\n{calling_args}"
-            )
-            self.log.warning(msg)
-        return filename
+        return compose_filename(name, ext, *extra_info())
 
     @final
     def handle_subs(self, scrape_item: ScrapeItem, video_filename: str, subtitles: Iterable[ISO639Subtitle]) -> None:
