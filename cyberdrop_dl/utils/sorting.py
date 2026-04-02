@@ -260,6 +260,7 @@ def _move_file(
         for auto_index in range(1, max_retries + 1):
             if source_size == dest.stat().st_size:
                 source.unlink()
+                logger.debug("Moved '{}' to '{}'", source, dest)
                 return True
 
             new_filename = f"{dest_stem}{incrementer_format.format(i=auto_index)}{dest.suffix}"
@@ -274,6 +275,9 @@ def _move_file(
                 _ = shutil.move(source, dest)
             except FileExistsError:
                 continue
+            except OSError:
+                logger.exception("Unable to move '{}'", source)
+                return False
             else:
                 return True
         else:
@@ -281,9 +285,12 @@ def _move_file(
             return False
 
     except OSError:
+        logger.exception("Unable to move '{}'", source)
         return False
 
-    raise RuntimeError
+    else:
+        logger.debug("Moved '{}' to '{}'", source, dest)
+        return True
 
 
 async def _try_probe(kind: str, file: Path) -> ffmpeg.FFprobeResult | None:
