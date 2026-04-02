@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any, Literal, Self, TypeAlias, TypedDict, over
 
 from multidict import CIMultiDict, CIMultiDictProxy
 
-from cyberdrop_dl.utils.utilities import get_valid_dict
+from cyberdrop_dl.utils.utilities import DictDataclass
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable, Iterator, Mapping
@@ -222,13 +222,8 @@ def _parse_duration(duration: str | float | None) -> TruncatedFloat | None:
         return TruncatedFloat(seconds)
 
 
-class StreamDict(TypedDict):
-    index: int
-    codec_type: Literal["video", "audio", "subtitle"]
-
-
 class FFprobeOutput(TypedDict):
-    streams: list[StreamDict]
+    streams: list[dict[str, Any]]
 
 
 class Tags(CIMultiDictProxy[Any]): ...
@@ -240,7 +235,7 @@ class TruncatedFloat(float):
 
 
 @dataclasses.dataclass(slots=True, kw_only=True)
-class Stream:
+class Stream(DictDataclass):
     index: int
     codec: str
     codec_type: str
@@ -249,8 +244,8 @@ class Stream:
     tags: Tags
 
     @classmethod
-    def validate(cls, stream_info: StreamDict) -> dict[str, Any]:
-        info = get_valid_dict(cls, stream_info)
+    def validate(cls, stream_info: dict[str, Any]) -> dict[str, Any]:
+        info = cls.filter_dict(stream_info)
         tags = Tags(CIMultiDict(stream_info.get("tags", {})))
         return info | {
             "codec": stream_info.get("codec_name"),
@@ -260,7 +255,7 @@ class Stream:
         }
 
     @classmethod
-    def from_dict(cls, stream_info: StreamDict) -> Self:
+    def from_dict(cls, stream_info: dict[str, Any]) -> Self:
         return cls(**cls.validate(stream_info))
 
 
@@ -270,7 +265,7 @@ class AudioStream(Stream):
     codec_type: Literal["audio"] = "audio"  # pyright: ignore[reportIncompatibleVariableOverride]
 
     @classmethod
-    def validate(cls, stream_info: StreamDict) -> dict[str, Any]:
+    def validate(cls, stream_info: dict[str, Any]) -> dict[str, Any]:
         defaults = super(AudioStream, cls).validate(stream_info)
         sample_rate = int(float(stream_info.get("sample_rate", 0))) or None
         return defaults | {"sample_rate": sample_rate}
@@ -285,7 +280,7 @@ class VideoStream(Stream):
     codec_type: Literal["video"] = "video"  # pyright: ignore[reportIncompatibleVariableOverride]
 
     @classmethod
-    def validate(cls, stream_info: StreamDict) -> dict[str, Any]:
+    def validate(cls, stream_info: dict[str, Any]) -> dict[str, Any]:
         width = int(float(stream_info.get("width", 0))) or None
         height = int(float(stream_info.get("height", 0))) or None
         resolution = fps = None

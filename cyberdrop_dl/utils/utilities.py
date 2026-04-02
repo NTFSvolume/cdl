@@ -10,7 +10,7 @@ import os
 import platform
 import re
 import sys
-from collections.abc import Generator, Mapping
+from collections.abc import Generator
 from functools import partial, wraps
 from http import HTTPStatus
 from pathlib import Path
@@ -48,7 +48,7 @@ from cyberdrop_dl.utils import json
 from cyberdrop_dl.utils.logger import log_with_color
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Coroutine, Generator, Iterable, Mapping
+    from collections.abc import Callable, Coroutine, Generator, Iterable
 
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
     from cyberdrop_dl.downloader.downloader import Downloader
@@ -297,7 +297,7 @@ def check_for_partial_files(manager: Manager) -> None:
         log_yellow("There are partial downloads in the downloads folder")
 
 
-def delete_empty_folders(manager: Manager):
+def delete_empty_folders(manager: Manager) -> None:
     """Deletes empty folders efficiently."""
     log_yellow("Checking for empty folders...")
     purge_dir_tree(manager.config.files.download_folder)
@@ -305,12 +305,6 @@ def delete_empty_folders(manager: Manager):
     sorted_folder = manager.config.sorting.sort_folder
     if sorted_folder and manager.config_manager.settings_data.sorting.sort_downloads:
         purge_dir_tree(sorted_folder)
-
-
-def get_valid_dict(dataclass: Dataclass | type[Dataclass], info: Mapping[str, Any]) -> dict[str, Any]:
-    """Remove all keys that are not fields in the dataclass"""
-    fields_names = [f.name for f in dataclasses.fields(dataclass)]
-    return {name: info[name] for name in fields_names if name in info}
 
 
 def get_text_between(original_text: str, start: str, end: str) -> str:
