@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import contextlib
 import logging
 from datetime import datetime
@@ -91,20 +90,12 @@ async def _run_manager(manager: Manager) -> None:
 
 async def _scheduler(manager: Manager) -> None:
     for func in (_runtime, _post_runtime):
-        if manager.states.SHUTTING_DOWN.is_set():
-            return
-
-        try:
-            await func(manager)
-        except asyncio.CancelledError:
-            if not manager.states.SHUTTING_DOWN.is_set():
-                raise
+        await func(manager)
 
 
 async def _runtime(manager: Manager) -> None:
     """Main runtime loop for the program, this will run until all scraping and downloading is complete."""
 
-    manager.states.RUNNING.set()
     with manager.live_manager.get_main_live(stop=True):
         async with ScrapeMapper.managed(manager) as scrape_mapper:
             await scrape_mapper.run()

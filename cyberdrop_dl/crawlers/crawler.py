@@ -78,8 +78,7 @@ SupportedDomains: TypeAlias = OneOrTuple[str]
 RateLimit = tuple[float, float]
 
 
-HASH_PREFIXES = "md5:", "sha1:", "sha256:", "xxh128:"
-VALID_RESOLUTION_NAMES = "4K", "8K", "HQ", "Unknown"
+_HASH_PREFIXES = "md5:", "sha1:", "sha256:", "xxh128:"
 
 
 @dataclasses.dataclass(slots=True, frozen=True)
@@ -171,20 +170,26 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
 
     @final
     def __init__(self, manager: Manager) -> None:
-        self.manager = manager
+        self.manager: Manager = manager
         self.downloader: Downloader = dataclasses.field(init=False)
         self.client: HTTPClient = dataclasses.field(init=False)
-        self.startup_lock = asyncio.Lock()
+        self._startup_lock: asyncio.Lock = asyncio.Lock()
         self.ready: bool = False
         self.disabled: bool = False
         self.logged_in: bool = False
         self.scraped_items: set[str] = set()
         self.RATE_LIMIT = AsyncLimiter(*self._RATE_LIMIT)
-        self.waiting_items = 0
+
         self.log = log
         self.log_debug = log_debug
-        self._semaphore = asyncio.Semaphore(20)
+        self._semaphore: asyncio.Semaphore = asyncio.Semaphore(20)
         self.__post_init__()
+
+    @property
+    def waiting_items(self) -> int:
+        if self._semaphore._waiters is None:
+            return 0
+        return len(self._semaphore._waiters)
 
     def __post_init__(self) -> None:
         """Override in subclasses to add custom init logic
@@ -194,7 +199,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
     @final
     async def __async_init__(self) -> None:
         """Starts the crawler."""
-        async with self.startup_lock:
+        async with self._startup_lock:
             if self.ready:
                 return
             self.client = self.manager.client_manager.scraper_client
@@ -316,10 +321,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         if self.disabled:
             return
 
-        self.waiting_items += 1
         async with self._semaphore:
-            await self.manager.states.RUNNING.wait()
-            self.waiting_items -= 1
             with scrape_item.track_changes():
                 scrape_item.url = url = self.transform_url(scrape_item.url)
 
@@ -474,7 +476,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         return check_complete
 
     async def handle_media_item(self, media_item: MediaItem, m3u8: m3u8.Rendition | None = None) -> None:
-        await self.manager.states.RUNNING.wait()
+
         check_complete = await self.check_complete(media_item.url, media_item.referer)
         if check_complete:
             if media_item.album_id:
@@ -873,7 +875,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
                 yield res.name
 
             if _include.hash and hash_string:
-                assert any(hash_string.startswith(x) for x in HASH_PREFIXES), f"Invalid: {hash_string = }"
+                assert any(hash_string.startswith(x) for x in _HASH_PREFIXES), f"Invalid: {hash_string = }"
                 yield hash_string
 
         filename, had_invalid_chars = _make_custom_filename(stem, ext, list(extra_info()), only_truncate_stem)
@@ -1032,7 +1034,7 @@ def auto_task_id(
 
     @wraps(func)
     async def wrapper(self: _CrawlerT, scrape_item: ScrapeItem, *args: _P.args, **kwargs: _P.kwargs) -> _R:
-        await self.manager.states.RUNNING.wait()
+
         with self.new_task_id(scrape_item.url):
             result = func(self, scrape_item, *args, **kwargs)
             if inspect.isawaitable(result):

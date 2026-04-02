@@ -7,7 +7,7 @@ import logging
 from dataclasses import Field, field
 from pathlib import Path
 from time import perf_counter
-from typing import TYPE_CHECKING, Any, NamedTuple, Self, TypeVar
+from typing import TYPE_CHECKING, Any, Self, TypeVar
 
 from pydantic import BaseModel
 
@@ -31,11 +31,6 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.data_structures.url_objects import MediaItem
     from cyberdrop_dl.scraper.scrape_mapper import ScrapeMapper
-
-
-class AsyncioEvents(NamedTuple):
-    SHUTTING_DOWN: asyncio.Event
-    RUNNING: asyncio.Event
 
 
 logger = logging.getLogger(__name__)
@@ -68,7 +63,7 @@ class Manager:
         self.downloaded_data: int = 0
         self.loggers: dict[str, QueuedLogger] = {}
         self.args = args
-        self.states: AsyncioEvents
+
         self._appdata: AppData | None = None
         self._completed_downloads: list[MediaItem] = []
 
@@ -127,7 +122,7 @@ class Manager:
 
     async def async_startup(self) -> None:
         """Async startup process for the manager."""
-        self.states = AsyncioEvents(asyncio.Event(), asyncio.Event())
+
         self.args_logging()
 
         if not isinstance(self.client_manager, ClientManager):
@@ -217,7 +212,6 @@ class Manager:
 
     async def close(self) -> None:
         """Closes the manager."""
-        self.states.RUNNING.clear()
 
         await self.async_db_close()
 

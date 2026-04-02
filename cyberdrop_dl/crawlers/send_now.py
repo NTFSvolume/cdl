@@ -51,7 +51,7 @@ class SendNowCrawler(Crawler):
     async def _get_cookies(self, scrape_item: ScrapeItem) -> None:
         if self.got_cookies:
             return
-        async with self.startup_lock:
+        async with self._startup_lock:
             if self.got_cookies:
                 return
 

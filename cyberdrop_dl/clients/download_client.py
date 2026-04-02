@@ -64,7 +64,6 @@ class DownloadClient:
     @contextlib.asynccontextmanager
     async def _track_errors(self, domain: str):
         with self.client_manager.request_context(domain):
-            await self.client_manager.manager.states.RUNNING.wait()
             yield
 
     def _get_download_headers(self, domain: str, referer: AbsoluteHttpURL) -> dict[str, str]:
@@ -207,7 +206,7 @@ class DownloadClient:
         process_response: Callable[[aiohttp.ClientResponse | AbstractResponse], Coroutine[None, None, bool]],
     ) -> bool:
         download_url = media_item.debrid_link or media_item.url
-        await self.manager.states.RUNNING.wait()
+
         fallback_url_generator = _fallback_generator(media_item)
         fallback_count = 0
 
@@ -251,7 +250,6 @@ class DownloadClient:
 
         async with aiofiles.open(media_item.partial_file, mode="ab") as f:
             async for chunk in content.iter_chunked(self.client_manager.speed_limiter.chunk_size):
-                await self.manager.states.RUNNING.wait()
                 await check_free_space()
                 chunk_size = len(chunk)
                 await self.client_manager.speed_limiter.acquire(chunk_size)

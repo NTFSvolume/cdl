@@ -55,7 +55,6 @@ class HTTPClient:
         with self.client_manager.request_context(domain):
             domain_limiter = self.client_manager.get_rate_limiter(domain)
             async with self.client_manager.global_rate_limiter, domain_limiter:
-                await self.client_manager.manager.states.RUNNING.wait()
                 yield
 
     def _prepare_headers(self, headers: Mapping[str, str] | None = None) -> CIMultiDict[str]:

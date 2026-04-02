@@ -75,21 +75,6 @@ class ProgressManager:
         finally:
             self.status_message.update(self.status_message_task_id, visible=False)
 
-    def pause_or_resume(self):
-        if self.manager.states.RUNNING.is_set():
-            self.pause()
-        else:
-            self.resume()
-
-    def pause(self, msg: str = ""):
-        self.manager.states.RUNNING.clear()
-        suffix = f" [{msg}]" if msg else ""
-        self.activity.update(self.activity_task_id, description=f"Paused{suffix}")
-
-    def resume(self):
-        self.manager.states.RUNNING.set()
-        self.activity.update(self.activity_task_id, description="Running Cyberdrop-DL")
-
     def startup(self) -> None:
         """Startup process for the progress manager."""
         spinner = SpinnerColumn(style="green", spinner_name="dots")

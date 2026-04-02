@@ -155,7 +155,7 @@ class Downloader:
 
     @contextlib.asynccontextmanager
     async def _download_context(self, media_item: MediaItem):
-        await self.manager.states.RUNNING.wait()
+
         media_item.attempts = 0
         await self.client.mark_incomplete(media_item, self.domain)
         if media_item.is_segment:
@@ -173,7 +173,6 @@ class Downloader:
         )
 
         async with server_limit, domain_limit, global_limit:
-            await self.manager.states.RUNNING.wait()
             self.processed_items.add(media_item.db_path)
             self.update_queued_files(increase_total=False)
             self.waiting_items -= 1
@@ -448,7 +447,6 @@ class Downloader:
         if url_as_str in KNOWN_BAD_URLS:
             raise DownloadError(KNOWN_BAD_URLS[url_as_str])
         try:
-            await self.manager.states.RUNNING.wait()
             self.client.client_manager.check_domain_errors(self.domain)
             media_item.attempts = media_item.attempts or 1
             if not media_item.is_segment:
