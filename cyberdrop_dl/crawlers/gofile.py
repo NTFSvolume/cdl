@@ -215,7 +215,7 @@ class GoFileCrawler(Crawler):
             return
 
         if file.get("isFrozen"):
-            self.log(f"{link} is marked as frozen, download may fail", 30)
+            self.log.warning(f"{link} is marked as frozen, download may fail")
 
         filename, ext = self.get_filename_and_ext(file["name"], mime_type=file.get("mimetype"))
         scrape_item.uploaded_at = file["createTime"]
@@ -231,7 +231,7 @@ class GoFileCrawler(Crawler):
             self.update_cookies({"accountToken": self._api_key})
 
     async def _create_temp_account(self) -> str:
-        self.log("Creating temp Gofile account")
+        self.log.info("Creating temp account")
         api_url = _API_ENTRYPOINT / "accounts"
         json_resp = await self.request_json(api_url, method="POST", data={}, headers=self.headers)
         if json_resp["status"] != "ok":

@@ -267,9 +267,7 @@ class PornHubCrawler(Crawler):
         if not use_hls:
             best_format = await self.get_best_mp4_format(formats)
             if best_format is None:
-                self.log(
-                    f"[{self.FOLDER_DOMAIN}] Video {video_id} has no mp4 formats available. Falling back to HLS", 30
-                )
+                self.log.warning(f"Video {video_id} has no mp4 formats available. Falling back to HLS")
 
             else:
                 debrid_link = self.parse_url(best_format.url)

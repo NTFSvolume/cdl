@@ -114,7 +114,7 @@ class XenforoCrawler(HTMLMessageBoardCrawler, is_abc=True):
         # Check first if we have cookies and they are valid
         text, logged_in = await self.check_login_with_request(login_url)
         if logged_in:
-            self.logged_in = True
+            self._logged_in = True
             return
 
         wait_time = wait_time or retries
@@ -134,7 +134,7 @@ class XenforoCrawler(HTMLMessageBoardCrawler, is_abc=True):
                 await asyncio.sleep(wait_time)
                 text, logged_in = await self.check_login_with_request(login_url)
                 if logged_in:
-                    self.logged_in = True
+                    self._logged_in = True
                     return
             except TimeoutError:
                 continue

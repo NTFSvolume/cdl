@@ -27,7 +27,7 @@ from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem,
 from cyberdrop_dl.downloader.downloader import Downloader
 from cyberdrop_dl.exceptions import MaxChildrenError, NoExtensionError, ScrapeError
 from cyberdrop_dl.utils import css, dates, m3u8
-from cyberdrop_dl.utils.logger import log, log_debug
+from cyberdrop_dl.utils.logger import log_debug
 from cyberdrop_dl.utils.strings import safe_format
 from cyberdrop_dl.utils.utilities import (
     error_handling_context,
@@ -78,6 +78,7 @@ class _PlaceHolderConfigInclude:
 
 
 _include = _PlaceHolderConfigInclude()
+
 
 _DB_PATH_BUILDERS: MappingProxyType[str, Callable[[AbsoluteHttpURL], str]] = MappingProxyType(
     {
@@ -135,6 +136,15 @@ class Registry:
                 cls._import_from(sub_module)
 
 
+class _CrawlerLogger(logging.LoggerAdapter[logging.Logger]):
+    def __init__(self, name: str) -> None:
+        self._crawler = name
+        super().__init__(logger)
+
+    def process(self, msg: object, kwargs: Any) -> tuple[str, Any]:
+        return f"[{self._crawler}] {msg}", kwargs
+
+
 class Crawler(HTTPClientProxy, HLSParser, ABC):
     OLD_DOMAINS: ClassVar[tuple[str, ...]] = ()
     SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = ()
@@ -166,13 +176,18 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         self._startup_lock: asyncio.Lock = asyncio.Lock()
         self._ready: bool = False
         self.disabled: bool = False
-        self.logged_in: bool = False
+        self._logged_in: bool = False
         self._scraped_items: set[str] = set()
 
-        self.log = log
+        self._logger: _CrawlerLogger = _CrawlerLogger(self.FOLDER_DOMAIN)
         self.log_debug = log_debug
         self._semaphore: asyncio.Semaphore = asyncio.Semaphore(20)
         self.__post_init__()
+
+    @property
+    @final
+    def log(self) -> _CrawlerLogger:
+        return self._logger
 
     def __post_init__(self) -> None:
         """Override in subclasses to add custom init logic

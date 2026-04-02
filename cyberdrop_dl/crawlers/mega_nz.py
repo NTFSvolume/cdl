@@ -69,7 +69,7 @@ class MegaNzCrawler(Crawler, db_path="path_qs_frag"):
         await self.login(self.PRIMARY_URL)
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
-        if not self.logged_in:
+        if not self._logged_in:
             return
 
         info = self.core.parse_url(scrape_item.url)
@@ -154,7 +154,7 @@ class MegaNzCrawler(Crawler, db_path="path_qs_frag"):
         # TODO: Show some logging message / UI about login
         try:
             await self.core.login(self.user, self.password)
-            self.logged_in = True
+            self._logged_in = True
         except Exception as e:
             self.disabled = True
             raise LoginError(f"[MegaNZ] {e}") from e

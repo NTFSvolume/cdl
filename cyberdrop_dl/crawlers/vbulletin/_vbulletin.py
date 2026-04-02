@@ -66,7 +66,7 @@ class vBulletinCrawler(XenforoCrawler, is_abc=True):  # noqa: N801
         cls.XF_POST_URL_PART_NAME = "post"
 
     async def __async_post_init__(self) -> None:
-        if not self.logged_in:
+        if not self._logged_in:
             login_url = self.PRIMARY_URL / "login.php"
             await self._login(login_url)
 
@@ -76,7 +76,7 @@ class vBulletinCrawler(XenforoCrawler, is_abc=True):  # noqa: N801
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         # TODO: Handle more URLs
-        if self.login_required and not self.logged_in:
+        if self.login_required and not self._logged_in:
             return
         await self.fetch_thread(scrape_item)
 

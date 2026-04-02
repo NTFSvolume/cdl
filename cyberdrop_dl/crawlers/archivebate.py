@@ -59,7 +59,7 @@ class ArchiveBateCrawler(MixDropCrawler):
         db_path = self.__db_path__(url)
         check_complete = await self.manager.db_manager.history_table.check_complete(self.DOMAIN, url, url, db_path)
         if check_complete:
-            self.log(f"Skipping {scrape_item.url} as it has already been downloaded", 10)
+            self.log.info(f"Skipping {scrape_item.url} as it has already been downloaded")
             self.manager.progress_manager.download_progress.add_previously_completed()
             return
 

@@ -92,7 +92,7 @@ class WordPressBaseCrawler(Crawler, is_abc=True):
         date_range = QueryDatetimeRange.from_url(scrape_item.url)
         scrape_item.url = scrape_item.url.with_query(None)
         if date_range:
-            self.log(f"Scraping {scrape_item.url} with date range: {date_range.as_query()}")
+            self.log.info(f"Scraping {scrape_item.url} with date range: {date_range.as_query()}")
         return await self.fetch_with_date_range(scrape_item, date_range)
 
     @property
@@ -139,7 +139,7 @@ class WordPressBaseCrawler(Crawler, is_abc=True):
         self, scrape_item: ScrapeItem, post: Post, date_range: QueryDatetimeRange | None = None
     ) -> None:
         if date_range and not date_range.is_in_range(post.date_gmt):
-            self.log(f"Skipping post {post.link} as it is out of date range. Post date: {[post.date_gmt]}")
+            self.log.info(f"Skipping post {post.link} as it is out of date range. Post date: {[post.date_gmt]}")
             return
         new_scrape_item = scrape_item.create_child(self.parse_url(post.link))
         await self.handle_post(new_scrape_item, post)
@@ -318,7 +318,7 @@ class WordPressHTMLCrawler(WordPressBaseCrawler, is_generic=True):
                     and (date_from_path := _match_date_from_path(new_scrape_item.url.parts[1:]))
                     and not date_range.is_in_range(date_from_path)
                 ):
-                    self.log(
+                    self.log.info(
                         f"Skipping post {new_scrape_item.url} as it is out of date range. Post date: {date_from_path}"
                     )
                     continue
