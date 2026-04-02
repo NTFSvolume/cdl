@@ -51,13 +51,12 @@ from cyberdrop_dl.utils.utilities import (
     is_blob_or_svg,
     parse_url,
     remove_file_id,
-    remove_trailing_slash,
     sanitize_filename,
     truncate_str,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Callable, Coroutine, Generator, Iterable, Mapping
+    from collections.abc import AsyncGenerator, AsyncIterator, Callable, Coroutine, Generator, Iterable, Mapping
     from types import ModuleType
 
     import yarl
@@ -200,7 +199,6 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
 
     @final
     async def __async_init__(self) -> None:
-        """Starts the crawler."""
         async with self._startup_lock:
             if self._ready:
                 return
@@ -699,8 +697,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         """Generates tuples with an URL from the `src` value of the first image tag (AKA the thumbnail) and a new scrape item from the value of `attribute`
 
         :param results: must be the output of `self.get_album_results`.
-        If provided, it will be used as a filter, to only yield items that has not been downloaded before
-        :param **kwargs: Will be forwarded to `scrape.item.create_child`"""
+        If provided, it will be used as a filter, to only yield items that has not been downloaded before"""
         for thumb, link in self.iter_tags(soup, selector, attribute, results=results):
             new_scrape_item = scrape_item.create_child(link, **kwargs)
             yield thumb, new_scrape_item
@@ -714,12 +711,8 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         impersonate: BrowserTypeLiteral | bool | None = False,
         relative_to: AbsoluteHttpURL | None = None,
         trim: bool | None = None,
-    ) -> AsyncGenerator[BeautifulSoup]:
-        """Generator of website pages.
-
-        :param next_page_selector: If `None`, `self.next_page_selector` will be used
-        :param cffi: If `True`, uses `curl_cffi` to get the soup for each page. Otherwise, `aiohttp` will be used
-        :param **kwargs: Will be forwarded to `self.parse_url` to parse each new page"""
+    ) -> AsyncIterator[BeautifulSoup]:
+        """Generator of website pages"""
 
         relative_to = relative_to or url.origin()
         page_url = url
@@ -913,42 +906,7 @@ def _make_custom_filename(stem: str, ext: str, extra_info: list[str], only_trunc
     return f"{truncated_stem}{ext}", invalid_extra_info_chars
 
 
-class Site(NamedTuple):
-    PRIMARY_URL: AbsoluteHttpURL
-    DOMAIN: str
-    SUPPORTED_DOMAINS: SupportedDomains = ()
-    FOLDER_DOMAIN: str = ""
-
-
 _CrawlerT = TypeVar("_CrawlerT", bound=Crawler)
-
-
-def create_crawlers(
-    urls: Iterable[str] | Iterable[AbsoluteHttpURL], base_crawler: type[_CrawlerT]
-) -> set[type[_CrawlerT]]:
-    """Creates new subclasses of the base crawler from the urls"""
-    return {_create_subclass(url, base_crawler) for url in urls}
-
-
-def _create_subclass(url: AbsoluteHttpURL | str, base_class: type[_CrawlerT]) -> type[_CrawlerT]:
-    url = AbsoluteHttpURL(url)
-    assert is_absolute_http_url(url)
-    primary_url = remove_trailing_slash(url)
-    domain = primary_url.host.removeprefix("www.")
-    class_name = _make_crawler_name(domain)
-    class_attributes = Site(primary_url, domain)._asdict()
-    return type(class_name, (base_class,), class_attributes)  # type: ignore  # pyright: ignore[reportReturnType]
-
-
-def _make_crawler_name(input_string: str) -> str:
-    clean_string = re.sub(r"[^a-zA-Z0-9]+", " ", input_string).strip()
-    cap_name = clean_string.title().replace(" ", "")
-    assert cap_name and cap_name.isalnum(), (
-        f"Can not generate a valid class name from {input_string}. Needs to be defined as a concrete class"
-    )
-    if cap_name[0].isdigit():
-        cap_name = "_" + cap_name
-    return f"{cap_name}Crawler"
 
 
 def _validate_supported_paths(cls: type[Crawler]) -> None:
@@ -959,9 +917,11 @@ def _validate_supported_paths(cls: type[Crawler]) -> None:
             assert paths, f"{cls.__name__} has not paths for {path_name}"
 
         if path_name.startswith("*"):  # note
-            return
+            continue
+
         if isinstance(paths, str):
             paths = (paths,)
+
         for path in paths:
             assert "`" not in path, f"{cls.__name__}, Invalid path {path_name}: {path}"
 

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
+from cyberdrop_dl.crawlers import create_crawlers
 from cyberdrop_dl.crawlers._chevereto import CheveretoCrawler
-from cyberdrop_dl.crawlers.crawler import create_crawlers
 from cyberdrop_dl.scraper import scrape_mapper
 
 
