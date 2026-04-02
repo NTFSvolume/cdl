@@ -174,7 +174,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         self.downloader: Downloader = dataclasses.field(init=False)
         self.client: HTTPClient = dataclasses.field(init=False)
         self._startup_lock: asyncio.Lock = asyncio.Lock()
-        self.ready: bool = False
+        self._ready: bool = False
         self.disabled: bool = False
         self.logged_in: bool = False
         self.scraped_items: set[str] = set()
@@ -200,7 +200,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
     async def __async_init__(self) -> None:
         """Starts the crawler."""
         async with self._startup_lock:
-            if self.ready:
+            if self._ready:
                 return
             self.client = self.manager.client_manager.scraper_client
             self.manager.client_manager.rate_limits[self.DOMAIN] = self.RATE_LIMIT
@@ -210,7 +210,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
                 self.manager.client_manager.download_client.server_locked_domains.add(self.DOMAIN)
             self.downloader = self._init_downloader()
             await self.__async_post_init__()
-            self.ready = True
+            self._ready = True
 
     async def __async_post_init__(self) -> None:
         """Perform additional setup that requires I/O
@@ -218,6 +218,11 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         ex: login, getting API tokens, etc..
 
         This method its called once and only if the crawler is actually going to be scrape something"""
+
+    @final
+    async def ready(self) -> None:
+        if not self._ready:
+            await self.__async_init__()
 
     def __init_subclass__(
         cls,
@@ -228,13 +233,15 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
     ) -> None:
         super().__init_subclass__(**kwargs)
 
-        msg = (
-            f"Subclass {cls.__name__} must not override __init__/_async_init_ method,"
-            "use __post_init__ for additional setup"
-            "use _async_post_init_ for setup that requires manipulating cookies or any IO (database access, https requests, etc...)"
+        assert cls.__init__ is Crawler.__init__, (
+            f"Subclass {cls.__name__} must not override __init__,use __post_init__ for additional setup"
         )
-        assert cls.__init__ is Crawler.__init__, msg
-        assert cls.__async_init__ is Crawler.__async_init__, msg
+
+        assert cls.__async_init__ is Crawler.__async_init__, (
+            f"Subclass {cls.__name__} must not override __async_init__,"
+            "use __async_post_init__ for setup that requires manipulating cookies or any IO (database access, HTTP requests, etc...)"
+        )
+
         cls.NAME: str = cls.__name__.removesuffix("Crawler")
         cls.IS_GENERIC: bool = is_generic
         cls.SUPPORTED_PATHS = _sort_supported_paths(cls.SUPPORTED_PATHS)  # pyright: ignore[reportConstantRedefinition]
