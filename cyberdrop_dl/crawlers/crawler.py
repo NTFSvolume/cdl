@@ -5,7 +5,6 @@ import contextlib
 import dataclasses
 import datetime
 import importlib
-import inspect
 import logging
 import pkgutil
 import re
@@ -14,6 +13,7 @@ from abc import ABC, abstractmethod
 from collections import Counter
 from functools import wraps
 from pathlib import Path
+from types import MappingProxyType
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -72,7 +72,7 @@ logger = logging.getLogger(__name__)
 _P = ParamSpec("_P")
 _R = TypeVar("_R")
 _T = TypeVar("_T")
-_T_co = TypeVar("_T_co", covariant=True)
+
 OneOrTuple: TypeAlias = _T | tuple[_T, ...]
 SupportedPaths: TypeAlias = dict[str, OneOrTuple[str]]
 SupportedDomains: TypeAlias = OneOrTuple[str]
@@ -93,14 +93,16 @@ class _PlaceHolderConfigInclude:
 
 _include = _PlaceHolderConfigInclude()
 
-_DB_PATH_BUILDERS: dict[str, Callable[[AbsoluteHttpURL], str]] = {
-    "url": lambda url: str(url),
-    "name": lambda url: url.name,
-    "path": lambda url: url.path,
-    "path_qs": lambda url: url.path_qs,
-    "path_qs_frag": lambda url: f"{url.path_qs}#{frag}" if (frag := url.fragment) else url.path_qs,
-    "path_frag": lambda url: f"{url.path}#{frag}" if (frag := url.fragment) else url.path,
-}
+_DB_PATH_BUILDERS: MappingProxyType[str, Callable[[AbsoluteHttpURL], str]] = MappingProxyType(
+    {
+        "url": lambda url: str(url),
+        "name": lambda url: url.name,
+        "path": lambda url: url.path,
+        "path_qs": lambda url: url.path_qs,
+        "path_qs_frag": lambda url: f"{url.path_qs}#{frag}" if (frag := url.fragment) else url.path_qs,
+        "path_frag": lambda url: f"{url.path}#{frag}" if (frag := url.fragment) else url.path,
+    }
+)
 
 
 def _url(item: ScrapeItem | AbsoluteHttpURL) -> AbsoluteHttpURL:
@@ -289,7 +291,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
             assert getattr(subclass, field_name, None), f"Subclass {subclass.__name__} must override: {field_name}"
 
     @final
-    def create_task(self, coro: Coroutine[Any, Any, _T_co]) -> None:
+    def create_task(self, coro: Coroutine[Any, Any, _T]) -> None:
         _ = self.manager.task_group.create_task(coro)
 
     @abstractmethod
@@ -984,17 +986,13 @@ def _sort_supported_paths(supported_paths: SupportedPaths) -> dict[str, OneOrTup
 
 
 def auto_task_id(
-    func: Callable[Concatenate[_CrawlerT, ScrapeItem, _P], _R | Coroutine[None, None, _R]],
+    func: Callable[Concatenate[_CrawlerT, ScrapeItem, _P], Coroutine[None, None, _R]],
 ) -> Callable[Concatenate[_CrawlerT, ScrapeItem, _P], Coroutine[None, None, _R]]:
     """Autocreate a new `task_id` from the scrape_item of the method"""
 
     @wraps(func)
     async def wrapper(self: _CrawlerT, scrape_item: ScrapeItem, *args: _P.args, **kwargs: _P.kwargs) -> _R:
-
         with self.new_task_id(scrape_item.url):
-            result = func(self, scrape_item, *args, **kwargs)
-            if inspect.isawaitable(result):
-                return await result
-            return result
+            return await func(self, scrape_item, *args, **kwargs)
 
     return wrapper
