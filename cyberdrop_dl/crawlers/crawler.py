@@ -14,20 +14,7 @@ from collections import Counter
 from functools import wraps
 from pathlib import Path
 from types import MappingProxyType
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    ClassVar,
-    Concatenate,
-    Final,
-    Literal,
-    NamedTuple,
-    ParamSpec,
-    Self,
-    TypeAlias,
-    TypeVar,
-    final,
-)
+from typing import TYPE_CHECKING, Any, ClassVar, Concatenate, Final, Literal, ParamSpec, Self, TypeAlias, TypeVar, final
 
 from aiolimiter import AsyncLimiter
 from typing_extensions import deprecated
@@ -108,7 +95,8 @@ def _url(item: ScrapeItem | AbsoluteHttpURL) -> AbsoluteHttpURL:
     return item if isinstance(item, AbsoluteHttpURL) else item.url
 
 
-class CrawlerInfo(NamedTuple):
+@dataclasses.dataclass(slots=True, frozen=True)
+class CrawlerInfo:
     site: str
     primary_url: AbsoluteHttpURL
     supported_domains: tuple[str, ...]
