@@ -7,7 +7,7 @@ import unicodedata
 from contextvars import ContextVar
 from pathlib import Path
 
-from cyberdrop_dl import constants
+from cyberdrop_dl.constants import FileExt
 from cyberdrop_dl.exceptions import InvalidExtensionError, NoExtensionError
 
 _ALLOWED_FILEPATH_PUNCTUATION = " .-_!#$%'()+,;=@[]^{}~"
@@ -17,10 +17,12 @@ MAX_FILE_LEN: ContextVar[int] = ContextVar("_MAX_FILE_LEN", default=95)
 MAX_FOLDER_LEN: ContextVar[int] = ContextVar("_MAX_FOLDER_LEN", default=60)
 
 
-def sanitize_unicode_emojis_and_symbols(title: str) -> str:
+def sanitize_unicode_emojis_and_symbols(filename: str) -> str:
     """Allow all Unicode letters/numbers/marks, plus safe filename punctuation, but not symbols or emoji."""
     return "".join(
-        c for c in title if (c in _ALLOWED_FILEPATH_PUNCTUATION or unicodedata.category(c)[0] in {"L", "N", "M"})
+        char
+        for char in filename
+        if (char in _ALLOWED_FILEPATH_PUNCTUATION or unicodedata.category(char)[0] in {"L", "N", "M"})
     ).strip()
 
 
@@ -39,13 +41,13 @@ def sanitize_folder(title: str, max_len: int | None = None) -> str:
 
     if all(char in title for char in ("(", ")")):
         new_title, domain_part = title.rsplit("(", 1)
-        new_title = truncate_str(new_title, max_len)
+        new_title = _truncate_str(new_title, max_len)
         return f"{new_title} ({domain_part.strip()}"
 
-    return truncate_str(title, max_len)
+    return _truncate_str(title, max_len)
 
 
-def truncate_str(text: str, max_bytes: int) -> str:
+def _truncate_str(text: str, max_bytes: int) -> str:
     str_bytes = text.encode("utf-8")[:max_bytes]
     return str_bytes.decode("utf-8", "ignore").strip()
 
@@ -53,9 +55,9 @@ def truncate_str(text: str, max_bytes: int) -> str:
 def get_filename_and_ext(
     filename: str,
     mime_type: str | None = None,
-    max_len: int | None = None,
     *,
     xenforo: bool = False,
+    max_len: int | None = None,
 ) -> tuple[str, str]:
     filename_as_path = Path(Path(filename).as_posix().replace("/", "-"))  # remove OS separators
     if not filename_as_path.suffix:
@@ -66,9 +68,9 @@ def get_filename_and_ext(
 
     if xenforo and "-" in filename and filename_as_path.suffix.lstrip(".").isdigit():
         name, _, ext = filename_as_path.name.rpartition("-")
-        ext = ext.rsplit(".")[0]
-        filename = f"{name}.{ext}"
-        if ext.lower() not in constants.FileExt.MEDIA:
+        ext = "." + ext.rsplit(".")[0]
+        filename = f"{name}{ext}"
+        if ext.lower() not in FileExt.MEDIA:
             raise InvalidExtensionError(filename)
 
         filename_as_path = Path(filename)
@@ -81,7 +83,7 @@ def _get_filename_and_ext(filename_as_path: Path, max_len: int) -> tuple[str, st
         raise InvalidExtensionError(str(filename_as_path))
 
     filename_as_path = filename_as_path.with_suffix(filename_as_path.suffix.lower())
-    filename = truncate_str(filename_as_path.stem, max_len - len(filename_as_path.suffix)) + filename_as_path.suffix
+    filename = _truncate_str(filename_as_path.stem, max_len - len(filename_as_path.suffix)) + filename_as_path.suffix
     filename_as_path = Path(sanitize_filename(filename))
     return filename_as_path.name, filename_as_path.suffix
 
@@ -100,12 +102,12 @@ def compose_custom_filename(
         clean_extras = sanitize_filename(extra)
         has_invalid_extra_info_chars = clean_extras != extra
         if (new_truncate_len := truncate_len - len(clean_extras) - 1) > 0:
-            truncated_stem = f"{truncate_str(stem, new_truncate_len)} {clean_extras}"
+            truncated_stem = f"{_truncate_str(stem, new_truncate_len)} {clean_extras}"
         else:
-            truncated_stem = truncate_str(f"{stem} {clean_extras}", truncate_len)
+            truncated_stem = _truncate_str(f"{stem} {clean_extras}", truncate_len)
 
     else:
-        truncated_stem = truncate_str(stem, truncate_len)
+        truncated_stem = _truncate_str(stem, truncate_len)
 
     return f"{truncated_stem}{ext}", has_invalid_extra_info_chars
 
@@ -120,7 +122,7 @@ def remove_file_id(filename: str, ext: str) -> str:
     if re.match(_RAR_MULTIPART_PATTERN, tail_no_dot) and ext == ".rar" and "-" in filename:
         filename, part = filename.rsplit("-", 1)
         filename = f"{filename}.{part}"
-    elif ext_no_dot.isdigit() and tail in constants.FileExt.SEVEN_Z and "-" in filename:
+    elif ext_no_dot.isdigit() and tail in FileExt.SEVEN_Z and "-" in filename:
         filename, _7z_ext = filename.rsplit("-", 1)
         filename = f"{filename}.{_7z_ext}"
     if not filename.endswith(ext):

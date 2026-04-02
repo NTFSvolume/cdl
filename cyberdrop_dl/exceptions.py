@@ -88,6 +88,9 @@ class NoExtensionError(CDLBaseError):
         ui_failure = "No File Extension"
         super().__init__(ui_failure, message=filename, origin=origin)
 
+    def __str__(self) -> str:
+        return f"{self.ui_failure} ({self.message})"
+
 
 class InvalidExtensionError(NoExtensionError):
     def __init__(self, filename: str | None = None, *, origin: ScrapeItem | MediaItem | URL | None = None) -> None:
