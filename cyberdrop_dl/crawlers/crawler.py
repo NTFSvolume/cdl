@@ -95,7 +95,7 @@ def _url(item: ScrapeItem | AbsoluteHttpURL) -> AbsoluteHttpURL:
     return item if isinstance(item, AbsoluteHttpURL) else item.url
 
 
-@dataclasses.dataclass(slots=True, frozen=True)
+@dataclasses.dataclass(slots=True, frozen=True, order=True)
 class CrawlerInfo:
     site: str
     primary_url: AbsoluteHttpURL
@@ -174,12 +174,6 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         self._semaphore: asyncio.Semaphore = asyncio.Semaphore(20)
         self.__post_init__()
 
-    @property
-    def waiting_items(self) -> int:
-        if self._semaphore._waiters is None:
-            return 0
-        return len(self._semaphore._waiters)
-
     def __post_init__(self) -> None:
         """Override in subclasses to add custom init logic
 
@@ -196,7 +190,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
                 self.manager.client_manager.download_slots[self.DOMAIN] = self._DOWNLOAD_SLOTS
             if self._USE_DOWNLOAD_SERVERS_LOCKS:
                 self.manager.client_manager.download_client.server_locked_domains.add(self.DOMAIN)
-            self.downloader = self._init_downloader()
+            self.__init_downloader__()
             await self.__async_post_init__()
             self._ready = True
 
@@ -270,6 +264,10 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         )
         Registry.concrete.add(cls)
 
+    def __init_downloader__(self) -> None:
+        self.downloader = dl = Downloader(self.manager, self.DOMAIN)
+        dl.startup()
+
     @final
     @staticmethod
     def _assert_fields_overrides(subclass: type[Crawler], *fields: str) -> None:
@@ -281,21 +279,30 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         _ = self.manager.task_group.create_task(coro)
 
     @abstractmethod
-    async def fetch(self, scrape_item: ScrapeItem) -> None: ...
+    async def fetch(self, scrape_item: ScrapeItem) -> None:
+        """Here goes the main logic to parse URL paths.
 
+        This method MUST NOT raise any exceptions other that ValueError to indiated that the path is not supported"""
+
+    @final
     @property
-    def allow_no_extension(self) -> bool:
-        return not self.manager.config.ignore_options.exclude_files_with_no_extension
+    def waiting_items(self) -> int:
+        if self._semaphore._waiters is None:
+            return 0
+        return len(self._semaphore._waiters)
 
     @final
     @property
     def deep_scrape(self) -> bool:
         return self.manager.config_manager.deep_scrape
 
-    def _init_downloader(self) -> Downloader:
-        self.downloader = dl = Downloader(self.manager, self.DOMAIN)
-        dl.startup()
-        return dl
+    @property
+    def allow_no_extension(self) -> bool:
+        return not self.manager.config.ignore_options.exclude_files_with_no_extension
+
+    @property
+    def separate_posts(self) -> bool:
+        return self.manager.config.download_options.separate_posts
 
     @final
     @contextlib.contextmanager
@@ -311,7 +318,6 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
 
     @final
     async def run(self, scrape_item: ScrapeItem) -> None:
-        """Runs the crawler loop."""
         if self.disabled:
             return
 
@@ -582,10 +588,6 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         # Remove double spaces
         title = " ".join(title.split(""))
         return title
-
-    @property
-    def separate_posts(self) -> bool:
-        return self.manager.config.download_options.separate_posts
 
     @final
     def create_separate_post_title(
@@ -894,9 +896,6 @@ def _make_custom_filename(stem: str, ext: str, extra_info: list[str], only_trunc
     return f"{truncated_stem}{ext}", invalid_extra_info_chars
 
 
-_CrawlerT = TypeVar("_CrawlerT", bound=Crawler)
-
-
 def _validate_supported_paths(cls: type[Crawler]) -> None:
     for path_name, paths in cls.SUPPORTED_PATHS.items():
         assert path_name, f"{cls.__name__}, Invalid path: {path_name}"
@@ -931,6 +930,9 @@ def _sort_supported_paths(supported_paths: SupportedPaths) -> dict[str, OneOrTup
 
     path_pairs = ((key, try_sort(value)) for key, value in supported_paths.items())
     return dict(sorted(path_pairs, key=lambda x: x[0].casefold()))
+
+
+_CrawlerT = TypeVar("_CrawlerT", bound=Crawler)
 
 
 def auto_task_id(

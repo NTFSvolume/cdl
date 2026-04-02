@@ -13,6 +13,7 @@ from mega.api import MegaAPI
 from mega.core import MegaCore
 from mega.crypto import b64_to_a32
 from mega.data_structures import Crypto
+from typing_extensions import override
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths, auto_task_id
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
@@ -58,11 +59,11 @@ class MegaNzCrawler(Crawler, db_path="path_qs_frag"):
     def password(self) -> str | None:
         return self.manager.auth_config.meganz.password or None
 
-    def _init_downloader(self) -> MegaDownloader:
+    @override
+    def __init_downloader__(self) -> None:
         self.core = MegaCore(MegaAPI(self.manager.client_manager._session))
         self.downloader = dl = MegaDownloader(self.manager, self.DOMAIN)  # type: ignore[reportIncompatibleVariableOverride]
         dl.startup()
-        return dl
 
     async def __async_post_init__(self) -> None:
         await self.login(self.PRIMARY_URL)

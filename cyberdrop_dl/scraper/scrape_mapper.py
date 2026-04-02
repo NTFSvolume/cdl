@@ -123,7 +123,7 @@ class ScrapeMapper:
             logger.exception("Failed to connect to jDownloader")
 
         await self.start_real_debrid()
-        self.direct_crawler._init_downloader()
+        self.direct_crawler.__init_downloader__()
         async for item in self.get_input_items():
             self.manager.task_group.create_task(self.send_to_crawler(item))
 
