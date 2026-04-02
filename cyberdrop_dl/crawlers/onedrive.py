@@ -97,7 +97,7 @@ class OneDriveCrawler(Crawler):
     }
     SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = SHARE_LINK_HOST, "onedrive.live.com"
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://onedrive.com/")
-    SKIP_PRE_CHECK: ClassVar[bool] = True  # URLs with not path could be valid
+    ALLOW_EMPTY_PATH: ClassVar[bool] = True
     DOMAIN: ClassVar[str] = "onedrive"
     FOLDER_DOMAIN: ClassVar[str] = "OneDrive"
 

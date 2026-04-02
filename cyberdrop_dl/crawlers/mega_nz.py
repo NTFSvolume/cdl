@@ -42,7 +42,7 @@ class MegaNzCrawler(Crawler, db_path="path_qs_frag"):
         "**NOTE**": "Downloads can not be resumed. Partial downloads will always be deleted and new downloads will start over",
     }
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://mega.nz")
-    SKIP_PRE_CHECK: ClassVar[bool] = True
+    ALLOW_EMPTY_PATH: ClassVar[bool] = True
     DOMAIN: ClassVar[str] = "mega.nz"
     FOLDER_DOMAIN: ClassVar[str] = "MegaNz"
     OLD_DOMAINS: ClassVar[tuple[str, ...]] = ("mega.co.nz",)

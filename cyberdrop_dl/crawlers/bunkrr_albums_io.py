@@ -11,12 +11,12 @@ if TYPE_CHECKING:
 
 
 class BunkrAlbumsIOCrawler(Crawler):
-    SUPPORTED_PATHS: ClassVar[SupportedPaths] = {"Search": "/s?search=<query>"}
+    SUPPORTED_PATHS: ClassVar[SupportedPaths] = {"Search": "/?search=<query>"}
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://bunkr-albums.io/")
     DOMAIN: ClassVar[str] = "bunkr-albums.io"
     FOLDER_DOMAIN: ClassVar[str] = "Bunkr-Albums.io"
     NEXT_PAGE_SELECTOR: ClassVar[str] = "nav a:-soup-contains(Next)"
-    SKIP_PRE_CHECK: ClassVar[bool] = True
+    ALLOW_EMPTY_PATH: ClassVar[bool] = True
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         if query := scrape_item.url.query.get("search"):

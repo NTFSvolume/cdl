@@ -153,7 +153,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
     DEFAULT_POST_TITLE_FORMAT: ClassVar[str] = "{date} - {id} - {title}"
 
     UPDATE_UNSUPPORTED: ClassVar[bool] = False
-    SKIP_PRE_CHECK: ClassVar[bool] = False
+    ALLOW_EMPTY_PATH: ClassVar[bool] = False
     NEXT_PAGE_SELECTOR: ClassVar[str] = ""
 
     DEFAULT_TRIM_URLS: ClassVar[bool] = True
@@ -178,8 +178,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         self._ready: bool = False
         self.disabled: bool = False
         self.logged_in: bool = False
-        self.scraped_items: set[str] = set()
-        self.RATE_LIMIT = AsyncLimiter(*self._RATE_LIMIT)
+        self._scraped_items: set[str] = set()
 
         self.log = log
         self.log_debug = log_debug
@@ -204,7 +203,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
             if self._ready:
                 return
             self.client = self.manager.client_manager.scraper_client
-            self.manager.client_manager.rate_limits[self.DOMAIN] = self.RATE_LIMIT
+            self.manager.client_manager.rate_limits[self.DOMAIN] = AsyncLimiter(*self._RATE_LIMIT)
             if self._DOWNLOAD_SLOTS:
                 self.manager.client_manager.download_slots[self.DOMAIN] = self._DOWNLOAD_SLOTS
             if self._USE_DOWNLOAD_SERVERS_LOCKS:
@@ -334,14 +333,15 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
             with scrape_item.track_changes():
                 scrape_item.url = url = self.transform_url(scrape_item.url)
 
-            if url.path_qs in self.scraped_items:
-                return logger.info(f"Skipping {url} as it has already been scraped")
+            if url.path_qs in self._scraped_items:
+                logger.info(f"Skipping {url} as it has already been scraped")
+                return
 
-            self.scraped_items.add(url.path_qs)
+            self._scraped_items.add(url.path_qs)
 
             with self.new_task_id(scrape_item.url):
                 try:
-                    if not self.SKIP_PRE_CHECK and scrape_item.url.path == "/":
+                    if not self.ALLOW_EMPTY_PATH and scrape_item.url.path == "/":
                         raise ValueError
                     await self.fetch(scrape_item)
                 except ValueError:

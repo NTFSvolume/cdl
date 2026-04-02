@@ -61,7 +61,7 @@ class MediaFireCrawler(Crawler, db_path="name"):
     }
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = _PRIMARY_URL
     DOMAIN: ClassVar[str] = "mediafire"
-    SKIP_PRE_CHECK: ClassVar[bool] = True
+    ALLOW_EMPTY_PATH: ClassVar[bool] = True
 
     def __post_init__(self) -> None:
         self.api = MediaFireAPI(self)

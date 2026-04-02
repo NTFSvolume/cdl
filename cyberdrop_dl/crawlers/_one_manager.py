@@ -36,7 +36,7 @@ _SELECTORS = Selectors()
 
 class OneManagerCrawler(Crawler, is_abc=True):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {"Any path": "/..."}
-    SKIP_PRE_CHECK = True
+    ALLOW_EMPTY_PATH: ClassVar[bool] = True
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         scrape_item.url = scrape_item.url.with_query(None)

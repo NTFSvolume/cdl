@@ -23,7 +23,7 @@ class ImgBBCrawler(CheveretoCrawler):
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://ibb.co")
     DOMAIN: ClassVar[str] = "imgbb"
     FOLDER_DOMAIN: ClassVar[str] = "ImgBB"
-    SKIP_PRE_CHECK: ClassVar[bool] = True
+    ALLOW_EMPTY_PATH: ClassVar[bool] = True
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         username, _, rest = scrape_item.url.host.partition(".imgbb.")
