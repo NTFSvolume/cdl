@@ -297,8 +297,9 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
 
     @property
     def allow_no_extension(self) -> bool:
-        return not self.manager.config_manager.settings_data.ignore_options.exclude_files_with_no_extension
+        return not self.manager.config.ignore_options.exclude_files_with_no_extension
 
+    @final
     @property
     def deep_scrape(self) -> bool:
         return self.manager.config_manager.deep_scrape
@@ -336,9 +337,15 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
                 return logger.info(f"Skipping {url} as it has already been scraped")
 
             self.scraped_items.add(url.path_qs)
-            async with self._fetch_context(scrape_item):
-                self.pre_check_scrape_item(scrape_item)
-                await self.fetch(scrape_item)
+
+            with self.new_task_id(scrape_item.url):
+                try:
+                    self.pre_check_scrape_item(scrape_item)
+                    await self.fetch(scrape_item)
+                except ValueError:
+                    self.raise_exc(scrape_item, ScrapeError("Unknown URL path"))
+                except MaxChildrenError as e:
+                    self.raise_exc(scrape_item, e)
 
     def pre_check_scrape_item(self, scrape_item: ScrapeItem) -> None:
         if not self.SKIP_PRE_CHECK and scrape_item.url.path == "/":
@@ -353,19 +360,6 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
             new_host = re.sub(cls.REPLACE_OLD_DOMAINS_REGEX, cls.PRIMARY_URL.host, url.host)
             return url.with_host(new_host)
         return url
-
-    @final
-    @contextlib.asynccontextmanager
-    async def _fetch_context(self, scrape_item: ScrapeItem) -> AsyncGenerator[TaskID]:
-        with self.new_task_id(scrape_item.url) as task_id:
-            try:
-                yield task_id
-            except ValueError:
-                self.raise_exc(scrape_item, ScrapeError("Unknown URL path"))
-            except MaxChildrenError as e:
-                self.raise_exc(scrape_item, e)
-            finally:
-                pass
 
     @error_handling_wrapper
     def raise_exc(self, scrape_item: ScrapeItem, exc: type[Exception] | Exception | str) -> None:
