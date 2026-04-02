@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import datetime
-import itertools
 import logging
 import shutil
 from pathlib import Path
@@ -237,7 +236,13 @@ def _get_files(directory: Path) -> tuple[Path, tuple[Path, ...]]:
     return directory, tuple(walk())
 
 
-def _move_file(source: Path, dest: Path, incrementer_format: str = "{i}") -> bool:
+def _move_file(
+    source: Path,
+    dest: Path,
+    incrementer_format: str = "{i}",
+    *,
+    max_retries: int = 10,
+) -> bool:
     """Moves a file to a destination folder."""
 
     dest = dest.resolve()
@@ -252,19 +257,28 @@ def _move_file(source: Path, dest: Path, incrementer_format: str = "{i}") -> boo
         _ = shutil.move(source, dest)
     except FileExistsError:
         dest_stem = dest.stem
-        for auto_index in itertools.count(1):
+        for auto_index in range(1, max_retries + 1):
             if source_size == dest.stat().st_size:
                 source.unlink()
                 return True
 
             new_filename = f"{dest_stem}{incrementer_format.format(i=auto_index)}{dest.suffix}"
-            dest = dest_parent / new_filename
+            logger.warning(
+                "Found name collision when moving '{}' to '{}'. Retring with '{}'",
+                source,
+                dest,
+                dest := dest_parent / new_filename,
+            )
+
             try:
                 _ = shutil.move(source, dest)
             except FileExistsError:
                 continue
             else:
                 return True
+        else:
+            logger.error("Unable to move '{}'. Giving up after {} attempts", source, max_retries)
+            return False
 
     except OSError:
         return False
