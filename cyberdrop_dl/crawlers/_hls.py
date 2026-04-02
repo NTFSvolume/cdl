@@ -37,36 +37,33 @@ class HLSParser(ABC):
         *,
         only: Iterable[str] = (),
         exclude: Iterable[str] = ("vp09",),
-    ) -> tuple[m3u8.RenditionGroup, m3u8.RenditionGroupDetails | None]:
+    ) -> tuple[m3u8.Rendition, m3u8.RenditionDetails | None]:
         m3u8_obj = await self._request_m3u8(url, headers)
         if m3u8_obj.is_variant:
-            return await self.__select_best_rendition(m3u8_obj, headers, only=only, exclude=exclude)
+            rendition = m3u8.select_best_rendition(m3u8_obj, only=only, exclude=exclude)
+            return await self._resolve_rendition(rendition, headers)
         m3u8_obj.media_type = "video"
-        return m3u8.RenditionGroup(m3u8_obj), None
+        return m3u8.Rendition(m3u8_obj), None
 
-    async def __select_best_rendition(
+    async def _resolve_rendition(
         self,
-        m3u8_playlist: m3u8.M3U8,
+        rendition: m3u8.RenditionDetails,
         /,
         headers: Mapping[str, str] | None = None,
-        *,
-        only: Iterable[str] = (),
-        exclude: Iterable[str] = (),
     ):
-        details = m3u8.get_best_group_from_playlist(m3u8_playlist, only=only, exclude=exclude)
         video, *audio_and_subs = await asyncio.gather(
             *(
                 self._request_m3u8(url, headers, name)
                 for name, url in zip(
                     ("video", "audio", "subtitle"),
-                    details.urls,
+                    rendition.urls,
                     strict=True,
                 )
                 if url
             )
         )
 
-        return m3u8.RenditionGroup(video, *audio_and_subs), details
+        return m3u8.Rendition(video, *audio_and_subs), rendition
 
     async def _request_m3u8(
         self,

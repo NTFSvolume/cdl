@@ -66,7 +66,7 @@ class MediaURLs(NamedTuple):
     subtitle: AbsoluteHttpURL | None
 
 
-class RenditionGroup(NamedTuple):
+class Rendition(NamedTuple):
     video: M3U8
     audio: M3U8 | None = None
     subtitle: M3U8 | None = None
@@ -96,7 +96,7 @@ class StreamInfo:
 
 
 @dataclass(frozen=True, slots=True, order=True)
-class RenditionGroupDetails:
+class RenditionDetails:
     resolution: Resolution
     codecs: Codecs
     stream_info: StreamInfo
@@ -104,7 +104,7 @@ class RenditionGroupDetails:
     urls: MediaURLs
 
     @staticmethod
-    def new(playlist: Playlist) -> RenditionGroupDetails:
+    def new(playlist: Playlist) -> RenditionDetails:
         assert playlist.uri
 
         def get_url(m3u8_obj: Playlist | Media) -> AbsoluteHttpURL:
@@ -131,7 +131,7 @@ class RenditionGroupDetails:
 
         media_urls = MediaURLs(video_url, audio_url, subtitle_url)
         stream_info = StreamInfo(**vars(playlist.stream_info))
-        return RenditionGroupDetails(resolution, codecs, stream_info, media, media_urls)
+        return RenditionDetails(resolution, codecs, stream_info, media, media_urls)
 
 
 class M3U8(_M3U8):
@@ -163,11 +163,11 @@ class VariantM3U8Parser:
     def __init__(self, m3u8: M3U8) -> None:
         assert m3u8.is_variant
         self._m3u8 = m3u8
-        self.groups = sorted((RenditionGroupDetails.new(playlist) for playlist in m3u8.playlists), reverse=True)
+        self.groups = sorted((RenditionDetails.new(playlist) for playlist in m3u8.playlists), reverse=True)
 
     def get_rendition_groups(
         self, only: Iterable[str] = (), *, exclude: Iterable[str] = ()
-    ) -> Generator[RenditionGroupDetails]:
+    ) -> Generator[RenditionDetails]:
         """Yields M3U8 options, best to worst"""
         assert not (only and exclude), "only one of `only` or `exclude` can be supplied, not both"
         if isinstance(exclude, str):
@@ -183,13 +183,13 @@ class VariantM3U8Parser:
                     continue
             yield group
 
-    def get_best_group(self, only: Iterable[str] = (), *, exclude: Iterable[str] = ()) -> RenditionGroupDetails:
+    def get_best_group(self, only: Iterable[str] = (), *, exclude: Iterable[str] = ()) -> RenditionDetails:
         return next(self.get_rendition_groups(only=only, exclude=exclude))
 
 
-def get_best_group_from_playlist(
+def select_best_rendition(
     m3u8_playlist: M3U8, only: Iterable[str] = (), *, exclude: Iterable[str] = ()
-) -> RenditionGroupDetails:
+) -> RenditionDetails:
     return VariantM3U8Parser(m3u8_playlist).get_best_group(only=only, exclude=exclude)
 
 

@@ -41,7 +41,7 @@ class TwimgCrawler(Crawler):
         filename, ext = self.get_filename_and_ext(filename)
         await self.handle_file(link, scrape_item, filename, ext)
 
-    async def handle_media_item(self, media_item: MediaItem, m3u8: m3u8.RenditionGroup | None = None) -> None:
+    async def handle_media_item(self, media_item: MediaItem, m3u8: m3u8.Rendition | None = None) -> None:
         _, *media_item.fallbacks = list(_make_download_urls(media_item.url))
         if media_item.referer == media_item.url and media_item.parents:
             media_item.referer = media_item.parents[0]

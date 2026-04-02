@@ -263,7 +263,7 @@ class TikTokCrawler(Crawler):
         )
         scrape_item.add_children()
 
-    async def handle_media_item(self, media_item: MediaItem, m3u8: m3u8.RenditionGroup | None = None) -> None:
+    async def handle_media_item(self, media_item: MediaItem, m3u8: m3u8.Rendition | None = None) -> None:
         if media_item.ext == ".mp3":
             media_item.download_folder = media_item.download_folder / "Audios"
 

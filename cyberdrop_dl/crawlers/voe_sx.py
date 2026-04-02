@@ -133,9 +133,7 @@ class VoeSxCrawler(Crawler):
 
         VoeSxCrawler._handle_video(self, scrape_item, video, m3u8)
 
-    def _handle_video(
-        self: Crawler, scrape_item: ScrapeItem, video: VoeVideo, m3u8: m3u8.RenditionGroup | None
-    ) -> None:
+    def _handle_video(self: Crawler, scrape_item: ScrapeItem, video: VoeVideo, m3u8: m3u8.Rendition | None) -> None:
         custom_filename = self.create_custom_filename(
             video.title,
             video.url.suffix,

@@ -64,7 +64,7 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.clients.download_client import DownloadClient
     from cyberdrop_dl.managers.manager import Manager
-    from cyberdrop_dl.utils.m3u8 import M3U8, RenditionGroup
+    from cyberdrop_dl.utils.m3u8 import M3U8, Rendition
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -189,7 +189,7 @@ class Downloader:
             return await self.start_download(media_item)
 
     @error_handling_wrapper
-    async def download_hls(self, media_item: MediaItem, m3u8_group: RenditionGroup) -> None:
+    async def download_hls(self, media_item: MediaItem, m3u8_group: Rendition) -> None:
         if media_item.url.path in self.processed_items and not self._ignore_history:
             return
 
@@ -202,7 +202,7 @@ class Downloader:
         async with self._download_context(media_item):
             await self._start_hls_download(media_item, m3u8_group)
 
-    async def _start_hls_download(self, media_item: MediaItem, m3u8_group: RenditionGroup) -> None:
+    async def _start_hls_download(self, media_item: MediaItem, m3u8_group: Rendition) -> None:
         media_item.path = media_item.download_folder / media_item.filename
         # TODO: register database duration from m3u8 info
         # TODO: compute approx size for UI from the m3u8 info
@@ -227,7 +227,7 @@ class Downloader:
         await self.finalize_download(media_item, downloaded=True)
 
     async def _download_rendition_group(
-        self, media_item: MediaItem, m3u8_group: RenditionGroup
+        self, media_item: MediaItem, m3u8_group: Rendition
     ) -> tuple[Path, Path | None, Path | None]:
 
         temp_dir = media_item.path.with_suffix(constants.TempExt.HLS)

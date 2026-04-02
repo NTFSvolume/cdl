@@ -415,7 +415,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         *,
         custom_filename: str | None = None,
         debrid_link: AbsoluteHttpURL | None = None,
-        m3u8: m3u8.RenditionGroup | None = None,
+        m3u8: m3u8.Rendition | None = None,
         metadata: object = None,
         referer: AbsoluteHttpURL | None = None,
     ) -> None:
@@ -444,7 +444,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         await self.handle_media_item(media_item, m3u8)
 
     @final
-    async def _download(self, media_item: MediaItem, m3u8: m3u8.RenditionGroup | None) -> None:
+    async def _download(self, media_item: MediaItem, m3u8: m3u8.Rendition | None) -> None:
         try:
             if m3u8:
                 await self.downloader.download_hls(media_item, m3u8)
@@ -473,7 +473,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
             self.manager.progress_manager.download_progress.add_previously_completed()
         return check_complete
 
-    async def handle_media_item(self, media_item: MediaItem, m3u8: m3u8.RenditionGroup | None = None) -> None:
+    async def handle_media_item(self, media_item: MediaItem, m3u8: m3u8.Rendition | None = None) -> None:
         await self.manager.states.RUNNING.wait()
         check_complete = await self.check_complete(media_item.url, media_item.referer)
         if check_complete:
@@ -816,7 +816,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         *,
         only: Iterable[str] = (),
         exclude: Iterable[str] = ("vp09",),
-    ) -> tuple[m3u8.RenditionGroup, m3u8.RenditionGroupDetails]:
+    ) -> tuple[m3u8.Rendition, m3u8.RenditionDetails]:
         """Get m3u8 rendition group from a playlist m3u8 (variant m3u8), selecting the best format"""
         playlist, info = await self.request_m3u8(m3u8_playlist_url, headers, only=only, exclude=exclude)
         if info is None:
@@ -826,7 +826,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
     @deprecated("Use self.request_m3u8 instead")
     async def get_m3u8_from_index_url(
         self, url: AbsoluteHttpURL, /, headers: Mapping[str, str] | None = None
-    ) -> m3u8.RenditionGroup:
+    ) -> m3u8.Rendition:
         """Get m3u8 rendition group from an index that only has 1 rendition, a video (non variant m3u8)"""
         playlist, info = await self.request_m3u8(url, headers)
         if info is not None:

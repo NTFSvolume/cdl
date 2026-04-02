@@ -45,7 +45,7 @@ class Format(NamedTuple):
     size: int
     type: FormatType  #  On formats where everything else is the same, choose mp4 over webm
     url: AbsoluteHttpURL
-    m3u8: m3u8.RenditionGroup | None = None
+    m3u8: m3u8.Rendition | None = None
 
 
 @dataclasses.dataclass(slots=True, frozen=True)
