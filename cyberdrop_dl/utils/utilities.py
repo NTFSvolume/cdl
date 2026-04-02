@@ -84,11 +84,11 @@ def _fields(cls: type) -> tuple[str, ...]:
 
 class DictDataclass(Dataclass, Protocol):
     @classmethod
-    def filter_dict(cls, data: Mapping[str, Any], /) -> dict[str, Any]:
+    def filter_dict(cls, data: dict[str, Any], /) -> dict[str, Any]:
         return {name: data.get(name) for name in _fields(cls)}
 
     @classmethod
-    def from_dict(cls, data: Mapping[str, Any], /) -> Self:
+    def from_dict(cls, data: dict[str, Any], /) -> Self:
         return cls(**cls.filter_dict(data))
 
 
@@ -463,23 +463,6 @@ def unique(iterable: Iterable[_T], *, hashable: bool = True) -> Iterable[_T]:
         if value not in seen:
             add(value)
             yield value
-
-
-def get_valid_kwargs(
-    func: Callable[..., Any], kwargs: Mapping[str, _T], accept_kwargs: bool = True
-) -> Mapping[str, _T]:
-    """Get the subset of ``kwargs`` that are valid params for ``func`` and their values are not `None`
-
-    If func takes **kwargs, returns everything"""
-    params = inspect.signature(func).parameters
-    if accept_kwargs and any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
-        return kwargs
-
-    return {k: v for k, v in kwargs.items() if k in params.keys() and v is not None}
-
-
-def call_w_valid_kwargs(cls: Callable[..., _R], kwargs: Mapping[str, Any]) -> _R:
-    return cls(**get_valid_kwargs(cls, kwargs))
 
 
 def xor_decrypt(encrypted_data: bytes, key: bytes) -> str:

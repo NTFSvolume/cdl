@@ -3,13 +3,13 @@ from __future__ import annotations
 
 import dataclasses
 import itertools
-from typing import TYPE_CHECKING, Any, ClassVar, Self
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.mediaprops import Resolution
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import nuxt
-from cyberdrop_dl.utils.utilities import call_w_valid_kwargs, error_handling_wrapper
+from cyberdrop_dl.utils.utilities import DictDataclass, error_handling_wrapper
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator, Iterable
@@ -22,7 +22,7 @@ PRIMARY_URL = AbsoluteHttpURL("https://pmvhaven.com")
 
 
 @dataclasses.dataclass(slots=True)
-class Video:
+class Video(DictDataclass):
     # TODO: parse and download previews and thumbnails
     id: str
     title: str
@@ -34,9 +34,9 @@ class Video:
     hlsMasterPlaylistUrl: str | None = None
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Self:
+    def filter_dict(cls, data: dict[str, Any]) -> dict[str, Any]:
         data["id"] = data["_id"]
-        return call_w_valid_kwargs(cls, data)
+        return super(Video, cls).filter_dict(data)
 
     @property
     def web_url(self) -> AbsoluteHttpURL:
