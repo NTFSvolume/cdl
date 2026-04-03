@@ -3,7 +3,7 @@ from __future__ import annotations
 import dataclasses
 import time
 from pathlib import Path
-from typing import ClassVar, final
+from typing import ClassVar, Self, final
 
 from rich.console import Group
 from rich.panel import Panel
@@ -11,11 +11,11 @@ from rich.progress import BarColumn, Progress, TaskID
 from rich.spinner import Spinner
 from rich.text import Text
 
-from cyberdrop_dl.progress import create_live, hyperlink
+from cyberdrop_dl.progress import hyperlink
 
 
 @dataclasses.dataclass(slots=True)
-class _SortStats:
+class SortStats:
     videos: int = 0
     audios: int = 0
     images: int = 0
@@ -28,19 +28,19 @@ class _SortStats:
 
 
 @final
-class SortingPanel:
+class SortingUI:
     """Class that keeps track of sorted files."""
 
     columns: ClassVar = (
         "[progress.description]{task.description}",
         BarColumn(bar_width=None),
-        "[progress.percentage]{task.percentage:>6.f}%",
+        "[progress.percentage]{task.percentage:>6.1f}%",
         "━",
         "{task.completed:,}",
     )
 
     def __init__(self, source: Path, dest: Path) -> None:
-        self._stats: _SortStats = _SortStats()
+        self._stats: SortStats = SortStats()
         self._progress: Progress = Progress(*self.columns)
         self._tasks_map: dict[str, TaskID] = {}
         for name, emoji in [
@@ -56,6 +56,8 @@ class SortingPanel:
         def file_row(name: str, file: Path) -> Text:
             return Text.assemble((f"{name}: ", "green"), Text.from_markup(hyperlink(file)))
 
+        self._total: int = 0
+
         self._panel: Panel = Panel(
             Group(
                 file_row("Source", source),
@@ -67,29 +69,40 @@ class SortingPanel:
             ),
             title="Sorting Downloads ",
             border_style="green",
+            subtitle="Total Files: [white]0",
             padding=(1, 1),
         )
+        self._progress.live._get_renderable = self.__rich__
+
+    def __enter__(self) -> Self:
+        self._progress.start()
+        return self
+
+    def __exit__(self, *_) -> None:
+        self._progress.stop()
 
     @property
-    def stats(self) -> _SortStats:
+    def stats(self) -> SortStats:
         return self._stats
 
     def __rich__(self) -> Panel:
         total = self._stats.total
-        self._panel.subtitle = f"Total Files: [white]{total:,}"
-        for name, task_id in self._tasks_map.items():
-            self._progress.update(task_id, total=total, completed=getattr(self._stats, name))
+        if total != self._total:
+            self._panel.subtitle = f"Total Files: [white]{total:,}"
+            for name, task_id in self._tasks_map.items():
+                self._progress.update(task_id, total=total, completed=getattr(self._stats, name))
+            self._total = total
 
         return self._panel
 
 
 if __name__ == "__main__":
-    panel = SortingPanel(
+    panel = SortingUI(
         Path("/folder1/cdl_downloads"),
         Path("/folder1/cdl_downloads_sorted"),
     )
 
-    with create_live(panel):
+    with panel:
         time.sleep(3)
         panel.stats.audios += 1
         time.sleep(1)

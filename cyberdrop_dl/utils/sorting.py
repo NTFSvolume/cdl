@@ -14,24 +14,21 @@ import imagesize
 
 from cyberdrop_dl import ffmpeg
 from cyberdrop_dl.constants import FileExt, TempExt
+from cyberdrop_dl.progress.sorting import SortingUI
 from cyberdrop_dl.utils import strings
 from cyberdrop_dl.utils.utilities import purge_dir_tree as delete_empty_files_and_folders
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
 
-    from cyberdrop_dl.managers.live_manager import LiveManager
     from cyberdrop_dl.managers.manager import Manager
-    from cyberdrop_dl.managers.progress_manager import ProgressManager
 
 
 logger = logging.getLogger(__name__)
 
 
-@dataclasses.dataclass(slots=True, frozen=True)
+@dataclasses.dataclass(slots=True)
 class Sorter:
-    live_manager: LiveManager
-    tui: ProgressManager
     input_dir: Path
     output_dir: Path
 
@@ -41,12 +38,15 @@ class Sorter:
     video_format: str | None
     other_format: str | None
 
+    tui: SortingUI = dataclasses.field(init=False)
+
+    def __post_init__(self) -> None:
+        self.tui = SortingUI(self.input_dir, self.output_dir)
+
     @classmethod
     def from_manager(cls, manager: Manager) -> Self:
         settings = manager.config.sorting
         return cls(
-            manager.live_manager,
-            tui=manager.progress_manager,
             input_dir=settings.scan_folder or manager.config.files.download_folder,
             output_dir=settings.sort_folder,
             incrementer_format=settings.sort_incrementer_format,
@@ -64,32 +64,26 @@ class Sorter:
         logger.info("Sorting downloads...", extra={"color": "cyan"})
         await asyncio.to_thread(self.output_dir.mkdir, parents=True, exist_ok=True)
 
-        with self.live_manager.get_sort_live(stop=True):
+        with self.tui:
             subfolders = await asyncio.to_thread(_subfolders, self.input_dir)
             await self._sort_files(subfolders)
             logger.info("DONE!", extra={"color": "green"})
             _ = delete_empty_files_and_folders(self.input_dir)
 
     async def _sort_files(self, folders: Iterable[Path]) -> None:
-        for fut in asyncio.as_completed(asyncio.to_thread(_get_files, f) for f in folders):
+        for fut in asyncio.as_completed(asyncio.to_thread(_files, folders) for folders in folders):
             folder, files = await fut
             folder_name = folder.name
-            self.tui.sort_progress.queue_length += len(files)
-            task_id = self.tui.sort_progress.add_task(folder_name, len(files))
-            try:
 
-                async def sort(file: Path, name: str = folder_name, task_id=task_id) -> None:
-                    try:
-                        await self.__sort(name, file)
-                    finally:
-                        self.tui.sort_progress.advance_folder(task_id)
-                        self.tui.sort_progress.queue_length -= 1
+            async def sort(file: Path, name: str = folder_name) -> None:
+                try:
+                    await self.__sort_file(name, file)
+                except Exception:
+                    self.tui.stats.errors += 1
 
-                _ = await asyncio.gather(*map(sort, files))
-            finally:
-                self.tui.sort_progress.remove_task(task_id)
+            _ = await asyncio.gather(*map(sort, files))
 
-    async def __sort(self, folder_name: str, file: Path) -> None:
+    async def __sort_file(self, folder_name: str, file: Path) -> None:
         ext = file.suffix.lower()
         if ext in TempExt:
             return
@@ -123,7 +117,7 @@ class Sorter:
             length=duration,
             sample_rate=sample_rate,
         ):
-            self.tui.sort_progress.increment_audio()
+            self.tui.stats.audios += 1
 
     async def sort_image(self, file: Path, base_name: str) -> None:
         if not self.image_format:
@@ -146,7 +140,7 @@ class Sorter:
             resolution=resolution,
             width=width,
         ):
-            self.tui.sort_progress.increment_image()
+            self.tui.stats.images += 1
 
     async def sort_video(self, file: Path, base_name: str) -> None:
         if not self.video_format:
@@ -174,14 +168,14 @@ class Sorter:
             resolution=resolution,
             width=width,
         ):
-            self.tui.sort_progress.increment_video()
+            self.tui.stats.videos += 1
 
     async def sort_other(self, file: Path, base_name: str) -> None:
         if not self.other_format:
             return
 
         if await self._move_file(file, base_name, self.other_format):
-            self.tui.sort_progress.increment_other()
+            self.tui.stats.others += 1
 
     async def _move_file(self, file: Path, base_name: str, format_str: str, /, **kwargs: object) -> bool:
         file_date = await _get_modified_date(file)
@@ -205,6 +199,8 @@ class Sorter:
         dest = await asyncio.to_thread(_move_file, file, dest, self.incrementer_format)
         if dest:
             logger.debug("Moved '{}' to '{}'", file, dest)
+        else:
+            self.tui.stats.errors += 1
         return bool(dest)
 
 
@@ -212,7 +208,7 @@ def _subfolders(directory: Path) -> tuple[Path, ...]:
     return tuple(path for path in directory.resolve().iterdir() if path.is_dir())
 
 
-def _get_files(directory: Path) -> tuple[Path, tuple[Path, ...]]:
+def _files(directory: Path) -> tuple[Path, tuple[Path, ...]]:
     return directory, tuple(path for path in directory.resolve().rglob("*") if path.is_file())
 
 
