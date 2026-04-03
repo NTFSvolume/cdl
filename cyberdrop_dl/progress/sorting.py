@@ -6,13 +6,12 @@ from pathlib import Path
 from typing import ClassVar, final
 
 from rich.console import Group
-from rich.markup import escape
 from rich.panel import Panel
 from rich.progress import BarColumn, Progress, TaskID
 from rich.spinner import Spinner
 from rich.text import Text
 
-from cyberdrop_dl.ui.progress import hyperlink
+from cyberdrop_dl.progress import create_live, hyperlink
 
 
 @dataclasses.dataclass(slots=True)
@@ -35,7 +34,7 @@ class SortingPanel:
     columns: ClassVar = (
         "[progress.description]{task.description}",
         BarColumn(bar_width=None),
-        "[progress.percentage]{task.percentage:>6.2f}%",
+        "[progress.percentage]{task.percentage:>6.f}%",
         "━",
         "{task.completed:,}",
     )
@@ -43,7 +42,7 @@ class SortingPanel:
     def __init__(self, source: Path, dest: Path) -> None:
         self._stats: _SortStats = _SortStats()
         self._progress: Progress = Progress(*self.columns)
-        self._tasks: dict[str, TaskID] = {}
+        self._tasks_map: dict[str, TaskID] = {}
         for name, emoji in [
             ("audios", "musical_notes"),
             ("videos", "movie_camera"),
@@ -52,9 +51,7 @@ class SortingPanel:
             ("errors", "cross_mark"),
         ]:
             color = "red" if "errors" in name else "blue"
-            self._tasks[name] = self._progress.add_task(f"[{color}] {name.capitalize()} :{emoji}: ", total=None)
-
-        f"Source: {escape(str(source))}"
+            self._tasks_map[name] = self._progress.add_task(f"[{color}] {name.capitalize()} :{emoji}: ", total=None)
 
         def file_row(name: str, file: Path) -> Text:
             return Text.assemble((f"{name}: ", "green"), Text.from_markup(hyperlink(file)))
@@ -80,7 +77,7 @@ class SortingPanel:
     def __rich__(self) -> Panel:
         total = self._stats.total
         self._panel.subtitle = f"Total Files: [white]{total:,}"
-        for name, task_id in self._tasks.items():
+        for name, task_id in self._tasks_map.items():
             self._progress.update(task_id, total=total, completed=getattr(self._stats, name))
 
         return self._panel
@@ -91,7 +88,6 @@ if __name__ == "__main__":
         Path("/folder1/cdl_downloads"),
         Path("/folder1/cdl_downloads_sorted"),
     )
-    from cyberdrop_dl.ui.progress import create_live
 
     with create_live(panel):
         time.sleep(3)
