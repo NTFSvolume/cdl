@@ -1,9 +1,38 @@
+import datetime
 import shutil
 from pathlib import Path
 
 import pytest
 
-from cyberdrop_dl.utils.sorting import _have_same_content, _move_file
+from cyberdrop_dl.utils.sorting import _format_dest, _have_same_content, _move_file
+
+DOWNLOADS = Path("/mnt/home/user/downloads/cdl/")
+SORT_DIR = DOWNLOADS.parent / "cdl_sorted"
+MTIME = datetime.datetime(2023, 7, 14, 12, 34, 56).timestamp()
+
+
+@pytest.mark.parametrize(
+    ("base_dir", "format_str", "expected"),
+    [
+        (
+            "album 1 (site)",
+            ("{sort_dir}/{base_dir}/audios/{parent_dir}___{filename}{ext}"),
+            "/mnt/home/user/downloads/cdl_sorted/album 1 (site)/audios/sub album___song.mp3",
+        ),
+        ("foo (Mega.NZ)", "{base_dir}/{file_date_iso}/{filename}{ext}", "foo (Mega.NZ)/2023-07-14/song.mp3"),
+        (
+            "folder 1",
+            "/mnt/data/{base_dir}/{file_date_us}/{filename}{ext}",
+            "/mnt/data/folder 1/2023-14-07/song.mp3",
+        ),
+        ("folder 1", "{base_dir}/{file_date:%Y}/{filename}{ext}", "folder 1/2023/song.mp3"),
+        ("folder 1", "{base_dir}/{invalid_param}/{filename}{ext}", "folder 1/UNKNOWN_INVALID_PARAM/song.mp3"),
+    ],
+)
+def test_destination_format(base_dir: str, format_str: str, expected: str) -> None:
+    file = DOWNLOADS / base_dir / "sub album/song.mp3"
+    result = _format_dest(file, base_dir, format_str, MTIME, SORT_DIR)
+    assert result == Path(expected)
 
 
 class TestHaveSameContent:
