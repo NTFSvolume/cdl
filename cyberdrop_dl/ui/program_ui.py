@@ -17,6 +17,7 @@ from rich.text import Text
 
 from cyberdrop_dl import __version__
 from cyberdrop_dl.clients.hash_client import hash_directory_scanner
+from cyberdrop_dl.progress import hyperlink
 from cyberdrop_dl.utils import text_editor
 from cyberdrop_dl.utils.sorting import Sorter
 from cyberdrop_dl.utils.utilities import clear_term
@@ -28,11 +29,11 @@ if TYPE_CHECKING:
 
 
 console = Console()
-ERROR_PREFIX = Text("ERROR: ", style="bold red")
-_changelog: str = ""
+_ERROR = Text("ERROR: ", style="bold red")
 _CHANGELOG_URL = "https://raw.githubusercontent.com/NTFSvolume/cdl/refs/heads/main/CHANGELOG.md"
 _EXIT_CHOICE = Choice("Exit")
 _DONE_CHOICE = Choice("Done")
+_changelog: str = ""
 
 
 class ProgramUI:
@@ -49,7 +50,6 @@ class ProgramUI:
     def _run(self) -> Choice | bool | None:
         clear_term()
         answer = _main_prompt(self.manager)
-
         if answer == _EXIT_CHOICE.value:
             sys.exit(0)
         if answer == _DONE_CHOICE.value:
@@ -98,18 +98,18 @@ class ProgramUI:
             try:
                 _changelog = asyncio.run(_get_changelog())
             except Exception:
-                console.print(ERROR_PREFIX, "UNABLE TO GET CHANGELOG INFORMATION")
+                console.print(_ERROR, "UNABLE TO GET CHANGELOG INFORMATION")
                 enter_to_continue()
                 return None
 
-        with console.pager(links=True):
+        with console.pager(links=True, styles=True):
             console.print(Markdown(_changelog, justify="left"))
 
     def _edit_urls(self) -> None:
         try:
             text_editor.open(self.manager.config.files.input_file)
         except ValueError as e:
-            console.print(ERROR_PREFIX, str(e))
+            console.print(_ERROR, str(e))
             enter_to_continue()
 
 
@@ -124,7 +124,6 @@ async def _get_changelog() -> str:
 
 def _main_prompt(manager: Manager) -> int:
     _prompt_header(manager)
-    enter_to_continue()
     choices = _create_choices(
         [
             [
@@ -144,13 +143,14 @@ def _main_prompt(manager: Manager) -> int:
 def _prompt_header(manager: Manager) -> None:
     clear_term()
     console.print(f"[bold]Cyberdrop Downloader ([blue]V{__version__!s}[/blue])[/bold]")
-    console.print(f"[bold]Current config:[/bold] [blue]{manager.config_manager.loaded_config}[/blue]")
+    console.print(f"Config file: [blue]{hyperlink(manager.config_manager.settings)}[/blue]\n")
 
 
 def _create_choices(options_groups: Iterable[Iterable[str]]) -> Generator[Choice | Separator]:
+    index: int = 0
     for group in options_groups:
-        for index, option in enumerate(group, 1):
-            yield Choice(index, option, enabled=True)
+        for option in group:
+            yield Choice(index := index + 1, option, enabled=True)
 
         yield Separator()
 
