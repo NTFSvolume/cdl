@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import sys
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from requests import request
 from rich.console import Console
@@ -11,15 +11,12 @@ from rich.markdown import Markdown
 from rich.text import Text
 
 from cyberdrop_dl.clients.hash_client import hash_directory_scanner
-from cyberdrop_dl.ui.prompts import user_prompts
-from cyberdrop_dl.ui.prompts.basic_prompts import ask_dir_path, enter_to_continue
-from cyberdrop_dl.ui.prompts.defaults import DONE_CHOICE, EXIT_CHOICE
+from cyberdrop_dl.ui.prompts import DONE_CHOICE, EXIT_CHOICE, ask_dir_path, enter_to_continue, main_prompt
 from cyberdrop_dl.utils import text_editor
 from cyberdrop_dl.utils.sorting import Sorter
 from cyberdrop_dl.utils.utilities import clear_term
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
     from pathlib import Path
 
     from InquirerPy.base.control import Choice
@@ -45,30 +42,28 @@ class ProgramUI:
             sys.exit(1)
         enter_to_continue()
 
-    def run(self) -> bool | None:
+    def run(self) -> None:
         done = False
         while not done:
             done = self._run()
-        return done
 
-    def _run(self) -> bool | None:
-        """Program UI."""
+    def _run(self) -> Choice | bool | None:
         clear_term()
-        options_map = {
+        answer = main_prompt(self.manager)
+
+        if answer == EXIT_CHOICE.value:
+            sys.exit(0)
+        if answer == DONE_CHOICE.value:
+            return DONE_CHOICE
+
+        return {
             1: self._download,
             2: self._retry_failed_download,
             3: self._scan_and_create_hashes,
             4: self._sort_files,
             5: self._edit_urls,
             6: self._view_changelog,
-        }
-
-        answer = user_prompts.main_prompt(self.manager)
-        result = self._process_answer(answer, options_map)
-        return_to_main = result and result != DONE_CHOICE
-        if return_to_main:
-            clear_term()
-        return return_to_main
+        }[answer]()
 
     def _download(self) -> bool:
         """Starts download process."""
@@ -81,8 +76,9 @@ class ProgramUI:
 
     def _scan_and_create_hashes(self) -> None:
         """Scans a folder and creates hashes for all of its files."""
-        path = ask_dir_path("Select the directory to scan", default=str(self.manager.config.files.download_folder))
-        hash_directory_scanner(self.manager, path)
+        path = ask_dir_path("Select the directory to scan", default=self.manager.config.files.download_folder)
+        asyncio.run(hash_directory_scanner(self.manager, path))
+        enter_to_continue()
 
     def _sort_files(self) -> None:
         """Sort files in download folder"""
@@ -118,22 +114,6 @@ class ProgramUI:
         if reload_config:
             console.print("Revalidating config, please wait..")
             self.manager.config_manager.reload_config()
-
-    def _process_answer(
-        self, answer: Any, options_map: Mapping[int, Callable[[], bool | None]]
-    ) -> Choice | bool | None:
-        """Checks prompt answer and executes corresponding function."""
-        if answer == EXIT_CHOICE.value:
-            sys.exit(0)
-        if answer == DONE_CHOICE.value:
-            return DONE_CHOICE
-
-        function_to_call = options_map.get(answer)
-        if not function_to_call:
-            self.print_error("Something went wrong. Please report it to the developer", critical=True)
-            sys.exit(1)
-
-        return function_to_call()
 
 
 @functools.cache

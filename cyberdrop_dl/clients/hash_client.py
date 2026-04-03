@@ -10,7 +10,6 @@ from send2trash import send2trash
 
 from cyberdrop_dl import constants
 from cyberdrop_dl.constants import Hashing
-from cyberdrop_dl.ui.prompts.basic_prompts import enter_to_continue
 from cyberdrop_dl.utils.utilities import get_size_or_none
 
 if TYPE_CHECKING:
@@ -23,12 +22,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def hash_directory_scanner(manager: Manager, path: Path) -> None:
-    asyncio.run(_hash_directory_scanner_helper(manager, path))
-    enter_to_continue()
-
-
-async def _hash_directory_scanner_helper(manager: Manager, path: Path) -> None:
+async def hash_directory_scanner(manager: Manager, path: Path) -> None:
     await manager.async_db_hash_startup()
     await manager.hash_manager.hash_client.hash_directory(path)
     manager.progress_manager.print_dedupe_stats()
