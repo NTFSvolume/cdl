@@ -49,7 +49,7 @@ def create_files(path: Path, number: int) -> None:
         },
     ],
 )
-def test_hash_directory_scanner(manager: Manager, expected_results: set[tuple[str, str]]) -> None:
+async def test_hash_directory_scanner(manager: Manager, expected_results: set[tuple[str, str]]) -> None:
     count = Counter(x[0] for x in expected_results)
     n_files = max(count.values())
     algos = count.keys()
@@ -59,10 +59,10 @@ def test_hash_directory_scanner(manager: Manager, expected_results: set[tuple[st
 
     manager.config.files.download_folder.mkdir(parents=True)
     db_path = manager.appdata.db_file
-    hash_directory_scanner(manager, manager.config.files.download_folder)
+    await hash_directory_scanner(manager, manager.config.files.download_folder)
     assert not get_hashes(db_path)
     create_files(manager.config.files.download_folder, n_files)
-    hash_directory_scanner(manager, manager.config.files.download_folder)
+    await hash_directory_scanner(manager, manager.config.files.download_folder)
     results = get_hashes(db_path)
     assert len(results) == len(expected_results)
     assert results == expected_results
