@@ -69,7 +69,6 @@ class SortingUI:
             ),
             title="Sorting Downloads ",
             border_style="green",
-            subtitle="Total Files: [white]0",
             padding=(1, 1),
         )
         self._progress.live._get_renderable = self.__rich__
@@ -86,13 +85,13 @@ class SortingUI:
         return self._stats
 
     def __rich__(self) -> Panel:
-        total = self._stats.total
-        if total != self._total:
-            self._panel.subtitle = f"Total Files: [white]{total:,}"
+        current_total = self._stats.total
+        if current_total != self._total:
             for name, task_id in self._tasks_map.items():
-                self._progress.update(task_id, total=total, completed=getattr(self._stats, name))
-            self._total = total
+                self._progress.update(task_id, total=current_total, completed=getattr(self._stats, name))
+            self._total = current_total
 
+        self._panel.subtitle = f"Total Files: [white]{current_total:,}"
         return self._panel
 
 

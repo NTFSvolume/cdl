@@ -66,36 +66,34 @@ class Sorter:
 
         with self.tui:
             subfolders = await asyncio.to_thread(_subfolders, self.input_dir)
-            await self._sort_files(subfolders)
+            await self._sort_folders(subfolders)
             logger.info("DONE!", extra={"color": "green"})
             _ = delete_empty_files_and_folders(self.input_dir)
 
-    async def _sort_files(self, folders: Iterable[Path]) -> None:
-        for fut in asyncio.as_completed(asyncio.to_thread(_files, folders) for folders in folders):
-            folder, files = await fut
-            folder_name = folder.name
+    async def _sort_folders(self, folders: Iterable[Path]) -> None:
+        async with asyncio.TaskGroup() as tg:
+            for fut in asyncio.as_completed(asyncio.to_thread(_files, folders) for folders in folders):
+                folder, files = await fut
 
-            async def sort(file: Path, name: str = folder_name) -> None:
-                try:
-                    await self.__sort_file(name, file)
-                except Exception:
-                    self.tui.stats.errors += 1
+                for file in files:
+                    _ = tg.create_task(self._sort_file(folder.name, file))
 
-            _ = await asyncio.gather(*map(sort, files))
-
-    async def __sort_file(self, folder_name: str, file: Path) -> None:
+    async def _sort_file(self, folder_name: str, file: Path) -> None:
         ext = file.suffix.lower()
         if ext in TempExt:
             return
 
-        if ext in FileExt.AUDIO:
-            return await self.sort_audio(file, folder_name)
-        if ext in FileExt.IMAGE:
-            return await self.sort_image(file, folder_name)
-        if ext in FileExt.VIDEO:
-            return await self.sort_video(file, folder_name)
+        try:
+            if ext in FileExt.AUDIO:
+                return await self.sort_audio(file, folder_name)
+            if ext in FileExt.IMAGE:
+                return await self.sort_image(file, folder_name)
+            if ext in FileExt.VIDEO:
+                return await self.sort_video(file, folder_name)
+            await self.sort_other(file, folder_name)
 
-        await self.sort_other(file, folder_name)
+        except Exception:
+            self.tui.stats.errors += 1
 
     async def sort_audio(self, file: Path, base_name: str) -> None:
         if not self.audio_format:
