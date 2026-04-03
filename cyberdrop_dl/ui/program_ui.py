@@ -87,8 +87,13 @@ class ProgramUI:
     def _sort_files(self) -> None:
         """Sort files in download folder"""
         sorter = Sorter.from_manager(self.manager)
-        asyncio.run(sorter.run())
-        enter_to_continue()
+        console.print(
+            f"You are about to sort files from '{sorter.input_dir}' to '{sorter.output_dir}'", style="bold red"
+        )
+        answer = input("Type 'YES' to proceed")
+        if answer.strip().casefold() == "yes":
+            asyncio.run(sorter.run())
+            enter_to_continue()
 
     def _view_changelog(self) -> None:
         clear_term()
