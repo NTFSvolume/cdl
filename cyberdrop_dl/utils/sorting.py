@@ -123,12 +123,20 @@ class Sorter:
 
         height = resolution = width = None
         try:
-            width, height = await asyncio.to_thread(imagesize.get, file)
-            if width > 0 and height > 0:
-                resolution = f"{width}x{height}"
-
-        except (OSError, ValueError):
+            info = await asyncio.to_thread(
+                imagesize.get_info,
+                file,
+                size=True,
+                dpi=False,
+                colors=False,
+                exif_rotation=True,
+                channels=False,
+            )
+        except Exception:
             logger.exception(f"Unable to get some image properties of '{file}'")
+        else:
+            width, height = info.width, info.height
+            resolution = f"{width}x{height}"
 
         if await self._move_file(
             file,
