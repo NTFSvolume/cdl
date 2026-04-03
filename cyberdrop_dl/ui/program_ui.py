@@ -33,7 +33,6 @@ console = Console()
 _ERROR = Text("ERROR: ", style="bold red")
 _CHANGELOG_URL = "https://raw.githubusercontent.com/NTFSvolume/cdl/refs/heads/main/CHANGELOG.md"
 _EXIT = "Exit"
-_DONE = "Done"
 _changelog: str = ""
 
 
@@ -43,13 +42,14 @@ class ProgramUI:
 
     def run(self) -> None:
         while True:
-            if self._show_prompt():
+            exit = self._show_prompt()
+            if exit:
                 break
 
     def _show_prompt(self) -> bool | None:
         _app_header(self.manager)
         choices = {
-            "Download": self._download,
+            "Download": lambda: True,
             "Retry failed downloads": self._retry_failed_download,
             "Create file hashes": self._scan_and_create_hashes,
             "Sort files in download folder": self._sort_files,
@@ -61,13 +61,8 @@ class ProgramUI:
         answer = _ask_choices(_create_choices(choices))
         if answer == _EXIT:
             sys.exit(0)
-        if answer == _DONE:
-            return True
 
         return choices[answer]()
-
-    def _download(self) -> bool:
-        return True
 
     def _retry_failed_download(self) -> bool:
         self.manager.parsed_args.cli_only_args.retry_failed = True
@@ -121,9 +116,7 @@ async def _get_changelog() -> str:
         _CHANGELOG_URL,
         raise_for_status=True,
     ) as response:
-        content = await response.text()
-
-    return content
+        return await response.text()
 
 
 def _app_header(manager: Manager) -> None:
