@@ -13,7 +13,7 @@ def test_startup(tmp_cwd: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.
     def main_ui(*_) -> None:
         print(msg)
 
-    monkeypatch.setattr(ProgramUI, "__init__", main_ui)
+    monkeypatch.setattr(ProgramUI, "run", main_ui)
     run(())
     captured = capsys.readouterr()
     output = captured.out

@@ -180,7 +180,7 @@ def _setup_manager(args: Sequence[str] | None = None) -> Manager:
     manager.startup()
 
     if not manager.parsed_args.cli_only_args.download:
-        ProgramUI(manager)
+        ProgramUI(manager).run()
 
     return manager
 

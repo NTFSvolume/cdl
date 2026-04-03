@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import sys
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -31,38 +32,39 @@ if TYPE_CHECKING:
 console = Console()
 _ERROR = Text("ERROR: ", style="bold red")
 _CHANGELOG_URL = "https://raw.githubusercontent.com/NTFSvolume/cdl/refs/heads/main/CHANGELOG.md"
-_EXIT_CHOICE = Choice("Exit")
-_DONE_CHOICE = Choice("Done")
+_EXIT = "Exit"
+_DONE = "Done"
 _changelog: str = ""
 
 
+@dataclasses.dataclass(slots=True)
 class ProgramUI:
-    def __init__(self, manager: Manager, run: bool = True) -> None:
-        self.manager = manager
-        if run:
-            self.run()
+    manager: Manager
 
     def run(self) -> None:
-        done = False
-        while not done:
-            done = self._run()
+        while True:
+            if self._show_prompt():
+                break
 
-    def _run(self) -> Choice | bool | None:
-        clear_term()
-        answer = _main_prompt(self.manager)
-        if answer == _EXIT_CHOICE.value:
+    def _show_prompt(self) -> bool | None:
+        _app_header(self.manager)
+        choices = {
+            "Download": self._download,
+            "Retry failed downloads": self._retry_failed_download,
+            "Create file hashes": self._scan_and_create_hashes,
+            "Sort files in download folder": self._sort_files,
+            None: lambda: None,
+            "Edit URLs.txt": self._edit_urls,
+            "View changelog": self._view_changelog,
+        }
+
+        answer = _ask_choices(_create_choices(choices))
+        if answer == _EXIT:
             sys.exit(0)
-        if answer == _DONE_CHOICE.value:
-            return _DONE_CHOICE
+        if answer == _DONE:
+            return True
 
-        return {
-            1: self._download,
-            2: self._retry_failed_download,
-            3: self._scan_and_create_hashes,
-            4: self._sort_files,
-            5: self._edit_urls,
-            6: self._view_changelog,
-        }[answer]()
+        return choices[answer]()
 
     def _download(self) -> bool:
         return True
@@ -102,7 +104,7 @@ class ProgramUI:
                 enter_to_continue()
                 return None
 
-        with console.pager(links=True, styles=True):
+        with console.pager(links=True):
             console.print(Markdown(_changelog, justify="left"))
 
     def _edit_urls(self) -> None:
@@ -114,53 +116,37 @@ class ProgramUI:
 
 
 async def _get_changelog() -> str:
-    async with aiohttp.request("GET", _CHANGELOG_URL, raise_for_status=True) as response:
+    async with aiohttp.request(
+        "GET",
+        _CHANGELOG_URL,
+        raise_for_status=True,
+    ) as response:
         content = await response.text()
 
-    lines = content.splitlines()
-    # remove keep_a_changelog disclaimer
-    return "\n".join(lines[:21] + lines[25:])
+    return content
 
 
-def _main_prompt(manager: Manager) -> int:
-    _prompt_header(manager)
-    choices = _create_choices(
-        [
-            [
-                "Download",
-                "Retry failed downloads",
-                "Create file hashes",
-                "Sort files in download folder",
-            ],
-            ["Edit URLs.txt"],
-            ["View changelog"],
-        ]
-    )
-
-    return _ask_choices(list(choices))
-
-
-def _prompt_header(manager: Manager) -> None:
+def _app_header(manager: Manager) -> None:
     clear_term()
     console.print(f"[bold]Cyberdrop Downloader ([blue]V{__version__!s}[/blue])[/bold]")
     console.print(f"Config file: [blue]{hyperlink(manager.config_manager.settings)}[/blue]\n")
 
 
-def _create_choices(options_groups: Iterable[Iterable[str]]) -> Generator[Choice | Separator]:
-    index: int = 0
-    for group in options_groups:
-        for option in group:
-            yield Choice(index := index + 1, option, enabled=True)
+def _create_choices(options_groups: Iterable[str | None]) -> Generator[Choice | Separator]:
+    for option in options_groups:
+        if option is None:
+            yield Separator()
+        else:
+            yield Choice(option, option)
 
-        yield Separator()
+    yield Separator()
+    yield Choice(_EXIT)
 
-    yield _EXIT_CHOICE
 
-
-def _ask_choices(choices: list[Choice | Separator]) -> int:
+def _ask_choices(choices: Iterable[Choice | Separator]) -> str:
     return ListPrompt(
         message="What would you like to do:",
-        choices=choices,
+        choices=list(choices),
         long_instruction="ARROW KEYS: Navigate | ENTER: Select",
     ).execute()
 
