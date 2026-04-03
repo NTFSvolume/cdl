@@ -93,6 +93,7 @@ class Sorter:
             await self.sort_other(file, folder_name)
 
         except Exception:
+            logger.exception("Unknown error while sorting {}", file)
             self.tui.stats.errors += 1
 
     async def sort_audio(self, file: Path, base_name: str) -> None:
@@ -133,7 +134,7 @@ class Sorter:
                 channels=False,
             )
         except Exception:
-            logger.exception(f"Unable to get some image properties of '{file}'")
+            logger.exception("Unable to get some image properties of '{}'", file)
         else:
             width, height = info.width, info.height
             resolution = f"{width}x{height}"
