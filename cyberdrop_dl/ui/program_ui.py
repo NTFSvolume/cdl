@@ -88,6 +88,7 @@ class ProgramUI:
         """Sort files in download folder"""
         sorter = Sorter.from_manager(self.manager)
         asyncio.run(sorter.run())
+        enter_to_continue()
 
     def _view_changelog(self) -> None:
         clear_term()
