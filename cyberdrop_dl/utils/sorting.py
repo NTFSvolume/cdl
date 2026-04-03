@@ -54,7 +54,7 @@ class Sorter:
             other_format=settings.sorted_other,
         )
 
-    async def run(self) -> None:
+    async def run(self, show_tui: bool = True) -> None:
         if not await asyncio.to_thread(self.input_dir.is_dir):
             logger.error(f"Sort directory '{self.input_dir}' does not exist", extra={"color": "red"})
             return
@@ -62,6 +62,7 @@ class Sorter:
         logger.info("Sorting downloads...", extra={"color": "cyan"})
         await asyncio.to_thread(self.output_dir.mkdir, parents=True, exist_ok=True)
 
+        self.tui._progress.disable = show_tui
         with self.tui:
             await self._run()
 

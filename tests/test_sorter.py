@@ -185,7 +185,7 @@ async def test_sorter(tmp_path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(str(idx))
 
-    await sorter.run()
+    await sorter.run(show_tui=False)
     stats = sorter.tui.stats
     assert stats.total == len(Files.ALL) - len(Files.TEMP)
     assert stats.videos == len(Files.VIDEOS)
