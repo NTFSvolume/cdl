@@ -1,10 +1,11 @@
 import datetime
+import itertools
 import shutil
 from pathlib import Path
 
 import pytest
 
-from cyberdrop_dl.utils.sorting import _format_dest, _have_same_content, _move_file
+from cyberdrop_dl.utils.sorting import Sorter, _format_dest, _have_same_content, _move_file
 
 DOWNLOADS = Path("/mnt/home/user/downloads/cdl/")
 SORT_DIR = DOWNLOADS.parent / "cdl_sorted"
@@ -146,3 +147,58 @@ class TestMoveFile:
         monkeypatch.setattr(shutil, "move", boom)
         assert _move_file(src, dst) is None
         assert src.exists()
+
+
+class Files:
+    VIDEOS = "video.mp4", "movies/4K/a_movie.mkv"
+    OTHERS = (
+        "docker-compose.yml",
+        "index.html",
+        "styles.css",
+        "tests/scripts/notes.txt",
+        "tests/scripts/script.js",
+        "tests/setup.sh",
+        "tests/utils.py",
+    )
+    AUDIOS = ("music/song.mp3",)
+    IMAGES = ("logo.png", "tests/logo.jpg")
+    TEMP = ("tmp/download.part",)
+
+    ALL = *VIDEOS, *OTHERS, *AUDIOS, *IMAGES, *TEMP
+
+
+async def test_sorter(tmp_path: Path) -> None:
+    assert len(Files.ALL) == len(set(Files.ALL))
+    input_dir = tmp_path / "cdl_downloads"
+    output_dir = tmp_path / "cdl_sorted_downloads"
+    sorter = Sorter(
+        input_dir=input_dir,
+        output_dir=output_dir,
+        audio_format="{sort_dir}/audio/{filename}{ext}",
+        image_format="{sort_dir}/image/{filename}{ext}",
+        video_format="{sort_dir}/video/{filename}{ext}",
+        other_format="{sort_dir}/other/{filename}{ext}",
+    )
+
+    for idx, file in enumerate(Files.ALL):
+        path = input_dir / file
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(str(idx))
+
+    await sorter.run()
+    stats = sorter.tui.stats
+    assert stats.total == len(Files.ALL) - len(Files.TEMP)
+    assert stats.videos == len(Files.VIDEOS)
+    assert stats.others == len(Files.OTHERS)
+
+    assert sorted(f for f in output_dir.rglob("*") if f.is_file()) == sorted(
+        itertools.chain.from_iterable(
+            (output_dir / kind / file.name for file in map(Path, files))
+            for kind, files in [
+                ("audio", Files.AUDIOS),
+                ("image", Files.IMAGES),
+                ("video", Files.VIDEOS),
+                ("other", Files.OTHERS),
+            ]
+        )
+    )
