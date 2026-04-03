@@ -2,13 +2,11 @@ from __future__ import annotations
 
 from dataclasses import field
 from pathlib import Path
-from time import sleep
 from typing import TYPE_CHECKING
 
 from cyberdrop_dl import yaml
 from cyberdrop_dl.config import AuthSettings, ConfigSettings, GlobalSettings
 from cyberdrop_dl.exceptions import InvalidYamlError
-from cyberdrop_dl.managers.logs import LogManager
 from cyberdrop_dl.utils.apprise import get_apprise_urls
 
 if TYPE_CHECKING:
@@ -118,13 +116,6 @@ class ConfigManager:
             self.global_settings_data = GlobalSettings()
 
         yaml.save(self.global_settings, self.global_settings_data)
-
-    def reload_config(self) -> None:
-        self.startup()
-        self.manager.config.resolve_paths()
-        sleep(1)
-        self.manager.logs = LogManager.from_manager(self.manager)
-        sleep(1)
 
 
 def _is_in_file(search_value: str, file: Path) -> bool:
