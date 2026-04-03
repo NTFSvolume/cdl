@@ -19,24 +19,22 @@ from cyberdrop_dl.utils import strings
 from cyberdrop_dl.utils.utilities import purge_dir_tree as delete_empty_files_and_folders
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
-
     from cyberdrop_dl.managers.manager import Manager
 
 
 logger = logging.getLogger(__name__)
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass(slots=True, kw_only=True)
 class Sorter:
     input_dir: Path
     output_dir: Path
 
-    incrementer_format: str
     audio_format: str | None
     image_format: str | None
     video_format: str | None
     other_format: str | None
+    incrementer_format: str = "{i}"
 
     tui: SortingUI = dataclasses.field(init=False)
 
@@ -58,25 +56,29 @@ class Sorter:
 
     async def run(self) -> None:
         if not await asyncio.to_thread(self.input_dir.is_dir):
-            logger.error(f"Sort directory ('{self.input_dir}' does not exist", extra={"color": "red"})
+            logger.error(f"Sort directory '{self.input_dir}' does not exist", extra={"color": "red"})
             return
 
         logger.info("Sorting downloads...", extra={"color": "cyan"})
         await asyncio.to_thread(self.output_dir.mkdir, parents=True, exist_ok=True)
 
         with self.tui:
-            subfolders = await asyncio.to_thread(_subfolders, self.input_dir)
-            await self._sort_folders(subfolders)
-            logger.info("DONE!", extra={"color": "green"})
-            _ = delete_empty_files_and_folders(self.input_dir)
+            await self._run()
 
-    async def _sort_folders(self, folders: Iterable[Path]) -> None:
+    async def _run(self) -> None:
         async with asyncio.TaskGroup() as tg:
-            for fut in asyncio.as_completed(asyncio.to_thread(_files, folders) for folders in folders):
-                folder, files = await fut
 
-                for file in files:
-                    _ = tg.create_task(self._sort_file(folder.name, file))
+            async def _sort_folder(folder: Path) -> None:
+                for path in await asyncio.to_thread(lambda: folder.glob("*")):
+                    if await asyncio.to_thread(path.is_file):
+                        _ = tg.create_task(self._sort_file(folder.name, path))
+                    else:
+                        _ = tg.create_task(_sort_folder(path))
+
+            await _sort_folder(self.input_dir)
+
+        logger.info("DONE!", extra={"color": "green"})
+        _ = delete_empty_files_and_folders(self.input_dir)
 
     async def _sort_file(self, folder_name: str, file: Path) -> None:
         ext = file.suffix.lower()
@@ -93,7 +95,7 @@ class Sorter:
             await self.sort_other(file, folder_name)
 
         except Exception:
-            logger.exception("Unknown error while sorting {}", file)
+            logger.exception("Unknown error while sorting '{}'", file)
             self.tui.stats.errors += 1
 
     async def sort_audio(self, file: Path, base_name: str) -> None:
@@ -185,7 +187,7 @@ class Sorter:
             self.tui.stats.others += 1
 
     async def _move_file(self, file: Path, base_name: str, format_str: str, /, **kwargs: object) -> bool:
-        success = _format_dest(
+        dest = _format_dest(
             file,
             base_name,
             format_str,
@@ -193,12 +195,12 @@ class Sorter:
             sort_dir=self.output_dir,
             **kwargs,
         )
-        success = bool(await asyncio.to_thread(_move_file, file, success, self.incrementer_format))
-        if success:
-            logger.debug("Moved '{}' to '{}'", file, success)
+        dest = await asyncio.to_thread(_move_file, file, dest, self.incrementer_format)
+        if dest:
+            logger.warning("Moved '{}' to '{}'", file, dest)
         else:
             self.tui.stats.errors += 1
-        return success
+        return bool(dest)
 
 
 def _format_dest(
@@ -226,14 +228,6 @@ def _format_dest(
     )
 
     return Path(dest)
-
-
-def _subfolders(directory: Path) -> tuple[Path, ...]:
-    return tuple(path for path in directory.resolve().iterdir() if path.is_dir())
-
-
-def _files(directory: Path) -> tuple[Path, tuple[Path, ...]]:
-    return directory, tuple(path for path in directory.resolve().rglob("*") if path.is_file())
 
 
 def _move_but_not_overwrite(source: Path, dest: Path) -> Path:
@@ -301,4 +295,4 @@ async def _try_probe(kind: str, file: Path) -> ffmpeg.FFprobeResult | None:
     try:
         return await ffmpeg.probe(file)
     except (RuntimeError, CalledProcessError, OSError):
-        logger.exception(f"Unable to get {kind} properties of '{file}'")
+        logger.exception("Unable to get {} properties of '{}'", kind, file)
