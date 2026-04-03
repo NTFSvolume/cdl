@@ -185,30 +185,47 @@ class Sorter:
             self.tui.stats.others += 1
 
     async def _move_file(self, file: Path, base_name: str, format_str: str, /, **kwargs: object) -> bool:
-        file_date = await _get_modified_date(file)
-        file_date_us = file_date.strftime("%Y-%d-%m")
-        file_date_iso = file_date.strftime("%Y-%m-%d")
-
-        dest, _ = strings.safe_format(
+        success = _format_dest(
+            file,
+            base_name,
             format_str,
-            base_dir=base_name,
-            ext=file.suffix,
-            file_date=file_date,
-            file_date_iso=file_date_iso,
-            file_date_us=file_date_us,
-            filename=file.stem,
-            parent_dir=file.parent.name,
+            mtime=(await asyncio.to_thread(file.stat)).st_mtime,
             sort_dir=self.output_dir,
             **kwargs,
         )
-
-        dest = Path(dest)
-        dest = await asyncio.to_thread(_move_file, file, dest, self.incrementer_format)
-        if dest:
-            logger.debug("Moved '{}' to '{}'", file, dest)
+        success = bool(await asyncio.to_thread(_move_file, file, success, self.incrementer_format))
+        if success:
+            logger.debug("Moved '{}' to '{}'", file, success)
         else:
             self.tui.stats.errors += 1
-        return bool(dest)
+        return success
+
+
+def _format_dest(
+    file: Path,
+    base_dir: str,
+    format_string: str,
+    /,
+    mtime: float,
+    sort_dir: Path,
+    **kwargs: object,
+) -> Path:
+    file_date = datetime.datetime.fromtimestamp(mtime).replace(microsecond=0)
+
+    dest, _ = strings.safe_format(
+        format_string,
+        base_dir=base_dir,
+        ext=file.suffix,
+        file_date=file_date,
+        file_date_iso=file_date.strftime("%Y-%m-%d"),
+        file_date_us=file_date.strftime("%Y-%d-%m"),
+        filename=file.stem,
+        parent_dir=file.parent.name,
+        sort_dir=sort_dir,
+        **kwargs,
+    )
+
+    return Path(dest)
 
 
 def _subfolders(directory: Path) -> tuple[Path, ...]:
@@ -285,8 +302,3 @@ async def _try_probe(kind: str, file: Path) -> ffmpeg.FFprobeResult | None:
         return await ffmpeg.probe(file)
     except (RuntimeError, CalledProcessError, OSError):
         logger.exception(f"Unable to get {kind} properties of '{file}'")
-
-
-async def _get_modified_date(file: Path) -> datetime.datetime:
-    stat = await asyncio.to_thread(file.stat)
-    return datetime.datetime.fromtimestamp(stat.st_mtime).replace(microsecond=0)
