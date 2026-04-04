@@ -12,8 +12,9 @@ if TYPE_CHECKING:
 
 
 class Selector:
-    UPLOADED = "span.hidden.sm\\:inline"
+    UPLOAD_DATE = "span.hidden.sm\\:inline"
     ALBUM_FILES = "a[\\:href*='javascript:void(0)']", ":href"
+    NEXT_PAGE = "a[rel=next]"
 
 
 class ImagePondCrawler(Crawler):
@@ -56,7 +57,7 @@ class ImagePondCrawler(Crawler):
 
         og = open_graph.parse(soup)
         source = self.parse_url(og.video or og.image)
-        scrape_item.uploaded_at = self.parse_date(css.select_text(soup, Selector.UPLOADED), "%b %d, %Y")
+        scrape_item.uploaded_at = self.parse_date(css.select_text(soup, Selector.UPLOAD_DATE), "%b %d, %Y")
         filename, ext = self.get_filename_and_ext(og.title, assume_ext=".jpg", mime_type=og.get("video_type"))
         await self.handle_file(source, scrape_item, og.title, ext, custom_filename=filename)
 
@@ -66,10 +67,18 @@ class ImagePondCrawler(Crawler):
             soup = await resp.soup()
 
         title = css.select_text(soup, "h1")
-        scrape_item.setup_as_album(self.create_title(title))
+        scrape_item.setup_as_album(self.create_title(title), album_id=scrape_item.url.name)
 
-        for js in css.iselect(soup, *Selector.ALBUM_FILES):
-            web_url = js[js.index("'http") :].strip("'")
-            new_item = scrape_item.create_child(self.parse_url(web_url))
-            self.create_task(self.run(new_item))
-            scrape_item.add_children()
+        while True:
+            for js in css.iselect(soup, *Selector.ALBUM_FILES):
+                web_url = js[js.index("'http") :].strip("'")
+                new_item = scrape_item.create_child(self.parse_url(web_url))
+                self.create_task(self.run(new_item))
+                scrape_item.add_children()
+
+            try:
+                next_page = css.select(soup, Selector.NEXT_PAGE, "href")
+            except css.SelectorError:
+                break
+
+            soup = await self.request_soup(self.parse_url(next_page))
