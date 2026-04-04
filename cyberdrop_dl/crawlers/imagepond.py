@@ -1,14 +1,58 @@
 from __future__ import annotations
 
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
-from cyberdrop_dl.crawlers._chevereto import CheveretoCrawler
+from cyberdrop_dl.crawlers.crawler import Crawler
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.utils import css, open_graph
+from cyberdrop_dl.utils.utilities import error_handling_wrapper
 
-PRIMARY_URL = AbsoluteHttpURL("https://imagepond.net")
+if TYPE_CHECKING:
+    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
 
-class ImagePondCrawler(CheveretoCrawler):
-    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = PRIMARY_URL
+class Selector:
+    UPLOADED = "span.hidden.sm\\:inline"
+
+
+class ImagePondCrawler(Crawler):
+    SUPPORTED_PATHS: ClassVar[dict[str, str | tuple[str, ...]]] = {
+        "Image": (
+            "/i/<slug>",
+            "/img/<slug>",
+            "/image/<slug>",
+        ),
+        "Video": "/video/<slug>",
+        "Direct links": "/media/<slug>",
+    }
+    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://imagepond.net")
     DOMAIN: ClassVar[str] = "imagepond.net"
     FOLDER_DOMAIN: ClassVar[str] = "ImagePond"
+    DEFAULT_TRIM_URLS: ClassVar[bool] = False
+
+    async def fetch(self, scrape_item: ScrapeItem) -> None:
+        match scrape_item.url.parts[1:]:
+            case ["media", _, *_] if self.is_subdomain(scrape_item.url):
+                return await self.direct_file(scrape_item)
+            case ["i" | "img" | "image" | "video" | "videos", _]:
+                return await self.media(scrape_item)
+            case _:
+                raise ValueError
+
+    @error_handling_wrapper
+    async def media(self, scrape_item: ScrapeItem) -> None:
+        if await self.check_complete_from_referer(scrape_item):
+            return
+
+        async with self.request(scrape_item.url) as resp:
+            if await self.check_complete_from_referer(resp.url):
+                return
+
+            scrape_item.url = resp.url
+            soup = await resp.soup()
+
+        og = open_graph.parse(soup)
+        source = self.parse_url(og.video or og.image)
+        scrape_item.uploaded_at = self.parse_date(css.select_text(soup, Selector.UPLOADED), "%b %d, %Y")
+        filename, ext = self.get_filename_and_ext(og.title, assume_ext=".jpg", mime_type=og.video_type)
+        await self.handle_file(source, scrape_item, og.title, ext, custom_filename=filename)
