@@ -22,7 +22,7 @@ from cyberdrop_dl.managers.logs import LogManager
 from cyberdrop_dl.managers.progress_manager import ProgressManager
 from cyberdrop_dl.utils import filepath
 from cyberdrop_dl.utils.logger import LogHandler, QueuedLogger
-from cyberdrop_dl.utils.utilities import close_if_defined, get_system_information
+from cyberdrop_dl.utils.utilities import get_system_information
 
 if TYPE_CHECKING:
     from asyncio import TaskGroup
@@ -201,14 +201,13 @@ class Manager:
 
     async def async_db_close(self) -> None:
         "Partial shutdown for managers used for hash directory scanner"
-        self.db_manager = await close_if_defined(self.db_manager)
+        await self.db_manager.close()
         self.progress_manager.hash_progress.reset()
 
     async def close(self) -> None:
         """Closes the manager."""
 
         await self.async_db_close()
-
         await self.client_manager.close()
         del self.client_manager
 

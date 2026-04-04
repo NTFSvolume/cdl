@@ -386,23 +386,6 @@ def get_size_or_none(path: Path) -> int | None:
         return None
 
 
-class HasClose(Protocol):
-    def close(self): ...
-
-
-class HasAsyncClose(Protocol):
-    async def close(self): ...
-
-
-C = TypeVar("C", bound=HasAsyncClose | HasClose)
-
-
-async def close_if_defined(obj: C) -> C:
-    if not isinstance(obj, dataclasses.Field):
-        await obj.close() if inspect.iscoroutinefunction(obj.close) else obj.close()
-    return constants.NOT_DEFINED
-
-
 @functools.cache
 def get_system_information() -> str:
     def get_common_name() -> str:
