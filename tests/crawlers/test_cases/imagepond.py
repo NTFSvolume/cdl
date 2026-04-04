@@ -5,8 +5,45 @@ TEST_CASES = [
         [
             {
                 "url": "https://media.imagepond.net/media/Palm-Desert-Resuscitation-Education-YourCPRMD.com8c5d221f74fbb880.png",
+                "referer": "https://www.imagepond.net/i/chv_866552",
+                "download_folder": "re:Loose Files (ImagePond)",
+                "filename": "Palm Desert Resuscitation Education (YourCPRMD.com).png",
+                "album_id": None,
+                "datetime": 1759122000,
+            },
+        ],
+    ),
+    (
+        "https://www.imagepond.net/image/zJfHAH",
+        [
+            {
+                "url": "https://media.imagepond.net/media/Palm-Desert-Resuscitation-Education-YourCPRMD.com8c5d221f74fbb880.png",
+                "referer": "https://www.imagepond.net/i/chv_866552",
+            },
+        ],
+    ),
+    (
+        "https://media.imagepond.net/media/Palm-Desert-Resuscitation-Education-YourCPRMD.com8c5d221f74fbb880.png",
+        [
+            {
+                "url": "https://media.imagepond.net/media/Palm-Desert-Resuscitation-Education-YourCPRMD.com8c5d221f74fbb880.png",
+                "referer": "https://media.imagepond.net/media/Palm-Desert-Resuscitation-Education-YourCPRMD.com8c5d221f74fbb880.png",
+                "download_folder": "re:Loose Files (ImagePond)",
                 "filename": "Palm-Desert-Resuscitation-Education-YourCPRMD.com8c5d221f74fbb880.png",
-                "referer": "https://www.imagepond.net/image/zJfHAH",
+                "album_id": None,
+                "datetime": None,
+            },
+        ],
+    ),
+    (
+        "https://www.imagepond.net/i/3RxARn4j",
+        [
+            {
+                "url": "https://media.imagepond.net/media/videos/VID_20260404_071357_214_a9cdyOhE.mp4",
+                "domain": "imagepond.net",
+                "referer": "https://www.imagepond.net/i/3RxARn4j",
+                "filename": "VID_20260404_071357_214.mp4",
+                "datetime": 1775278800,
             }
         ],
     ),
