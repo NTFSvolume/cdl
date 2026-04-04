@@ -51,6 +51,15 @@ class ImagePondCrawler(Crawler):
             case _:
                 raise ValueError
 
+    @classmethod
+    def transform_url(cls, url: AbsoluteHttpURL):
+        url = super().transform_url(url)
+        match url.parts[1:]:
+            case [a, b, "download", *_]:
+                return url.origin() / a / b
+            case _:
+                return url
+
     @error_handling_wrapper
     async def media(self, scrape_item: ScrapeItem) -> None:
         if await self.check_complete_from_referer(scrape_item):
