@@ -26,11 +26,14 @@ class HashTable:
     def db_conn(self) -> aiosqlite.Connection:
         return self._database._db_conn
 
-    async def startup(self) -> None:
-        """Startup process for the HashTable."""
-        await self.db_conn.execute(create_files)
-        await self.db_conn.execute(create_hash)
-        await self.db_conn.execute(create_hash_index)
+    async def create(self) -> None:
+        for query in (
+            create_files,
+            create_hash,
+            create_hash_index,
+        ):
+            _ = await self.db_conn.execute(query)
+
         await self.db_conn.commit()
 
     async def get_file_hash_exists(self, path: Path | str, hash_type: str) -> str | None:

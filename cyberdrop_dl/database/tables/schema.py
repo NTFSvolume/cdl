@@ -53,7 +53,7 @@ class SchemaVersionTable:
         await self.db_conn.execute(query, (CURRENT_APP_SCHEMA_VERSION,))
         await self.db_conn.commit()
 
-    async def startup(self) -> None:
+    async def create(self) -> None:
         logger.info(f"Expected database schema version: {CURRENT_APP_SCHEMA_VERSION}")
         version = await self.get_version()
         logger.info(f"Database reports installed version: {version}")

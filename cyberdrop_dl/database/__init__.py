@@ -31,9 +31,9 @@ class Database:
         self._db_conn = await aiosqlite.connect(self._db_path, timeout=20)
         self._db_conn.row_factory = aiosqlite.Row
         await self._pre_allocate()
-        await self.history.startup()
-        await self.hash.startup()
-        await self.schema.startup()
+        await self.history.create()
+        await self.hash.create()
+        await self.schema.create()
         return self
 
     async def fetchone(self, query: str, parameters: Iterable[Any] | None = None) -> aiosqlite.Row | None:

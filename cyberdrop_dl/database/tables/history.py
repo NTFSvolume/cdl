@@ -31,8 +31,7 @@ class HistoryTable:
     def db_conn(self) -> aiosqlite.Connection:
         return self._database._db_conn
 
-    async def startup(self) -> None:
-        """Startup process for the HistoryTable."""
+    async def create(self) -> None:
         from cyberdrop_dl.crawlers import cyberdrop, jpg5, redgifs, turbovid
 
         def try_wrap(fn):
