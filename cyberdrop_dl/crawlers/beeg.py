@@ -50,8 +50,6 @@ class BeegComCrawler(Crawler):
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
             case [video_id]:
-                # https://beeg.com/-0983946056129650"
-                # https://beeg.com/1277207756"
                 video_id = str(int(video_id.removeprefix("-")))
                 return await self.video(scrape_item, video_id)
             case _:
@@ -68,7 +66,7 @@ class BeegComCrawler(Crawler):
 
     @error_handling_wrapper
     async def video(self, scrape_item: ScrapeItem, video_id: str) -> None:
-        if await self.check_complete_from_referer(scrape_item=scrape_item.url):
+        if await self.check_complete_from_referer(scrape_item.url):
             return
 
         video = await self._request_video(video_id)
