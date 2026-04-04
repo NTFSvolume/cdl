@@ -69,23 +69,24 @@ async def _run_manager(manager: Manager) -> None:
     logger.info(f"Using Debug Log: {debug_log_file_path}")
     logger.info("Starting Async Processes...")
     await manager.async_startup()
+
     log_spacer(10)
+    async with manager.db_manager:
+        logger.info("Starting CDL...\n")
 
-    logger.info("Starting CDL...\n")
+        await _scheduler(manager)
 
-    await _scheduler(manager)
+        manager.progress_manager.print_stats(start_time)
 
-    manager.progress_manager.print_stats(start_time)
+        log_spacer(20)
+        logger.info("Checking for Updates...")
+        check_latest_pypi()
+        log_spacer(20)
+        logger.info("Closing Program...")
+        log_with_color("Finished downloading. Enjoy :)", "green", 20, show_in_stats=False)
 
-    log_spacer(20)
-    logger.info("Checking for Updates...")
-    check_latest_pypi()
-    log_spacer(20)
-    logger.info("Closing Program...")
-    log_with_color("Finished downloading. Enjoy :)", "green", 20, show_in_stats=False)
-
-    await send_webhook_message(manager)
-    await send_apprise_notifications(manager)
+        await send_webhook_message(manager)
+        await send_apprise_notifications(manager)
 
 
 async def _scheduler(manager: Manager) -> None:

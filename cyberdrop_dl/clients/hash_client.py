@@ -23,10 +23,11 @@ logger = logging.getLogger(__name__)
 
 
 async def hash_directory_scanner(manager: Manager, path: Path) -> None:
-    await manager.async_db_hash_startup()
-    await manager.hash_manager.hash_client.hash_directory(path)
-    manager.progress_manager.print_dedupe_stats()
-    await manager.async_db_close()
+    manager.async_db_hash_startup()
+    async with manager.db_manager:
+        await manager.hash_manager.hash_client.hash_directory(path)
+        manager.progress_manager.print_dedupe_stats()
+        manager.progress_manager.hash_progress.reset()
 
 
 class HashClient:

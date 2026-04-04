@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
 import aiosqlite
 
@@ -26,16 +26,16 @@ class Database:
         self.hash_table = HashTable(self)
         self._schema_versions = SchemaVersionTable(self)
 
-    async def connect(self) -> None:
+    async def __aenter__(self) -> Self:
         self._db_conn = await aiosqlite.connect(self._db_path, timeout=20)
         self._db_conn.row_factory = aiosqlite.Row
         await self._pre_allocate()
         await self.history_table.startup()
         await self.hash_table.startup()
         await self._schema_versions.startup()
+        return self
 
-    async def close(self) -> None:
-        """Close the DBManager."""
+    async def __aexit__(self, *_) -> None:
         await self._db_conn.close()
 
     async def _pre_allocate(self) -> None:

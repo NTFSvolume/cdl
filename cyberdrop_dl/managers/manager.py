@@ -124,22 +124,20 @@ class Manager:
         """Async startup process for the manager."""
 
         self.args_logging()
+        self.async_db_hash_startup()
 
         self.client_manager = ClientManager(self)
         await self.client_manager.startup()
 
-        await self.async_db_hash_startup()
-
         filepath.MAX_FILE_LEN.set(self.config_manager.global_settings_data.general.max_file_name_length)
         filepath.MAX_FOLDER_LEN.set(self.config_manager.global_settings_data.general.max_folder_name_length)
 
-    async def async_db_hash_startup(self) -> None:
+    def async_db_hash_startup(self) -> None:
 
         self.db_manager = Database(
             self.appdata.db_file,
             self.config.runtime_options.ignore_history,
         )
-        await self.db_manager.connect()
 
         self.hash_manager = HashManager(self)
         self.live_manager = LiveManager(self)
@@ -199,15 +197,8 @@ class Manager:
         )
         logger.info("\n".join(args_info))
 
-    async def async_db_close(self) -> None:
-        "Partial shutdown for managers used for hash directory scanner"
-        await self.db_manager.close()
-        self.progress_manager.hash_progress.reset()
-
     async def close(self) -> None:
-        """Closes the manager."""
 
-        await self.async_db_close()
         await self.client_manager.close()
 
         while self.loggers:
