@@ -22,10 +22,12 @@ class Selector:
 
 class ImagePondCrawler(Crawler):
     SUPPORTED_PATHS: ClassVar[dict[str, str | tuple[str, ...]]] = {
-        "Image / Video": (
+        "Image / Video / Archive": (
             "/i/<slug>",
             "/img/<slug>",
             "/image/<slug>",
+            "/video/<slug>",
+            "/videos/<slug>",
         ),
         "Album": "/a/<slug>",
         "User": (

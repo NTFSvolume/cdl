@@ -66,4 +66,16 @@ TEST_CASES = [
             }
         ],
     ),
+    (
+        "https://www.imagepond.net/a/AY75C28f",
+        [
+            {
+                "url": "re:https://media.imagepond.net/media/",
+                "referer": "re:https://www.imagepond.net/i/",
+                "album_id": "AY75C28f",
+                "download_folder": "re:vic (ImagePond)",
+            }
+        ],
+        21,
+    ),
 ]
