@@ -25,10 +25,9 @@ class Database:
         self.history_table = HistoryTable(self)
         self.hash_table = HashTable(self)
         self._schema_versions = SchemaVersionTable(self)
-        self._db_conn = aiosqlite.connect(self._db_path, timeout=20)
 
     async def connect(self) -> None:
-        await self._db_conn
+        self._db_conn = await aiosqlite.connect(self._db_path, timeout=20)
         self._db_conn.row_factory = aiosqlite.Row
         await self._pre_allocate()
         await self.history_table.startup()
