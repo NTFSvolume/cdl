@@ -88,7 +88,9 @@ class DictDataclass(Dataclass, Protocol):
         return {name: data.get(name) for name in _fields(cls)}
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any], /) -> Self:
+    def from_dict(cls, data: dict[str, Any], /, **overrides: Any) -> Self:
+        if overrides:
+            data.update(overrides)
         return cls(**cls.filter_dict(data))
 
 
