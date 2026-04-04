@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 async def hash_directory_scanner(manager: Manager, path: Path) -> None:
     manager.async_db_hash_startup()
-    async with manager.db_manager:
+    async with manager.database:
         await manager.hash_manager.hash_client.hash_directory(path)
         manager.progress_manager.print_dedupe_stats()
         manager.progress_manager.hash_progress.reset()
@@ -113,11 +113,11 @@ class HashClient:
     ) -> str | None:
         """Generates hash of a file."""
         self.manager.progress_manager.hash_progress.update_currently_hashing(file)
-        hash = await self.manager.db_manager.hash_table.get_file_hash_exists(file, hash_type)
+        hash = await self.manager.database.hash_table.get_file_hash_exists(file, hash_type)
         try:
             if not hash:
                 hash = await self.manager.hash_manager.hash_file(file, hash_type)
-                await self.manager.db_manager.hash_table.insert_or_update_hash_db(
+                await self.manager.database.hash_table.insert_or_update_hash_db(
                     hash,
                     hash_type,
                     file,
@@ -127,7 +127,7 @@ class HashClient:
                 self.manager.progress_manager.hash_progress.add_new_completed_hash(hash_type)
             else:
                 self.manager.progress_manager.hash_progress.add_prev_hash()
-                await self.manager.db_manager.hash_table.insert_or_update_hash_db(
+                await self.manager.database.hash_table.insert_or_update_hash_db(
                     hash,
                     hash_type,
                     file,
@@ -165,7 +165,7 @@ class HashClient:
     async def final_dupe_cleanup(self, final_dict: dict[str, dict]) -> None:
         """cleanup files based on dedupe setting"""
 
-        get_matches = self.manager.db_manager.hash_table.get_files_with_hash_matches
+        get_matches = self.manager.database.hash_table.get_files_with_hash_matches
         async with asyncio.TaskGroup() as tg:
 
             async def delete_dupes(hash_value: str, size: int) -> None:

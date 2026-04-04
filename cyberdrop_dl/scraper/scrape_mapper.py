@@ -116,7 +116,7 @@ class ScrapeMapper:
     async def run(self) -> None:
         """Starts the orchestra."""
         self.start_scrapers()
-        await self.manager.db_manager.history_table.update_previously_unsupported(self.existing_crawlers)
+        await self.manager.database.history_table.update_previously_unsupported(self.existing_crawlers)
         try:
             await self.jdownloader.connect()
         except JDownloaderError:
@@ -201,7 +201,7 @@ class ScrapeMapper:
 
     async def load_failed_links(self) -> AsyncGenerator[ScrapeItem]:
         """Loads failed links from database."""
-        async for rows in self.manager.db_manager.history_table.get_failed_items():
+        async for rows in self.manager.database.history_table.get_failed_items():
             for row in rows:
                 yield _create_item_from_row(row)
 
@@ -209,13 +209,13 @@ class ScrapeMapper:
         """Loads all links from database."""
         after = self.manager.parsed_args.cli_only_args.completed_after or datetime.date.min
         before = self.manager.parsed_args.cli_only_args.completed_before or datetime.date.today()
-        async for rows in self.manager.db_manager.history_table.get_all_items(after, before):
+        async for rows in self.manager.database.history_table.get_all_items(after, before):
             for row in rows:
                 yield _create_item_from_row(row)
 
     async def load_all_bunkr_failed_links_via_hash(self) -> AsyncGenerator[ScrapeItem]:
         """Loads all bunkr links with maintenance hash."""
-        async for rows in self.manager.db_manager.history_table.get_all_bunkr_failed():
+        async for rows in self.manager.database.history_table.get_all_bunkr_failed():
             for row in rows:
                 yield _create_item_from_row(row)
 

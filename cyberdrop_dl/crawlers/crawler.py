@@ -470,7 +470,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         This method is called automatically on a created media item,
         but Crawler code can use it to skip unnecessary requests"""
         db_path = self.__db_path__(url)
-        was_completed = await self.manager.db_manager.history_table.check_complete(self.DOMAIN, url, referer, db_path)
+        was_completed = await self.manager.database.history_table.check_complete(self.DOMAIN, url, referer, db_path)
         if was_completed:
             logger.info(f"Skipping {url} as it has already been downloaded")
             self.manager.progress_manager.download_progress.add_previously_completed()
@@ -479,7 +479,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
     async def handle_media_item(self, media_item: MediaItem, m3u8: m3u8.Rendition | None = None) -> None:
         if await self.check_complete(media_item.url, media_item.referer):
             if media_item.album_id:
-                await self.manager.db_manager.history_table.set_album_id(self.DOMAIN, media_item)
+                await self.manager.database.history_table.set_album_id(self.DOMAIN, media_item)
             return
 
         if await self.check_skip_by_config(media_item):
@@ -517,7 +517,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         """
         url = _url(scrape_item)
         domain = None if any_crawler else self.DOMAIN
-        downloaded = await self.manager.db_manager.history_table.check_complete_by_referer(domain, url)
+        downloaded = await self.manager.database.history_table.check_complete_by_referer(domain, url)
         if downloaded:
             logger.info(f"Skipping {url} as it has already been downloaded")
             self.manager.progress_manager.download_progress.add_previously_completed()
@@ -528,7 +528,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         self: Crawler, scrape_item: ScrapeItem | AbsoluteHttpURL, hash_type: Literal["md5", "sha256"], hash_value: str
     ) -> bool:
         """Returns `True` if at least 1 file with this hash is recorded on the database"""
-        downloaded = await self.manager.db_manager.hash_table.check_hash_exists(hash_type, hash_value)
+        downloaded = await self.manager.database.hash_table.check_hash_exists(hash_type, hash_value)
         if downloaded:
             url = _url(scrape_item)
             logger.info(f"Skipping {url} as its hash ({hash_type}:{hash_value}) has already been downloaded")
@@ -538,7 +538,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
     @final
     async def get_album_results(self, album_id: str) -> dict[str, bool]:
         """Checks whether an album has completed given its domain and album id."""
-        return await self.manager.db_manager.history_table.check_album(self.DOMAIN, album_id)
+        return await self.manager.database.history_table.check_album(self.DOMAIN, album_id)
 
     @final
     def handle_external_links(self, scrape_item: ScrapeItem, reset: bool = True) -> None:

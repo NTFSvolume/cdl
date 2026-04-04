@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import logging
 from typing import TYPE_CHECKING
 
@@ -19,9 +20,9 @@ CURRENT_APP_SCHEMA_VERSION = "8.10.0"
 logger = logging.getLogger(__name__)
 
 
+@dataclasses.dataclass(slots=True, frozen=True)
 class SchemaVersionTable:
-    def __init__(self, database: Database) -> None:
-        self._database = database
+    _database: Database
 
     @property
     def db_conn(self) -> aiosqlite.Connection:

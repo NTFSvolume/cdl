@@ -71,7 +71,7 @@ async def _run_manager(manager: Manager) -> None:
     await manager.async_startup()
 
     log_spacer(10)
-    async with manager.db_manager:
+    async with manager.database:
         logger.info("Starting CDL...\n")
 
         await _scheduler(manager)

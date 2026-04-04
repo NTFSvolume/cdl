@@ -79,6 +79,6 @@ def post_startup_manager(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Man
 async def running_manager(manager: Manager) -> AsyncGenerator[Manager]:
     scrape_mapper.existing_crawlers.clear()
     await manager.async_startup()
-    async with manager.db_manager:
+    async with manager.database:
         yield manager
     await manager.close()

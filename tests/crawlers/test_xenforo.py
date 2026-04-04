@@ -78,7 +78,7 @@ async def post_startup_manager(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     manager.config.resolve_paths()
     manager.logs.delete_old_logs()
     await manager.async_startup()
-    async with manager.db_manager:
+    async with manager.database:
         yield manager
     await manager.close()
 

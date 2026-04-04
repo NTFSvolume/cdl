@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
@@ -16,10 +17,10 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+@dataclasses.dataclass(slots=True, frozen=True)
 class HashTable:
-    def __init__(self, database: Database) -> None:
-        self._database = database
-        self.cwd: Path = Path.cwd().absolute()
+    _database: Database
+    cwd: Path = dataclasses.field(init=False, default_factory=lambda: Path.cwd().expanduser().resolve())
 
     @property
     def db_conn(self) -> aiosqlite.Connection:

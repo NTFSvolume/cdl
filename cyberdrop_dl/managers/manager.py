@@ -47,7 +47,7 @@ class Manager:
         self.hash_manager: HashManager = field(init=False)
 
         self.logs: LogManager = field(init=False)
-        self.db_manager: Database = field(init=False)
+        self.database: Database = field(init=False)
         self.client_manager: ClientManager = field(init=False)
 
         self.progress_manager: ProgressManager = field(init=False)
@@ -134,7 +134,7 @@ class Manager:
 
     def async_db_hash_startup(self) -> None:
 
-        self.db_manager = Database(
+        self.database = Database(
             self.appdata.db_file,
             self.config.runtime_options.ignore_history,
         )
