@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 class Selector:
     UPLOAD_DATE = "span.hidden.sm\\:inline"
     ALBUM_FILES = "a[\\:href*='javascript:void(0)']", ":href"
+    USER_FILES = "a.group.relative[href]"
     NEXT_PAGE = "a[rel=next]"
 
 
@@ -25,21 +26,28 @@ class ImagePondCrawler(Crawler):
             "/image/<slug>",
         ),
         "Album": "/a/<slug>",
+        "User": (
+            "/user/<user_name>",
+            "/<user_name>",
+        ),
         "Direct links": "/media/<slug>",
     }
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://imagepond.net")
     DOMAIN: ClassVar[str] = "imagepond.net"
     FOLDER_DOMAIN: ClassVar[str] = "ImagePond"
     DEFAULT_TRIM_URLS: ClassVar[bool] = False
+    NEXT_PAGE_SELECTOR: ClassVar[str] = Selector.NEXT_PAGE
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
-            case ["media", _] if self.is_subdomain(scrape_item.url):
-                return await self.direct_file(scrape_item)
             case ["i" | "img" | "image" | "video" | "videos", _]:
                 return await self.media(scrape_item)
             case ["a", _]:
                 return await self.album(scrape_item)
+            case ["media", _] if self.is_subdomain(scrape_item.url):
+                return await self.direct_file(scrape_item)
+            case ["user", user_name] | [user_name]:
+                return await self.user(scrape_item, user_name)
             case _:
                 raise ValueError
 
@@ -61,24 +69,25 @@ class ImagePondCrawler(Crawler):
         filename, ext = self.get_filename_and_ext(og.title, assume_ext=".jpg", mime_type=og.get("video_type"))
         await self.handle_file(source, scrape_item, og.title, ext, custom_filename=filename)
 
+    @error_handling_wrapper
     async def album(self, scrape_item: ScrapeItem) -> None:
-        async with self.request(scrape_item.url) as resp:
-            scrape_item.url = resp.url
-            soup = await resp.soup()
+        title: str = ""
+        async for soup in self.web_pager(scrape_item.url):
+            if not title:
+                title = css.select_text(soup, "h1")
+                scrape_item.setup_as_album(self.create_title(title), album_id=scrape_item.url.name)
 
-        title = css.select_text(soup, "h1")
-        scrape_item.setup_as_album(self.create_title(title), album_id=scrape_item.url.name)
-
-        while True:
             for js in css.iselect(soup, *Selector.ALBUM_FILES):
                 web_url = js[js.index("'http") :].strip("'")
                 new_item = scrape_item.create_child(self.parse_url(web_url))
                 self.create_task(self.run(new_item))
                 scrape_item.add_children()
 
-            try:
-                next_page = css.select(soup, Selector.NEXT_PAGE, "href")
-            except css.SelectorError:
-                break
+    @error_handling_wrapper
+    async def user(self, scrape_item: ScrapeItem, user_name: str) -> None:
+        title = self.create_title(f"{user_name} [user]")
+        scrape_item.setup_as_profile(title)
 
-            soup = await self.request_soup(self.parse_url(next_page))
+        async for soup in self.web_pager(scrape_item.url):
+            for _, new_item in self.iter_children(scrape_item, soup, Selector.USER_FILES):
+                self.create_task(self.run(new_item))
