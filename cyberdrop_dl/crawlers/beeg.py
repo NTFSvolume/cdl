@@ -74,7 +74,7 @@ class BeegComCrawler(Crawler):
         video = await self._request_video(video_id)
         scrape_item.uploaded_at = self.parse_iso_date(video.created_at)
         best = max(video.hls_formats)
-        m3u8 = await self.get_m3u8_from_index_url(best.url)
+        m3u8, _ = await self.request_m3u8(best.url)
         filename = self.create_custom_filename(
             video.title,
             ext := ".mp4",
