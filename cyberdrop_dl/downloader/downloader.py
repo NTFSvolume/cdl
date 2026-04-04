@@ -206,7 +206,7 @@ class Downloader:
         # TODO: register database duration from m3u8 info
         # TODO: compute approx size for UI from the m3u8 info
         media_item.download_filename = media_item.path.name
-        await self.manager.database.history_table.add_download_filename(self.domain, media_item)
+        await self.manager.database.history.add_download_filename(self.domain, media_item)
         task_id = self.manager.progress_manager.file_progress.add_task(domain=self.domain, filename=media_item.filename)
         media_item.set_task_id(task_id)
         video, audio, _subs = await self._download_rendition_group(media_item, m3u8_group)
@@ -450,7 +450,7 @@ class Downloader:
             self.client.client_manager.check_domain_errors(self.domain)
             media_item.attempts = media_item.attempts or 1
             if not media_item.is_segment:
-                media_item.duration = await self.manager.database.history_table.get_duration(self.domain, media_item)
+                media_item.duration = await self.manager.database.history.get_duration(self.domain, media_item)
                 await self.check_file_can_download(media_item)
             downloaded = await self.client.download_file(self.domain, media_item)
             if downloaded:
