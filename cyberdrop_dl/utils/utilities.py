@@ -210,10 +210,6 @@ def get_download_path(manager: Manager, scrape_item: ScrapeItem, domain: str) ->
 """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
 
 
-def clear_term():
-    os.system("cls" if os.name == "nt" else "clear")
-
-
 def get_size(path: os.DirEntry[str]) -> int | None:
     try:
         return path.stat(follow_symlinks=False).st_size
