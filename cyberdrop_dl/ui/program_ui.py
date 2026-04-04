@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING
 
 import aiohttp
 import inquirer
-import inquirer.errors
 import inquirer.questions
+from inquirer.themes import BlueComposure
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.text import Text
@@ -116,22 +116,26 @@ async def _get_changelog() -> str:
 
 def _app_header(manager: Manager) -> None:
     _clear_term()
-    console.print(f"[bold]Cyberdrop Downloader ([blue]V{__version__!s}[/blue])[/bold]")
-    console.print(f"Config file: [blue]{hyperlink(manager.config_manager.settings)}[/blue]\n")
+    console.print(f"[bold]cyberdrop-dl ([blue]v{__version__!s}[/blue])[/bold]")
+    console.print(f"config file: [blue]{hyperlink(manager.config_manager.settings)}[/blue]\n")
 
 
 def _ask_choices(choices: Iterable[str]) -> str:
     return _ask(
         inquirer.List(
             "main",
-            message="What would you like to do:",
+            message="What would you like to do",
             choices=list(choices),
         )
     )
 
 
-def _ask(*questions: inquirer.questions.Question) -> str:
-    answers = inquirer.prompt(questions, raise_keyboard_interrupt=True)
+def _ask(question: inquirer.questions.Question) -> str:
+    answers = inquirer.prompt(
+        [question],
+        raise_keyboard_interrupt=True,
+        theme=BlueComposure(),
+    )
     assert answers
     return next(iter(answers.values()))
 
@@ -153,7 +157,7 @@ def _ask_dir(message: str = "Select dir path", default: Path = Path.home()) -> P
             if not path.is_dir():
                 raise NotADirectoryError(answer)
 
-        except (NotADirectoryError, FileNotFoundError, inquirer.errors.ValidationError) as e:
+        except (NotADirectoryError, FileNotFoundError) as e:
             console.print(_ERROR, repr(e))
         else:
             return path
