@@ -377,6 +377,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         finally:
             self.manager.progress_manager.scraping_progress.remove_task(task_id)
 
+    @final
     @staticmethod
     def is_subdomain(url: AbsoluteHttpURL) -> bool:
         return url.host.removeprefix("www.").count(".") > 1

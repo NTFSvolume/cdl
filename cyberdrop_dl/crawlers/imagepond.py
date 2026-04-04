@@ -13,16 +13,17 @@ if TYPE_CHECKING:
 
 class Selector:
     UPLOADED = "span.hidden.sm\\:inline"
+    ALBUM_FILES = "a[\\:href*='javascript:void(0)']", ":href"
 
 
 class ImagePondCrawler(Crawler):
     SUPPORTED_PATHS: ClassVar[dict[str, str | tuple[str, ...]]] = {
-        "Image": (
+        "Image / Video": (
             "/i/<slug>",
             "/img/<slug>",
             "/image/<slug>",
         ),
-        "Video": "/video/<slug>",
+        "Album": "/a/<slug>",
         "Direct links": "/media/<slug>",
     }
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://imagepond.net")
@@ -32,10 +33,12 @@ class ImagePondCrawler(Crawler):
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
-            case ["media", _, *_] if self.is_subdomain(scrape_item.url):
+            case ["media", _] if self.is_subdomain(scrape_item.url):
                 return await self.direct_file(scrape_item)
             case ["i" | "img" | "image" | "video" | "videos", _]:
                 return await self.media(scrape_item)
+            case ["a", _]:
+                return await self.album(scrape_item)
             case _:
                 raise ValueError
 
@@ -45,7 +48,7 @@ class ImagePondCrawler(Crawler):
             return
 
         async with self.request(scrape_item.url) as resp:
-            if await self.check_complete_from_referer(resp.url):
+            if resp.url != scrape_item.url and await self.check_complete_from_referer(resp.url):
                 return
 
             scrape_item.url = resp.url
@@ -54,5 +57,19 @@ class ImagePondCrawler(Crawler):
         og = open_graph.parse(soup)
         source = self.parse_url(og.video or og.image)
         scrape_item.uploaded_at = self.parse_date(css.select_text(soup, Selector.UPLOADED), "%b %d, %Y")
-        filename, ext = self.get_filename_and_ext(og.title, assume_ext=".jpg", mime_type=og.video_type)
+        filename, ext = self.get_filename_and_ext(og.title, assume_ext=".jpg", mime_type=og.get("video_type"))
         await self.handle_file(source, scrape_item, og.title, ext, custom_filename=filename)
+
+    async def album(self, scrape_item: ScrapeItem) -> None:
+        async with self.request(scrape_item.url) as resp:
+            scrape_item.url = resp.url
+            soup = await resp.soup()
+
+        title = css.select_text(soup, "h1")
+        scrape_item.setup_as_album(self.create_title(title))
+
+        for js in css.iselect(soup, *Selector.ALBUM_FILES):
+            web_url = js[js.index("'http") :].strip("'")
+            new_item = scrape_item.create_child(self.parse_url(web_url))
+            self.create_task(self.run(new_item))
+            scrape_item.add_children()
