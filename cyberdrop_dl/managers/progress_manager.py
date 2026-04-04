@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import time
 from contextlib import asynccontextmanager
-from dataclasses import field
 from datetime import timedelta
 from functools import partial
 from typing import TYPE_CHECKING
@@ -29,7 +28,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
     from pathlib import Path
 
-    from rich.console import RenderableType
+    from rich.panel import Panel
 
     from cyberdrop_dl.managers.manager import Manager
     from cyberdrop_dl.ui.progress.statistic_progress import UiFailureTotal
@@ -42,6 +41,8 @@ log_yellow = partial(log_with_color, style="yellow", level=20)
 log_green = partial(log_with_color, style="green", level=20)
 log_red = partial(log_with_color, style="red", level=20)
 
+spinner = SpinnerColumn(style="green", spinner_name="dots")
+
 
 class ProgressManager:
     def __init__(self, manager: Manager) -> None:
@@ -53,37 +54,22 @@ class ProgressManager:
         self.scraping_progress = ScrapingProgress(manager)
 
         # Overall Progress Bars & Stats
-        self.download_progress = DownloadsProgress(manager)
-        self.download_stats_progress = DownloadStatsProgress()
-        self.scrape_stats_progress = ScrapeStatsProgress()
-        self.hash_progress = HashProgress(manager)
-        self.sort_progress = SortProgress(1, manager)
+        self.download_progress: DownloadsProgress = DownloadsProgress(manager)
+        self.download_stats_progress: DownloadStatsProgress = DownloadStatsProgress()
+        self.scrape_stats_progress: ScrapeStatsProgress = ScrapeStatsProgress()
+        self.hash_progress: HashProgress = HashProgress(manager)
+        self.sort_progress: SortProgress = SortProgress(1, manager)
 
-        self.ui_refresh_rate = ui_options.refresh_rate
+        self.ui_refresh_rate: int = ui_options.refresh_rate
 
-        self.hash_remove_layout: RenderableType = field(init=False)
-        self.hash_layout: RenderableType = field(init=False)
-        self.sort_layout: RenderableType = field(init=False)
-        self.status_message: Progress = field(init=False)
-        self.status_message_task_id: TaskID = field(init=False)
-
-    @asynccontextmanager
-    async def show_status_msg(self, msg: str | None) -> AsyncGenerator[None]:
-        try:
-            self.status_message.update(self.status_message_task_id, description=msg, visible=bool(msg))
-            yield
-        finally:
-            self.status_message.update(self.status_message_task_id, visible=False)
-
-    def startup(self) -> None:
-        """Startup process for the progress manager."""
-        spinner = SpinnerColumn(style="green", spinner_name="dots")
         activity = Progress(spinner, "[progress.description]{task.description}")
-        self.status_message = Progress(spinner, "[progress.description]{task.description}")
+        self.status_message: Progress = Progress(spinner, "[progress.description]{task.description}")
 
-        self.status_message_task_id = self.status_message.add_task("", total=100, completed=0, visible=False)
-        self.activity_task_id = activity.add_task(f"Running Cyberdrop-DL: v{__version__}", total=100, completed=0)
-        self.activity = activity
+        self.status_message_task_id: TaskID = self.status_message.add_task("", total=100, completed=0, visible=False)
+        self.activity_task_id: TaskID = activity.add_task(
+            f"Running Cyberdrop-DL: v{__version__}", total=100, completed=0
+        )
+        self.activity: Progress = activity
 
         simple_layout = Group(activity, self.download_progress.simple_progress)
 
@@ -110,13 +96,21 @@ class ProgressManager:
         horizontal_layout["upper"].split_row(*upper_layouts)
         vertical_layout["upper"].split_column(*upper_layouts)
 
-        self.horizontal_layout = horizontal_layout
-        self.vertical_layout = vertical_layout
-        self.activity_layout = activity
-        self.simple_layout = simple_layout
-        self.hash_remove_layout = self.hash_progress.get_removed_progress()
-        self.hash_layout = self.hash_progress.get_renderable()
-        self.sort_layout = self.sort_progress.get_renderable()
+        self.horizontal_layout: Layout = horizontal_layout
+        self.vertical_layout: Layout = vertical_layout
+        self.activity_layout: Progress = activity
+        self.simple_layout: Group = simple_layout
+        self.hash_remove_layout: Panel = self.hash_progress.get_removed_progress()
+        self.hash_layout: Panel = self.hash_progress.get_renderable()
+        self.sort_layout: Panel = self.sort_progress.get_renderable()
+
+    @asynccontextmanager
+    async def show_status_msg(self, msg: str | None) -> AsyncGenerator[None]:
+        try:
+            self.status_message.update(self.status_message_task_id, description=msg, visible=bool(msg))
+            yield
+        finally:
+            self.status_message.update(self.status_message_task_id, visible=False)
 
     @property
     def fullscreen_layout(self) -> Layout:

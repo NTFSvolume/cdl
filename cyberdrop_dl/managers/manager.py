@@ -139,15 +139,11 @@ class Manager:
             self.appdata.db_file,
             self.config.runtime_options.ignore_history,
         )
-        await self.db_manager.startup()
+        await self.db_manager.connect()
 
-        if not isinstance(self.hash_manager, HashManager):
-            self.hash_manager = HashManager(self)
-        if not isinstance(self.live_manager, LiveManager):
-            self.live_manager = LiveManager(self)
-        if not isinstance(self.progress_manager, ProgressManager):
-            self.progress_manager = ProgressManager(self)
-            self.progress_manager.startup()
+        self.hash_manager = HashManager(self)
+        self.live_manager = LiveManager(self)
+        self.progress_manager = ProgressManager(self)
 
     def process_additive_args(self) -> None:
         cli_general_options = self.parsed_args.global_settings.general
@@ -206,7 +202,6 @@ class Manager:
     async def async_db_close(self) -> None:
         "Partial shutdown for managers used for hash directory scanner"
         self.db_manager = await close_if_defined(self.db_manager)
-        self.hash_manager = constants.NOT_DEFINED
         self.progress_manager.hash_progress.reset()
 
     async def close(self) -> None:
@@ -214,7 +209,8 @@ class Manager:
 
         await self.async_db_close()
 
-        self.client_manager = await close_if_defined(self.client_manager)
+        await self.client_manager.close()
+        del self.client_manager
 
         while self.loggers:
             _, queued_logger = self.loggers.popitem()
