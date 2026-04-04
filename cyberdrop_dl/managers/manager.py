@@ -209,7 +209,6 @@ class Manager:
 
         await self.async_db_close()
         await self.client_manager.close()
-        del self.client_manager
 
         while self.loggers:
             _, queued_logger = self.loggers.popitem()
