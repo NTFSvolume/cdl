@@ -16,6 +16,8 @@ class Selector:
     ALBUM_FILES = "a[\\:href*='javascript:void(0)']", ":href"
     USER_FILES = "a.group.relative[href]"
     NEXT_PAGE = "a[rel=next]"
+    ARCHIVE = "[x-data='archiveViewer()']"
+    DIRECT_DL = "#embed-direct"
 
 
 class ImagePondCrawler(Crawler):
@@ -41,7 +43,7 @@ class ImagePondCrawler(Crawler):
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
             case ["i" | "img" | "image" | "video" | "videos", _]:
-                return await self.media(scrape_item)
+                return await self.file(scrape_item)
             case ["a", _]:
                 return await self.album(scrape_item)
             case ["media", _] if self.is_subdomain(scrape_item.url):
@@ -61,7 +63,7 @@ class ImagePondCrawler(Crawler):
                 return url
 
     @error_handling_wrapper
-    async def media(self, scrape_item: ScrapeItem) -> None:
+    async def file(self, scrape_item: ScrapeItem) -> None:
         if await self.check_complete_from_referer(scrape_item):
             return
 
@@ -73,7 +75,13 @@ class ImagePondCrawler(Crawler):
             soup = await resp.soup()
 
         og = open_graph.parse(soup)
-        source = self.parse_url(og.video or og.image)
+
+        if soup.select_one(Selector.ARCHIVE):
+            # source = self.parse_url(scrape_item.url / "download/file")
+            source = self.parse_url(css.select(soup, Selector.DIRECT_DL, "value"))
+        else:
+            source = self.parse_url(og.video or og.image)
+
         scrape_item.uploaded_at = self.parse_date(css.select_text(soup, Selector.UPLOAD_DATE), "%b %d, %Y")
         filename, ext = self.get_filename_and_ext(og.title, assume_ext=".jpg", mime_type=og.get("video_type"))
         await self.handle_file(source, scrape_item, og.title, ext, custom_filename=filename)

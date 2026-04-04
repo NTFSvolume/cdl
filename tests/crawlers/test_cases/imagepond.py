@@ -56,4 +56,14 @@ TEST_CASES = [
             }
         ],
     ),
+    (
+        "https://www.imagepond.net/i/9TVLS36c/download/file",
+        [
+            {
+                "url": "https://media.imagepond.net/media/archives/Images_kM5dpzpw.zip",
+                "referer": "https://www.imagepond.net/i/9TVLS36c",
+                "filename": "Images.zip",
+            }
+        ],
+    ),
 ]
