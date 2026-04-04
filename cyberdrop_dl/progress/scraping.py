@@ -26,16 +26,14 @@ if TYPE_CHECKING:
 _COLOR: str = "plum3"
 
 
-ColumnsType = tuple[ProgressColumn | str, ...]
-
-_gen_id = itertools.count(1).__next__
+_generate_unique_id = itertools.count(1).__next__
 
 
 @final
 @dataclasses.dataclass(slots=True, frozen=True)
 class StatusMessage:
     description: Text | str = f"Running cyberdrop-dl [blue]v{__version__}[/blue]"
-    _messages: dict[int, Text | str] = dataclasses.field(init=False, default_factory=dict)
+    _messages: dict[int, tuple[Spinner, Text]] = dataclasses.field(init=False, default_factory=dict)
     _cols: Columns = dataclasses.field(init=False, default_factory=Columns)
 
     def __post_init__(self) -> None:
@@ -44,21 +42,16 @@ class StatusMessage:
     def __rich__(self) -> Columns:
         return self._cols
 
-    def _refresh(self) -> None:
-        self._cols.renderables[2:] = itertools.chain.from_iterable(
-            (Spinner("dots", style="green"), msg) for msg in self._messages.values()
-        )
-
     @contextlib.contextmanager
     def __call__(self, msg: object) -> Generator[None]:
-        msg_id = _gen_id()
+        msg_id = _generate_unique_id()
         try:
-            self._messages[msg_id] = Text(escape(str(msg)))
-            self._refresh()
+            self._messages[msg_id] = new_msg = Spinner("dots", style="green"), Text(escape(str(msg)))
+            self._cols.renderables.extend(new_msg)
             yield
         finally:
             _ = self._messages.pop(msg_id)
-            self._refresh()
+            self._cols.renderables[2:] = itertools.chain.from_iterable(self._messages.values())
 
 
 @final
@@ -79,15 +72,13 @@ class OverFlow:
 
 class OverflowPanel:
     unit: ClassVar[str]
-    columns: ClassVar[ColumnsType]
 
-    def __init__(self, visible_tasks_limit: int, expand: bool = True) -> None:
-        self._progress: Final[DictProgress] = DictProgress(*self.columns, expand=expand)
+    def __init__(self, *columns: ProgressColumn | str, visible_tasks_limit: int, expand: bool = True) -> None:
+        self._progress: Final[DictProgress] = DictProgress(*columns, expand=expand)
         self._overflow: Final[OverFlow] = OverFlow(self.unit)
         self._limit: Final[int] = visible_tasks_limit
         self._invisible_queue: Final[deque[TaskID]] = deque()
         self._visible_tasks: int = 0
-
         self._panel: Panel = Panel(
             self._progress,
             title=type(self).__name__.removesuffix("Panel"),
@@ -143,10 +134,14 @@ class OverflowPanel:
 
 class ScrapingPanel(OverflowPanel):
     unit: ClassVar[str] = "URLs"
-    columns: ClassVar[ColumnsType] = SpinnerColumn(), "[progress.description]{task.description}"
 
     def __init__(self) -> None:
-        super().__init__(visible_tasks_limit=3, expand=False)
+        super().__init__(
+            SpinnerColumn(),
+            "[progress.description]{task.description}",
+            visible_tasks_limit=3,
+            expand=False,
+        )
 
 
 if __name__ == "__main__":

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import asyncio
+import dataclasses
+import random
+from typing import TYPE_CHECKING, Self
 
 from rich.live import Live
 from rich.markup import escape
@@ -8,6 +11,7 @@ from rich.progress import Progress, Task, TaskID
 from rich.text import Text
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Generator
     from pathlib import Path
 
     from rich.console import RenderableType
@@ -37,3 +41,52 @@ class DictProgress(Progress):
     def __len__(self) -> int:
         with self._lock:
             return len(self._tasks)
+
+
+class Random:
+    choice = random.choice
+    choices = random.choices
+
+    @staticmethod
+    def float(start: float, end: float) -> float:
+        return random.uniform(start, end)
+
+    @staticmethod
+    def int(start: float = 0.0, end: float = 1e12) -> int:
+        return random.randint(int(start), int(end))
+
+    @staticmethod
+    def int_until(target: int, min_step: float, max_step: float) -> Generator[int, None, None]:
+        total = 0
+        while total < target:
+            new = min(random.randint(int(min_step), int(max_step)), target - total)
+            yield new
+            total += new
+
+    @staticmethod
+    async def sleep(delay: float = 0.1) -> None:
+        await asyncio.sleep(delay)
+
+
+@dataclasses.dataclass(slots=True)
+class ProgressHook:
+    advance: Callable[[int], None]
+    get_speed: Callable[[], float]
+    done: Callable[[], None]
+
+    _done: bool = dataclasses.field(init=False, default=False)
+
+    @property
+    def speed(self) -> float:
+        return self.get_speed()
+
+    def __enter__(self) -> Self:
+        if self._done:
+            raise RuntimeError
+        return self
+
+    def __exit__(self, *_) -> None:
+        if self._done:
+            raise RuntimeError
+        self.done()
+        self._done = True
