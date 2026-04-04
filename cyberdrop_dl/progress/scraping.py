@@ -94,7 +94,7 @@ class OverflowPanel:
         self._overflow.count = len(self._progress) - self._visible_tasks
 
     @final
-    def add_task(self, description: object, total: float | None = None, /, *, completed: int = 0) -> Task:
+    def _add_task(self, description: object, total: float | None = None, /, *, completed: int = 0) -> Task:
         visible = self._visible_tasks < self._limit
         task_id = self._progress.add_task(
             f"[{_COLOR}]{escape(str(description))}",
@@ -111,7 +111,7 @@ class OverflowPanel:
         return self._progress[task_id]
 
     @final
-    def remove_task(self, task: Task) -> None:
+    def _remove_task(self, task: Task) -> None:
         was_visible = task.visible
         self._progress.remove_task(task.id)
         if was_visible:
@@ -131,6 +131,14 @@ class OverflowPanel:
 
         self._update_overflow()
 
+    @contextlib.contextmanager
+    def new(self, url: object) -> Generator[None]:
+        task = self._add_task(str(url))
+        try:
+            yield
+        finally:
+            self._remove_task(task)
+
 
 class ScrapingPanel(OverflowPanel):
     unit: ClassVar[str] = "URLs"
@@ -148,7 +156,7 @@ if __name__ == "__main__":
     panel = ScrapingPanel()
     status = StatusMessage()
     with create_live(status):
-        time.sleep(5)
+        time.sleep(2)
         with status("test 1"):
             time.sleep(2)
             with status("test 2"):
@@ -161,19 +169,25 @@ if __name__ == "__main__":
                 time.sleep(2)
         time.sleep(2)
 
-        with status("test 2"):
+        with status("test 5"):
             time.sleep(2)
 
     with create_live(panel):
-        a = panel.add_task("url_a")
-        b = panel.add_task("url_b")
-        c = panel.add_task("url_c")
+        a = panel._add_task("url_a")
+        b = panel._add_task("url_b")
+        c = panel._add_task("url_c")
         time.sleep(5)
-        d = panel.add_task("url_d")
-        _ = panel.add_task("url_e")
+        d = panel._add_task("url_d")
+        _ = panel._add_task("url_e")
         time.sleep(5)
-        panel.remove_task(a)
-        panel.remove_task(b)
-        panel.remove_task(c)
-        panel.remove_task(d)
-        time.sleep(5)
+        panel._remove_task(a)
+        panel._remove_task(b)
+        panel._remove_task(c)
+        panel._remove_task(d)
+        time.sleep(2)
+        with panel.new("http://github.com"):
+            time.sleep(2)
+            with panel.new("http://github2.com"):
+                time.sleep(2)
+            with panel.new("http://github3.com"):
+                time.sleep(2)

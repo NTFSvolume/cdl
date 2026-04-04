@@ -137,7 +137,7 @@ class DownloadsPanel(OverflowPanel):
         self._total_amount = 0
 
     @contextlib.contextmanager
-    def create_hls_task(self, filename: str, /, segments: float | None = None) -> Generator[None]:
+    def download_hls(self, filename: str, /, segments: float | None = None) -> Generator[None]:
         # For HLS downloads, we use 2 different tasks. One on a hidden progress to track the downloaded bytes
         # and one on the user facing progress to track the number of downloaded segments (with a known total)
         # We create both at the same time and smuggle the bytes task as a field of the segments task
@@ -145,35 +145,35 @@ class DownloadsPanel(OverflowPanel):
 
         task_id = self._hls_progress.add_task("", total=None, visible=False)
         filename = str(filename).rsplit("/", 1)[-1]
-        segments_task = self.add_task(filename, segments)
+        segments_task = self._add_task(filename, segments)
         bytes_task = self._hls_progress[task_id]
         self._progress.update(segments_task.id, HLS=bytes_task)
         token = _current_hls_task.set(segments_task.id)
         try:
             yield
         finally:
-            self.remove_task(segments_task)
+            self._remove_task(segments_task)
             self._hls_progress.remove_task(task_id)
             _current_hls_task.reset(token)
 
     @final
-    def create_task(self, description: object, /, total: float | None = None) -> ProgressHook:
+    def download_file(self, description: object, /, total: float | None = None) -> ProgressHook:
         filename = str(description).rsplit("/", 1)[-1]
-        task = self.add_task(filename, total)
+        task = self._add_task(filename, total)
 
         def advance(amount: int = 1) -> None:
             self._total_amount += amount
             self._progress.advance(task.id, amount)
 
         def on_exit() -> None:
-            self.remove_task(task)
+            self._remove_task(task)
 
         def get_speed() -> float:
             return task.finished_speed or task.speed or 0
 
         return ProgressHook(advance, get_speed, on_exit)
 
-    def create_segment_task(self) -> ProgressHook:
+    def download_hls_seg(self) -> ProgressHook:
         segments_task_id = _current_hls_task.get()
         hls_task: Task = self._progress[segments_task_id].fields[_HLS_TASK_FIELD_NAME]
 
@@ -204,7 +204,7 @@ async def test() -> None:
 
     async def download_file(filename: str) -> None:
         size = Random.int(1e2, 1e9)
-        hook = panel.create_task(filename, size)
+        hook = panel.download_file(filename, size)
         await download(hook, size)
 
     async def download_hls(filename: str) -> None:
@@ -214,13 +214,13 @@ async def test() -> None:
 
         async def download_segment() -> None:
             size = Random.int(1e2, 1e5)
-            hook = panel.create_segment_task()
+            hook = panel.download_hls_seg()
             try:
                 await download(hook, size)
             finally:
                 segments_sem.release()
 
-        with panel.create_hls_task(filename, n_segments):
+        with panel.download_hls(filename, n_segments):
             async with asyncio.TaskGroup() as tg:
                 for _ in range(n_segments):
                     await segments_sem.acquire()
