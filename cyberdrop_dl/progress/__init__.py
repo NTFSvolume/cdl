@@ -3,11 +3,12 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import random
+from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Self
 
 from rich.live import Live
 from rich.markup import escape
-from rich.progress import Progress, Task, TaskID
+from rich.progress import Progress, ProgressColumn, Task, TaskID
 from rich.text import Text
 
 if TYPE_CHECKING:
@@ -90,3 +91,19 @@ class ProgressHook:
             raise RuntimeError
         self.done()
         self._done = True
+
+
+class ProgressProxy(ABC):
+    def __init__(self, *columns: ProgressColumn | str, expand: bool = False) -> None:
+        self._progress: Progress = Progress(*columns, expand=expand)
+        self._progress.live._get_renderable = self.__rich__
+
+    def __enter__(self) -> Self:
+        self._progress.start()
+        return self
+
+    def __exit__(self, *_) -> None:
+        self._progress.stop()
+
+    @abstractmethod
+    def __rich__(self) -> RenderableType: ...
