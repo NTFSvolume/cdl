@@ -168,28 +168,18 @@ def _setup_main_logger(manager: Manager) -> None:
     logger.addHandler(queued_logger.handler)
 
 
-def _setup_manager(args: Sequence[str] | None = None) -> Manager:
-    """Starts the program and returns the manager.
-
-    This will also run the UI for the program
-    After this function returns, the manager will be ready to use and scraping / downloading can begin.
-    """
-
-    manager = Manager(args)
-
-    manager.startup()
-
-    if not manager.parsed_args.cli_only_args.download:
-        program_ui.run(manager)
-
-    return manager
-
-
 class Director:
     """Creates a manager and runs it"""
 
     def __init__(self, args: Sequence[str] | None = None) -> None:
-        self.manager = _setup_manager(args)
+        manager = Manager(args)
+
+        manager.startup()
+
+        if not manager.parsed_args.cli_only_args.download:
+            program_ui.run(manager)
+
+        self.manager = manager
 
     def run(self) -> int:
         return self._run()

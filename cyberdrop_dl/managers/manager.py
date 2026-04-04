@@ -14,7 +14,6 @@ from pydantic import BaseModel
 from cyberdrop_dl import __version__, constants, ffmpeg, yaml
 from cyberdrop_dl.cli import ParsedArgs, parse_args
 from cyberdrop_dl.database import Database
-from cyberdrop_dl.database.transfer import transfer_v5_db_to_v6
 from cyberdrop_dl.managers.client_manager import ClientManager
 from cyberdrop_dl.managers.config_manager import ConfigManager
 from cyberdrop_dl.managers.hash_manager import HashManager
@@ -126,9 +125,8 @@ class Manager:
 
         self.args_logging()
 
-        if not isinstance(self.client_manager, ClientManager):
-            self.client_manager = ClientManager(self)
-            await self.client_manager.startup()
+        self.client_manager = ClientManager(self)
+        await self.client_manager.startup()
 
         await self.async_db_hash_startup()
 
@@ -136,13 +134,13 @@ class Manager:
         filepath.MAX_FOLDER_LEN.set(self.config_manager.global_settings_data.general.max_folder_name_length)
 
     async def async_db_hash_startup(self) -> None:
-        if not isinstance(self.db_manager, Database):
-            self.db_manager = Database(
-                self.appdata.db_file,
-                self.config.runtime_options.ignore_history,
-            )
-            await self.db_manager.startup()
-        transfer_v5_db_to_v6(self.appdata.db_file)
+
+        self.db_manager = Database(
+            self.appdata.db_file,
+            self.config.runtime_options.ignore_history,
+        )
+        await self.db_manager.startup()
+
         if not isinstance(self.hash_manager, HashManager):
             self.hash_manager = HashManager(self)
         if not isinstance(self.live_manager, LiveManager):
