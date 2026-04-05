@@ -42,18 +42,18 @@ class ScrapingUI:
         horizontal = Layout()
         vertical = Layout()
         top = (
-            Layout(self.files, ratio=1, minimum_size=9),
+            Layout(self.files, ratio=1),
             Layout(self.scrape_errors, ratio=1),
             Layout(self.download_errors, ratio=1),
         )
 
         bottom = (
-            Layout(self.scrape, ratio=20),
-            Layout(self.downloads, ratio=20),
-            Layout(self.status, ratio=2),
+            Layout(self.scrape, size=8),
+            Layout(self.downloads),
+            Layout(self.status, size=2),
         )
 
-        horizontal.split_column(Layout(name="top", ratio=20), *bottom)
+        horizontal.split_column(Layout(name="top", minimum_size=10), *bottom)
         vertical.split_column(Layout(name="top", ratio=60), *bottom)
 
         horizontal["top"].split_row(*top)
