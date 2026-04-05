@@ -32,7 +32,7 @@ class StatusMessage:
     _cols: Columns = dataclasses.field(init=False, default_factory=Columns)
 
     def __post_init__(self) -> None:
-        self._cols.renderables.extend([Spinner("dots", style="green"), self.description])
+        self._cols.renderables.extend([self.description, Spinner("point", style="green"), "|"])
 
     def __rich__(self) -> Columns:
         return self._cols
@@ -41,12 +41,12 @@ class StatusMessage:
     def __call__(self, msg: object) -> Generator[None]:
         msg_id = _generate_unique_id()
         try:
-            self._messages[msg_id] = new_msg = Spinner("dots", style="green"), Text(escape(str(msg)))
+            self._messages[msg_id] = new_msg = Spinner("dots3", style="green"), Text(escape(str(msg)))
             self._cols.renderables.extend(new_msg)
             yield
         finally:
             _ = self._messages.pop(msg_id)
-            self._cols.renderables[2:] = itertools.chain.from_iterable(self._messages.values())
+            self._cols.renderables[3:] = itertools.chain.from_iterable(self._messages.values())
 
     async def simulate(self) -> None:
         await asyncio.sleep(2)
@@ -66,7 +66,7 @@ class ScrapingPanel(OverflowPanel):
 
     def __init__(self) -> None:
         super().__init__(
-            SpinnerColumn(),
+            SpinnerColumn("dots3"),
             "[progress.description]{task.description}",
             visible_tasks_limit=3,
             expand=False,

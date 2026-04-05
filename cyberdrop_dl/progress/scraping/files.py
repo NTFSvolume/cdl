@@ -50,7 +50,7 @@ class FileStatsPanel:
             self._progress,
             title="Files",
             border_style="green",
-            padding=(0, 1),
+            padding=(1, 1),
         )
 
     def _init_tasks(self) -> Generator[tuple[str, TaskID]]:

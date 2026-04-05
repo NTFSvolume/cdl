@@ -7,9 +7,9 @@ from rich.layout import Layout
 from cyberdrop_dl import env
 from cyberdrop_dl.progress import create_live
 from cyberdrop_dl.progress.scraping.downloads import DownloadsPanel
-from cyberdrop_dl.progress.scraping.errors import DownloadErrors, ScrapeErrors
+from cyberdrop_dl.progress.scraping.errors import DownloadErrorsPanel, ScrapeErrorsPanel
 from cyberdrop_dl.progress.scraping.files import FileStatsPanel
-from cyberdrop_dl.progress.scraping.scraping import ScrapingPanel, StatusMessage
+from cyberdrop_dl.progress.scraping.panel import ScrapingPanel, StatusMessage
 
 
 @dataclasses.dataclass(slots=True, frozen=True)
@@ -24,19 +24,19 @@ class Screen:
 @dataclasses.dataclass(slots=True, frozen=True)
 class ScrapingUI:
     files: FileStatsPanel = dataclasses.field(default_factory=FileStatsPanel)
-    scrape_errors: ScrapeErrors = dataclasses.field(default_factory=ScrapeErrors)
-    download_errors: DownloadErrors = dataclasses.field(default_factory=DownloadErrors)
+    scrape_errors: ScrapeErrorsPanel = dataclasses.field(default_factory=ScrapeErrorsPanel)
+    download_errors: DownloadErrorsPanel = dataclasses.field(default_factory=DownloadErrorsPanel)
 
     scrape: ScrapingPanel = dataclasses.field(default_factory=ScrapingPanel)
     downloads: DownloadsPanel = dataclasses.field(default_factory=DownloadsPanel)
     status: StatusMessage = dataclasses.field(default_factory=StatusMessage)
-    screen: Screen = dataclasses.field(init=False)
+    _screen: Screen = dataclasses.field(init=False)
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "screen", self._create_screen())
+        object.__setattr__(self, "_screen", self._create_screen())
 
     def __rich__(self) -> Screen:
-        return self.screen
+        return self._screen
 
     def _create_screen(self) -> Screen:
         horizontal = Layout()

@@ -118,7 +118,7 @@ class DownloadsPanel(OverflowPanel):
 
     def __init__(self) -> None:
         super().__init__(
-            SpinnerColumn("arc"),
+            SpinnerColumn("dots3"),
             AutoWidthTextColumn(
                 "[progress.description]{task.description}",
                 table_column=Column(justify="left", no_wrap=True),

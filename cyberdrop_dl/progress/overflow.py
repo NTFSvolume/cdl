@@ -46,6 +46,7 @@ class OverflowPanel:
             self._progress,
             title=type(self).__name__.removesuffix("Panel"),
             border_style="green",
+            padding=(1, 1),
         )
 
     def __rich__(self) -> Panel:

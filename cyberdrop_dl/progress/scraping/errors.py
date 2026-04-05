@@ -5,7 +5,7 @@ import dataclasses
 import functools
 import random
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING, ClassVar, Self
 
 import rich
 from rich.panel import Panel
@@ -54,8 +54,14 @@ class Error:
 class _ErrorsPanel:
     """Base class that keeps track of errors and reasons."""
 
+    title: ClassVar[str]
+
     def __repr__(self) -> str:
         return f"{type(self).__name__}(error_count={self._total!r}, errors={tuple(self._errors_map)!r})"
+
+    def __init_subclass__(cls, title: str | None = None) -> None:
+        if title:
+            cls.title = title
 
     def __init__(self) -> None:
         self._progress: DictProgress = DictProgress(
@@ -71,8 +77,9 @@ class _ErrorsPanel:
         self._changed: bool = False
         self._panel: Panel = Panel(
             self._progress,
-            title=type(self).__name__.removesuffix("Errors") + " Errors",
+            title=f"{self.title} Errors",
             border_style="green",
+            padding=(1, 1),
         )
 
     def __rich__(self) -> Panel:
@@ -111,10 +118,10 @@ class _ErrorsPanel:
             await asyncio.sleep(random.random() * 5)
 
 
-class DownloadErrors(_ErrorsPanel): ...
+class DownloadErrorsPanel(_ErrorsPanel, title="Download"): ...
 
 
-class ScrapeErrors(_ErrorsPanel):
+class ScrapeErrorsPanel(_ErrorsPanel, title="Scrape"):
     def __init__(self) -> None:
         super().__init__()
         self._unsupported: int = 0
@@ -155,7 +162,7 @@ _ERROR_OVERRIDES = MappingProxyType(
 
 
 if __name__ == "__main__":
-    panel = DownloadErrors()
+    panel = DownloadErrorsPanel()
     with create_live(panel, transient=True):
         asyncio.run(panel.simulate())
         rich.print(sorted(panel))
