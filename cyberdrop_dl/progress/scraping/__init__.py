@@ -31,7 +31,7 @@ class Screen:
         return self.vertical if terminal_is_in_portrait() else self.horizontal
 
 
-@dataclasses.dataclass(slots=True)
+@dataclasses.dataclass(slots=True, frozen=True)
 class ScrapingUI(LiveUI):
     files: FileStatsPanel = dataclasses.field(default_factory=FileStatsPanel)
     scrape_errors: ScrapeErrorsPanel = dataclasses.field(default_factory=ScrapeErrorsPanel)
@@ -43,8 +43,7 @@ class ScrapingUI(LiveUI):
     _screen: Screen = dataclasses.field(init=False)
 
     def __post_init__(self) -> None:
-        self._screen = self._create_screen()
-        super(ScrapingUI, self).__post_init__()
+        object.__setattr__(self, "_screen", self._create_screen())
 
     def __rich__(self) -> Screen:
         return self._screen
@@ -122,9 +121,9 @@ def terminal_is_in_portrait() -> bool:
 
 
 if __name__ == "__main__":
-    scrape_tui = ScrapingUI(transient=False)
+    scrape_tui = ScrapingUI()
     rich.print(scrape_tui._screen.horizontal.tree)
     _ = input("press <Enter> to continue")
 
-    with scrape_tui:
+    with scrape_tui(transient=False):
         asyncio.run(scrape_tui.simulate())

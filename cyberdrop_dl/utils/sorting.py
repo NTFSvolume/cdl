@@ -63,7 +63,7 @@ class Sorter:
         await asyncio.to_thread(self.output_dir.mkdir, parents=True, exist_ok=True)
 
         self.tui.disable = disable_tui
-        with self.tui:
+        with self.tui():
             await self._run()
 
     async def _run(self) -> None:

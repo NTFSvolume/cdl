@@ -34,16 +34,7 @@ class SortStats:
 class SortingUI(LiveUI):
     """Class that keeps track of sorted files."""
 
-    def __init__(
-        self,
-        source: Path,
-        dest: Path,
-        *,
-        transient: bool = True,
-        disable: bool = False,
-        expand: bool = False,
-    ) -> None:
-        super().__init__(transient=True)
+    def __init__(self, source: Path, dest: Path) -> None:
 
         self._progress = Progress(
             "[progress.description]{task.description}",
@@ -51,7 +42,7 @@ class SortingUI(LiveUI):
             "[progress.percentage]{task.percentage:>6.1f}%",
             "━",
             "{task.completed:,}",
-            expand=expand,
+            expand=False,
         )
         self._stats: SortStats = SortStats()
         self._total: int = 0
@@ -106,7 +97,7 @@ if __name__ == "__main__":
         Path("/folder1/cdl_downloads_sorted"),
     )
 
-    with panel:
+    with panel(transient=False):
         time.sleep(3)
         panel.stats.audios += 1
         time.sleep(1)

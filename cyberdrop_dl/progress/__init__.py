@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 from abc import ABC, abstractmethod
 from contextvars import ContextVar
@@ -11,13 +12,13 @@ from rich.progress import Progress, Task, TaskID
 from rich.text import Text
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
+    from collections.abc import Callable, Generator, Iterable
     from pathlib import Path
 
     from rich.console import RenderableType
 
 REFRESH_RATE = ContextVar("REFRESH_RATE", default=10)
-DISABLE_TUI = ContextVar("DISABLE_TUI", default=False)
+TUI_DISABLED = ContextVar("DISABLE_TUI", default=False)
 
 
 def create_live(renderable: RenderableType, transient: bool = False) -> Live:
@@ -76,33 +77,28 @@ class ProgressHook:
         self._done = True
 
 
-@dataclasses.dataclass(slots=True, kw_only=True)
 class LiveUI(ABC):
-    transient: bool = True
-    _live: Live = dataclasses.field(init=False)
-
-    def __post_init__(self) -> None:
-        self._live = Live(
-            refresh_per_second=REFRESH_RATE.get(),
-            auto_refresh=True,
-            transient=self.transient,
-            get_renderable=self.__rich__,
-        )
-
     @property
     def disable(self) -> bool:
-        return DISABLE_TUI.get()
+        return TUI_DISABLED.get()
 
     @disable.setter
     def disable(self, value: bool) -> None:
-        _ = DISABLE_TUI.set(value)
-
-    def __enter__(self) -> None:
-        if not self.disable:
-            self._live.start()
-
-    def __exit__(self, *_) -> None:
-        self._live.stop()
+        _ = TUI_DISABLED.set(value)
 
     @abstractmethod
     def __rich__(self) -> RenderableType: ...
+
+    @contextlib.contextmanager
+    def __call__(self, *, transient: bool = False) -> Generator[None]:
+        if self.disable:
+            yield None
+            return
+
+        with Live(
+            refresh_per_second=REFRESH_RATE.get(),
+            auto_refresh=True,
+            transient=transient,
+            get_renderable=self.__rich__,
+        ):
+            yield
