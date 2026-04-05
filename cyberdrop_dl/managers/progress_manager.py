@@ -179,6 +179,7 @@ def _log_errors(scrape_errors: Sequence[UiFailureTotal], download_errors: Sequen
         ("Scrape Failures:", scrape_errors),
         ("Download Failures:", download_errors),
     ):
+        log_spacer()
         logger.info(title, extra={"color": "red"})
         if not errors:
             logger.info(f"  {'None':>{padding}}")

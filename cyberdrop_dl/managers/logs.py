@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Self
 
 from cyberdrop_dl.exceptions import get_origin
 from cyberdrop_dl.utils import json
+from cyberdrop_dl.utils.logger import log_spacer
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
@@ -133,6 +134,7 @@ class LogManager:
 
 
 def _update_last_forum_post(input_file: Path, last_post_log: Path) -> None:
+    log_spacer()
     logger.info("Updating Last Forum Posts...\n")
 
     current_urls, current_base_urls, new_urls, new_base_urls = [], [], [], []

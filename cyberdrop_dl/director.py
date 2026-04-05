@@ -43,7 +43,6 @@ async def _run_manager(manager: Manager) -> None:
     start_time = manager.start_time
 
     with setup_logging(manager.config.logs.main_log):
-        logger.info("Starting Async Processes...")
         await manager.async_startup()
 
         log_spacer()
@@ -87,7 +86,6 @@ async def _post_runtime(manager: Manager) -> None:
     check_partials_and_empty_folders(manager)
 
     if manager.config_manager.settings_data.runtime_options.update_last_forum_post:
-        log_spacer()
         await manager.logs.update_last_forum_post(manager.config.files.input_file)
 
 
