@@ -35,7 +35,7 @@ from cyberdrop_dl.exceptions import (
 from cyberdrop_dl.utils import json
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Coroutine, Generator, Iterable
+    from collections.abc import Callable, Coroutine, Generator
 
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
     from cyberdrop_dl.downloader.downloader import Downloader
@@ -387,21 +387,6 @@ def get_system_information() -> dict[str, Any]:
 
 def is_blob_or_svg(link: str) -> bool:
     return any(link.startswith(x) for x in _BLOB_OR_SVG)
-
-
-def unique(iterable: Iterable[_T], *, hashable: bool = True) -> Iterable[_T]:
-    """Yields unique values from iterable, keeping original order"""
-    if hashable:
-        seen: set[_T] | list[_T] = set()
-        add: Callable[[_T], None] = seen.add
-    else:
-        seen = []
-        add = seen.append
-
-    for value in iterable:
-        if value not in seen:
-            add(value)
-            yield value
 
 
 def xor_decrypt(encrypted_data: bytes, key: bytes) -> str:

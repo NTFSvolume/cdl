@@ -15,7 +15,7 @@ from cyberdrop_dl.crawlers._forum import MessageBoardCrawler
 from cyberdrop_dl.exceptions import MaxChildrenError
 from cyberdrop_dl.utils import css
 from cyberdrop_dl.utils.dates import to_timestamp
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, unique
+from cyberdrop_dl.utils.utilities import error_handling_wrapper
 
 from .models import AvailablePost, PostStream, Topic
 
@@ -138,14 +138,15 @@ class DiscourseCrawler(MessageBoardCrawler, is_generic=True):
             images = css.iselect(soup, *css.images)
             links = css.iselect(soup, *css.links)
             external_links = (ref.url for ref in post.link_counts)
-            for link_str in unique(itertools.chain(external_links, images, links)):
+
+            for link_str in dict.fromkeys(itertools.chain(external_links, images, links)):
                 try:
                     if link_str:
                         yield self.parse_url(link_str)
                 except Exception:
                     continue
 
-        return unique(iter_links())
+        return iter_links()
 
     @classmethod
     def parse_url(
