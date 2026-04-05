@@ -7,7 +7,8 @@ from unittest import mock
 
 import pytest
 
-from cyberdrop_dl import aio, storage
+from cyberdrop_dl import aio
+from cyberdrop_dl.storage import _psutil as storage
 
 
 def create_partition(path: str):

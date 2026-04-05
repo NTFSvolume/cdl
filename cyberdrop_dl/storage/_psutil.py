@@ -3,35 +3,27 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
 import dataclasses
 import functools
 import logging
 from collections import defaultdict
-from contextvars import ContextVar
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 import psutil
 from pydantic import ByteSize
 
-from cyberdrop_dl.exceptions import InsufficientFreeSpaceError
-
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
-
-    from cyberdrop_dl.data_structures import MediaItem
+    from collections.abc import Generator
 
 
 logger = logging.getLogger(__name__)
-_required_free_space: ContextVar[int] = ContextVar("_required_free_space")
 _PARTITIONS: list[DiskPartition] = []
 _UNAVAILABLE: set[Path] = set()
 _LOCKS: dict[Path, asyncio.Lock] = defaultdict(asyncio.Lock)
 _CHECK_PERIOD: Final = 2  # how often the check_free_space_loop will run (in seconds)
 _LOG_PERIOD: Final = 10  # log storage details every <x> loops, AKA log every 20 (2x10) seconds,
 _free_space: dict[Path, int] = {}
-_running = asyncio.Event()
 
 
 @dataclasses.dataclass(frozen=True, slots=True, order=True)
@@ -82,7 +74,7 @@ async def _get_free_space(path: Path) -> int:
     return free_space
 
 
-async def _has_sufficient_space(folder: Path) -> bool:
+async def has_sufficient_space(folder: Path, /, required_free_space: int) -> bool:
     await _check_nt_network_drive(folder)
     mount = _get_mount_point(folder)
     if not mount:
@@ -99,14 +91,7 @@ async def _has_sufficient_space(folder: Path) -> bool:
                 logger.info(f"A new mountpoint ('{mount!s}') will be used for '{folder}'")
                 logger.info(_Stats())
 
-    return free_space == -1 or free_space > _required_free_space.get()
-
-
-async def check(media_item: MediaItem) -> None:
-    """Checks if there is enough free space to download this item."""
-
-    if not await _has_sufficient_space(media_item.download_folder):
-        raise InsufficientFreeSpaceError(media_item)
+    return free_space == -1 or free_space > required_free_space
 
 
 def _find_partition(path: Path) -> DiskPartition | None:
@@ -127,18 +112,6 @@ def _is_fuse_fs(path: Path) -> bool:
     if partition := _find_partition(path):
         return "fuse" in partition.fstype
     return False
-
-
-def create_free_space_checker(media_item: MediaItem, *, frecuency: int = 5) -> Callable[[], Awaitable[None]]:
-    current_chunk = 0
-
-    async def checker() -> None:
-        nonlocal current_chunk
-        if current_chunk % frecuency == 0:
-            await check(media_item)
-        current_chunk += 1
-
-    return checker
 
 
 def _partitions() -> tuple[DiskPartition, ...]:
@@ -162,7 +135,7 @@ def clear_cache() -> None:
     _get_mount_point.cache_clear()
 
 
-async def _start_loop() -> None:
+async def start_loop() -> None:
     """Infinite loop to get free space of all used mounts and update internal dict"""
 
     async def update():
@@ -264,19 +237,3 @@ async def _check_nt_network_drive(folder: Path) -> None:
 
         else:
             _UNAVAILABLE.add(folder_drive)
-
-
-@contextlib.asynccontextmanager
-async def monitor(required_free_space: int) -> AsyncGenerator[None]:
-    loop = asyncio.create_task(_start_loop(), name="storage monitor")
-    token = _required_free_space.set(required_free_space)
-    await asyncio.sleep(0)
-    try:
-        yield
-    finally:
-        _required_free_space.reset(token)
-        try:
-            _ = loop.cancel("On monitor exit")
-            await loop
-        except asyncio.CancelledError:
-            pass
