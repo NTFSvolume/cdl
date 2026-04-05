@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import time
 from typing import TYPE_CHECKING, final
@@ -79,21 +80,24 @@ class FileStatsPanel:
     def stats(self) -> FileStats:
         return self._stats
 
+    async def simulate(self) -> None:
+        await asyncio.sleep(3)
+        self.stats.completed += 1
+        await asyncio.sleep(1)
+        self.stats.queued += 5
+        await asyncio.sleep(1)
+        self.stats.failed += 15
+        await asyncio.sleep(1)
+        self.stats.previously_completed += 1
+        await asyncio.sleep(1)
+        self.stats.skipped += 10
+        await asyncio.sleep(3)
+
 
 if __name__ == "__main__":
     panel = FileStatsPanel()
     with create_live(panel):
-        time.sleep(3)
-        panel.stats.completed += 1
-        time.sleep(1)
-        panel.stats.queued += 5
-        time.sleep(1)
-        panel.stats.failed += 15
-        time.sleep(1)
-        panel.stats.previously_completed += 1
-        time.sleep(1)
-        panel.stats.skipped += 10
-        time.sleep(3)
+        asyncio.run(panel.simulate())
 
     with panel.simple:
         time.sleep(3)

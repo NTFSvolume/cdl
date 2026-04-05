@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import dataclasses
 import itertools
-import time
+import random
 from typing import TYPE_CHECKING, ClassVar, final
 
 from rich.columns import Columns
@@ -47,6 +48,17 @@ class StatusMessage:
             _ = self._messages.pop(msg_id)
             self._cols.renderables[2:] = itertools.chain.from_iterable(self._messages.values())
 
+    async def simulate(self) -> None:
+        await asyncio.sleep(2)
+
+        async def show(msg: str) -> None:
+            with self(msg):
+                await asyncio.sleep(random.random() * 5)
+
+        async with asyncio.TaskGroup() as tg:
+            for idx in range(1, 10):
+                tg.create_task(show(f"test msg {idx}"))
+
 
 @final
 class ScrapingPanel(OverflowPanel):
@@ -68,43 +80,32 @@ class ScrapingPanel(OverflowPanel):
         finally:
             self._remove_task(task)
 
+    async def simulate(self) -> None:
+        a = self._add_task("url_a")
+        b = self._add_task("url_b")
+        c = self._add_task("url_c")
+        await asyncio.sleep(5)
+        d = self._add_task("url_d")
+        _ = self._add_task("url_e")
+        await asyncio.sleep(5)
+        self._remove_task(a)
+        self._remove_task(b)
+        self._remove_task(c)
+        self._remove_task(d)
+        await asyncio.sleep(2)
+        with self.new("http://github.com"):
+            await asyncio.sleep(2)
+            with self.new("http://github2.com"):
+                await asyncio.sleep(2)
+            with self.new("http://github3.com"):
+                await asyncio.sleep(2)
+
 
 if __name__ == "__main__":
     panel = ScrapingPanel()
     status = StatusMessage()
     with create_live(status):
-        time.sleep(2)
-        with status("test 1"):
-            time.sleep(2)
-            with status("test 2"):
-                time.sleep(2)
-                with status("test 3"):
-                    time.sleep(2)
-                time.sleep(2)
-                with status("test 4"):
-                    time.sleep(2)
-                time.sleep(2)
-        time.sleep(2)
-
-        with status("test 5"):
-            time.sleep(2)
+        asyncio.run(status.simulate())
 
     with create_live(panel):
-        a = panel._add_task("url_a")
-        b = panel._add_task("url_b")
-        c = panel._add_task("url_c")
-        time.sleep(5)
-        d = panel._add_task("url_d")
-        _ = panel._add_task("url_e")
-        time.sleep(5)
-        panel._remove_task(a)
-        panel._remove_task(b)
-        panel._remove_task(c)
-        panel._remove_task(d)
-        time.sleep(2)
-        with panel.new("http://github.com"):
-            time.sleep(2)
-            with panel.new("http://github2.com"):
-                time.sleep(2)
-            with panel.new("http://github3.com"):
-                time.sleep(2)
+        asyncio.run(panel.simulate())

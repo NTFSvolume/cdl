@@ -1,6 +1,6 @@
+import asyncio
 import dataclasses
 import shutil
-import time
 
 from rich.layout import Layout
 
@@ -61,6 +61,22 @@ class ScrapingUI:
 
         return Screen(horizontal, vertical)
 
+    async def simulate(self) -> None:
+        try:
+            async with asyncio.timeout(20):
+                async with asyncio.TaskGroup() as tg:
+                    for panel in (
+                        self.files,
+                        self.scrape_errors,
+                        self.download_errors,
+                        self.scrape,
+                        self.downloads,
+                        self.status,
+                    ):
+                        _ = tg.create_task(panel.simulate())
+        except TimeoutError:
+            pass
+
 
 def is_terminal_in_portrait() -> bool:
     """Check if CDL is being run in portrait mode based on a few conditions."""
@@ -87,4 +103,4 @@ def is_terminal_in_portrait() -> bool:
 if __name__ == "__main__":
     ui = ScrapingUI()
     with create_live(ui):
-        time.sleep(5)
+        asyncio.run(ui.simulate())

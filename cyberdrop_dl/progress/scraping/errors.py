@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 import functools
 import random
-import time
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Self
 
@@ -104,6 +104,12 @@ class _ErrorsPanel:
         tasks = {task.id: task for task in self._progress.tasks}
         return iter((Error.parse(msg, int(tasks[task_id].completed)) for msg, task_id in self._errors_map.items()))
 
+    async def simulate(self) -> None:
+        self.add("404 not found")
+        for error in random.choices(tuple(_ERROR_OVERRIDES), k=40):
+            self.add(error)
+            await asyncio.sleep(random.random() * 5)
+
 
 class DownloadErrors(_ErrorsPanel): ...
 
@@ -150,10 +156,6 @@ _ERROR_OVERRIDES = MappingProxyType(
 
 if __name__ == "__main__":
     panel = DownloadErrors()
-    with create_live(panel):
-        panel.add("404 not found")
-        for error in random.choices(tuple(_ERROR_OVERRIDES), k=40):
-            panel.add(error)
-            time.sleep(random.random() * 5)
-
+    with create_live(panel, transient=True):
+        asyncio.run(panel.simulate())
         rich.print(sorted(panel))

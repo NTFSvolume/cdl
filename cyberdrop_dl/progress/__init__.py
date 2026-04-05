@@ -18,11 +18,11 @@ if TYPE_CHECKING:
     from rich.console import RenderableType
 
 
-def create_live(renderable: RenderableType) -> Live:
+def create_live(renderable: RenderableType, transient: bool = False) -> Live:
     return Live(
         auto_refresh=True,
         refresh_per_second=20,
-        transient=False,
+        transient=transient,
         get_renderable=lambda: renderable,
     )
 

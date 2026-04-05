@@ -189,52 +189,47 @@ class DownloadsPanel(OverflowPanel):
 
         return ProgressHook(advance, get_speed, on_exit)
 
+    async def simulate(self) -> None:
+        import itertools
+        from pathlib import Path
 
-async def test() -> None:
-    import itertools
-    from pathlib import Path
+        async def download(hook: ProgressHook, size: int) -> None:
+            with hook:
+                for chunk in Random.int_until(size, min_step=1, max_step=1e7):
+                    hook.advance(chunk)
+                    await asyncio.sleep(0.1)
 
-    panel = DownloadsPanel()
+        async def download_file(filename: str) -> None:
+            size = Random.int(1e2, 1e9)
+            hook = self.download_file(filename, size)
+            await download(hook, size)
 
-    async def download(hook: ProgressHook, size: int) -> None:
-        with hook:
-            for chunk in Random.int_until(size, min_step=1, max_step=1e7):
-                hook.advance(chunk)
-                await asyncio.sleep(0.1)
+        async def download_hls(filename: str) -> None:
+            n_segments = Random.int(1, 1_200)
 
-    async def download_file(filename: str) -> None:
-        size = Random.int(1e2, 1e9)
-        hook = panel.download_file(filename, size)
-        await download(hook, size)
+            segments_sem = asyncio.BoundedSemaphore(20)
 
-    async def download_hls(filename: str) -> None:
-        n_segments = Random.int(1, 1_200)
+            async def download_segment() -> None:
+                size = Random.int(1e2, 1e5)
+                hook = self.download_hls_seg()
+                try:
+                    await download(hook, size)
+                finally:
+                    segments_sem.release()
 
-        segments_sem = asyncio.BoundedSemaphore(20)
+            with self.download_hls(filename, n_segments):
+                async with asyncio.TaskGroup() as tg:
+                    for _ in range(n_segments):
+                        await segments_sem.acquire()
+                        tg.create_task(download_segment())
 
-        async def download_segment() -> None:
-            size = Random.int(1e2, 1e5)
-            hook = panel.download_hls_seg()
-            try:
-                await download(hook, size)
-            finally:
-                segments_sem.release()
-
-        with panel.download_hls(filename, n_segments):
-            async with asyncio.TaskGroup() as tg:
-                for _ in range(n_segments):
-                    await segments_sem.acquire()
-                    tg.create_task(download_segment())
-
-    files = Random.choices(
-        [
-            str(f.with_suffix(Random.choice([".py", ".exe", ".jpg", ".mp4", ".zip"])))
-            for f in Path(__file__).parent.parent.rglob("*")
-        ],
-        k=Random.int(80, 200),
-    )
-
-    with create_live(panel):
+        files = Random.choices(
+            [
+                str(f.with_suffix(Random.choice([".py", ".exe", ".jpg", ".mp4", ".zip"])))
+                for f in Path(__file__).parent.parent.rglob("*")
+            ],
+            k=Random.int(80, 200),
+        )
         async with asyncio.TaskGroup() as tg:
 
             def download_files(files: Iterable[str]) -> None:
@@ -253,4 +248,6 @@ async def test() -> None:
 
 
 if __name__ == "__main__":  # pragma: no cover
-    asyncio.run(test())
+    panel = DownloadsPanel()
+    with create_live(panel):
+        asyncio.run(panel.simulate())
