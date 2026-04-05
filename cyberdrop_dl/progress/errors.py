@@ -5,16 +5,20 @@ import functools
 import random
 import time
 from types import MappingProxyType
-from typing import Self
+from typing import TYPE_CHECKING, Self
 
+import rich
 from rich.panel import Panel
 from rich.progress import BarColumn, Progress, TaskID
 
 from cyberdrop_dl.progress import create_live
 
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
 
 @functools.cache
-def _get_pretty_error(failure: str) -> str:
+def _pretty_format_error(failure: str) -> str:
     return _FAILURE_OVERRIDES.get(failure) or _capitalize_words(failure)
 
 
@@ -30,7 +34,7 @@ def _capitalize_words(text: str) -> str:
 
 
 @dataclasses.dataclass(slots=True, order=True)
-class UIFailure:
+class Error:
     msg: str
     count: int
     code: int | None = None
@@ -81,7 +85,7 @@ class _ErrorsPanel:
 
     def add(self, error: str) -> None:
         self._errors_count += 1
-        name = _get_pretty_error(error)
+        name = _pretty_format_error(error)
         if (task_id := self._errors.get(name)) is not None:
             self._progress.advance(task_id)
         else:
@@ -105,9 +109,9 @@ class _ErrorsPanel:
                 completed=int(task.completed),
             )
 
-    def results(self) -> list[UIFailure]:
-        tasks = self._progress.tasks
-        return sorted(UIFailure.parse(msg, int(tasks[task_id].completed)) for msg, task_id in self._errors.items())
+    def __iter__(self) -> Iterator[Error]:
+        tasks = {task.id: task for task in self._progress.tasks}
+        return iter((Error.parse(msg, int(tasks[task_id].completed)) for msg, task_id in self._errors.items()))
 
 
 class DownloadErrors(_ErrorsPanel): ...
@@ -156,6 +160,9 @@ _FAILURE_OVERRIDES = MappingProxyType(
 if __name__ == "__main__":
     panel = DownloadErrors()
     with create_live(panel):
+        panel.add("404 not found")
         for error in random.choices(tuple(_FAILURE_OVERRIDES), k=40):
             panel.add(error)
             time.sleep(0.3)
+
+        rich.print(sorted(panel))
