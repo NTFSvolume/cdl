@@ -109,7 +109,6 @@ class LogHandler(RichHandler):
             tracebacks_extra_lines=2,
             locals_max_length=20,
             show_path=False,
-            keywords=["Scraping"],
         )
         if self.is_file:
             self._log_render = NoPaddingLogRender(
@@ -278,14 +277,13 @@ class NoPaddingLogRender(LogRender):
 def _indent_text(text: Text, console: Console, indent: int) -> Text:
     """Indents each line of a Text object except the first one."""
     padding = Text("\n" + (" " * indent))
+    new_text = Text()
     first_line, *rest = text.wrap(console, width=console.width - indent)
-    first_line.rstrip()
-    text = first_line
     for line in rest:
         line.rstrip()
-        _ = text.append_text(padding.append_text(line))
-
-    return text
+        _ = new_text.append_text(padding + line)
+    first_line.rstrip()
+    return first_line.append_text(new_text)
 
 
 def log_spacer(char: str = "-") -> None:

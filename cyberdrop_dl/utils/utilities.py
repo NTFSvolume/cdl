@@ -388,7 +388,7 @@ def get_size_or_none(path: Path) -> int | None:
 
 
 @functools.cache
-def get_system_information() -> str:
+def get_system_information() -> dict[str, Any]:
     def get_common_name() -> str:
         system = platform.system()
 
@@ -417,7 +417,7 @@ def get_system_information() -> str:
         "common_name": get_common_name(),
     }
     _ = system_info.pop("node", None)
-    return json.dumps(system_info, indent=4)
+    return system_info
 
 
 def is_blob_or_svg(link: str) -> bool:

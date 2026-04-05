@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
-import json
 import logging
 from dataclasses import Field, field
 from pathlib import Path
@@ -167,35 +166,32 @@ class Manager:
 
     def args_logging(self) -> None:
         """Logs the runtime arguments."""
-        auth_provided = {}
 
-        for site, auth_entries in self.config_manager.authentication_data.model_dump().items():
-            auth_provided[site] = all(auth_entries.values())
+        auth = {
+            site: all(credentials.values())
+            for site, credentials in self.config_manager.authentication_data.model_dump().items()
+        }
 
         config_settings = self.config_manager.settings_data.model_copy()
         config_settings.runtime_options.deep_scrape = self.config_manager.deep_scrape
-        config_settings = config_settings.model_dump_json(indent=4)
-        global_settings = self.config_manager.global_settings_data.model_dump_json(indent=4)
-        cli_only_args = self.parsed_args.cli_only_args.model_dump_json(indent=4)
-        system_info = get_system_information()
 
-        args_info = (
-            "Starting Cyberdrop-DL Process",
-            f"Running Version: {__version__}",
-            f"System Info: {system_info}",
-            f"Using Config: {self.config_manager.loaded_config}",
-            f"Using Config File: {self.config_manager.settings}",
-            f"Using Input File: {self.config.files.input_file}",
-            f"Using Download Folder: {self.config.files.download_folder}",
-            f"Using Database File: {self.appdata.db_file}",
-            f"Using CLI only options: {cli_only_args}",
-            f"Using Authentication: \n{json.dumps(auth_provided, indent=4, sort_keys=True)}",
-            f"Using Settings: \n{config_settings}",
-            f"Using Global Settings: \n{global_settings}",
-            f"Using ffmpeg version: {ffmpeg.get_ffmpeg_version()}",
-            f"Using ffprobe version: {ffmpeg.get_ffprobe_version()}",
-        )
-        logger.info("\n".join(args_info))
+        logger.info(f"Running cyberdrop-dl v{__version__}")
+
+        args_info = {
+            "System": get_system_information(),
+            "Config": self.config_manager.loaded_config,
+            "Config File": self.config_manager.settings,
+            "Input File": self.config.files.input_file,
+            "Download Folder": self.config.files.download_folder,
+            "Database File": self.appdata.db_file,
+            "CLI only options": self.parsed_args.cli_only_args.model_dump(mode="json"),
+            "Auth": auth,
+            "Settings": config_settings.model_dump(mode="json"),
+            "Global Settings": self.config_manager.global_settings_data.model_dump(mode="json"),
+            "ffmpeg version": ffmpeg.get_ffmpeg_version(),
+            "ffprobe version": ffmpeg.get_ffprobe_version(),
+        }
+        logger.info(args_info)
 
     async def close(self) -> None:
 
