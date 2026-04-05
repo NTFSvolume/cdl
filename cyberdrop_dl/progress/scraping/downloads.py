@@ -24,7 +24,7 @@ from rich.text import Text
 from typing_extensions import override
 
 from cyberdrop_dl.progress import DictProgress, ProgressHook, Random, create_live
-from cyberdrop_dl.progress.scraping import OverflowPanel
+from cyberdrop_dl.progress.overflow import OverflowPanel
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable

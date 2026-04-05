@@ -47,7 +47,7 @@ class DictProgress(Progress):
         with self._lock:
             sorted_tasks = sort_fn(self._tasks.values())
             self._tasks.clear()
-            self._tasks.update((tasks.id, tasks) for tasks in sorted_tasks)
+            self._tasks.update((task.id, task) for task in sorted_tasks)
 
 
 class Random:
