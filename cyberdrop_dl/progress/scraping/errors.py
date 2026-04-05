@@ -8,10 +8,12 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, ClassVar, Self
 
 import rich
+from rich.console import Group
 from rich.panel import Panel
 from rich.progress import BarColumn, TaskID
 
 from cyberdrop_dl.progress import DictProgress, create_live
+from cyberdrop_dl.progress.overflow import OverFlow
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -55,6 +57,7 @@ class _ErrorsPanel:
     """Base class that keeps track of errors and reasons."""
 
     title: ClassVar[str]
+    limit: ClassVar[int] = 8
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(error_count={self._total!r}, errors={tuple(self._errors_map)!r})"
@@ -71,7 +74,7 @@ class _ErrorsPanel:
             "━",
             "{task.completed:,}",
         )
-
+        self._overflow: OverFlow = OverFlow("kind of errors")
         self._errors_map: dict[str, TaskID] = {}
         self._total: int = 0
         self._changed: bool = False
@@ -87,6 +90,7 @@ class _ErrorsPanel:
             self._sort_tasks()
             self._changed = False
 
+        self._panel.renderable = self._progress if not self._overflow else Group(self._progress, self._overflow)
         self._panel.subtitle = f"Total: [white]{self._total:,}"
         return self._panel
 
@@ -96,7 +100,14 @@ class _ErrorsPanel:
         if (task_id := self._errors_map.get(name)) is not None:
             self._progress.advance(task_id)
         else:
-            self._errors_map[name] = self._progress.add_task(name, total=self._total, completed=1)
+            self._overflow.count = len(self._errors_map) + 1 - self.limit + 1
+            self._errors_map[name] = self._progress.add_task(
+                name,
+                total=self._total,
+                completed=1,
+                visible=not self._overflow,
+            )
+
         self._changed = True
 
     def _sort_tasks(self) -> None:

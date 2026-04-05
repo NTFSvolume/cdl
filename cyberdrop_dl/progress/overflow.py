@@ -27,7 +27,9 @@ class OverFlow:
         return self.count > 0
 
     def __rich__(self) -> str:
-        return str(self)
+        if self:
+            return str(self)
+        return ""
 
     def __str__(self) -> str:
         return f"[{_COLOR}]... and {self.count:,} other {self.unit}"

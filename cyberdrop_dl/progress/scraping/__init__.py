@@ -63,7 +63,7 @@ class ScrapingUI:
             Layout(self.status, name="status", size=2),
         )
 
-        horizontal.split_column(Layout(name="top", minimum_size=10), *bottom)
+        horizontal.split_column(Layout(name="top", size=self.scrape_errors.limit + 4), *bottom)
         vertical.split_column(Layout(name="top", ratio=60), *bottom)
 
         horizontal["top"].split_row(*top)
