@@ -208,17 +208,14 @@ def get_download_path(manager: Manager, scrape_item: ScrapeItem, domain: str) ->
     return download_dir / scrape_item.create_download_path(domain)
 
 
-"""~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
-
-
-def get_size(path: os.DirEntry[str]) -> int | None:
+def _get_size(path: os.DirEntry[str]) -> int | None:
     try:
         return path.stat(follow_symlinks=False).st_size
     except (OSError, ValueError):
         return
 
 
-def purge_dir_tree(dirname: Path | str) -> bool:
+def delete_empty_files_and_folders(dirname: Path | str) -> bool:
     """walks and removes in place"""
 
     has_non_empty_files = False
@@ -231,10 +228,10 @@ def purge_dir_tree(dirname: Path | str) -> bool:
             except OSError:
                 is_dir = False
             if is_dir:
-                deleted = purge_dir_tree(entry.path)
+                deleted = delete_empty_files_and_folders(entry.path)
                 if not deleted:
                     has_non_empty_subfolders = True
-            elif get_size(entry) == 0:
+            elif _get_size(entry) == 0:
                 os.unlink(entry)  # noqa: PTH108
             else:
                 has_non_empty_files = True
@@ -253,13 +250,24 @@ def purge_dir_tree(dirname: Path | str) -> bool:
 
 def check_partials_and_empty_folders(manager: Manager) -> None:
     """Checks for partial downloads, deletes partial files and empty folders."""
+    download_folder = manager.config.files.download_folder
+
+    _check_for_partial_files(download_folder)
     settings = manager.config_manager.settings_data.runtime_options
     if settings.delete_partial_files:
-        delete_partial_files(manager)
-    if not settings.skip_check_for_partial_files:
-        check_for_partial_files(manager)
-    if not settings.skip_check_for_empty_folders:
-        delete_empty_folders(manager)
+        logger.info("Deleting partial downloads...")
+        for file in _partial_files(download_folder):
+            file.unlink(missing_ok=True)
+
+    if settings.skip_check_for_empty_folders:
+        return
+
+    logger.info("Deleting empty files and folders...")
+    _ = delete_empty_files_and_folders(download_folder)
+
+    sorted_folder = manager.config.sorting.sort_folder
+    if sorted_folder and manager.config_manager.settings_data.sorting.sort_downloads:
+        _ = delete_empty_files_and_folders(sorted_folder)
 
 
 def _partial_files(dir: Path | str) -> Generator[Path]:
@@ -279,29 +287,11 @@ def _partial_files(dir: Path | str) -> Generator[Path]:
         return
 
 
-def delete_partial_files(manager: Manager) -> None:
-    """Deletes partial download files recursively."""
-    logger.info("Deleting partial downloads...")
-    for file in _partial_files(manager.config.files.download_folder):
-        file.unlink(missing_ok=True)
-
-
-def check_for_partial_files(manager: Manager) -> None:
-    """Checks if there are partial downloads in any subdirectory and logs if found."""
+def _check_for_partial_files(path: Path) -> None:
     logger.info("Checking for partial downloads...")
-    has_partial_files = next(_partial_files(manager.config.files.download_folder), None)
+    has_partial_files = next(_partial_files(path), None)
     if has_partial_files:
         logger.warning("There are partial downloads in the downloads folder")
-
-
-def delete_empty_folders(manager: Manager) -> None:
-    """Deletes empty folders efficiently."""
-    logger.info("Checking for empty folders...")
-    purge_dir_tree(manager.config.files.download_folder)
-
-    sorted_folder = manager.config.sorting.sort_folder
-    if sorted_folder and manager.config_manager.settings_data.sorting.sort_downloads:
-        purge_dir_tree(sorted_folder)
 
 
 def get_text_between(original_text: str, start: str, end: str) -> str:

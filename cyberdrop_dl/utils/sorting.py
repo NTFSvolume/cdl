@@ -16,7 +16,7 @@ from cyberdrop_dl import ffmpeg
 from cyberdrop_dl.constants import FileExt, TempExt
 from cyberdrop_dl.progress.sorting import SortingUI
 from cyberdrop_dl.utils import strings
-from cyberdrop_dl.utils.utilities import purge_dir_tree as delete_empty_files_and_folders
+from cyberdrop_dl.utils.utilities import delete_empty_files_and_folders
 
 if TYPE_CHECKING:
     from cyberdrop_dl.managers.manager import Manager

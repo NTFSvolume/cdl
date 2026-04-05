@@ -21,7 +21,7 @@ from cyberdrop_dl.models.types import (
 )
 from cyberdrop_dl.models.validators import falsy_as, to_timedelta
 from cyberdrop_dl.utils.strings import validate_format_string
-from cyberdrop_dl.utils.utilities import purge_dir_tree
+from cyberdrop_dl.utils.utilities import delete_empty_files_and_folders
 
 from ._common import ConfigModel
 
@@ -123,7 +123,7 @@ class Logs(AliasModel):
                 if (now - datetime.fromtimestamp(file.stat().st_ctime)) > self.logs_expire_after:
                     file.unlink()
 
-        purge_dir_tree(self.log_folder)
+        delete_empty_files_and_folders(self.log_folder)
 
 
 class FileSizeLimits(BaseModel):
