@@ -51,7 +51,7 @@ class OverFlow:
         return ""
 
 
-class OverflowPanel:
+class OverFlowPanel:
     unit: ClassVar[str]
 
     def __init__(self, *columns: ProgressColumn | str, max_rows: int, expand: bool = True) -> None:

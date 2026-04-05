@@ -14,9 +14,7 @@ def main(args: Sequence[str] | None = None) -> None:
 
 
 def run(args: Sequence[str] | None = None) -> str | int | None:
-    from cyberdrop_dl.utils.logger import catch_exceptions
 
-    @catch_exceptions
     def run_() -> int:
         return _create_director(args).run()
 

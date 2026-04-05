@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils.logger import log
 from cyberdrop_dl.utils.utilities import error_handling_wrapper
 
 if TYPE_CHECKING:
@@ -118,7 +117,7 @@ class RealDebridCrawler(Crawler):
         title = self.create_title(f"files [{url.host}]")
         scrape_item.setup_as_album(title)
         debrid_link = await self.api.unrestrict(url, scrape_item.password)
-        log(f"[{self.FOLDER_DOMAIN}]:\n  Original URL: {url}\n  Debrid URL: {debrid_link}", 10)
+        self.log.info(f"\n  Original URL: {url}\n  Debrid URL: {debrid_link}")
         filename, ext = self.get_filename_and_ext(debrid_link.name)
         await self.handle_file(
             url,

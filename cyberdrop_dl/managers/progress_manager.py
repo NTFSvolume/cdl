@@ -126,7 +126,7 @@ class ProgressManager:
         runtime = timedelta(seconds=int(end_time - start_time))
         total_data_written = ByteSize(self.file_progress.total_data_written).human_readable(decimal=True)
 
-        log_spacer(20)
+        log_spacer()
         logger.info("Printing Stats...\n")
         config_path = self.manager.appdata.configs / self.manager.config_manager.loaded_config
         config_path_text = get_console_hyperlink(config_path, text=self.manager.config_manager.loaded_config)
@@ -141,21 +141,21 @@ class ProgressManager:
         log_yellow(f"  Total Runtime: {runtime}")
         log_yellow(f"  Total Downloaded Data: {total_data_written}")
 
-        log_spacer(20, "")
+        log_spacer()
         log_cyan("Download Stats:")
         log_green(f"  Downloaded: {self.download_progress.completed_files:,} files")
         log_yellow(f"  Skipped (By Config): {self.download_progress.skipped_files:,} files")
         log_yellow(f"  Skipped (Previously Downloaded): {self.download_progress.previously_completed_files:,} files")
         log_red(f"  Failed: {self.download_stats_progress.failed_files:,} files")
 
-        log_spacer(20, "")
+        log_spacer()
         log_cyan("Unsupported URLs Stats:")
         log_yellow(f"  Sent to Jdownloader: {self.scrape_stats_progress.sent_to_jdownloader:,}")
         log_yellow(f"  Skipped: {self.scrape_stats_progress.unsupported_urls_skipped:,}")
 
         self.print_dedupe_stats()
 
-        log_spacer(20, "")
+        log_spacer()
         log_cyan("Sort Stats:")
         log_green(f"  Audios: {self.sort_progress.audio_count:,}")
         log_green(f"  Images: {self.sort_progress.image_count:,}")
@@ -166,7 +166,7 @@ class ProgressManager:
         log_failures(self.download_stats_progress.return_totals(), "Download Failures:", last_padding)
 
     def print_dedupe_stats(self) -> None:
-        log_spacer(20, "")
+        log_spacer()
         log_cyan("Dupe Stats:")
         log_yellow(f"  Newly Hashed: {self.hash_progress.hashed_files:,} files")
         log_yellow(f"  Previously Hashed: {self.hash_progress.prev_hashed_files:,} files")
@@ -174,7 +174,7 @@ class ProgressManager:
 
 
 def log_failures(failures: list[UiFailureTotal], title: str = "Failures:", last_padding: int = 0) -> int:
-    log_spacer(20, "")
+    log_spacer()
     log_cyan(title)
     if not failures:
         log_green("  None")

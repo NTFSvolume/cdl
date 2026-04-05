@@ -27,7 +27,7 @@ from rich.text import Text
 from typing_extensions import override
 
 from cyberdrop_dl.progress import DictProgress, ProgressHook, create_test_live
-from cyberdrop_dl.progress.overflow import OverflowPanel
+from cyberdrop_dl.progress.overflow import OverFlowPanel
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
@@ -112,7 +112,7 @@ class AutoDownloadColumn(DownloadColumn):
 
 
 @final
-class DownloadsPanel(OverflowPanel):
+class DownloadsPanel(OverFlowPanel):
     unit: ClassVar[str] = "file"
 
     @property

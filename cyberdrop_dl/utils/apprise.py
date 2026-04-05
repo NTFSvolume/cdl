@@ -95,13 +95,13 @@ def _process_results(
     else:
         final_result = constants.NotificationResult.FAILED
 
-    log_spacer(10, log_to_console=False, log_to_file=not all(result))
+    log_spacer()
     rich.print("Apprise notifications results:", final_result.value)
     log = logger.debug if all(result) else logger.info
     log(f"Apprise notifications results: {final_result.value}")
     log(f"PARSED_APPRISE_URLs: \n{json.dumps(all_urls, indent=4)}\n")
     log(f"RESULTS_BY_TAGS: \n{json.dumps(result_dict, indent=4)}")
-    log_spacer(10, log_to_console=False, log_to_file=not all(result))
+    log_spacer()
     parsed_log_lines = _parse_apprise_logs(apprise_logs)
     for line in parsed_log_lines:
         log(line.msg)

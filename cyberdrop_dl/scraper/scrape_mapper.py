@@ -463,7 +463,7 @@ def disable_crawlers_by_config(existing_crawlers: dict[str, type[Crawler]], craw
         )
         logger.info(f"Crawlers disabled by config: \n{crawlers_info}")
 
-    log_spacer(10)
+    log_spacer()
 
 
 def match_url_to_crawler(existing_crawlers: dict[str, _T], url: AbsoluteHttpURL) -> _T | None:

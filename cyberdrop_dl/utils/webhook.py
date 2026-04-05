@@ -90,7 +90,7 @@ async def send_webhook_message(manager: Manager) -> None:
         logger.exception("Unable to send webhook notification")
         result_to_log = result, str(e)
 
-    log_spacer(10, log_to_console=False)
+    log_spacer()
     rich.print("Webhook Notifications Results:", result)
     result_to_log = "\n".join(map(str, result_to_log))
     logger.info(f"Webhook Notifications Results: {result_to_log}")

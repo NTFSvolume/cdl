@@ -15,7 +15,7 @@ from rich.text import Text
 
 from cyberdrop_dl import __version__
 from cyberdrop_dl.progress import create_test_live
-from cyberdrop_dl.progress.overflow import OverflowPanel
+from cyberdrop_dl.progress.overflow import OverFlowPanel
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -61,7 +61,7 @@ class StatusMessage:
 
 
 @final
-class ScrapingPanel(OverflowPanel):
+class ScrapingPanel(OverFlowPanel):
     unit: ClassVar[str] = "URL"
 
     def __init__(self) -> None:

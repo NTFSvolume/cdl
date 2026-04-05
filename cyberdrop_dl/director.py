@@ -70,7 +70,7 @@ async def _run_manager(manager: Manager) -> None:
     logger.info("Starting Async Processes...")
     await manager.async_startup()
 
-    log_spacer(10)
+    log_spacer()
     async with manager.database:
         logger.info("Starting CDL...\n")
 
@@ -78,10 +78,10 @@ async def _run_manager(manager: Manager) -> None:
 
         manager.progress_manager.print_stats(start_time)
 
-        log_spacer(20)
+        log_spacer()
         logger.info("Checking for Updates...")
         check_latest_pypi()
-        log_spacer(20)
+        log_spacer()
         logger.info("Closing Program...")
         log_with_color("Finished downloading. Enjoy :)", "green", 20, show_in_stats=False)
 
@@ -117,7 +117,7 @@ async def _post_runtime(manager: Manager) -> None:
     check_partials_and_empty_folders(manager)
 
     if manager.config_manager.settings_data.runtime_options.update_last_forum_post:
-        log_spacer(20)
+        log_spacer()
         await manager.logs.update_last_forum_post(manager.config.files.input_file)
 
 

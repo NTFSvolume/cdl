@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-import contextlib
 import json
 import logging
 import queue
 import sys
-from functools import wraps
 from logging.handlers import QueueHandler, QueueListener
 from pathlib import Path
 from typing import IO, TYPE_CHECKING, ParamSpec
@@ -18,9 +16,7 @@ from rich.measure import Measurement
 from rich.padding import Padding
 from rich.text import Text, TextType
 
-from cyberdrop_dl import constants, env
-from cyberdrop_dl.dependencies import browser_cookie3
-from cyberdrop_dl.exceptions import InvalidYamlError
+from cyberdrop_dl import constants
 
 logger = logging.getLogger("cyberdrop_dl")
 logger_debug = logging.getLogger("cyberdrop_dl_debug")
@@ -29,10 +25,11 @@ _DEFAULT_CONSOLE = Console()
 
 _USER_NAME = Path.home().resolve().name
 _NEW_ISSUE_URL = "https://github.com/NTFSvolume/cdl/issues/new/choose"
+_DEFAULT_CONSOLE_WIDTH = 240
 
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Iterable
+    from collections.abc import Callable, Iterable
     from datetime import datetime
 
     from rich.console import ConsoleRenderable
@@ -228,8 +225,6 @@ def _indent_text(text: Text, console: Console, indent: int = 30) -> Text:
 
 
 def log(message: object, level: int = 10, bug: bool = False, **kwargs) -> None:
-    """Simple logging function."""
-    log_debug(message, level, **kwargs)
     if bug:
         args = message, f"Please open a bug report at {_NEW_ISSUE_URL}"
         message = "{}. {}"
@@ -237,12 +232,6 @@ def log(message: object, level: int = 10, bug: bool = False, **kwargs) -> None:
     else:
         args = ()
     logger.log(level, message, *args, **kwargs)
-
-
-def log_debug(message: object, level: int = 10, **kwargs) -> None:
-    """Simple logging function."""
-    if env.DEBUG_VAR:
-        logger_debug.log(level, message, **kwargs)
 
 
 def log_with_color(message: Text | str, style: str, level: int = 20, show_in_stats: bool = True, **kwargs) -> None:
@@ -255,13 +244,8 @@ def log_with_color(message: Text | str, style: str, level: int = 20, show_in_sta
         constants.LOG_OUTPUT_TEXT.append_text(text.append("\n"))
 
 
-def log_spacer(level: int, char: str = "-", *, log_to_console: bool = True, log_to_file: bool = True) -> None:
-    spacer = char * min(int(constants.DEFAULT_CONSOLE_WIDTH / 2), 50)
-    if log_to_file:
-        log(spacer, level)
-    if log_to_console and constants.CONSOLE_LEVEL >= 50:
-        _DEFAULT_CONSOLE.print("")
-    constants.LOG_OUTPUT_TEXT.append("\n", style="black")
+def log_spacer(char: str = "-") -> None:
+    logger.info(char * (_DEFAULT_CONSOLE_WIDTH // 2), stacklevel=2)
 
 
 def _redact_message(message: Exception | Text | str) -> str:
@@ -272,67 +256,3 @@ def _redact_message(message: Exception | Text | str) -> str:
         as_part = _USER_NAME + sep
         redacted = redacted.replace(as_tail, f"{sep}[REDACTED]").replace(as_part, f"[REDACTED]{sep}")
     return redacted
-
-
-@contextlib.contextmanager
-def _setup_startup_logger() -> Generator[None]:
-    """Context manager to add a file handler to the startup logger
-
-    It will only add it if we have an exception, to prevent creating an empty file"""
-    startup_logger.setLevel(10)
-    if "pytest" not in sys.modules:
-        console_handler = LogHandler(level=10)
-        startup_logger.addHandler(console_handler)
-    try:
-        yield
-
-    except Exception:
-        try:
-            file = Path.cwd() / "startup.log"
-            file_handler = LogHandler(
-                level=10,
-                file=file.open("w", encoding="utf8"),
-                width=constants.DEFAULT_CONSOLE_WIDTH,
-            )
-            startup_logger.addHandler(file_handler)
-        except OSError:
-            # We could not create the file for some reason
-            # Ignore this and just log to the console
-            pass
-        raise
-
-
-def catch_exceptions(func: Callable[_P, _ExitCode]) -> Callable[_P, _ExitCode]:
-    """Decorator to automatically log uncaught exceptions.
-
-    Exceptions will be logged to a file in the current working directory
-    because the manager setup itself may have failed, therefore we don't know
-    what the proper log file path is.
-    """
-
-    @wraps(func)
-    def catch(*args, **kwargs) -> _ExitCode | None:
-        try:
-            with _setup_startup_logger():
-                return func(*args, **kwargs)
-
-        except InvalidYamlError as e:
-            startup_logger.error(e.message)
-
-        except browser_cookie3.BrowserCookieError:
-            startup_logger.exception("")
-
-        except OSError as e:
-            startup_logger.exception(str(e))
-
-        except KeyboardInterrupt:
-            startup_logger.info("Exiting...")
-            return
-
-        except Exception:
-            msg = "An error occurred, please report this to the developer with your logs file:"
-            startup_logger.exception(msg)
-
-        return 1
-
-    return catch
