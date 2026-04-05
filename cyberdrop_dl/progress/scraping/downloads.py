@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
+import random
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, ClassVar, Final, final
 
@@ -23,7 +24,7 @@ from rich.table import Column
 from rich.text import Text
 from typing_extensions import override
 
-from cyberdrop_dl.progress import DictProgress, ProgressHook, Random, create_live
+from cyberdrop_dl.progress import DictProgress, ProgressHook, create_live
 from cyberdrop_dl.progress.overflow import OverflowPanel
 
 if TYPE_CHECKING:
@@ -194,22 +195,25 @@ class DownloadsPanel(OverflowPanel):
         from pathlib import Path
 
         async def download(hook: ProgressHook, size: int) -> None:
+            total = 0
             with hook:
-                for chunk in Random.int_until(size, min_step=1, max_step=1e7):
+                while total < size:
+                    chunk = min(random.randint(1, int(1e7)), size - total)
                     hook.advance(chunk)
+                    total += chunk
                     await asyncio.sleep(0.1)
 
         async def download_file(filename: str) -> None:
-            size = Random.int(1e2, 1e9)
+            size = random.randint(int(1e2), int(1e9))
             hook = self.download_file(filename, size)
             await download(hook, size)
 
         async def download_hls(filename: str) -> None:
-            n_segments = Random.int(1, 1_200)
+            n_segments = random.randint(1, 1_200)
             segments_sem = asyncio.BoundedSemaphore(20)
 
             async def download_segment() -> None:
-                size = Random.int(1e2, 1e5)
+                size = random.randint(int(1e2), int(1e5))
                 hook = self.download_hls_seg()
                 try:
                     await download(hook, size)
@@ -222,19 +226,19 @@ class DownloadsPanel(OverflowPanel):
                         await segments_sem.acquire()
                         tg.create_task(download_segment())
 
-        files = Random.choices(
+        files = random.choices(
             [
-                str(f.with_suffix(Random.choice([".py", ".exe", ".jpg", ".mp4", ".zip"])))
+                str(f.with_suffix(random.choice([".py", ".exe", ".jpg", ".mp4", ".zip"])))
                 for f in Path(__file__).parent.parent.rglob("*")
             ],
-            k=Random.int(80, 200),
+            k=random.randint(80, 200),
         )
         async with asyncio.TaskGroup() as tg:
 
             def download_files(files: Iterable[str]) -> None:
                 tg.create_task(download_file("file_X_with_a_very_long_name_and_?_#.mp4"))
                 for file in files:
-                    fn = Random.choice([download_hls, download_file])
+                    fn = random.choice([download_hls, download_file])
                     tg.create_task(fn(file))
 
             batches = 4
