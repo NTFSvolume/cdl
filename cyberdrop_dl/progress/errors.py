@@ -9,9 +9,9 @@ from typing import TYPE_CHECKING, Self
 
 import rich
 from rich.panel import Panel
-from rich.progress import BarColumn, Progress, TaskID
+from rich.progress import BarColumn, TaskID
 
-from cyberdrop_dl.progress import create_live
+from cyberdrop_dl.progress import DictProgress, create_live
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -58,7 +58,7 @@ class _ErrorsPanel:
         return f"{type(self).__name__}(error_count={self._total!r}, errors={tuple(self._errors_map)!r})"
 
     def __init__(self) -> None:
-        self._progress: Progress = Progress(
+        self._progress: DictProgress = DictProgress(
             "[progress.description]{task.description}",
             BarColumn(bar_width=None),
             "[progress.percentage]{task.percentage:>6.2f}%",
@@ -96,18 +96,9 @@ class _ErrorsPanel:
         for task_id in self._errors_map.values():
             self._progress.update(task_id, total=self._total)
 
-        tasks = self._progress.tasks
-        tasks_sorted = sorted(tasks, key=lambda x: x.completed, reverse=True)
-        if tasks == tasks_sorted:
-            return
-
-        for task in tasks_sorted:
-            self._progress.remove_task(task.id)
-            self._errors_map[task.description] = self._progress.add_task(
-                task.description,
-                total=task.total,
-                completed=int(task.completed),
-            )
+        self._progress.sort_tasks(
+            lambda tasks: sorted(tasks, key=lambda x: x.completed, reverse=True),
+        )
 
     def __iter__(self) -> Iterator[Error]:
         tasks = {task.id: task for task in self._progress.tasks}

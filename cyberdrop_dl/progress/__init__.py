@@ -12,7 +12,7 @@ from rich.progress import Progress, ProgressColumn, Task, TaskID
 from rich.text import Text
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator
+    from collections.abc import Callable, Generator, Iterable
     from pathlib import Path
 
     from rich.console import RenderableType
@@ -42,6 +42,12 @@ class DictProgress(Progress):
     def __len__(self) -> int:
         with self._lock:
             return len(self._tasks)
+
+    def sort_tasks(self, sort_fn: Callable[[Iterable[Task]], list[Task]]) -> None:
+        with self._lock:
+            sorted_tasks = sort_fn(self._tasks.values())
+            self._tasks.clear()
+            self._tasks.update((tasks.id, tasks) for tasks in sorted_tasks)
 
 
 class Random:
