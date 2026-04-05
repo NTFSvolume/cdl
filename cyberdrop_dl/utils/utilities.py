@@ -10,7 +10,6 @@ import os
 import platform
 import re
 import sys
-from collections.abc import Generator
 from http import HTTPStatus
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Concatenate, ParamSpec, Protocol, Self, TypeVar, cast, overload
@@ -45,7 +44,6 @@ if TYPE_CHECKING:
     _Origin = TypeVar("_Origin", bound=ScrapeItem | MediaItem | yarl.URL)
 
 _P = ParamSpec("_P")
-_T = TypeVar("_T")
 _R = TypeVar("_R")
 
 
