@@ -18,6 +18,8 @@ from cyberdrop_dl.progress.overflow import OverFlow
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
+_ACRONYMS = frozenset(("HTTP", "URL", "DNS"))
+
 
 @functools.cache
 def _pretty_format(error: str) -> str:
@@ -30,7 +32,9 @@ def _capitalize_words(text: str) -> str:
     Unlike `str.title()`, this caps the first letter of each word without modifying the rest of the word"""
 
     def cap(word: str) -> str:
-        return word[0].capitalize() + word[1:]
+        if word in _ACRONYMS:
+            return word
+        return word[0].upper() + word[1:]
 
     return " ".join([cap(word) for word in text.split()])
 
