@@ -4,7 +4,6 @@ import logging
 import time
 from contextlib import asynccontextmanager
 from datetime import timedelta
-from functools import partial
 from typing import TYPE_CHECKING
 
 from pydantic import ByteSize
@@ -22,10 +21,10 @@ from cyberdrop_dl.ui.progress.hash_progress import HashProgress
 from cyberdrop_dl.ui.progress.scraping_progress import ScrapingProgress
 from cyberdrop_dl.ui.progress.sort_progress import SortProgress
 from cyberdrop_dl.ui.progress.statistic_progress import DownloadStatsProgress, ScrapeStatsProgress
-from cyberdrop_dl.utils.logger import log_spacer, log_with_color
+from cyberdrop_dl.utils.logger import log_spacer
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator
+    from collections.abc import AsyncGenerator, Sequence
     from pathlib import Path
 
     from rich.panel import Panel
@@ -36,10 +35,6 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-log_cyan = partial(log_with_color, style="cyan", level=20)
-log_yellow = partial(log_with_color, style="yellow", level=20)
-log_green = partial(log_with_color, style="green", level=20)
-log_red = partial(log_with_color, style="red", level=20)
 
 spinner = SpinnerColumn(style="green", spinner_name="dots")
 
@@ -133,60 +128,65 @@ class ProgressManager:
         input_file_text = get_input(self.manager)
         log_folder_text = get_console_hyperlink(self.manager.config.logs.log_folder)
 
-        log_concat("Run Stats (config: ", config_path_text, ")", style="cyan")
-        log_concat("  Input File: ", input_file_text, style="yellow")
-        log_yellow(f"  Input URLs: {self.manager.scrape_mapper.count:,}")
-        log_yellow(f"  Input URL Groups: {self.manager.scrape_mapper.group_count:,}")
-        log_concat("  Log Folder: ", log_folder_text, style="yellow")
-        log_yellow(f"  Total Runtime: {runtime}")
-        log_yellow(f"  Total Downloaded Data: {total_data_written}")
+        logger.info("Run Stats: ", config_path_text)
+        logger.info("  Input File: ", input_file_text)
+        logger.info(f"  Input URLs: {self.manager.scrape_mapper.count:,}")
+        logger.info(f"  Input URL Groups: {self.manager.scrape_mapper.group_count:,}")
+        logger.info("  Log Folder: ", log_folder_text)
+        logger.info(f"  Total Runtime: {runtime}")
+        logger.info(f"  Total Downloaded Data: {total_data_written}")
 
         log_spacer()
-        log_cyan("Download Stats:")
-        log_green(f"  Downloaded: {self.download_progress.completed_files:,} files")
-        log_yellow(f"  Skipped (By Config): {self.download_progress.skipped_files:,} files")
-        log_yellow(f"  Skipped (Previously Downloaded): {self.download_progress.previously_completed_files:,} files")
-        log_red(f"  Failed: {self.download_stats_progress.failed_files:,} files")
+        logger.info("Download Stats:")
+        logger.info(f"  Downloaded: {self.download_progress.completed_files:,} files")
+        logger.info(f"  Skipped (By Config): {self.download_progress.skipped_files:,} files")
+        logger.info(f"  Skipped (Previously Downloaded): {self.download_progress.previously_completed_files:,} files")
+        logger.info(f"  Failed: {self.download_stats_progress.failed_files:,} files")
 
         log_spacer()
-        log_cyan("Unsupported URLs Stats:")
-        log_yellow(f"  Sent to Jdownloader: {self.scrape_stats_progress.sent_to_jdownloader:,}")
-        log_yellow(f"  Skipped: {self.scrape_stats_progress.unsupported_urls_skipped:,}")
+        logger.info("Unsupported URLs Stats:")
+        logger.info(f"  Sent to Jdownloader: {self.scrape_stats_progress.sent_to_jdownloader:,}")
+        logger.info(f"  Skipped: {self.scrape_stats_progress.unsupported_urls_skipped:,}")
 
         self.print_dedupe_stats()
 
         log_spacer()
-        log_cyan("Sort Stats:")
-        log_green(f"  Audios: {self.sort_progress.audio_count:,}")
-        log_green(f"  Images: {self.sort_progress.image_count:,}")
-        log_green(f"  Videos: {self.sort_progress.video_count:,}")
-        log_green(f"  Other Files: {self.sort_progress.other_count:,}")
+        logger.info("Sort Stats:")
+        logger.info(f"  Audios: {self.sort_progress.audio_count:,}")
+        logger.info(f"  Images: {self.sort_progress.image_count:,}")
+        logger.info(f"  Videos: {self.sort_progress.video_count:,}")
+        logger.info(f"  Other Files: {self.sort_progress.other_count:,}")
 
-        last_padding = log_failures(self.scrape_stats_progress.return_totals(), "Scrape Failures:")
-        log_failures(self.download_stats_progress.return_totals(), "Download Failures:", last_padding)
+        _log_errors(self.scrape_stats_progress.return_totals(), self.download_stats_progress.return_totals())
 
     def print_dedupe_stats(self) -> None:
         log_spacer()
-        log_cyan("Dupe Stats:")
-        log_yellow(f"  Newly Hashed: {self.hash_progress.hashed_files:,} files")
-        log_yellow(f"  Previously Hashed: {self.hash_progress.prev_hashed_files:,} files")
-        log_yellow(f"  Removed (Downloads): {self.hash_progress.removed_files:,} files")
+        logger.info("Dupe Stats:")
+        logger.info(f"  Newly Hashed: {self.hash_progress.hashed_files:,} files")
+        logger.info(f"  Previously Hashed: {self.hash_progress.prev_hashed_files:,} files")
+        logger.info(f"  Removed (Downloads): {self.hash_progress.removed_files:,} files")
 
 
-def log_failures(failures: list[UiFailureTotal], title: str = "Failures:", last_padding: int = 0) -> int:
-    log_spacer()
-    log_cyan(title)
-    if not failures:
-        log_green("  None")
-        return 0
-    error_padding = last_padding
-    error_codes = [f.error_code for f in failures if f.error_code is not None]
-    if error_codes:
-        error_padding = max(len(str(max(error_codes))), error_padding)
-    for f in failures:
-        error = f.error_code if f.error_code is not None else ""
-        log_red(f"  {error:>{error_padding}}{' ' if error_padding else ''}{f.msg}: {f.total:,}")
-    return error_padding
+def _log_errors(scrape_errors: Sequence[UiFailureTotal], download_errors: Sequence[UiFailureTotal]) -> None:
+    error_codes = (error.code for error in (*scrape_errors, *download_errors) if error.code is not None)
+
+    try:
+        padding = len(str(max(error_codes)))
+    except ValueError:
+        padding = 0
+
+    for title, errors in (
+        ("Scrape Failures:", scrape_errors),
+        ("Download Failures:", download_errors),
+    ):
+        logger.info(title, extra={"color": "red"})
+        if not errors:
+            logger.info(f"  {'None':>{padding}}")
+            return
+
+        for error in scrape_errors:
+            error_code = error.code if error.code is not None else ""
+            logger.info(f"  {error_code:>{padding}}{' ' if padding else ''}{error.msg}: {error.count:,}")
 
 
 def get_input(manager: Manager) -> Text | str:
@@ -206,22 +206,3 @@ def get_console_hyperlink(file_path: Path, text: str = "") -> Text:
     show_text = text or full_path
     file_url = URL(full_path.as_posix()).with_scheme("file")
     return Text(str(show_text), style=f"link {file_url}")
-
-
-def concat_as_text(*text_or_str, style: str = "") -> Text:
-    result = Text()
-    for elem in text_or_str:
-        if isinstance(elem, Text):
-            text = elem
-            if style and text.style != style:
-                text.stylize(f"{style} {text.style}")
-        else:
-            text = Text(elem, style=style)
-
-        result.append(text)
-    return result
-
-
-def log_concat(*text_or_str, style: str = "", **kwargs) -> None:
-    text = concat_as_text(*text_or_str, style=style)
-    log_with_color(text, style, **kwargs)

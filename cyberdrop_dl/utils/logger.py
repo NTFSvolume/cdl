@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import logging
 import queue
-import sys
 from logging.handlers import QueueHandler, QueueListener
 from pathlib import Path
 from typing import IO, TYPE_CHECKING, ParamSpec
@@ -19,8 +18,6 @@ from rich.text import Text, TextType
 from cyberdrop_dl import constants
 
 logger = logging.getLogger("cyberdrop_dl")
-logger_debug = logging.getLogger("cyberdrop_dl_debug")
-startup_logger = logging.getLogger("cyberdrop_dl_startup")
 _DEFAULT_CONSOLE = Console()
 
 _USER_NAME = Path.home().resolve().name
@@ -222,26 +219,6 @@ def _indent_text(text: Text, console: Console, indent: int = 30) -> Text:
         new_text.append(indent_str + line)
     first_line.rstrip()
     return first_line.append(new_text)
-
-
-def log(message: object, level: int = 10, bug: bool = False, **kwargs) -> None:
-    if bug:
-        args = message, f"Please open a bug report at {_NEW_ISSUE_URL}"
-        message = "{}. {}"
-        level = 30
-    else:
-        args = ()
-    logger.log(level, message, *args, **kwargs)
-
-
-def log_with_color(message: Text | str, style: str, level: int = 20, show_in_stats: bool = True, **kwargs) -> None:
-    """Simple logging function with color."""
-    text = message if isinstance(message, Text) else Text(message, style=style)
-    log(text.plain, level, **kwargs)
-    if constants.CONSOLE_LEVEL >= 50 and "pytest" not in sys.modules:
-        _DEFAULT_CONSOLE.print(text)
-    if show_in_stats:
-        constants.LOG_OUTPUT_TEXT.append_text(text.append("\n"))
 
 
 def log_spacer(char: str = "-") -> None:

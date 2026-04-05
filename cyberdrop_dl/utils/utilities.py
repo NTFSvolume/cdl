@@ -11,7 +11,7 @@ import platform
 import re
 import sys
 from collections.abc import Generator
-from functools import partial, wraps
+from functools import wraps
 from http import HTTPStatus
 from pathlib import Path
 from stat import S_ISREG
@@ -45,7 +45,6 @@ from cyberdrop_dl.exceptions import (
     get_origin,
 )
 from cyberdrop_dl.utils import json
-from cyberdrop_dl.utils.logger import log_with_color
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Generator, Iterable
@@ -282,22 +281,22 @@ def _partial_files(dir: Path | str) -> Generator[Path]:
 
 def delete_partial_files(manager: Manager) -> None:
     """Deletes partial download files recursively."""
-    log_red("Deleting partial downloads...")
+    logger.info("Deleting partial downloads...")
     for file in _partial_files(manager.config.files.download_folder):
         file.unlink(missing_ok=True)
 
 
 def check_for_partial_files(manager: Manager) -> None:
     """Checks if there are partial downloads in any subdirectory and logs if found."""
-    log_yellow("Checking for partial downloads...")
+    logger.info("Checking for partial downloads...")
     has_partial_files = next(_partial_files(manager.config.files.download_folder), None)
     if has_partial_files:
-        log_yellow("There are partial downloads in the downloads folder")
+        logger.warning("There are partial downloads in the downloads folder")
 
 
 def delete_empty_folders(manager: Manager) -> None:
     """Deletes empty folders efficiently."""
-    log_yellow("Checking for empty folders...")
+    logger.info("Checking for empty folders...")
     purge_dir_tree(manager.config.files.download_folder)
 
     sorted_folder = manager.config.sorting.sort_folder
@@ -443,7 +442,3 @@ def unique(iterable: Iterable[_T], *, hashable: bool = True) -> Iterable[_T]:
 def xor_decrypt(encrypted_data: bytes, key: bytes) -> str:
     data = bytearray(b_input ^ b_key for b_input, b_key in zip(encrypted_data, itertools.cycle(key)))
     return data.decode("utf-8", errors="ignore")
-
-
-log_yellow = partial(log_with_color, style="yellow", level=20)
-log_red = partial(log_with_color, style="red", level=20)

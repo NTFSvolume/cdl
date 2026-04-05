@@ -42,7 +42,7 @@ class TaskInfo(NamedTuple):
 class UiFailureTotal(NamedTuple):
     full_msg: str
     total: int
-    error_code: int | None
+    code: int | None
     msg: str
 
     @classmethod
