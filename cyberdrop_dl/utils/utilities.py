@@ -11,16 +11,15 @@ import platform
 import re
 import sys
 from collections.abc import Generator
-from functools import wraps
 from http import HTTPStatus
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Concatenate, ParamSpec, Protocol, Self, TypeVar, cast, overload
 
+import yarl
 from aiohttp import ClientConnectorError, TooManyRedirects
 from mega.errors import MegaNzError
 from pydantic import ValidationError
 from typing_extensions import TypeIs
-from yarl import URL
 
 from cyberdrop_dl import constants
 from cyberdrop_dl.data_structures import AbsoluteHttpURL
@@ -32,7 +31,6 @@ from cyberdrop_dl.exceptions import (
     create_error_msg,
     get_origin,
 )
-from cyberdrop_dl.utils import json
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Generator
@@ -45,7 +43,7 @@ if TYPE_CHECKING:
         manager: Manager
 
     _HasManagerT = TypeVar("_HasManagerT", bound=_HasManager)
-    _Origin = TypeVar("_Origin", bound=ScrapeItem | MediaItem | URL)
+    _Origin = TypeVar("_Origin", bound=ScrapeItem | MediaItem | yarl.URL)
 
 _P = ParamSpec("_P")
 _T = TypeVar("_T")
@@ -85,10 +83,10 @@ _BLOB_OR_SVG = ("data:", "blob:", "javascript:")
 
 
 @contextlib.contextmanager
-def error_handling_context(self: _HasManager, item: ScrapeItem | MediaItem | URL) -> Generator[None]:
-    link: URL = item if isinstance(item, URL) else item.url
+def error_handling_context(self: _HasManager, item: ScrapeItem | MediaItem | yarl.URL) -> Generator[None]:
+    link: yarl.URL = item if isinstance(item, yarl.URL) else item.url
     error_log_msg = origin = exc_info = None
-    link_to_show: URL | str = ""
+    link_to_show: yarl.URL | str = ""
     is_segment: bool = getattr(item, "is_segment", False)
     is_downloader: bool = bool(getattr(self, "log_prefix", False))
     try:
@@ -98,13 +96,16 @@ def error_handling_context(self: _HasManager, item: ScrapeItem | MediaItem | URL
     except CDLBaseError as e:
         error_log_msg = ErrorLogMessage(e.ui_failure, str(e))
         origin = e.origin
-        link_to_show: URL | str = getattr(e, "url", None) or link_to_show
+        link_to_show = getattr(e, "url", None) or link_to_show
     except NotImplementedError as e:
         error_log_msg = ErrorLogMessage("NotImplemented")
         exc_info = e
     except TooManyRedirects as e:
         ui_failure = "Too Many Redirects"
-        info = json.dumps({"url": e.request_info.real_url, "history": [r.real_url for r in e.history]}, indent=4)
+        info = {
+            "url": str(e.request_info.real_url),
+            "history": tuple(str(r.real_url) for r in e.history),
+        }
         error_log_msg = ErrorLogMessage(ui_failure, f"{ui_failure}\n{info}")
     except MegaNzError as e:
         if code := getattr(e, "code", None):
@@ -172,14 +173,14 @@ def error_handling_wrapper(
 
     if inspect.iscoroutinefunction(func):
 
-        @wraps(func)
+        @functools.wraps(func)
         async def async_wrapper(self: _HasManagerT, item: _Origin, *args: _P.args, **kwargs: _P.kwargs) -> _R:
             with error_handling_context(self, item):
                 return await func(self, item, *args, **kwargs)
 
         return async_wrapper
 
-    @wraps(func)
+    @functools.wraps(func)
     def wrapper(self: _HasManagerT, item: _Origin, *args: _P.args, **kwargs: _P.kwargs) -> _R:
         with error_handling_context(self, item):
             result = func(self, item, *args, **kwargs)
@@ -289,7 +290,10 @@ def get_text_between(original_text: str, start: str, end: str) -> str:
     return original_text[start_index:end_index].strip()
 
 
-def _str_to_url(link_str: str) -> URL:
+def _str_to_url(link_str: str) -> yarl.URL:
+    if not link_str:
+        raise InvalidURLError("link_str is empty", url=link_str)
+
     def fix_query_params_encoding(link: str) -> str:
         if "?" not in link:
             return link
@@ -300,19 +304,16 @@ def _str_to_url(link_str: str) -> URL:
     def fix_multiple_slashes(link_str: str) -> str:
         return re.sub(r"(?:https?)?:?(\/{3,})", "//", link_str)
 
-    if not link_str:
-        raise InvalidURLError("link_str is empty", url=link_str)
-
     try:
         clean_link_str = fix_multiple_slashes(fix_query_params_encoding(link_str))
-        return URL(clean_link_str, encoded="%" in clean_link_str)
+        return yarl.URL(clean_link_str, encoded="%" in clean_link_str)
 
     except (AttributeError, ValueError, TypeError) as e:
         raise InvalidURLError(str(e), url=link_str) from e
 
 
 def parse_url(
-    link_str: AbsoluteHttpURL | URL | str, relative_to: AbsoluteHttpURL | None = None, *, trim: bool = True
+    link_str: AbsoluteHttpURL | yarl.URL | str, relative_to: AbsoluteHttpURL | None = None, *, trim: bool = True
 ) -> AbsoluteHttpURL:
     """Parse a string into an absolute URL, handling relative URLs, encoding and optionally removes trailing slash (trimming).
     Raises:
@@ -333,7 +334,7 @@ def parse_url(
     return remove_trailing_slash(url)
 
 
-def is_absolute_http_url(url: URL) -> TypeIs[AbsoluteHttpURL]:
+def is_absolute_http_url(url: yarl.URL) -> TypeIs[AbsoluteHttpURL]:
     return url.absolute and url.scheme.startswith("http")
 
 
