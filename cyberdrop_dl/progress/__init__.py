@@ -94,8 +94,8 @@ class ProgressHook:
 
 
 class ProgressProxy(ABC):
-    def __init__(self, *columns: ProgressColumn | str, expand: bool = False) -> None:
-        self._progress: Progress = Progress(*columns, expand=expand)
+    def __init__(self, *columns: ProgressColumn | str, disable: bool = False, expand: bool = False) -> None:
+        self._progress: Progress = Progress(*columns, disable=disable, expand=expand)
         self._progress.live._get_renderable = self.__rich__
 
     def __enter__(self) -> Self:
