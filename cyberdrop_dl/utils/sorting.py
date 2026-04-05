@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Self
 
 import imagesize
 
-from cyberdrop_dl import ffmpeg
+from cyberdrop_dl import aio, ffmpeg
 from cyberdrop_dl.constants import FileExt, TempExt
 from cyberdrop_dl.progress.sorting import SortingUI
 from cyberdrop_dl.utils import strings
@@ -55,12 +55,12 @@ class Sorter:
         )
 
     async def run(self, *, disable_tui: bool = False) -> None:
-        if not await asyncio.to_thread(self.input_dir.is_dir):
+        if not await aio.is_dir(self.input_dir):
             logger.error(f"Sort directory '{self.input_dir}' does not exist", extra={"color": "red"})
             return
 
         logger.info("Sorting downloads...", extra={"color": "cyan"})
-        await asyncio.to_thread(self.output_dir.mkdir, parents=True, exist_ok=True)
+        await aio.mkdir(self.output_dir, parents=True, exist_ok=True)
 
         self.tui.disabled = disable_tui
         with self.tui():
@@ -69,14 +69,16 @@ class Sorter:
     async def _run(self) -> None:
         async with asyncio.TaskGroup() as tg:
 
-            async def _sort_folder(folder: Path) -> None:
-                for path in await asyncio.to_thread(lambda: folder.glob("*")):
-                    if await asyncio.to_thread(path.is_file):
+            async def sort_subfolder(folder: Path) -> None:
+                async for path in aio.rglob(folder, "*"):
+                    if await aio.is_file(path):
                         _ = tg.create_task(self._sort_file(folder.name, path))
-                    else:
-                        _ = tg.create_task(_sort_folder(path))
 
-            await _sort_folder(self.input_dir)
+            async for path in aio.glob(self.input_dir, "*"):
+                if await aio.is_file(path):
+                    _ = tg.create_task(self._sort_file(self.input_dir.name, path))
+                else:
+                    _ = tg.create_task(sort_subfolder(path))
 
         logger.info("DONE!", extra={"color": "green"})
         _ = delete_empty_files_and_folders(self.input_dir)
@@ -192,7 +194,7 @@ class Sorter:
             file,
             base_name,
             format_str,
-            mtime=(await asyncio.to_thread(file.stat)).st_mtime,
+            mtime=(await aio.stat(file)).st_mtime,
             sort_dir=self.output_dir,
             **kwargs,
         )
