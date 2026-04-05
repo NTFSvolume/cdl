@@ -1,19 +1,24 @@
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 from abc import ABC, abstractmethod
+from contextvars import ContextVar
 from typing import TYPE_CHECKING, Self
 
 from rich.live import Live
 from rich.markup import escape
-from rich.progress import Progress, ProgressColumn, Task, TaskID
+from rich.progress import Progress, Task, TaskID
 from rich.text import Text
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
+    from collections.abc import Callable, Generator, Iterable
     from pathlib import Path
 
     from rich.console import RenderableType
+
+REFRESH_RATE = ContextVar("REFRESH_RATE", default=10)
+DISABLE_TUI = ContextVar("DISABLE_TUI", default=False)
 
 
 def create_live(renderable: RenderableType, transient: bool = False) -> Live:
@@ -72,25 +77,38 @@ class ProgressHook:
         self._done = True
 
 
-class ProgressProxy(ABC):
-    def __init__(self, *columns: ProgressColumn | str, disable: bool = False, expand: bool = False) -> None:
-        self._progress: Progress = Progress(*columns, disable=disable, expand=expand)
-        self._progress.live._get_renderable = self.__rich__
+@dataclasses.dataclass(slots=True, kw_only=True)
+class UI(ABC):
+    transient: bool = True
+    disable: bool = False
+    _live: Live = dataclasses.field(init=False)
 
-    def __enter__(self) -> Self:
-        self._progress.start()
-        return self
+    def __post_init__(self) -> None:
+        self.disable = self.disable or DISABLE_TUI.get()
+        self._live = Live(
+            refresh_per_second=REFRESH_RATE.get(),
+            auto_refresh=True,
+            transient=self.transient,
+            get_renderable=self.__rich__,
+        )
+
+    @contextlib.contextmanager
+    def __call__(self, disable: bool = False) -> Generator[None]:
+        og_disable = self.disable
+        self.disable = disable
+        try:
+            with self:
+                yield
+        finally:
+            self.disable = og_disable
+
+    def __enter__(self) -> None:
+        if not self.disable:
+            self._live.start()
 
     def __exit__(self, *_) -> None:
-        self._progress.stop()
-
-    @property
-    def disable(self) -> bool:
-        return self._progress.disable
-
-    @disable.setter
-    def disable(self, value: bool) -> None:
-        self._progress.disable = value
+        if not self.disable:
+            self._live.stop()
 
     @abstractmethod
     def __rich__(self) -> RenderableType: ...

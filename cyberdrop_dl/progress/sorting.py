@@ -7,11 +7,11 @@ from typing import TYPE_CHECKING, final
 
 from rich.console import Group
 from rich.panel import Panel
-from rich.progress import BarColumn, TaskID
+from rich.progress import BarColumn, Progress, TaskID
 from rich.spinner import Spinner
 from rich.text import Text
 
-from cyberdrop_dl.progress import ProgressProxy, hyperlink
+from cyberdrop_dl.progress import UI, hyperlink
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -31,16 +31,27 @@ class SortStats:
 
 
 @final
-class SortingUI(ProgressProxy):
+class SortingUI(UI):
     """Class that keeps track of sorted files."""
 
-    def __init__(self, source: Path, dest: Path) -> None:
-        super().__init__(
+    def __init__(
+        self,
+        source: Path,
+        dest: Path,
+        *,
+        transient: bool = True,
+        disable: bool = False,
+        expand: bool = False,
+    ) -> None:
+        super().__init__(transient=True, disable=False)
+
+        self._progress = Progress(
             "[progress.description]{task.description}",
             BarColumn(bar_width=None),
             "[progress.percentage]{task.percentage:>6.1f}%",
             "━",
             "{task.completed:,}",
+            expand=expand,
         )
         self._stats: SortStats = SortStats()
         self._total: int = 0
