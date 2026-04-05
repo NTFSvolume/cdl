@@ -5,8 +5,7 @@ import contextlib
 import logging
 import os
 from dataclasses import field
-from functools import wraps
-from typing import TYPE_CHECKING, NamedTuple, ParamSpec, TypeVar
+from typing import TYPE_CHECKING, NamedTuple
 
 from aiohttp import ClientConnectorError, ClientError, ClientResponseError
 
@@ -29,15 +28,12 @@ logger = logging.getLogger(__name__)
 
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Coroutine, Generator
+    from collections.abc import Generator
     from pathlib import Path
 
     from cyberdrop_dl.clients.download_client import DownloadClient
     from cyberdrop_dl.managers.manager import Manager
     from cyberdrop_dl.utils.m3u8 import M3U8, Rendition
-
-P = ParamSpec("P")
-R = TypeVar("R")
 
 
 class SegmentDownloadResult(NamedTuple):
@@ -53,35 +49,6 @@ KNOWN_BAD_URLS = {
     "https://c.bunkr-cache.se/maintenance-vid.mp4": 503,
     "https://c.bunkr-cache.se/maintenance.jpg": 503,
 }
-
-
-def retry(func: Callable[P, Coroutine[None, None, R]]) -> Callable[P, Coroutine[None, None, R]]:
-    """This function is a wrapper that handles retrying for failed downloads."""
-
-    @wraps(func)
-    async def wrapper(*args, **kwargs) -> R:
-        self: Downloader = args[0]
-        media_item: MediaItem = args[1]
-        while True:
-            try:
-                return await func(*args, **kwargs)
-            except DownloadError as e:
-                if not e.retry:
-                    raise
-
-                self.attempt_task_removal(media_item)
-                if e.status != 999:
-                    media_item.attempts += 1
-
-                logger.error(f"{self.log_prefix} failed: {media_item.url} with error: {e!s}")
-                if media_item.attempts >= self.max_attempts:
-                    raise
-
-                logger.info(
-                    f"Retrying {self.log_prefix.lower()}: {media_item.url} , retry attempt: {media_item.attempts + 1}"
-                )
-
-    return wrapper
 
 
 GENERIC_CRAWLERS = ".", "no_crawler"
@@ -102,6 +69,28 @@ class Downloader:
         self._file_lock_vault = manager.client_manager.file_locks
         self._ignore_history = manager.config_manager.settings_data.runtime_options.ignore_history
         self._semaphore: asyncio.Semaphore = field(init=False)
+
+    @error_handling_wrapper
+    async def download(self, media_item: MediaItem) -> bool:
+        while True:
+            try:
+                return bool(await self._download(media_item))
+
+            except DownloadError as e:
+                if not e.retry:
+                    raise
+
+                self.attempt_task_removal(media_item)
+                if e.status != 999:
+                    media_item.attempts += 1
+
+                logger.error(f"{self.log_prefix} failed: {media_item.url} with error: {e!s}")
+                if media_item.attempts >= self.max_attempts:
+                    raise
+
+                logger.info(
+                    f"Retrying {self.log_prefix.lower()}: {media_item.url} , retry attempt: {media_item.attempts + 1}"
+                )
 
     @property
     def max_attempts(self):
@@ -360,8 +349,7 @@ class Downloader:
                 logger.debug(f"Lock for '{media_item.filename}' released")
 
     @error_handling_wrapper
-    @retry
-    async def download(self, media_item: MediaItem) -> bool | None:
+    async def _download(self, media_item: MediaItem) -> bool | None:
         """Downloads the media item."""
         url_as_str = str(media_item.url)
         if url_as_str in KNOWN_BAD_URLS:
