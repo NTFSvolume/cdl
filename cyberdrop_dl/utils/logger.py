@@ -108,9 +108,16 @@ class LogHandler(RichHandler):
             locals_max_string=_DEFAULT_CONSOLE_WIDTH,
             tracebacks_extra_lines=2,
             locals_max_length=20,
+            show_path=False,
+            keywords=["Scraping"],
         )
         if self.is_file:
-            self._log_render = NoPaddingLogRender(show_level=True)
+            self._log_render = NoPaddingLogRender(
+                show_level=True,
+                show_path=False,
+                level_width=10,
+                time_format=lambda dt: Text(f"[{dt.isoformat(sep=' ', timespec='milliseconds')}]", style="log.time"),
+            )
 
     @override
     def render_message(self, record: logging.LogRecord, message: str) -> ConsoleRenderable:
@@ -316,7 +323,7 @@ def _setup_debug_logger() -> Generator[Path | None]:
         yield
         return
 
-    debug_log_file = Path(__file__).parent.parent / "cyberdrop_dl_debug.log"
+    debug_log_file = Path(__file__).parent.parent.parent / "cyberdrop_dl_debug.log"
 
     if env.DEBUG_LOG_FOLDER:
         debug_log_folder = Path(env.DEBUG_LOG_FOLDER)
