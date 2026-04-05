@@ -5,7 +5,7 @@ import dataclasses
 import functools
 import random
 from types import MappingProxyType
-from typing import TYPE_CHECKING, ClassVar, Self
+from typing import TYPE_CHECKING, ClassVar, Final, Self
 
 import rich
 from rich.console import Group
@@ -57,7 +57,7 @@ class _ErrorsPanel:
     """Base class that keeps track of errors and reasons."""
 
     title: ClassVar[str]
-    limit: ClassVar[int] = 8
+    max_rows: Final[int] = 7
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(error_count={self._total!r}, errors={tuple(self._errors_map)!r})"
@@ -99,7 +99,7 @@ class _ErrorsPanel:
         if (task_id := self._errors_map.get(name)) is not None:
             self._progress.advance(task_id)
         else:
-            self._overflow.count = len(self._errors_map) + 1 - self.limit + 1
+            self._overflow.count = len(self._errors_map) + 1 - self.max_rows
             self._errors_map[name] = self._progress.add_task(
                 name,
                 total=self._total,

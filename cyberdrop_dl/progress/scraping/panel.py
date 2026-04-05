@@ -68,7 +68,7 @@ class ScrapingPanel(OverflowPanel):
         super().__init__(
             SpinnerColumn("dots3"),
             "[progress.description]{task.description}",
-            visible_tasks_limit=3,
+            max_rows=3,
             expand=False,
         )
 

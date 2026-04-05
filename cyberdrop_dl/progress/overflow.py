@@ -38,10 +38,10 @@ class OverFlow:
 class OverflowPanel:
     unit: ClassVar[str]
 
-    def __init__(self, *columns: ProgressColumn | str, visible_tasks_limit: int, expand: bool = True) -> None:
+    def __init__(self, *columns: ProgressColumn | str, max_rows: int, expand: bool = True) -> None:
+        self.max_rows: Final[int] = max_rows
         self._progress: Final[DictProgress] = DictProgress(*columns, expand=expand)
         self._overflow: Final[OverFlow] = OverFlow(self.unit)
-        self._limit: Final[int] = visible_tasks_limit
         self._invisible_queue: Final[deque[TaskID]] = deque()
         self._visible_tasks: int = 0
         self._panel: Final[Panel] = Panel(
@@ -57,7 +57,7 @@ class OverflowPanel:
 
     @final
     def _add_task(self, description: object, total: float | None = None, /, *, completed: int = 0) -> Task:
-        visible = self._visible_tasks < self._limit
+        visible = self._visible_tasks < self.max_rows
         task_id = self._progress.add_task(
             f"[{_COLOR}]{escape(str(description))}",
             total=total,

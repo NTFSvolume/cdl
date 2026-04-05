@@ -49,21 +49,21 @@ class ScrapingUI:
         return self._screen
 
     def _create_screen(self) -> Screen:
-        horizontal = Layout()
-        vertical = Layout()
+        horizontal, vertical = Layout(), Layout()
+        panel_padding = 5
         top = (
-            Layout(self.files, name="files", ratio=1),
-            Layout(self.scrape_errors, name="scrape_errors", ratio=1),
-            Layout(self.download_errors, name="download_errors", ratio=1),
+            Layout(self.files, name="files"),
+            Layout(self.scrape_errors, name="scrape_errors"),
+            Layout(self.download_errors, name="download_errors"),
         )
 
         bottom = (
-            Layout(self.scrape, name="scrape", size=8),
+            Layout(self.scrape, name="scrape", size=self.scrape.max_rows + panel_padding),
             Layout(self.downloads, name="downloads"),
             Layout(self.status, name="status", size=2),
         )
 
-        horizontal.split_column(Layout(name="top", size=self.scrape_errors.limit + 4), *bottom)
+        horizontal.split_column(Layout(name="top", size=self.scrape_errors.max_rows + panel_padding), *bottom)
         vertical.split_column(Layout(name="top", ratio=60), *bottom)
 
         horizontal["top"].split_row(*top)

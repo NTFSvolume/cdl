@@ -116,7 +116,7 @@ class DownloadsPanel(OverflowPanel):
     def total_data_written(self) -> int:
         return self._total_amount
 
-    def __init__(self) -> None:
+    def __init__(self, max_rows: int = 6) -> None:
         super().__init__(
             SpinnerColumn("dots3"),
             AutoWidthTextColumn(
@@ -131,7 +131,7 @@ class DownloadsPanel(OverflowPanel):
             AutoTransferSpeedColumn(table_column=Column(justify="right", no_wrap=True)),
             "━",
             TimeRemainingColumn(compact=True, elapsed_when_finished=True),
-            visible_tasks_limit=4,
+            max_rows=max_rows,
         )
         self._hls_progress: Final[DictProgress] = DictProgress("")
         self._total_amount = 0
