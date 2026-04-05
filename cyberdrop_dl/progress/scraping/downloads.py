@@ -157,7 +157,6 @@ class DownloadsPanel(OverflowPanel):
             self._hls_progress.remove_task(task_id)
             _current_hls_task.reset(token)
 
-    @final
     def download_file(self, description: object, /, total: float | None = None) -> ProgressHook:
         filename = str(description).rsplit("/", 1)[-1]
         task = self._add_task(filename, total)

@@ -51,6 +51,7 @@ class OverflowPanel:
             padding=(1, 1),
         )
 
+    @final
     def __rich__(self) -> Panel:
         self._overflow.count = len(self._progress) - self._visible_tasks
         return self._panel
@@ -83,6 +84,7 @@ class OverflowPanel:
             except IndexError:
                 pass
 
+    @final
     def _push_one_invisible(self) -> None:
         while True:
             invisible_task_id = self._invisible_queue.popleft()
