@@ -348,7 +348,6 @@ class Downloader:
             finally:
                 logger.debug(f"Lock for '{media_item.filename}' released")
 
-    @error_handling_wrapper
     async def _download(self, media_item: MediaItem) -> bool | None:
         """Downloads the media item."""
         url_as_str = str(media_item.url)
