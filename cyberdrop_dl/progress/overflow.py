@@ -39,7 +39,7 @@ class OverflowPanel:
     unit: ClassVar[str]
 
     def __init__(self, *columns: ProgressColumn | str, max_rows: int, expand: bool = True) -> None:
-        self.max_rows: Final[int] = max_rows
+        self.max_rows: int = max_rows
         self._progress: Final[DictProgress] = DictProgress(*columns, expand=expand)
         self._overflow: Final[OverFlow] = OverFlow(self.unit)
         self._invisible_queue: Final[deque[TaskID]] = deque()
@@ -75,17 +75,21 @@ class OverflowPanel:
     def _remove_task(self, task: Task) -> None:
         was_visible = task.visible
         self._progress.remove_task(task.id)
-        if was_visible:
-            while True:
-                try:
-                    invisible_task_id = self._invisible_queue.popleft()
-                except IndexError:
-                    self._visible_tasks -= 1
-                    break
 
-                try:
-                    self._progress.update(invisible_task_id, visible=True)
-                except KeyError:
-                    continue
-                else:
-                    break
+        if was_visible:
+            self._visible_tasks -= 1
+            try:
+                self._push_one_invisible()
+            except IndexError:
+                pass
+
+    def _push_one_invisible(self) -> None:
+        while True:
+            invisible_task_id = self._invisible_queue.popleft()
+            try:
+                self._progress.update(invisible_task_id, visible=True)
+            except KeyError:
+                continue
+            else:
+                self._visible_tasks += 1
+                break

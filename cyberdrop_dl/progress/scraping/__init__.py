@@ -18,6 +18,8 @@ from cyberdrop_dl.progress.scraping.panel import ScrapingPanel, StatusMessage
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
+_PANEL_PADDING = 5
+
 
 @dataclasses.dataclass(slots=True, frozen=True)
 class Screen:
@@ -50,7 +52,7 @@ class ScrapingUI(LiveUI):
 
     def _create_screen(self) -> Screen:
         horizontal, vertical = Layout(), Layout()
-        panel_padding = 5
+
         top = (
             Layout(self.files, name="files"),
             Layout(self.scrape_errors, name="scrape_errors"),
@@ -58,12 +60,12 @@ class ScrapingUI(LiveUI):
         )
 
         bottom = (
-            Layout(self.scrape, name="scrape", size=self.scrape.max_rows + panel_padding),
+            Layout(self.scrape, name="scrape", size=self.scrape.max_rows + _PANEL_PADDING),
             Layout(self.downloads, name="downloads"),
             Layout(self.status, name="status", size=2),
         )
 
-        horizontal.split_column(Layout(name="top", size=self.scrape_errors.max_rows + panel_padding), *bottom)
+        horizontal.split_column(Layout(name="top", size=self.scrape_errors.max_rows + _PANEL_PADDING), *bottom)
         vertical.split_column(Layout(name="top", ratio=60), *bottom)
 
         horizontal["top"].split_row(*top)
@@ -74,6 +76,15 @@ class ScrapingUI(LiveUI):
         for layout in self._screen:
             layout["scrape"].visible = False
             layout["downloads"].ratio = 2
+
+        free_rows = self.scrape.max_rows + _PANEL_PADDING
+
+        self.downloads.max_rows += free_rows
+        for _ in range(free_rows):
+            try:
+                self.downloads._push_one_invisible()
+            except IndexError:
+                break
 
     async def simulate(self) -> None:
 
