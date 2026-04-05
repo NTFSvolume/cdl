@@ -9,7 +9,7 @@ import rich
 from rich.layout import Layout
 
 from cyberdrop_dl import env
-from cyberdrop_dl.progress import create_live
+from cyberdrop_dl.progress import LiveUI
 from cyberdrop_dl.progress.scraping.downloads import DownloadsPanel
 from cyberdrop_dl.progress.scraping.errors import DownloadErrorsPanel, ScrapeErrorsPanel
 from cyberdrop_dl.progress.scraping.files import FileStatsPanel
@@ -31,8 +31,8 @@ class Screen:
         return self.vertical if terminal_is_in_portrait() else self.horizontal
 
 
-@dataclasses.dataclass(slots=True, frozen=True)
-class ScrapingUI:
+@dataclasses.dataclass(slots=True)
+class ScrapingUI(LiveUI):
     files: FileStatsPanel = dataclasses.field(default_factory=FileStatsPanel)
     scrape_errors: ScrapeErrorsPanel = dataclasses.field(default_factory=ScrapeErrorsPanel)
     download_errors: DownloadErrorsPanel = dataclasses.field(default_factory=DownloadErrorsPanel)
@@ -43,7 +43,8 @@ class ScrapingUI:
     _screen: Screen = dataclasses.field(init=False)
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "_screen", self._create_screen())
+        self._screen = self._create_screen()
+        super(ScrapingUI, self).__post_init__()
 
     def __rich__(self) -> Screen:
         return self._screen
@@ -121,8 +122,9 @@ def terminal_is_in_portrait() -> bool:
 
 
 if __name__ == "__main__":
-    ui = ScrapingUI()
-    rich.print(ui._screen.horizontal.tree)
+    scrape_tui = ScrapingUI(transient=False)
+    rich.print(scrape_tui._screen.horizontal.tree)
     _ = input("press <Enter> to continue")
-    with create_live(ui):
-        asyncio.run(ui.simulate())
+
+    with scrape_tui:
+        asyncio.run(scrape_tui.simulate())

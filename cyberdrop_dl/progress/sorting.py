@@ -11,7 +11,7 @@ from rich.progress import BarColumn, Progress, TaskID
 from rich.spinner import Spinner
 from rich.text import Text
 
-from cyberdrop_dl.progress import UI, hyperlink
+from cyberdrop_dl.progress import LiveUI, hyperlink
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -31,7 +31,7 @@ class SortStats:
 
 
 @final
-class SortingUI(UI):
+class SortingUI(LiveUI):
     """Class that keeps track of sorted files."""
 
     def __init__(
@@ -43,7 +43,7 @@ class SortingUI(UI):
         disable: bool = False,
         expand: bool = False,
     ) -> None:
-        super().__init__(transient=True, disable=False)
+        super().__init__(transient=True)
 
         self._progress = Progress(
             "[progress.description]{task.description}",

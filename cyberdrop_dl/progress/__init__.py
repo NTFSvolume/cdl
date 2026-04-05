@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import contextlib
 import dataclasses
 from abc import ABC, abstractmethod
 from contextvars import ContextVar
@@ -12,7 +11,7 @@ from rich.progress import Progress, Task, TaskID
 from rich.text import Text
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Generator, Iterable
+    from collections.abc import Callable, Iterable
     from pathlib import Path
 
     from rich.console import RenderableType
@@ -78,13 +77,11 @@ class ProgressHook:
 
 
 @dataclasses.dataclass(slots=True, kw_only=True)
-class UI(ABC):
+class LiveUI(ABC):
     transient: bool = True
-    disable: bool = False
     _live: Live = dataclasses.field(init=False)
 
     def __post_init__(self) -> None:
-        self.disable = self.disable or DISABLE_TUI.get()
         self._live = Live(
             refresh_per_second=REFRESH_RATE.get(),
             auto_refresh=True,
@@ -92,23 +89,20 @@ class UI(ABC):
             get_renderable=self.__rich__,
         )
 
-    @contextlib.contextmanager
-    def __call__(self, disable: bool = False) -> Generator[None]:
-        og_disable = self.disable
-        self.disable = disable
-        try:
-            with self:
-                yield
-        finally:
-            self.disable = og_disable
+    @property
+    def disable(self) -> bool:
+        return DISABLE_TUI.get()
+
+    @disable.setter
+    def disable(self, value: bool) -> None:
+        _ = DISABLE_TUI.set(value)
 
     def __enter__(self) -> None:
         if not self.disable:
             self._live.start()
 
     def __exit__(self, *_) -> None:
-        if not self.disable:
-            self._live.stop()
+        self._live.stop()
 
     @abstractmethod
     def __rich__(self) -> RenderableType: ...
