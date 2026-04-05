@@ -1,7 +1,11 @@
+from __future__ import annotations
+
 import asyncio
 import dataclasses
 import shutil
+from typing import TYPE_CHECKING
 
+import rich
 from rich.layout import Layout
 
 from cyberdrop_dl import env
@@ -11,14 +15,20 @@ from cyberdrop_dl.progress.scraping.errors import DownloadErrorsPanel, ScrapeErr
 from cyberdrop_dl.progress.scraping.files import FileStatsPanel
 from cyberdrop_dl.progress.scraping.panel import ScrapingPanel, StatusMessage
 
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
 
 @dataclasses.dataclass(slots=True, frozen=True)
 class Screen:
     horizontal: Layout
     vertical: Layout
 
+    def __iter__(self) -> Iterator[Layout]:
+        return iter((self.horizontal, self.vertical))
+
     def __rich__(self) -> Layout:
-        return self.vertical if is_terminal_in_portrait() else self.horizontal
+        return self.vertical if terminal_is_in_portrait() else self.horizontal
 
 
 @dataclasses.dataclass(slots=True, frozen=True)
@@ -42,15 +52,15 @@ class ScrapingUI:
         horizontal = Layout()
         vertical = Layout()
         top = (
-            Layout(self.files, ratio=1),
-            Layout(self.scrape_errors, ratio=1),
-            Layout(self.download_errors, ratio=1),
+            Layout(self.files, name="files", ratio=1),
+            Layout(self.scrape_errors, name="scrape_errors", ratio=1),
+            Layout(self.download_errors, name="download_errors", ratio=1),
         )
 
         bottom = (
-            Layout(self.scrape, size=8),
-            Layout(self.downloads),
-            Layout(self.status, size=2),
+            Layout(self.scrape, name="scrape", size=8),
+            Layout(self.downloads, name="downloads"),
+            Layout(self.status, name="status", size=2),
         )
 
         horizontal.split_column(Layout(name="top", minimum_size=10), *bottom)
@@ -58,27 +68,39 @@ class ScrapingUI:
 
         horizontal["top"].split_row(*top)
         vertical["top"].split_column(*top)
-
         return Screen(horizontal, vertical)
 
+    def hide_scrape_panel(self) -> None:
+        for layout in self._screen:
+            layout["scrape"].visible = False
+            layout["downloads"].ratio = 2
+
     async def simulate(self) -> None:
+
+        await asyncio.sleep(2)
         try:
-            async with asyncio.timeout(20):
+            async with asyncio.timeout(30):
                 async with asyncio.TaskGroup() as tg:
                     for panel in (
                         self.files,
                         self.scrape_errors,
                         self.download_errors,
-                        self.scrape,
                         self.downloads,
                         self.status,
                     ):
                         _ = tg.create_task(panel.simulate())
+
+                    async def scrape() -> None:
+                        await self.scrape.simulate()
+                        self.hide_scrape_panel()
+
+                    _ = tg.create_task(scrape())
+
         except TimeoutError:
             pass
 
 
-def is_terminal_in_portrait() -> bool:
+def terminal_is_in_portrait() -> bool:
     """Check if CDL is being run in portrait mode based on a few conditions."""
 
     if env.PORTRAIT_MODE:
@@ -102,5 +124,7 @@ def is_terminal_in_portrait() -> bool:
 
 if __name__ == "__main__":
     ui = ScrapingUI()
+    rich.print(ui._screen.horizontal.tree)
+    _ = input("press <Enter> to continue")
     with create_live(ui):
         asyncio.run(ui.simulate())
