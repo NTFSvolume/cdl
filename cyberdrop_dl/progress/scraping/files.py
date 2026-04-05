@@ -72,7 +72,7 @@ class FileStatsPanel:
                     self._progress.update(task_id, total=current_total, completed=getattr(self._stats, name))
             self._total = current_total
 
-        self._panel.subtitle = f"Total Files: [white]{current_total:,}"
+        self._panel.subtitle = f"Total: [white]{current_total:,}"
         return self._panel
 
     @property
