@@ -15,47 +15,47 @@ def create_partition(path: str):
 
 
 def find_partition(path: str):
-    return storage.find_partition(Path(path))
+    return storage._find_partition(Path(path))
 
 
 async def test_unsupported_fs_should_not_return_zero() -> None:
     cwd = await aio.resolve(Path())
-    free_space = await storage.get_free_space(cwd)
+    free_space = await storage._get_free_space(cwd)
     assert free_space > 0
     with mock.patch("psutil.disk_usage", side_effect=OSError(None, "operation not supported")):
-        free_space = await storage.get_free_space(cwd)
+        free_space = await storage._get_free_space(cwd)
         assert free_space == -1
 
     with mock.patch("psutil.disk_usage", side_effect=OSError(None, "another error")):
         with pytest.raises(OSError):
-            _ = await storage.get_free_space(cwd)
+            _ = await storage._get_free_space(cwd)
 
 
 async def test_fuse_filesystem_should_not_return_zero() -> None:
     cwd = await aio.resolve(Path())
-    partition = storage.find_partition(cwd)
+    partition = storage._find_partition(cwd)
     assert partition
-    assert not storage.is_fuse_fs(cwd)
+    assert not storage._is_fuse_fs(cwd)
     storage._PARTITIONS = [dataclasses.replace(partition, fstype="fuse")]  # pyright: ignore[reportPrivateUsage]
-    assert storage.is_fuse_fs(cwd)
+    assert storage._is_fuse_fs(cwd)
 
-    free_space = await storage.get_free_space(cwd)
+    free_space = await storage._get_free_space(cwd)
     assert free_space > 0
 
     class NullUsage:
         free = 0
 
     with mock.patch("psutil.disk_usage", return_value=NullUsage()):
-        free_space = await storage.get_free_space(cwd)
+        free_space = await storage._get_free_space(cwd)
         assert free_space == -1
 
 
 def test_storage_only_work_with_abs_paths() -> None:
     cwd = Path()
     with pytest.raises(ValueError):
-        _ = storage.find_partition(cwd)
+        _ = storage._find_partition(cwd)
 
-    assert storage.find_partition(cwd.resolve())
+    assert storage._find_partition(cwd.resolve())
 
 
 @pytest.mark.skipif(os.name == "nt", reason="Test paths are only posix")
