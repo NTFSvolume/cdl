@@ -110,7 +110,7 @@ class AutoDownloadColumn(DownloadColumn):
 
 @final
 class DownloadsPanel(OverflowPanel):
-    unit: ClassVar[str] = "files"
+    unit: ClassVar[str] = "file"
 
     @property
     def total_data_written(self) -> int:

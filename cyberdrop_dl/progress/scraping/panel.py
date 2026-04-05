@@ -62,7 +62,7 @@ class StatusMessage:
 
 @final
 class ScrapingPanel(OverflowPanel):
-    unit: ClassVar[str] = "URLs"
+    unit: ClassVar[str] = "URL"
 
     def __init__(self) -> None:
         super().__init__(

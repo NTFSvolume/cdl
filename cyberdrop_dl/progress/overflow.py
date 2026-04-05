@@ -32,7 +32,7 @@ class OverFlow:
         return ""
 
     def __str__(self) -> str:
-        return f"[{_COLOR}]... and {self.count:,} other {self.unit}"
+        return f"[{_COLOR}]... and {self.count:,} other {self.unit}{'s' if self.count > 1 else ''}"
 
 
 class OverflowPanel:
@@ -45,7 +45,7 @@ class OverflowPanel:
         self._invisible_queue: Final[deque[TaskID]] = deque()
         self._visible_tasks: int = 0
         self._panel: Final[Panel] = Panel(
-            self._progress,
+            Group(self._progress, self._overflow),
             title=type(self).__name__.removesuffix("Panel"),
             border_style="green",
             padding=(1, 1),
@@ -53,7 +53,6 @@ class OverflowPanel:
 
     def __rich__(self) -> Panel:
         self._overflow.count = len(self._progress) - self._visible_tasks
-        self._panel.renderable = self._progress if not self._overflow else Group(self._progress, self._overflow)
         return self._panel
 
     @final

@@ -74,12 +74,12 @@ class _ErrorsPanel:
             "━",
             "{task.completed:,}",
         )
-        self._overflow: OverFlow = OverFlow("kind of errors")
+        self._overflow: OverFlow = OverFlow("kind of error")
         self._errors_map: dict[str, TaskID] = {}
         self._total: int = 0
         self._changed: bool = False
         self._panel: Panel = Panel(
-            self._progress,
+            Group(self._progress, self._overflow),
             title=f"{self.title} Errors",
             border_style="green",
             padding=(1, 1),
@@ -90,7 +90,6 @@ class _ErrorsPanel:
             self._sort_tasks()
             self._changed = False
 
-        self._panel.renderable = self._progress if not self._overflow else Group(self._progress, self._overflow)
         self._panel.subtitle = f"Total: [white]{self._total:,}"
         return self._panel
 
