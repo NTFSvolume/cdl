@@ -26,7 +26,7 @@ except ImportError:
     _psutil_loop = None
 
     async def has_sufficient_space(folder: Path, /, required_free_space: int) -> bool:
-        usage = shutil.disk_usage(folder)
+        usage = await asyncio.to_thread(shutil.disk_usage, folder)
         return usage.free > required_free_space
 
 
