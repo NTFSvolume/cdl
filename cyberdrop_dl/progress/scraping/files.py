@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, final
 from rich.panel import Panel
 from rich.progress import BarColumn, Progress, TaskID
 
-from cyberdrop_dl.progress import create_live
+from cyberdrop_dl.progress import create_test_live
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -96,7 +96,7 @@ class FileStatsPanel:
 
 if __name__ == "__main__":
     panel = FileStatsPanel()
-    with create_live(panel):
+    with create_test_live(panel):
         asyncio.run(panel.simulate())
 
     with panel.simple:

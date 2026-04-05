@@ -24,7 +24,7 @@ from rich.table import Column
 from rich.text import Text
 from typing_extensions import override
 
-from cyberdrop_dl.progress import DictProgress, ProgressHook, create_live
+from cyberdrop_dl.progress import DictProgress, ProgressHook, create_test_live
 from cyberdrop_dl.progress.overflow import OverflowPanel
 
 if TYPE_CHECKING:
@@ -251,5 +251,5 @@ class DownloadsPanel(OverflowPanel):
 
 if __name__ == "__main__":  # pragma: no cover
     panel = DownloadsPanel()
-    with create_live(panel):
+    with create_test_live(panel):
         asyncio.run(panel.simulate())

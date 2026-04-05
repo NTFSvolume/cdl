@@ -21,7 +21,7 @@ REFRESH_RATE = ContextVar("REFRESH_RATE", default=10)
 TUI_DISABLED = ContextVar("DISABLE_TUI", default=False)
 
 
-def create_live(renderable: RenderableType, transient: bool = False) -> Live:
+def create_test_live(renderable: RenderableType, transient: bool = False) -> Live:
     return Live(
         auto_refresh=True,
         refresh_per_second=20,

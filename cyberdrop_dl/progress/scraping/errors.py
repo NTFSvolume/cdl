@@ -12,7 +12,7 @@ from rich.console import Group
 from rich.panel import Panel
 from rich.progress import BarColumn, TaskID
 
-from cyberdrop_dl.progress import DictProgress, create_live
+from cyberdrop_dl.progress import DictProgress, create_test_live
 from cyberdrop_dl.progress.overflow import OverFlow
 
 if TYPE_CHECKING:
@@ -177,6 +177,6 @@ _ERROR_OVERRIDES = MappingProxyType(
 
 if __name__ == "__main__":
     panel = DownloadErrorsPanel()
-    with create_live(panel, transient=True):
+    with create_test_live(panel, transient=True):
         asyncio.run(panel.simulate())
         rich.print(sorted(panel))

@@ -14,7 +14,7 @@ from rich.spinner import Spinner
 from rich.text import Text
 
 from cyberdrop_dl import __version__
-from cyberdrop_dl.progress import create_live
+from cyberdrop_dl.progress import create_test_live
 from cyberdrop_dl.progress.overflow import OverflowPanel
 
 if TYPE_CHECKING:
@@ -104,8 +104,8 @@ class ScrapingPanel(OverflowPanel):
 if __name__ == "__main__":
     panel = ScrapingPanel()
     status = StatusMessage()
-    with create_live(status):
+    with create_test_live(status):
         asyncio.run(status.simulate())
 
-    with create_live(panel):
+    with create_test_live(panel):
         asyncio.run(panel.simulate())
