@@ -4,11 +4,7 @@ import asyncio
 import contextlib
 import logging
 import os
-import shutil
-import subprocess
-import sys
 from dataclasses import field
-from datetime import datetime
 from functools import wraps
 from typing import TYPE_CHECKING, NamedTuple, ParamSpec, TypeVar
 
@@ -26,36 +22,10 @@ from cyberdrop_dl.exceptions import (
     SkipDownloadError,
     TooManyCrawlerErrors,
 )
+from cyberdrop_dl.utils import dates
 from cyberdrop_dl.utils.utilities import error_handling_wrapper, parse_url
 
 logger = logging.getLogger(__name__)
-
-# Windows epoch is January 1, 1601. Unix epoch is January 1, 1970
-WIN_EPOCH_OFFSET = 116444736e9
-MAC_OS_SET_FILE = None
-
-
-# Try to import win32con for Windows constants, fallback to hardcoded values if unavailable
-try:
-    import win32con  # type: ignore[reportMissingModuleSource]
-
-    FILE_WRITE_ATTRIBUTES = 256
-    OPEN_EXISTING = win32con.OPEN_EXISTING
-    FILE_ATTRIBUTE_NORMAL = win32con.FILE_ATTRIBUTE_NORMAL
-    FILE_FLAG_BACKUP_SEMANTICS = win32con.FILE_FLAG_BACKUP_SEMANTICS
-except ImportError:
-    FILE_WRITE_ATTRIBUTES = 256
-    OPEN_EXISTING = 3
-    FILE_ATTRIBUTE_NORMAL = 128
-    FILE_FLAG_BACKUP_SEMANTICS = 33554432
-
-if sys.platform == "win32":
-    from ctypes import byref, windll, wintypes
-
-
-elif sys.platform == "darwin":
-    # SetFile is non standard in macOS. Only users that have xcode installed will have SetFile
-    MAC_OS_SET_FILE = shutil.which("SetFile")
 
 
 if TYPE_CHECKING:
@@ -350,58 +320,8 @@ class Downloader:
             logger.warning(f"Unable to parse upload date for {media_item.url}, using current datetime as file datetime")
             return
 
-        # TODO: Make this entire method async (run in another thread)
-
         # 1. try setting creation date
-        try:
-            if sys.platform == "win32":
-
-                def set_win_time():
-                    nano_ts: float = media_item.uploaded_at * 1e7  # Windows uses nano seconds for dates
-                    timestamp = int(nano_ts + WIN_EPOCH_OFFSET)
-
-                    # Windows dates are 64bits, split into 2 32bits unsigned ints (dwHighDateTime , dwLowDateTime)
-                    # XOR to get the date as bytes, then shift to get the first 32 bits (dwHighDateTime)
-                    ctime = wintypes.FILETIME(timestamp & 0xFFFFFFFF, timestamp >> 32)
-                    access_mode = FILE_WRITE_ATTRIBUTES
-                    sharing_mode = 0  # Exclusive access
-                    security_mode = None  # Use default security attributes
-                    creation_disposition = OPEN_EXISTING
-
-                    # FILE_FLAG_BACKUP_SEMANTICS allows access to directories
-                    flags = FILE_ATTRIBUTE_NORMAL | FILE_FLAG_BACKUP_SEMANTICS
-                    template_file = None
-
-                    params = (
-                        access_mode,
-                        sharing_mode,
-                        security_mode,
-                        creation_disposition,
-                        flags,
-                        template_file,
-                    )
-
-                    handle = windll.kernel32.CreateFileW(str(complete_file), *params)
-                    windll.kernel32.SetFileTime(
-                        handle,
-                        byref(ctime),  # Creation time
-                        None,  # Access time
-                        None,  # Modification time
-                    )
-                    windll.kernel32.CloseHandle(handle)
-
-                await asyncio.to_thread(set_win_time)
-
-            elif sys.platform == "darwin" and MAC_OS_SET_FILE:
-                date_string = datetime.fromtimestamp(media_item.uploaded_at).strftime("%m/%d/%Y %H:%M:%S")
-                cmd = ["-d", date_string, complete_file]
-                process = await asyncio.subprocess.create_subprocess_exec(
-                    MAC_OS_SET_FILE, *cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-                )
-                _ = await process.wait()
-
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError, ValueError):
-            pass
+        await dates.set_creation_time(complete_file, media_item.uploaded_at)
 
         # 2. try setting modification and access date
         try:
