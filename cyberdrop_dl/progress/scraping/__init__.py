@@ -77,7 +77,6 @@ class ScrapingUI:
 
     async def simulate(self) -> None:
 
-        await asyncio.sleep(2)
         try:
             async with asyncio.timeout(30):
                 async with asyncio.TaskGroup() as tg:
@@ -101,7 +100,6 @@ class ScrapingUI:
 
 
 def terminal_is_in_portrait() -> bool:
-    """Check if CDL is being run in portrait mode based on a few conditions."""
 
     if env.PORTRAIT_MODE:
         return True

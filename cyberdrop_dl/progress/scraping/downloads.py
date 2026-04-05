@@ -113,7 +113,7 @@ class DownloadsPanel(OverflowPanel):
     unit: ClassVar[str] = "file"
 
     @property
-    def total_data_written(self) -> int:
+    def bytes_downloaded(self) -> int:
         return self._total_amount
 
     def __init__(self, max_rows: int = 6) -> None:
@@ -206,7 +206,6 @@ class DownloadsPanel(OverflowPanel):
 
         async def download_hls(filename: str) -> None:
             n_segments = Random.int(1, 1_200)
-
             segments_sem = asyncio.BoundedSemaphore(20)
 
             async def download_segment() -> None:
