@@ -17,7 +17,6 @@ from cyberdrop_dl.constants import FileExt
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, InvalidContentTypeError, SlowDownloadError
 from cyberdrop_dl.utils import dates
-from cyberdrop_dl.utils.utilities import get_size_or_none
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Callable, Coroutine, Generator, Mapping
@@ -104,11 +103,7 @@ class DownloadClient:
             media_item.partial_file = download_dir / f"{downloaded_filename}{constants.TempExt.PART}"
 
         resume_point = 0
-        if (
-            self._supports_ranges
-            and media_item.partial_file
-            and (size := await asyncio.to_thread(get_size_or_none, media_item.partial_file))
-        ):
+        if self._supports_ranges and media_item.partial_file and (size := await aio.get_size(media_item.partial_file)):
             resume_point = size
             download_headers["Range"] = f"bytes={size}-"
 

@@ -14,24 +14,12 @@ from collections.abc import Generator
 from functools import wraps
 from http import HTTPStatus
 from pathlib import Path
-from stat import S_ISREG
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    ClassVar,
-    Concatenate,
-    ParamSpec,
-    Protocol,
-    Self,
-    TypeGuard,
-    TypeVar,
-    cast,
-    overload,
-)
+from typing import TYPE_CHECKING, Any, ClassVar, Concatenate, ParamSpec, Protocol, Self, TypeVar, cast, overload
 
 from aiohttp import ClientConnectorError, TooManyRedirects
 from mega.errors import MegaNzError
 from pydantic import ValidationError
+from typing_extensions import TypeIs
 from yarl import URL
 
 from cyberdrop_dl import constants
@@ -345,7 +333,7 @@ def parse_url(
     return remove_trailing_slash(url)
 
 
-def is_absolute_http_url(url: URL) -> TypeGuard[AbsoluteHttpURL]:
+def is_absolute_http_url(url: URL) -> TypeIs[AbsoluteHttpURL]:
     return url.absolute and url.scheme.startswith("http")
 
 
@@ -362,19 +350,6 @@ def remove_parts(
         return url
     new_parts = [p for p in url.parts[1:] if p not in parts_to_remove]
     return url.with_path("/".join(new_parts), keep_fragment=keep_fragment, keep_query=keep_query)
-
-
-def get_size_or_none(path: Path) -> int | None:
-    """Checks if this is a file and returns its size with a single system call.
-
-    Returns `None` otherwise"""
-
-    try:
-        stat = path.stat()
-        if S_ISREG(stat.st_mode):
-            return stat.st_size
-    except (OSError, ValueError):
-        return None
 
 
 @functools.cache

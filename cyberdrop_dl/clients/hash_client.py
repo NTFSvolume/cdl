@@ -8,9 +8,8 @@ from typing import TYPE_CHECKING, Literal
 
 from send2trash import send2trash
 
-from cyberdrop_dl import constants
+from cyberdrop_dl import aio, constants
 from cyberdrop_dl.constants import Hashing
-from cyberdrop_dl.utils.utilities import get_size_or_none
 
 if TYPE_CHECKING:
     from yarl import URL
@@ -94,7 +93,7 @@ class HashClient:
         if file.suffix in constants.TempExt:
             return
 
-        if not await asyncio.to_thread(get_size_or_none, file):
+        if not await aio.get_size(file):
             return
 
         hash = await self._update_db_and_retrive_hash_helper(file, original_filename, referer, hash_type=self.xxhash)
@@ -143,7 +142,7 @@ class HashClient:
         if not hash:
             return
         absolute_path = await asyncio.to_thread(media_item.path.resolve)
-        size = await asyncio.to_thread(get_size_or_none, media_item.path)
+        size = await aio.get_size(media_item.path)
         assert size
         self.hashed_media_items.append(media_item)
         if hash:
