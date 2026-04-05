@@ -2,20 +2,18 @@ from __future__ import annotations
 
 import contextlib
 import logging
-from datetime import datetime
 from enum import IntEnum
-from pathlib import Path
 from typing import TYPE_CHECKING, ParamSpec, TypeVar
 
 from rich.traceback import install as install_rich_tracebacks
 
-from cyberdrop_dl import aio, constants, env, storage
+from cyberdrop_dl import aio, storage
 from cyberdrop_dl.managers.manager import Manager
 from cyberdrop_dl.scraper.scrape_mapper import ScrapeMapper
 from cyberdrop_dl.ui import program_ui
 from cyberdrop_dl.updates import check_latest_pypi
 from cyberdrop_dl.utils.apprise import send_apprise_notifications
-from cyberdrop_dl.utils.logger import LogHandler, QueuedLogger, log_spacer
+from cyberdrop_dl.utils.logger import log_spacer, setup_logging
 from cyberdrop_dl.utils.sorting import Sorter
 from cyberdrop_dl.utils.utilities import check_partials_and_empty_folders
 from cyberdrop_dl.utils.webhook import send_webhook_message
@@ -42,34 +40,29 @@ async def _run_manager(manager: Manager) -> None:
     """Runs the program and handles the UI."""
     manager.config.resolve_paths()
     manager.logs.delete_old_logs()
-    debug_log_file_path = _setup_debug_logger(manager)
     start_time = manager.start_time
-    _setup_main_logger(manager)
-    logger.info(f"Using Debug Log: {debug_log_file_path}")
-    logger.info("Starting Async Processes...")
-    await manager.async_startup()
 
-    log_spacer()
-    async with manager.database:
-        logger.info("Starting CDL...\n")
-
-        await _scheduler(manager)
-
-        manager.progress_manager.print_stats(start_time)
+    with setup_logging(manager.config.logs.main_log):
+        logger.info("Starting Async Processes...")
+        await manager.async_startup()
 
         log_spacer()
-        check_latest_pypi()
-        log_spacer()
-        logger.info("Closing program...")
-        logger.info("Finished downloading. Enjoy :)", extra={"color": "green"})
+        async with manager.database:
+            logger.info("Starting CDL...\n")
 
-        await send_webhook_message(manager)
-        await send_apprise_notifications(manager)
+            await _runtime(manager)
+            await _post_runtime(manager)
 
+            manager.progress_manager.print_stats(start_time)
 
-async def _scheduler(manager: Manager) -> None:
-    for func in (_runtime, _post_runtime):
-        await func(manager)
+            log_spacer()
+            check_latest_pypi()
+            log_spacer()
+            logger.info("Closing program...")
+            logger.info("Finished downloading. Enjoy :)", extra={"color": "green"})
+
+            await send_webhook_message(manager)
+            await send_apprise_notifications(manager)
 
 
 async def _runtime(manager: Manager) -> None:
@@ -96,54 +89,6 @@ async def _post_runtime(manager: Manager) -> None:
     if manager.config_manager.settings_data.runtime_options.update_last_forum_post:
         log_spacer()
         await manager.logs.update_last_forum_post(manager.config.files.input_file)
-
-
-def _setup_debug_logger(manager: Manager) -> Path | None:
-    if not env.DEBUG_VAR:
-        return
-
-    log_level = logging.DEBUG
-    settings_data = manager.config_manager.settings_data
-    settings_data.runtime_options.log_level = log_level
-    debug_log_file_path = Path(__file__).parents[1] / "cyberdrop_dl_debug.log"
-    if env.DEBUG_LOG_FOLDER:
-        debug_log_folder = Path(env.DEBUG_LOG_FOLDER)
-        if not debug_log_folder.is_dir():
-            msg = "Value of env var 'CDL_DEBUG_LOG_FOLDER' is invalid."
-            msg += f" Folder '{debug_log_folder}' does not exists"
-            raise FileNotFoundError(None, msg, env.DEBUG_LOG_FOLDER)
-        date = datetime.now().strftime("%Y%m%d_%H%M%S")
-        debug_log_file_path = debug_log_folder / f"cyberdrop_dl_debug_{date}.log"
-
-    file_io = debug_log_file_path.open("w", encoding="utf8")
-
-    file_handler = LogHandler(level=log_level, file=file_io, width=500, debug=True)
-    queued_logger = QueuedLogger(manager, file_handler, "debug")
-
-    logging.getLogger("cyberdrop_dl").addHandler(queued_logger.handler)
-
-    # aiosqlite_log = logging.getLogger("aiosqlite")
-    # aiosqlite_log.setLevel(log_level)
-    # aiosqlite_log.addHandler(file_handler_debug)
-
-    return debug_log_file_path.resolve()
-
-
-def _setup_main_logger(manager: Manager) -> None:
-    logger = logging.getLogger("cyberdrop_dl")
-    file_io = manager.config.logs.main_log.open("w", encoding="utf8")
-    settings_data = manager.config_manager.settings_data
-    log_level = settings_data.runtime_options.log_level
-    logger.setLevel(log_level)
-
-    if not manager.parsed_args.cli_only_args.fullscreen_ui:
-        constants.CONSOLE_LEVEL = settings_data.runtime_options.console_log_level
-        constants.console_handler = LogHandler(level=constants.CONSOLE_LEVEL)
-
-    logger.addHandler(constants.console_handler)
-    file_handler = LogHandler(level=log_level, file=file_io, width=500)
-    queued_logger = QueuedLogger(manager, file_handler)
-    logger.addHandler(queued_logger.handler)
 
 
 class Director:

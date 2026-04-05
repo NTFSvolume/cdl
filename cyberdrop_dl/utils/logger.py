@@ -4,8 +4,10 @@ import contextlib
 import itertools
 import json
 import logging
+import os
 import queue
 from contextvars import ContextVar
+from datetime import datetime
 from logging.handlers import QueueHandler, QueueListener
 from pathlib import Path
 from typing import TYPE_CHECKING, ParamSpec, cast
@@ -16,6 +18,8 @@ from rich.logging import RichHandler
 from rich.padding import Padding
 from rich.text import Text, TextType
 from typing_extensions import override
+
+from cyberdrop_dl import env
 
 if TYPE_CHECKING:
     import threading
@@ -28,13 +32,13 @@ _USER_NAME = Path.home().name
 _NEW_ISSUE_URL = "https://github.com/NTFSvolume/cdl/issues/new/choose"
 _DEFAULT_CONSOLE_WIDTH = 240
 _LOCK: threading.RLock = cast("threading.RLock", logging._lock)  # pyright: ignore[ reportAttributeAccessIssue]
+_MAIN_LOGGER: ContextVar[LogHandler] = ContextVar("_MAIN_LOGGER")
 
 _capture_logs: ContextVar[bool] = ContextVar("_capture_logs", default=False)
 
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
-    from datetime import datetime
 
     from rich.console import ConsoleRenderable
 
@@ -180,23 +184,23 @@ class QueuedLogger:
 
 
 @contextlib.contextmanager
-def _lazy_logger(log_handler: LogHandler) -> Generator[BareQueueHandler]:
+def _threaded_logger(log_handler: LogHandler) -> Generator[BareQueueHandler]:
     """Context-manager to process logs from this handler in another thread.
 
     It starts a QueueListener and yields the QueueHandler."""
     q: queue.Queue[logging.LogRecord] = queue.Queue()
-    queue_handler: BareQueueHandler = BareQueueHandler(q)
+    q_handler: BareQueueHandler = BareQueueHandler(q)
     listener: QueueListener = QueueListener(q, log_handler, respect_handler_level=True)
     listener.start()
     try:
-        yield queue_handler
+        yield q_handler
     finally:
         try:
-            queue_handler.close()
+            q_handler.close()
         finally:
             listener.stop()
-            for handl in listener.handlers[:]:
-                handl.close()
+            for handler in listener.handlers[:]:
+                handler.close()
 
 
 class NoPaddingLogRender(LogRender):
@@ -224,15 +228,15 @@ class NoPaddingLogRender(LogRender):
                 else Text(log_time.strftime(time_format), style="log.time")
             )
             if log_time_display == self._last_time and self.omit_repeated_times:
-                output.append(" " * len(log_time_display), style="log.time")
+                _ = output.append(" " * len(log_time_display), style="log.time")
                 output.pad_right(1)
             else:
-                output.append(log_time_display)
+                _ = output.append_text(log_time_display)
                 output.pad_right(1)
                 self._last_time = log_time_display
 
         if self.show_level:
-            output.append(level)
+            _ = output.append(level)
             output.pad_right(1)
 
         if not self._cdl_padding:
@@ -256,7 +260,7 @@ class NoPaddingLogRender(LogRender):
             if isinstance(renderable, Text):
                 renderable = _indent_text(renderable, console, self._cdl_padding)
                 renderable.stylize("log.message")
-                _ = output.append(renderable)
+                _ = output.append_text(renderable)
                 continue
 
             padded_lines.append(Padding(renderable, (0, 0, 0, self._cdl_padding), expand=False))
@@ -279,3 +283,58 @@ def _indent_text(text: Text, console: Console, indent: int) -> Text:
 
 def log_spacer(char: str = "-") -> None:
     logger.info(char * (_DEFAULT_CONSOLE_WIDTH // 2), stacklevel=2)
+
+
+@contextlib.contextmanager
+def setup_logging(file: Path, /, level: int = logging.DEBUG) -> Generator[None]:
+    logger.setLevel(level)
+    file.parent.mkdir(parents=True, exist_ok=True)
+    with (
+        file.open("w+" if os.name == "nt" else "w", encoding="utf8") as fp,
+        _threaded_logger(LogHandler(level=level)) as console_out,
+        _threaded_logger(
+            main_logger := LogHandler(
+                level=level,
+                console=RedactedConsole(file=fp, width=_DEFAULT_CONSOLE_WIDTH * 2),
+            )
+        ) as file_out,
+        _setup_debug_logger() as debug_log_file,
+    ):
+        token = _MAIN_LOGGER.set(main_logger)
+        logger.addHandler(console_out)
+        logger.addHandler(file_out)
+        try:
+            logger.info(f"Debug log file: '{debug_log_file}'")
+            yield
+        finally:
+            _MAIN_LOGGER.reset(token)
+
+
+@contextlib.contextmanager
+def _setup_debug_logger() -> Generator[Path | None]:
+    if not env.DEBUG_VAR:
+        yield
+        return
+
+    debug_log_file = Path(__file__).parent.parent / "cyberdrop_dl_debug.log"
+
+    if env.DEBUG_LOG_FOLDER:
+        debug_log_folder = Path(env.DEBUG_LOG_FOLDER)
+
+        if not debug_log_folder.is_dir():
+            msg = f"Value of env var 'CDL_DEBUG_LOG_FOLDER' is invalid. Folder '{debug_log_folder}' does not exists"
+            raise FileNotFoundError(None, msg, env.DEBUG_LOG_FOLDER)
+
+        now = datetime.now().strftime("%Y%m%d_%H%M%S")
+        debug_log_file = debug_log_folder / f"cyberdrop_dl_debug_{now}.log"
+
+    debug_log_file = debug_log_file.expanduser().resolve().absolute()
+
+    with (
+        debug_log_file.open("w", encoding="utf8") as fp,
+        _threaded_logger(
+            LogHandler(level=logging.DEBUG, console=Console(file=fp, width=_DEFAULT_CONSOLE_WIDTH * 2))
+        ) as debug_handler,
+    ):
+        logger.addHandler(debug_handler)
+        yield debug_log_file
