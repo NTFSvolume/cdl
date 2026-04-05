@@ -62,7 +62,7 @@ class Sorter:
         logger.info("Sorting downloads...", extra={"color": "cyan"})
         await asyncio.to_thread(self.output_dir.mkdir, parents=True, exist_ok=True)
 
-        self.tui.disable = disable_tui
+        self.tui.disabled = disable_tui
         with self.tui():
             await self._run()
 

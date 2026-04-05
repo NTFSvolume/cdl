@@ -79,11 +79,11 @@ class ProgressHook:
 
 class LiveUI(ABC):
     @property
-    def disable(self) -> bool:
+    def disabled(self) -> bool:
         return TUI_DISABLED.get()
 
-    @disable.setter
-    def disable(self, value: bool) -> None:
+    @disabled.setter
+    def disabled(self, value: bool) -> None:
         _ = TUI_DISABLED.set(value)
 
     @abstractmethod
@@ -91,7 +91,7 @@ class LiveUI(ABC):
 
     @contextlib.contextmanager
     def __call__(self, *, transient: bool = False) -> Generator[None]:
-        if self.disable:
+        if self.disabled:
             yield None
             return
 
