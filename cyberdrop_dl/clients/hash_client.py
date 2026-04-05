@@ -59,9 +59,9 @@ class HashClient:
             self.manager.live_manager.get_hash_live(stop=True),
             self.manager.progress_manager.hash_progress.currently_hashing_dir(path),
         ):
-            if not await asyncio.to_thread(path.is_dir):
+            if not await aio.is_dir(path):
                 raise NotADirectoryError
-            for file in path.rglob("*"):
+            async for file in aio.rglob(path, "*"):
                 _ = await self.update_db_and_retrive_hash(file)
 
     async def hash_item(self, media_item: MediaItem) -> None:
@@ -141,7 +141,7 @@ class HashClient:
     async def save_hash_data(self, media_item: MediaItem, hash: str | None) -> None:
         if not hash:
             return
-        absolute_path = await asyncio.to_thread(media_item.path.resolve)
+        absolute_path = await aio.resolve(media_item.path)
         size = await aio.get_size(media_item.path)
         assert size
         self.hashed_media_items.append(media_item)
@@ -203,7 +203,7 @@ class HashClient:
         downloads = self.manager.completed_downloads
 
         async def exists(item: MediaItem) -> MediaItem | None:
-            if await asyncio.to_thread(item.path.is_file):
+            if await aio.is_file(item.path):
                 return item
 
         results = await asyncio.gather(*(exists(item) for item in downloads))
@@ -225,7 +225,7 @@ async def _delete_file(path: Path, to_trash: bool = True) -> bool:
     if to_trash:
         coro = asyncio.to_thread(send2trash, path)
     else:
-        coro = asyncio.to_thread(path.unlink)
+        coro = aio.unlink(path)
 
     try:
         await coro

@@ -243,6 +243,7 @@ touch = to_thread(Path.touch)
 unlink = remove = to_thread(Path.unlink)
 write_bytes = to_thread(Path.write_bytes)
 write_text = to_thread(Path.write_text)
+rmdir = to_thread(Path.rmdir)
 
 
 def glob(path: Path, pattern: str) -> AsyncIterator[Path]:

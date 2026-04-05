@@ -10,7 +10,6 @@ import sys
 from dataclasses import field
 from datetime import datetime
 from functools import wraps
-from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple, ParamSpec, TypeVar
 
 from aiohttp import ClientConnectorError, ClientError, ClientResponseError
@@ -61,6 +60,7 @@ elif sys.platform == "darwin":
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Generator
+    from pathlib import Path
 
     from cyberdrop_dl.clients.download_client import DownloadClient
     from cyberdrop_dl.managers.manager import Manager
@@ -211,7 +211,7 @@ class Downloader:
         media_item.set_task_id(task_id)
         video, audio, _subs = await self._download_rendition_group(media_item, m3u8_group)
         if not audio:
-            await asyncio.to_thread(video.rename, media_item.path)
+            await aio.move(video, media_item.path)
         else:
             # TODO: add remux method to ffmpeg to create an mkv file instead of mp4
             # Subtitles format may be incompatible with mp4 and they will be silently dropped by ffmpeg
@@ -245,7 +245,7 @@ class Downloader:
                 suffix = media_item.path.suffix + parse_url(m3u8.segments[0].absolute_uri).suffix
 
             output = media_item.path.with_suffix(suffix)
-            if await asyncio.to_thread(output.is_file):
+            if await aio.is_file(output):
                 return output
 
             tasks_results = await self._download_segments(media_item, m3u8, download_folder)
@@ -281,7 +281,7 @@ class Downloader:
             audio = await download(m3u8_group.audio)
         video = await download(m3u8_group.video)
         try:
-            await asyncio.to_thread(temp_dir.rmdir)
+            await aio.rmdir(temp_dir)
         except OSError:
             pass
         return video, audio, subtitles
@@ -321,7 +321,7 @@ class Downloader:
 
     async def finalize_download(self, media_item: MediaItem, downloaded: bool) -> None:
         if downloaded:
-            await asyncio.to_thread(Path.chmod, media_item.path, 0o666)
+            await aio.chmod(media_item.path, 0o666)
             await self.set_file_datetime(media_item, media_item.path)
         self.attempt_task_removal(media_item)
         self.manager.progress_manager.download_progress.add_completed()
@@ -454,7 +454,7 @@ class Downloader:
                 await self.check_file_can_download(media_item)
             downloaded = await self.client.download_file(self.domain, media_item)
             if downloaded:
-                await asyncio.to_thread(Path.chmod, media_item.path, 0o666)
+                await aio.chmod(media_item.path, 0o666)
                 if not media_item.is_segment:
                     await self.set_file_datetime(media_item, media_item.path)
                     self.manager.progress_manager.download_progress.add_completed()

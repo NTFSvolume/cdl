@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import contextlib
 import datetime
 import logging
@@ -11,6 +10,7 @@ from typing import TYPE_CHECKING, Literal, Self, TypeVar
 import aiofiles
 from yarl import URL
 
+from cyberdrop_dl import aio
 from cyberdrop_dl.clients.jdownloader import JDownloader
 from cyberdrop_dl.constants import REGEX_LINKS, BlockedDomains
 from cyberdrop_dl.crawlers import create_crawlers
@@ -157,7 +157,7 @@ class ScrapeMapper:
     async def parse_input_file_groups(self) -> AsyncGenerator[tuple[str, list[AbsoluteHttpURL]]]:
         """Split URLs from input file by their groups."""
         input_file = self.manager.config.files.input_file
-        if not await asyncio.to_thread(input_file.is_file):
+        if not await aio.is_file(input_file):
             yield ("", [])
             return
 

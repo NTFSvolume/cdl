@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import dataclasses
 import os
 from pathlib import Path
@@ -8,7 +7,7 @@ from unittest import mock
 
 import pytest
 
-from cyberdrop_dl import storage
+from cyberdrop_dl import aio, storage
 
 
 def create_partition(path: str):
@@ -20,7 +19,7 @@ def find_partition(path: str):
 
 
 async def test_unsupported_fs_should_not_return_zero() -> None:
-    cwd = await asyncio.to_thread(Path().resolve)
+    cwd = await aio.resolve(Path())
     free_space = await storage.get_free_space(cwd)
     assert free_space > 0
     with mock.patch("psutil.disk_usage", side_effect=OSError(None, "operation not supported")):
@@ -33,7 +32,7 @@ async def test_unsupported_fs_should_not_return_zero() -> None:
 
 
 async def test_fuse_filesystem_should_not_return_zero() -> None:
-    cwd = await asyncio.to_thread(Path().resolve)
+    cwd = await aio.resolve(Path())
     partition = storage.find_partition(cwd)
     assert partition
     assert not storage.is_fuse_fs(cwd)

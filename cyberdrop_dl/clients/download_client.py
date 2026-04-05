@@ -119,10 +119,10 @@ class DownloadClient:
         media_item: MediaItem,
         domain: str,
         resume_point: int,
-        resp: aiohttp.ClientResponse | AbstractResponse,
+        resp: aiohttp.ClientResponse | AbstractResponse[Any],
     ) -> bool:
         if resp.status == HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE:
-            await asyncio.to_thread(media_item.partial_file.unlink)
+            await aio.unlink(media_item.partial_file)
 
         await self.client_manager.check_http_status(resp, download=True)
 
@@ -147,7 +147,7 @@ class DownloadClient:
                 return False
 
         if resp.status != HTTPStatus.PARTIAL_CONTENT:
-            await asyncio.to_thread(media_item.partial_file.unlink, missing_ok=True)
+            await aio.unlink(media_item.partial_file, missing_ok=True)
 
         if (
             not media_item.is_segment
@@ -254,13 +254,11 @@ class DownloadClient:
 
         await self._post_download_check(media_item)
 
-    def _pre_download_check(self, media_item: MediaItem) -> Coroutine[Any, Any, None]:
-        def prepare() -> None:
-            media_item.partial_file.parent.mkdir(parents=True, exist_ok=True)
-            if not media_item.partial_file.is_file():
-                media_item.partial_file.touch()
-
-        return asyncio.to_thread(prepare)
+    @aio.to_thread
+    def _pre_download_check(self, media_item: MediaItem) -> None:
+        media_item.partial_file.parent.mkdir(parents=True, exist_ok=True)
+        if not media_item.partial_file.is_file():
+            media_item.partial_file.touch()
 
     async def _post_download_check(self, media_item: MediaItem, *_) -> None:
         if not await aio.get_size(media_item.partial_file):
@@ -298,13 +296,13 @@ class DownloadClient:
             downloaded = await self._download(domain, media_item)
 
         if downloaded:
-            await asyncio.to_thread(media_item.partial_file.rename, media_item.path)
+            await aio.move(media_item.partial_file, media_item.path)
             if not media_item.is_segment:
                 proceed = await self.client_manager.check_file_duration(media_item)
                 await self.manager.database.history.add_duration(domain, media_item)
                 if not proceed:
                     logger.info(f"Download skipped {media_item.url} due to runtime restrictions")
-                    await asyncio.to_thread(media_item.path.unlink)
+                    await aio.unlink(media_item.path)
                     await self.mark_incomplete(media_item, domain)
                     self.manager.progress_manager.download_progress.add_skipped()
                     return False
@@ -331,7 +329,7 @@ class DownloadClient:
     async def add_file_size(self, domain: str, media_item: MediaItem) -> None:
         if not media_item.path:
             media_item.path = self.get_file_location(media_item)
-        if await asyncio.to_thread(media_item.path.is_file):
+        if await aio.is_file(media_item.path):
             await self.manager.database.history.add_filesize(domain, media_item)
 
     async def handle_media_item_completion(self, media_item: MediaItem, downloaded: bool = False) -> None:

@@ -1,18 +1,16 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import aiofiles
 from mega.chunker import MegaChunker, get_chunks
 
-from cyberdrop_dl import storage
+from cyberdrop_dl import aio, storage
 from cyberdrop_dl.clients.download_client import DownloadClient
 from cyberdrop_dl.downloader.downloader import Downloader
 
 if TYPE_CHECKING:
-    from collections.abc import Coroutine
-
     import aiohttp
     from mega.data_structures import Crypto
     from yarl import URL
@@ -54,13 +52,11 @@ class MegaDownloadClient(DownloadClient):
         await self._post_download_check(media_item)
         chunk_decryptor.check_integrity()
 
-    def _pre_download_check(self, media_item: MediaItem) -> Coroutine[Any, Any, None]:
-        def prepare() -> None:
-            media_item.partial_file.parent.mkdir(parents=True, exist_ok=True)
-            media_item.partial_file.unlink(missing_ok=True)  # We can't resume
-            media_item.partial_file.touch()
-
-        return asyncio.to_thread(prepare)
+    @aio.to_thread
+    def _pre_download_check(self, media_item: MediaItem) -> None:
+        media_item.partial_file.parent.mkdir(parents=True, exist_ok=True)
+        media_item.partial_file.unlink(missing_ok=True)  # We can't resume
+        media_item.partial_file.touch()
 
 
 class MegaDownloader(Downloader):
