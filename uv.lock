@@ -748,7 +748,7 @@ dependencies = [
     { name = "myjdapi" },
     { name = "packaging" },
     { name = "propcache" },
-    { name = "psutil" },
+    { name = "psutil", marker = "sys_platform != 'android'" },
     { name = "pycares" },
     { name = "pycryptodome" },
     { name = "pydantic" },
@@ -758,6 +758,11 @@ dependencies = [
     { name = "truststore" },
     { name = "xxhash" },
     { name = "yarl" },
+]
+
+[package.optional-dependencies]
+extras = [
+    { name = "apprise" },
 ]
 
 [package.dev-dependencies]
@@ -770,9 +775,6 @@ dev = [
     { name = "ruff" },
     { name = "tox" },
 ]
-extras = [
-    { name = "apprise" },
-]
 
 [package.metadata]
 requires-dist = [
@@ -781,6 +783,7 @@ requires-dist = [
     { name = "aiohttp", extras = ["speedups"], specifier = ">=3.13.3" },
     { name = "aiolimiter", specifier = ">=1.2.1" },
     { name = "aiosqlite", specifier = ">=0.22.1" },
+    { name = "apprise", marker = "extra == 'extras'", specifier = ">=1.9.7" },
     { name = "async-mega-py", specifier = ">=2.0.3" },
     { name = "beautifulsoup4", specifier = ">=4.14.3" },
     { name = "certifi", specifier = ">=2026.2.25" },
@@ -792,7 +795,7 @@ requires-dist = [
     { name = "myjdapi", specifier = ">=1.1.10" },
     { name = "packaging", specifier = ">=25.0" },
     { name = "propcache", specifier = ">=0.4.1" },
-    { name = "psutil", specifier = ">=7.2.1" },
+    { name = "psutil", marker = "sys_platform != 'android'", specifier = ">=7.2.1" },
     { name = "pycares", specifier = ">=4.10.0" },
     { name = "pycryptodome", specifier = ">=3.23.0" },
     { name = "pydantic", specifier = ">=2.12.4" },
@@ -803,6 +806,7 @@ requires-dist = [
     { name = "xxhash", specifier = ">=3.6.0" },
     { name = "yarl", specifier = ">=1.23.0" },
 ]
+provides-extras = ["extras"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -814,7 +818,6 @@ dev = [
     { name = "ruff", specifier = "==0.15.6" },
     { name = "tox", specifier = ">=4.50.3" },
 ]
-extras = [{ name = "apprise", specifier = ">=1.9.7" }]
 
 [[package]]
 name = "distlib"

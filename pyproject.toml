@@ -25,7 +25,7 @@ dependencies = [
     "myjdapi >=1.1.10",
     "packaging >=25.0",
     "propcache >=0.4.1",
-    "psutil >=7.2.1",
+    "psutil >=7.2.1; sys_platform != 'android'",
     "pycares >=4.10.0",
     "pycryptodome >=3.23.0",
     "pydantic >=2.12.4",
@@ -42,6 +42,11 @@ license-files = ["LICENSE"]
 readme = "README.md"
 requires-python = ">=3.11"
 version = "9.0.2"
+
+[project.optional-dependencies]
+extras = [
+    "apprise >=1.9.7"
+]
 
 [project.scripts]
 cyberdrop-dl = "cyberdrop_dl.main:main"
@@ -64,9 +69,6 @@ dev = [
     "pytest>=9.0.2",
     "ruff==0.15.6",
     "tox>=4.50.3"
-]
-extras = [
-    "apprise >=1.9.7"
 ]
 
 [tool.coverage.report]
