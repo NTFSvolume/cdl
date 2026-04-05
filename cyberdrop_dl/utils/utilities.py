@@ -21,8 +21,7 @@ from mega.errors import MegaNzError
 from pydantic import ValidationError
 from typing_extensions import TypeIs
 
-from cyberdrop_dl import constants
-from cyberdrop_dl.data_structures import AbsoluteHttpURL
+from cyberdrop_dl.constants import TempExt
 from cyberdrop_dl.exceptions import (
     CDLBaseError,
     ErrorLogMessage,
@@ -77,9 +76,6 @@ class DictDataclass(Dataclass, Protocol):
         if overrides:
             data.update(overrides)
         return cls(**cls.filter_dict(data))
-
-
-_BLOB_OR_SVG = ("data:", "blob:", "javascript:")
 
 
 @contextlib.contextmanager
@@ -221,11 +217,13 @@ def delete_empty_files_and_folders(dirname: Path | str) -> bool:
                 if not deleted:
                     has_non_empty_subfolders = True
             elif _get_size(entry) == 0:
+                logger.debug(f"Deleting '{entry.path}'")
                 os.unlink(entry)  # noqa: PTH108
             else:
                 has_non_empty_files = True
 
-    except (OSError, PermissionError):
+    except OSError:
+        logger.exception(f"Unknown errot while walking '{dirname}'")
         pass
 
     if has_non_empty_files or has_non_empty_subfolders:
@@ -238,7 +236,6 @@ def delete_empty_files_and_folders(dirname: Path | str) -> bool:
 
 
 def check_partials_and_empty_folders(manager: Manager) -> None:
-    """Checks for partial downloads, deletes partial files and empty folders."""
     download_folder = manager.config.files.download_folder
 
     _check_for_partial_files(download_folder)
@@ -246,6 +243,7 @@ def check_partials_and_empty_folders(manager: Manager) -> None:
     if settings.delete_partial_files:
         logger.info("Deleting partial downloads...")
         for file in _partial_files(download_folder):
+            logger.debug(f"Deleting '{file}'")
             file.unlink(missing_ok=True)
 
     if settings.skip_check_for_empty_folders:
@@ -270,7 +268,7 @@ def _partial_files(dir: Path | str) -> Generator[Path]:
                 pass
 
             suffix = entry.name.rpartition(".")[-1]
-            if f".{suffix}" in constants.TempExt:
+            if f".{suffix}" in TempExt:
                 yield Path(entry.path)
     except OSError:
         return
@@ -387,7 +385,7 @@ def get_system_information() -> dict[str, Any]:
 
 
 def is_blob_or_svg(link: str) -> bool:
-    return any(link.startswith(x) for x in _BLOB_OR_SVG)
+    return link.startswith(("data:", "blob:", "javascript:"))
 
 
 def xor_decrypt(encrypted_data: bytes, key: bytes) -> str:
