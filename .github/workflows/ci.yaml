@@ -13,6 +13,7 @@ on:
       - main
     paths:
       - 'cyberdrop_dl/**/*.py'
+      - 'cyberdrop_dl/pyproject.toml'
       - 'tests/**/*.py'
       - '.github/workflows/ci.yaml'
   workflow_dispatch:
