@@ -110,8 +110,8 @@ class ProgressProxy(ABC):
         return self._progress.disable
 
     @disable.setter
-    def disable(self):
-        self._progress.disable = True
+    def disable(self, value: bool) -> None:
+        self._progress.disable = value
 
     @abstractmethod
     def __rich__(self) -> RenderableType: ...

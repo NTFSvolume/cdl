@@ -18,14 +18,14 @@ if TYPE_CHECKING:
 
 
 @functools.cache
-def _pretty_format_error(failure: str) -> str:
-    return _FAILURE_OVERRIDES.get(failure) or _capitalize_words(failure)
+def _pretty_format(error: str) -> str:
+    return _ERROR_OVERRIDES.get(error) or _capitalize_words(error)
 
 
 def _capitalize_words(text: str) -> str:
     """Capitalize first letter of each word
 
-    Unlike `str.capwords()`, this only caps the first letter of each word without modifying the rest of the word"""
+    Unlike `str.title()`, this caps the first letter of each word without modifying the rest of the word"""
 
     def cap(word: str) -> str:
         return word[0].capitalize() + word[1:]
@@ -55,7 +55,7 @@ class _ErrorsPanel:
     """Base class that keeps track of errors and reasons."""
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}(error_count={self._total!r}, errors={tuple(self._errors)!r})"
+        return f"{type(self).__name__}(error_count={self._total!r}, errors={tuple(self._errors_map)!r})"
 
     def __init__(self) -> None:
         self._progress: Progress = Progress(
@@ -66,7 +66,7 @@ class _ErrorsPanel:
             "{task.completed:,}",
         )
 
-        self._errors: dict[str, TaskID] = {}
+        self._errors_map: dict[str, TaskID] = {}
         self._total: int = 0
         self._changed: bool = False
         self._panel: Panel = Panel(
@@ -85,15 +85,15 @@ class _ErrorsPanel:
 
     def add(self, error: str) -> None:
         self._total += 1
-        name = _pretty_format_error(error)
-        if (task_id := self._errors.get(name)) is not None:
+        name = _pretty_format(error)
+        if (task_id := self._errors_map.get(name)) is not None:
             self._progress.advance(task_id)
         else:
-            self._errors[name] = self._progress.add_task(name, total=self._total, completed=1)
+            self._errors_map[name] = self._progress.add_task(name, total=self._total, completed=1)
         self._changed = True
 
     def _sort_tasks(self) -> None:
-        for task_id in self._errors.values():
+        for task_id in self._errors_map.values():
             self._progress.update(task_id, total=self._total)
 
         tasks = self._progress.tasks
@@ -103,7 +103,7 @@ class _ErrorsPanel:
 
         for task in tasks_sorted:
             self._progress.remove_task(task.id)
-            self._errors[task.description] = self._progress.add_task(
+            self._errors_map[task.description] = self._progress.add_task(
                 task.description,
                 total=task.total,
                 completed=int(task.completed),
@@ -111,7 +111,7 @@ class _ErrorsPanel:
 
     def __iter__(self) -> Iterator[Error]:
         tasks = {task.id: task for task in self._progress.tasks}
-        return iter((Error.parse(msg, int(tasks[task_id].completed)) for msg, task_id in self._errors.items()))
+        return iter((Error.parse(msg, int(tasks[task_id].completed)) for msg, task_id in self._errors_map.items()))
 
 
 class DownloadErrors(_ErrorsPanel): ...
@@ -132,7 +132,7 @@ class ScrapeErrors(_ErrorsPanel):
             self.skipped += 1
 
 
-_FAILURE_OVERRIDES = MappingProxyType(
+_ERROR_OVERRIDES = MappingProxyType(
     {
         "ClientConnectorCertificateError": "Client Connector Certificate Error",
         "ClientConnectorDNSError": "Client Connector DNS Error",
@@ -161,8 +161,8 @@ if __name__ == "__main__":
     panel = DownloadErrors()
     with create_live(panel):
         panel.add("404 not found")
-        for error in random.choices(tuple(_FAILURE_OVERRIDES), k=40):
+        for error in random.choices(tuple(_ERROR_OVERRIDES), k=40):
             panel.add(error)
-            time.sleep(0.3)
+            time.sleep(random.random() * 5)
 
         rich.print(sorted(panel))
