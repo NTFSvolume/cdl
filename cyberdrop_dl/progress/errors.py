@@ -55,7 +55,7 @@ class _ErrorsPanel:
     """Base class that keeps track of errors and reasons."""
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}(error_count={self._errors_count!r}, errors={tuple(self._errors)!r})"
+        return f"{type(self).__name__}(error_count={self._total!r}, errors={tuple(self._errors)!r})"
 
     def __init__(self) -> None:
         self._progress: Progress = Progress(
@@ -67,7 +67,7 @@ class _ErrorsPanel:
         )
 
         self._errors: dict[str, TaskID] = {}
-        self._errors_count: int = 0
+        self._total: int = 0
         self._changed: bool = False
         self._panel: Panel = Panel(
             self._progress,
@@ -80,21 +80,21 @@ class _ErrorsPanel:
             self._sort_tasks()
             self._changed = False
 
-        self._panel.subtitle = f"Total: [white]{self._errors_count:,}"
+        self._panel.subtitle = f"Total: [white]{self._total:,}"
         return self._panel
 
     def add(self, error: str) -> None:
-        self._errors_count += 1
+        self._total += 1
         name = _pretty_format_error(error)
         if (task_id := self._errors.get(name)) is not None:
             self._progress.advance(task_id)
         else:
-            self._errors[name] = self._progress.add_task(name, total=self._errors_count, completed=1)
+            self._errors[name] = self._progress.add_task(name, total=self._total, completed=1)
         self._changed = True
 
     def _sort_tasks(self) -> None:
         for task_id in self._errors.values():
-            self._progress.update(task_id, total=self._errors_count)
+            self._progress.update(task_id, total=self._total)
 
         tasks = self._progress.tasks
         tasks_sorted = sorted(tasks, key=lambda x: x.completed, reverse=True)

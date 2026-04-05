@@ -79,19 +79,16 @@ class OverflowPanel:
         self._limit: Final[int] = visible_tasks_limit
         self._invisible_queue: Final[deque[TaskID]] = deque()
         self._visible_tasks: int = 0
-        self._panel: Panel = Panel(
+        self._panel: Final[Panel] = Panel(
             self._progress,
             title=type(self).__name__.removesuffix("Panel"),
             border_style="green",
         )
 
     def __rich__(self) -> Panel:
+        self._overflow.count = len(self._progress) - self._visible_tasks
         self._panel.renderable = self._progress if not self._overflow else Group(self._progress, self._overflow)
         return self._panel
-
-    @final
-    def _update_overflow(self) -> None:
-        self._overflow.count = len(self._progress) - self._visible_tasks
 
     @final
     def _add_task(self, description: object, total: float | None = None, /, *, completed: int = 0) -> Task:
@@ -107,7 +104,6 @@ class OverflowPanel:
         else:
             self._invisible_queue.append(task_id)
 
-        self._update_overflow()
         return self._progress[task_id]
 
     @final
@@ -129,17 +125,8 @@ class OverflowPanel:
                 else:
                     break
 
-        self._update_overflow()
 
-    @contextlib.contextmanager
-    def new(self, url: object) -> Generator[None]:
-        task = self._add_task(str(url))
-        try:
-            yield
-        finally:
-            self._remove_task(task)
-
-
+@final
 class ScrapingPanel(OverflowPanel):
     unit: ClassVar[str] = "URLs"
 
@@ -150,6 +137,14 @@ class ScrapingPanel(OverflowPanel):
             visible_tasks_limit=3,
             expand=False,
         )
+
+    @contextlib.contextmanager
+    def new(self, url: object) -> Generator[None]:
+        task = self._add_task(str(url))
+        try:
+            yield
+        finally:
+            self._remove_task(task)
 
 
 if __name__ == "__main__":
