@@ -21,7 +21,7 @@ from cyberdrop_dl.utils.webhook import send_webhook_message
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("cyberdrop_dl")
 
 _ = install_rich_tracebacks(width=None)
 
@@ -54,8 +54,6 @@ async def _scrape(manager: Manager) -> None:
 
 
 async def _runtime(manager: Manager) -> None:
-    """Main runtime loop for the program, this will run until all scraping and downloading is complete."""
-
     async with storage.monitor(manager.global_config.general.required_free_space):
         with manager.live_manager.get_main_live(stop=True):
             async with ScrapeMapper.managed(manager) as scrape_mapper:
