@@ -29,7 +29,6 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.data_structures.url_objects import MediaItem
     from cyberdrop_dl.scraper.scrape_mapper import ScrapeMapper
-    from cyberdrop_dl.utils.logger import QueuedLogger
 
 
 logger = logging.getLogger(__name__)
@@ -59,7 +58,6 @@ class Manager:
 
         self.start_time: float = perf_counter()
         self.downloaded_data: int = 0
-        self.loggers: dict[str, QueuedLogger] = {}
         self.args = args
 
         self._appdata: AppData | None = None
@@ -193,10 +191,6 @@ class Manager:
     async def close(self) -> None:
 
         await self.client_manager.close()
-
-        while self.loggers:
-            _, queued_logger = self.loggers.popitem()
-            queued_logger.stop()
 
     @property
     def appdata(self) -> AppData:
