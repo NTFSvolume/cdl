@@ -46,7 +46,7 @@ except ImportError as e:
 
 logger = logging.getLogger(__name__)
 
-
+DNS_RESOLVER: type[aiohttp.AsyncResolver] | type[aiohttp.ThreadedResolver] | None = None
 _DOWNLOAD_ERROR_ETAGS = {
     "d835884373f4d6c8f24742ceabe74946": "Imgur image has been removed",
     "65b7753c-528a": "SC Scrape Image",
@@ -245,7 +245,9 @@ class ClientManager:
                 yield domain, self.cookies.filter_cookies(AbsoluteHttpURL(f"https://{domain}"))
 
     async def startup(self) -> None:
-        await _set_dns_resolver()
+        global DNS_RESOLVER
+        if DNS_RESOLVER is None:
+            DNS_RESOLVER = await _get_dns_resolver()
 
     def new_curl_cffi_session(self) -> AsyncSession[CurlResponse]:
         # Calling code should have validated if curl is actually available
@@ -448,23 +450,22 @@ class ClientManager:
             await self._flaresolverr.aclose()
 
 
-async def _set_dns_resolver(loop: asyncio.AbstractEventLoop | None = None) -> None:
-    if constants.DNS_RESOLVER is not None:
-        return
-    try:
-        await _test_async_resolver(loop)
-        constants.DNS_RESOLVER = aiohttp.AsyncResolver
-    except Exception as e:
-        constants.DNS_RESOLVER = aiohttp.ThreadedResolver
-        logger.warning(f"Unable to setup asynchronous DNS resolver. Falling back to thread based resolver: {e}")
-
-
-async def _test_async_resolver(loop: asyncio.AbstractEventLoop | None = None) -> None:
+async def _get_dns_resolver(
+    loop: asyncio.AbstractEventLoop | None = None,
+) -> type[aiohttp.AsyncResolver] | type[aiohttp.ThreadedResolver]:
     """Test aiodns with a DNS lookup."""
 
-    # pycares (the underlying C extension library that aiodns uses) installs successfully in most cases,
+    # pycares (the underlying C extension that aiodns uses) installs successfully in most cases,
     # but it fails to actually connect to DNS servers on some platforms (e.g., Android).
-    import aiodns
+    try:
+        import aiodns
 
-    async with aiodns.DNSResolver(loop=loop, timeout=5.0) as resolver:
-        _ = await resolver.query_dns("github.com", "A")
+        async with aiodns.DNSResolver(loop=loop, timeout=5.0) as resolver:
+            _ = await resolver.query_dns("github.com", "A")
+
+    except Exception as e:
+        logger.warning(f"Unable to setup asynchronous DNS resolver. Falling back to thread based resolver: {e}")
+        return aiohttp.ThreadedResolver
+
+    else:
+        return aiohttp.AsyncResolver

@@ -80,7 +80,6 @@ class BlockedDomains:
 
 DEFAULT_APP_STORAGE = Path("./AppData")
 DEFAULT_DOWNLOAD_STORAGE = Path("./Downloads")
-RESERVED_CONFIG_NAMES = ["all", "default"]
 
 
 class HashType(StrEnum):
