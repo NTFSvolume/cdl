@@ -53,7 +53,7 @@ async def hash_directory_scanner(manager: Manager, path: Path) -> None:
 
 
 @dataclasses.dataclass(slots=True)
-class HashClient:
+class Hasher:
     manager: Manager
     hashed_media_items: list[MediaItem] = dataclasses.field(init=False, default_factory=list)
     hashes_dict: dict[str, dict[int, set[Path]]] = dataclasses.field(
@@ -61,6 +61,10 @@ class HashClient:
     )
     _sem: asyncio.BoundedSemaphore = dataclasses.field(init=False, default_factory=lambda: asyncio.BoundedSemaphore(20))
     _cwd: Path = dataclasses.field(init=False, default_factory=Path.cwd)
+    config: DupeCleanup = dataclasses.field(init=False)
+
+    def __post_init__(self) -> None:
+        self.config = self.manager.config.dupe_cleanup_options
 
     async def hash_file(self, filename: Path | str, hash_type: Literal["xxh128", "md5", "sha256"]) -> str:
         file_path = self._cwd / filename
@@ -68,15 +72,11 @@ class HashClient:
 
     @property
     def _to_trash(self) -> bool:
-        return self.dupe_cleanup_options.send_deleted_to_trash
+        return self.config.send_deleted_to_trash
 
     @property
     def _deleted_file_suffix(self) -> Literal["Sent to trash", "Permanently deleted"]:
         return "Sent to trash" if self._to_trash else "Permanently deleted"
-
-    @property
-    def dupe_cleanup_options(self) -> DupeCleanup:
-        return self.manager.config.dupe_cleanup_options
 
     async def hash_directory(self, path: Path) -> None:
         path = Path(path)
@@ -85,7 +85,8 @@ class HashClient:
             self.manager.progress_manager.hash_progress.currently_hashing_dir(path),
         ):
             if not await aio.is_dir(path):
-                raise NotADirectoryError
+                raise NotADirectoryError(None, path)
+
             async for file in aio.rglob(path, "*"):
                 _ = await self.update_db_and_retrive_hash(file)
 
@@ -98,7 +99,8 @@ class HashClient:
     async def hash_item_during_download(self, media_item: MediaItem) -> None:
         if media_item.is_segment:
             return
-        if self.manager.config_manager.settings_data.dupe_cleanup_options.hashing != Hashing.IN_PLACE:
+
+        if self.config.hashing != Hashing.IN_PLACE:
             return
 
         try:
@@ -111,7 +113,10 @@ class HashClient:
             logger.exception(f"After hash processing failed: '{media_item.path}' with error {e}")
 
     async def update_db_and_retrive_hash(
-        self, file: Path | str, original_filename: str | None = None, referer: URL | None = None
+        self,
+        file: Path | str,
+        original_filename: str | None = None,
+        referer: URL | None = None,
     ) -> str | None:
         file = Path(file)
 
@@ -121,14 +126,15 @@ class HashClient:
         if not await aio.get_size(file):
             return
 
-        hash = await self._update_db_and_retrive_hash_helper(file, original_filename, referer, hash_type="xxh128")
-        if self.manager.config_manager.settings_data.dupe_cleanup_options.add_md5_hash:
-            await self._update_db_and_retrive_hash_helper(file, original_filename, referer, hash_type="md5")
-        if self.manager.config_manager.settings_data.dupe_cleanup_options.add_sha256_hash:
-            await self._update_db_and_retrive_hash_helper(file, original_filename, referer, hash_type="sha256")
+        hash = await self._update_db_and_retrive_hash(file, original_filename, referer, hash_type="xxh128")
+        if self.config.add_md5_hash:
+            await self._update_db_and_retrive_hash(file, original_filename, referer, hash_type="md5")
+        if self.config.add_sha256_hash:
+            await self._update_db_and_retrive_hash(file, original_filename, referer, hash_type="sha256")
+
         return hash
 
-    async def _update_db_and_retrive_hash_helper(
+    async def _update_db_and_retrive_hash(
         self,
         file: Path,
         original_filename: str | None,
@@ -166,6 +172,7 @@ class HashClient:
     async def save_hash_data(self, media_item: MediaItem, hash: str | None) -> None:
         if not hash:
             return
+
         absolute_path = await aio.resolve(media_item.path)
         size = await aio.get_size(media_item.path)
         assert size
@@ -175,11 +182,11 @@ class HashClient:
         self.hashes_dict[hash][size].add(absolute_path)
 
     async def cleanup_dupes_after_download(self) -> None:
-        if self.manager.config_manager.settings_data.dupe_cleanup_options.hashing == Hashing.OFF:
+        if self.config.hashing == Hashing.OFF:
             return
-        if not self.manager.config_manager.settings_data.dupe_cleanup_options.auto_dedupe:
+        if not self.config.auto_dedupe:
             return
-        if self.manager.config_manager.settings_data.runtime_options.ignore_history:
+        if self.manager.config.runtime_options.ignore_history:
             return
         with self.manager.live_manager.get_hash_live(stop=True):
             file_hashes_dict = await self.get_file_hashes_dict()
@@ -209,6 +216,7 @@ class HashClient:
             deleted = await _delete_file(file, self._to_trash)
         except OSError as e:
             logger.exception(f"Unable to remove '{file}' ({hash_string}): {e}")
+
         else:
             if not deleted:
                 return

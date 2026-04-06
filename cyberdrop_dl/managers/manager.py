@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from cyberdrop_dl import __version__, ffmpeg, yaml
 from cyberdrop_dl.cli import ParsedArgs, parse_args
 from cyberdrop_dl.database import Database
-from cyberdrop_dl.hasher import HashClient
+from cyberdrop_dl.hasher import Hasher
 from cyberdrop_dl.managers.client_manager import ClientManager
 from cyberdrop_dl.managers.config_manager import ConfigManager
 from cyberdrop_dl.managers.live_manager import LiveManager
@@ -64,7 +64,7 @@ class Manager:
 
         self._appdata: AppData | None = None
         self._completed_downloads: list[MediaItem] = []
-        self.hash_client: HashClient = HashClient(self)
+        self.hash_client: Hasher = Hasher(self)
 
     @property
     def config(self):
