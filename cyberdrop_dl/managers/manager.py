@@ -64,7 +64,7 @@ class Manager:
 
         self._appdata: AppData | None = None
         self._completed_downloads: list[MediaItem] = []
-        self.hash_client: Hasher = Hasher(self)
+        self.hasher: Hasher = Hasher(self)
 
     @property
     def config(self):

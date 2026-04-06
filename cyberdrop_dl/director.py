@@ -78,7 +78,7 @@ async def _post_runtime(manager: Manager) -> None:
     log_spacer()
     logger.info("Running Post-Download Processes", extra={"color": "green"})
 
-    await manager.hash_client.cleanup_dupes_after_download()
+    await manager.hasher.cleanup_dupes_after_download()
 
     if manager.config_manager.settings_data.sorting.sort_downloads and not manager.parsed_args.cli_only_args.retry_any:
         sorter = Sorter.from_manager(manager)
