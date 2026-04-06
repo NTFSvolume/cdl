@@ -49,7 +49,7 @@ class DownloadClient:
     def __init__(self, manager: Manager, client_manager: ClientManager) -> None:
         self.manager = manager
         self.client_manager = client_manager
-        self.download_speed_threshold = self.manager.config_manager.settings_data.runtime_options.slow_download_speed
+        self.download_speed_threshold = self.manager.config.runtime_options.slow_download_speed
         self._server_locks = aio.WeakAsyncLocks[str]()
         self.server_locked_domains: set[str] = set()
         self._supports_ranges: bool = True
@@ -349,7 +349,7 @@ class DownloadClient:
         if self.manager.parsed_args.cli_only_args.retry_any:
             return download_folder
 
-        if self.manager.config_manager.settings_data.download_options.block_download_sub_folders:
+        if self.manager.config.download_options.block_download_sub_folders:
             while download_folder.parent != self.manager.config.files.download_folder:
                 download_folder = download_folder.parent
             media_item.download_folder = download_folder
@@ -463,7 +463,7 @@ class DownloadClient:
 
     def check_filesize_limits(self, media: MediaItem) -> bool:
         """Checks if the file size is within the limits."""
-        file_size_limits = self.manager.config_manager.settings_data.file_size_limits
+        file_size_limits = self.manager.config.file_size_limits
         max_video_filesize = file_size_limits.maximum_video_size or float("inf")
         min_video_filesize = file_size_limits.minimum_video_size
         max_image_filesize = file_size_limits.maximum_image_size or float("inf")

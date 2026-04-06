@@ -210,7 +210,7 @@ class ClientManager:
 
     def is_allowed_filetype(self, media_item: MediaItem) -> bool:
         """Checks if the file type is allowed to download."""
-        ignore_options = self.manager.config_manager.settings_data.ignore_options
+        ignore_options = self.manager.config.ignore_options
         ext = media_item.ext.lower()
 
         return not (
@@ -227,7 +227,7 @@ class ClientManager:
             return True
 
         item_date = datetime.date()
-        ignore_options = self.manager.config_manager.settings_data.ignore_options
+        ignore_options = self.manager.config.ignore_options
 
         if ignore_options.exclude_before and item_date < ignore_options.exclude_before:
             return False
@@ -323,7 +323,7 @@ class ClientManager:
             pass
 
     async def load_cookie_files(self) -> None:
-        if self.manager.config_manager.settings_data.browser_cookies.auto_import:
+        if self.manager.config.browser_cookies.auto_import:
             assert self.manager.config.browser_cookies.browser
             cookies = await extract_cookies(self.manager.config.browser_cookies.browser)
             await export_cookies(cookies, output_path=self.manager.appdata.cookies)

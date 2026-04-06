@@ -80,13 +80,13 @@ async def _post_runtime(manager: Manager) -> None:
 
     await manager.hasher.cleanup_dupes_after_download()
 
-    if manager.config_manager.settings_data.sorting.sort_downloads and not manager.parsed_args.cli_only_args.retry_any:
+    if manager.config.sorting.sort_downloads and not manager.parsed_args.cli_only_args.retry_any:
         sorter = Sorter.from_manager(manager)
         await sorter.run()
 
     check_partials_and_empty_folders(manager)
 
-    if manager.config_manager.settings_data.runtime_options.update_last_forum_post:
+    if manager.config.runtime_options.update_last_forum_post:
         await manager.logs.update_last_forum_post(manager.config.files.input_file)
 
 

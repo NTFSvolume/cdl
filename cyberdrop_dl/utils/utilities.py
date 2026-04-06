@@ -237,7 +237,7 @@ def check_partials_and_empty_folders(manager: Manager) -> None:
     download_folder = manager.config.files.download_folder
 
     _check_for_partial_files(download_folder)
-    settings = manager.config_manager.settings_data.runtime_options
+    settings = manager.config.runtime_options
     if settings.delete_partial_files:
         logger.info("Deleting partial downloads...")
         for file in _partial_files(download_folder):
@@ -251,7 +251,7 @@ def check_partials_and_empty_folders(manager: Manager) -> None:
     _ = delete_empty_files_and_folders(download_folder)
 
     sorted_folder = manager.config.sorting.sort_folder
-    if sorted_folder and manager.config_manager.settings_data.sorting.sort_downloads:
+    if sorted_folder and manager.config.sorting.sort_downloads:
         _ = delete_empty_files_and_folders(sorted_folder)
 
 

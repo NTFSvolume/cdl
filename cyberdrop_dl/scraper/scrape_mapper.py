@@ -144,7 +144,7 @@ class ScrapeMapper:
             items_generator = self.load_links()
 
         async for item in items_generator:
-            item.children_limits = self.manager.config_manager.settings_data.download_options.maximum_number_of_children
+            item.children_limits = self.manager.config.download_options.maximum_number_of_children
             if self.filter_items(item):
                 if item_limit and self.count >= item_limit:
                     break
@@ -300,12 +300,12 @@ class ScrapeMapper:
             logger.info(f"Skipping {scrape_item.url} as it is outside of the desired date range")
             return False
 
-        skip_hosts = self.manager.config_manager.settings_data.ignore_options.skip_hosts
+        skip_hosts = self.manager.config.ignore_options.skip_hosts
         if skip_hosts and is_in_domain_list(scrape_item, skip_hosts):
             logger.info(f"Skipping URL by skip_hosts config: {scrape_item.url}")
             return False
 
-        only_hosts = self.manager.config_manager.settings_data.ignore_options.only_hosts
+        only_hosts = self.manager.config.ignore_options.only_hosts
         if only_hosts and not is_in_domain_list(scrape_item, only_hosts):
             logger.info(f"Skipping URL by only_hosts config: {scrape_item.url}")
             return False

@@ -55,11 +55,11 @@ class LogManager:
     @classmethod
     def from_manager(cls, manager: Manager) -> Self:
         files = LogFiles(
-            main_log=manager.config_manager.settings_data.logs.main_log,
-            last_post_log=manager.config_manager.settings_data.logs.last_forum_post,
-            unsupported_urls_log=manager.config_manager.settings_data.logs.unsupported_urls,
-            download_error_log=manager.config_manager.settings_data.logs.download_error_urls,
-            scrape_error_log=manager.config_manager.settings_data.logs.scrape_error_urls,
+            main_log=manager.config.logs.main_log,
+            last_post_log=manager.config.logs.last_forum_post,
+            unsupported_urls_log=manager.config.logs.unsupported_urls,
+            download_error_log=manager.config.logs.download_error_urls,
+            scrape_error_log=manager.config.logs.scrape_error_urls,
         )
         return cls(files, manager.task_group)
 

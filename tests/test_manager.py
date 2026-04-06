@@ -104,8 +104,8 @@ class TestMergeDicts:
 def test_args_logging_should_censor_webhook(
     running_manager: Manager, logs: pytest.LogCaptureFixture, webhook: str, output: str
 ) -> None:
-    logs_model = running_manager.config_manager.settings_data.logs
-    running_manager.config_manager.settings_data.logs = update_model(logs_model, webhook=webhook)
+    logs_model = running_manager.config.logs
+    running_manager.config.logs = update_model(logs_model, webhook=webhook)
     running_manager.args_logging()
     assert logs.messages
     assert "Running cyberdrop-dl " in logs.text

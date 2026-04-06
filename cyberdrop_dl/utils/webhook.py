@@ -63,7 +63,7 @@ async def _prepare_form(webhook: AppriseURL, main_log: Path) -> FormData:
 
 async def send_webhook_message(manager: Manager) -> None:
     """Outputs the stats to a code block for webhook messages."""
-    webhook = manager.config_manager.settings_data.logs.webhook
+    webhook = manager.config.logs.webhook
 
     if not webhook:
         return
