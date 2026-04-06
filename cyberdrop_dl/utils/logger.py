@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import contextlib
-import itertools
 import json
 import logging
 import os
 import queue
+from contextvars import ContextVar
 from datetime import datetime
 from io import StringIO
 from logging.handlers import QueueHandler, QueueListener
 from pathlib import Path
-from typing import TYPE_CHECKING, ParamSpec, cast
+from typing import TYPE_CHECKING, cast
 
 from rich._log_render import LogRender
 from rich.console import Console, Group
@@ -31,15 +31,13 @@ _DEFAULT_CONSOLE = Console()
 _USER_NAME = Path.home().name
 _DEFAULT_CONSOLE_WIDTH = 240
 _LOCK: threading.RLock = cast("threading.RLock", logging._lock)  # pyright: ignore[ reportAttributeAccessIssue]
+_MAIN_LOGGER_LISTENER: ContextVar[QueueListener] = ContextVar("_MAIN_LOGGER_LISTENER")
 
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
     from rich.console import ConsoleRenderable
-
-    _P = ParamSpec("_P")
-    _ExitCode = str | int | None
 
 
 class RedactedConsole(Console):
@@ -96,7 +94,6 @@ class LogHandler(RichHandler):
         *,
         show_time: bool,
     ) -> None:
-        self._buffer: list[Text] = []
         super().__init__(
             level,
             console,
@@ -137,18 +134,6 @@ class LogHandler(RichHandler):
 
         return message_text
 
-    def export_text(self) -> Text:
-        assert self.lock is not None
-        with self.lock:
-            lines = self._buffer[:]
-            self._buffer.clear()
-
-        eof = Text("\n")
-        text = Text()
-        for line in itertools.chain.from_iterable((line, eof) for line in lines):
-            _ = text.append_text(line)
-        return text
-
 
 class BareQueueHandler(QueueHandler):
     """Sends the log record to the queue as is.
@@ -167,7 +152,7 @@ class BareQueueHandler(QueueHandler):
 
 
 @contextlib.contextmanager
-def _threaded_logger(log_handler: logging.Handler) -> Generator[BareQueueHandler]:
+def _threaded_logger(log_handler: logging.Handler) -> Generator[tuple[BareQueueHandler, QueueListener]]:
     """Context-manager to process logs from this handler in another thread.
 
     It starts a QueueListener and yields the QueueHandler."""
@@ -176,7 +161,7 @@ def _threaded_logger(log_handler: logging.Handler) -> Generator[BareQueueHandler
     listener: QueueListener = QueueListener(q, log_handler, respect_handler_level=True)
     listener.start()
     try:
-        yield q_handler
+        yield q_handler, listener
     finally:
         try:
             q_handler.close()
@@ -279,19 +264,23 @@ def setup_logging(file: Path, /, level: int = logging.DEBUG) -> Generator[None]:
                 level,
                 show_time=False,
             )
-        ) as console_out,
+        ) as (console_out, _),
         _threaded_logger(
             LogHandler(
                 level,
                 show_time=True,
                 console=RedactedConsole(file=fp, width=_DEFAULT_CONSOLE_WIDTH * 2),
             )
-        ) as file_out,
+        ) as (file_out, file_listener),
     ):
         logger.addHandler(console_out)
         logger.addHandler(file_out)
         logger.info(f"Debug log file: '{debug_log_file}'")
-        yield
+        token = _MAIN_LOGGER_LISTENER.set(file_listener)
+        try:
+            yield
+        finally:
+            _MAIN_LOGGER_LISTENER.reset(token)
 
 
 @contextlib.contextmanager
@@ -322,7 +311,7 @@ def _setup_debug_logger() -> Generator[Path | None]:
                 console=Console(file=fp, width=_DEFAULT_CONSOLE_WIDTH * 2),
                 show_time=True,
             )
-        ) as debug_handler,
+        ) as (debug_handler, _),
     ):
         logger.addHandler(debug_handler)
         yield debug_log_file
@@ -336,3 +325,14 @@ def capture_logs() -> Generator[StringIO]:
         yield file
     finally:
         logger.removeHandler(in_memory_handler)
+
+
+def export_logs(path: Path, size_limit: int | None = None) -> bytes:
+    listener = _MAIN_LOGGER_LISTENER.get()
+    listener.stop()
+    try:
+        if size_limit and path.stat().st_size > size_limit:
+            raise RuntimeError
+        return path.read_bytes()
+    finally:
+        listener.start()
