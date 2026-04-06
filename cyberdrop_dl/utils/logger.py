@@ -330,9 +330,9 @@ def _setup_debug_logger() -> Generator[Path | None]:
 
 @contextlib.contextmanager
 def capture_logs() -> Generator[StringIO]:
-    with _threaded_logger(logging.StreamHandler(file := StringIO())) as in_memory_handler:
-        logger.addHandler(in_memory_handler)
-        try:
-            yield file
-        finally:
-            logger.removeHandler(in_memory_handler)
+    in_memory_handler = logging.StreamHandler(file := StringIO())
+    logger.addHandler(in_memory_handler)
+    try:
+        yield file
+    finally:
+        logger.removeHandler(in_memory_handler)
