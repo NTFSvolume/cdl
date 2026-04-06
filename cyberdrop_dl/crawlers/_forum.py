@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING, ClassVar, Protocol, final
 
 from bs4 import BeautifulSoup, Tag
 
-from cyberdrop_dl.constants import HTTP_REGEX_LINKS
 from cyberdrop_dl.crawlers.crawler import Crawler
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import LoginError, MaxChildrenError, ScrapeError
@@ -35,6 +34,10 @@ if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
 
 LINK_TRASH_MAPPING = {".th.": ".", ".md.": ".", "ifr": "watch"}
+HTTP_REGEX_LINKS = re.compile(
+    r"https?://(www\.)?[-a-zA-Z0-9@:%._+~#=]{2,256}\.[a-z]{2,12}\b([-a-zA-Z0-9@:%_+.~#?&/=]*)"
+)
+
 
 Selector = css.CssAttributeSelector
 

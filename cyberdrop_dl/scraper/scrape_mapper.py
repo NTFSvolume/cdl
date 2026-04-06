@@ -12,7 +12,7 @@ from yarl import URL
 
 from cyberdrop_dl import aio
 from cyberdrop_dl.clients.jdownloader import JDownloader
-from cyberdrop_dl.constants import REGEX_LINKS, BlockedDomains
+from cyberdrop_dl.constants import BlockedDomains
 from cyberdrop_dl.crawlers import create_crawlers
 from cyberdrop_dl.crawlers._chevereto import CheveretoCrawler
 from cyberdrop_dl.crawlers.crawler import Crawler
@@ -39,6 +39,8 @@ logger = logging.getLogger(__name__)
 existing_crawlers: dict[str, type[Crawler]] = {}
 _seen_urls: set[AbsoluteHttpURL] = set()
 _crawlers_disabled_at_runtime: set[str] = set()
+
+REGEX_LINKS = re.compile(r"(?:http.*?)(?=($|\n|\r\n|\r|\s|\"|\[/URL]|']\[|]\[|\[/img]))")
 
 
 def is_outside_date_range(scrape_item: ScrapeItem, before: datetime.date | None, after: datetime.date | None) -> bool:
