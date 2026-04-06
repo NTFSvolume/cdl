@@ -1,6 +1,8 @@
 import logging
 from pathlib import Path
 
+import pytest
+
 from cyberdrop_dl.utils import logger
 
 TEXT = "\n".join(f"line {idx}" for idx in range(1, 5))
@@ -23,6 +25,11 @@ def test_export_logs(tmp_path: Path) -> None:
             logger.logger.debug(line)
 
         content = logger.export_logs().decode("utf8")
+        with pytest.raises(RuntimeError):
+            _ = logger.export_logs(size_limit=1)
+
+    with pytest.raises(LookupError):
+        _ = logger.export_logs()
 
     assert "Debug log file" in content
     for line in TEXT.splitlines():

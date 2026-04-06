@@ -3,7 +3,6 @@ from __future__ import annotations
 import contextlib
 import json
 import logging
-import os
 import queue
 from contextvars import ContextVar
 from datetime import datetime
@@ -254,7 +253,7 @@ def setup_logging(file: Path, /, level: int = logging.DEBUG) -> Generator[None]:
     file.parent.mkdir(parents=True, exist_ok=True)
     with (
         _setup_debug_logger() as debug_log_file,
-        file.open("w+" if os.name == "nt" else "w", encoding="utf8") as fp,
+        file.open("w", encoding="utf8") as fp,
         _threaded_logger(
             LogHandler(
                 level,
@@ -324,7 +323,7 @@ def capture_logs() -> Generator[StringIO]:
         logger.removeHandler(in_memory_handler)
 
 
-def export_logs(size_limit: int | None = None) -> bytes:
+def export_logs(*, size_limit: int | None = None) -> bytes:
     flush_logs()
     log_file = _MAIN_LOG_FILE.get()
     if size_limit and log_file.stat().st_size > size_limit:
