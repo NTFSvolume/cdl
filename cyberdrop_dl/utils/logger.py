@@ -94,9 +94,7 @@ class LogHandler(RichHandler):
         level: int = logging.DEBUG,
         console: Console | None = None,
         *,
-        show_time: bool = True,
-        padding: bool = True,
-        capture: bool = False,
+        show_time: bool,
     ) -> None:
         self._buffer: list[Text] = []
         super().__init__(
@@ -109,8 +107,9 @@ class LogHandler(RichHandler):
             tracebacks_extra_lines=2,
             locals_max_length=20,
             show_path=False,
+            show_level=True,
         )
-        if not padding:
+        if show_time:
             self._log_render = NoPaddingLogRender(
                 show_time=show_time,
                 show_level=True,
@@ -168,7 +167,7 @@ class BareQueueHandler(QueueHandler):
 
 
 @contextlib.contextmanager
-def _threaded_logger(log_handler: LogHandler) -> Generator[BareQueueHandler]:
+def _threaded_logger(log_handler: logging.Handler) -> Generator[BareQueueHandler]:
     """Context-manager to process logs from this handler in another thread.
 
     It starts a QueueListener and yields the QueueHandler."""
@@ -285,7 +284,6 @@ def setup_logging(file: Path, /, level: int = logging.DEBUG) -> Generator[None]:
             LogHandler(
                 level,
                 show_time=True,
-                padding=False,
                 console=RedactedConsole(file=fp, width=_DEFAULT_CONSOLE_WIDTH * 2),
             )
         ) as file_out,
@@ -319,7 +317,11 @@ def _setup_debug_logger() -> Generator[Path | None]:
     with (
         debug_log_file.open("w", encoding="utf8") as fp,
         _threaded_logger(
-            LogHandler(logging.DEBUG, console=Console(file=fp, width=_DEFAULT_CONSOLE_WIDTH * 2))
+            LogHandler(
+                logging.DEBUG,
+                console=Console(file=fp, width=_DEFAULT_CONSOLE_WIDTH * 2),
+                show_time=True,
+            )
         ) as debug_handler,
     ):
         logger.addHandler(debug_handler)
@@ -327,21 +329,10 @@ def _setup_debug_logger() -> Generator[Path | None]:
 
 
 @contextlib.contextmanager
-def capture_logs() -> Generator[tuple[StringIO, Console]]:
-    file = StringIO()
-    console = Console(file=file, width=_DEFAULT_CONSOLE_WIDTH * 2, record=True)
-
-    with _threaded_logger(
-        LogHandler(
-            logging.DEBUG,
-            console=console,
-            show_time=False,
-            padding=False,
-            capture=True,
-        )
-    ) as memory_handler:
+def capture_logs() -> Generator[StringIO]:
+    with _threaded_logger(logging.StreamHandler(file := StringIO())) as in_memory_handler:
+        logger.addHandler(in_memory_handler)
         try:
-            logger.addHandler(memory_handler)
-            yield file, console
+            yield file
         finally:
-            logger.removeHandler(memory_handler)
+            logger.removeHandler(in_memory_handler)
