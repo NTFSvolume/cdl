@@ -3,8 +3,8 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from cyberdrop_dl.__main__ import main
 from cyberdrop_dl.cli import parse_args
-from cyberdrop_dl.main import run
 
 
 @pytest.mark.parametrize(
@@ -16,7 +16,7 @@ from cyberdrop_dl.main import run
 )
 def test_command_by_console_output(tmp_cwd: Path, capsys: pytest.CaptureFixture[str], command: str, text: str) -> None:
     try:
-        run(command.split())
+        main(command.split())
     except SystemExit:
         pass
     output = capsys.readouterr().out

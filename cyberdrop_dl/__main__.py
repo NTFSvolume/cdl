@@ -111,7 +111,7 @@ class Director:
         return exit_code
 
 
-def run(args: Sequence[str] | None = None) -> str | int | None:
+def main(args: Sequence[str] | None = None) -> str | int | None:
     return _create_director(args).run()
 
 
@@ -122,4 +122,4 @@ def _create_director(args: Sequence[str] | None = None) -> Director:
 
 
 if __name__ == "__main__":
-    sys.exit(run())
+    sys.exit(main())

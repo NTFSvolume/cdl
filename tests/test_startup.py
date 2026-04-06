@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from cyberdrop_dl.main import run
+from cyberdrop_dl.__main__ import main
 from cyberdrop_dl.ui import program_ui
 
 
@@ -14,12 +14,12 @@ def test_startup(tmp_cwd: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.
         print(msg)
 
     monkeypatch.setattr(program_ui, "run", main_ui)
-    run(())
+    main(())
     captured = capsys.readouterr()
     output = captured.out
     assert msg in output
 
 
 def test_async_startup(tmp_cwd: Path, caplog: pytest.LogCaptureFixture) -> None:
-    run(("--download",))
+    main(("--download",))
     assert "Finished downloading. Enjoy :)" in caplog.text

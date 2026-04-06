@@ -50,8 +50,8 @@ extras = [
 ]
 
 [project.scripts]
-cyberdrop-dl = "cyberdrop_dl.main:main"
-cyberdrop-dl-patched = "cyberdrop_dl.main:main"
+cyberdrop-dl = "cyberdrop_dl.__main__:main"
+cyberdrop-dl-patched = "cyberdrop_dl.__main__:main"
 
 [project.urls]
 Changelog = "https://github.com/NTFSvolume/cdl/blob/main/CHANGELOG.md"
