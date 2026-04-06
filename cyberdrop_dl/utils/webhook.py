@@ -43,16 +43,17 @@ async def send_webhook_message(content: str, webhook: AppriseURL) -> None:
     log_spacer()
     try:
         async with aiohttp.request("POST", url, data=form) as response:
-            if not response.ok:
+            if response.ok:
+                logger.info("Webhook notifications: Success", extra={"color": "green"})
+            else:
                 try:
                     error: dict[str, Any] = await response.json()
-                except aiohttp.ClientError:
+                except Exception:
                     response.raise_for_status()
+                    raise
                 else:
                     _ = error.pop("content", None)
-                    logger.error("Webhook notification failed: %s", error, extra={"color": "red"})
+                    logger.error(f"Webhook notification failed: {error}", extra={"color": "red"})
 
     except Exception:
         logger.exception("Unable to send webhook notification")
-    else:
-        logger.info("Webhook notifications: Success", extra={"color": "green"})
