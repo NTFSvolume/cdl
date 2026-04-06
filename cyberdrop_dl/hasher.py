@@ -61,10 +61,10 @@ class Hasher:
     )
     _sem: asyncio.BoundedSemaphore = dataclasses.field(init=False, default_factory=lambda: asyncio.BoundedSemaphore(20))
     _cwd: Path = dataclasses.field(init=False, default_factory=Path.cwd)
-    config: DupeCleanup = dataclasses.field(init=False)
 
-    def __post_init__(self) -> None:
-        self.config = self.manager.config.dupe_cleanup_options
+    @property
+    def config(self) -> DupeCleanup:
+        return self.manager.config.dupe_cleanup_options
 
     async def hash_file(self, filename: Path | str, hash_type: Literal["xxh128", "md5", "sha256"]) -> str:
         file_path = self._cwd / filename
