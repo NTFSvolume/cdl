@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import sys
 from typing import TYPE_CHECKING
 
 from rich.traceback import install as install_rich_tracebacks
@@ -108,3 +109,17 @@ class Director:
             exit_code = 0
 
         return exit_code
+
+
+def run(args: Sequence[str] | None = None) -> str | int | None:
+    return _create_director(args).run()
+
+
+def _create_director(args: Sequence[str] | None = None) -> Director:
+    from cyberdrop_dl.__main__ import Director
+
+    return Director(args)
+
+
+if __name__ == "__main__":
+    sys.exit(run())
