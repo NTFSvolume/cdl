@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import logging
 from collections import defaultdict
 from pathlib import Path
@@ -29,17 +30,14 @@ async def hash_directory_scanner(manager: Manager, path: Path) -> None:
         manager.progress_manager.hash_progress.reset()
 
 
+@dataclasses.dataclass(slots=True)
 class HashClient:
-    """Manage hashes and db insertion."""
-
-    def __init__(self, manager: Manager) -> None:
-        self.manager = manager
-        self.xxhash = "xxh128"
-        self.md5 = "md5"
-        self.sha256 = "sha256"
-        self.hashed_media_items: list[MediaItem] = []
-        self.hashes_dict: defaultdict[str, defaultdict[int, set[Path]]] = defaultdict(lambda: defaultdict(set))
-        self._sem = asyncio.BoundedSemaphore(20)
+    manager: Manager
+    hashed_media_items: list[MediaItem] = dataclasses.field(init=False, default_factory=list)
+    hashes_dict: dict[str, dict[int, set[Path]]] = dataclasses.field(
+        init=False, default_factory=lambda: defaultdict(lambda: defaultdict(set))
+    )
+    _sem: asyncio.BoundedSemaphore = dataclasses.field(init=False, default_factory=lambda: asyncio.BoundedSemaphore(20))
 
     @property
     def _to_trash(self) -> bool:
@@ -96,19 +94,19 @@ class HashClient:
         if not await aio.get_size(file):
             return
 
-        hash = await self._update_db_and_retrive_hash_helper(file, original_filename, referer, hash_type=self.xxhash)
+        hash = await self._update_db_and_retrive_hash_helper(file, original_filename, referer, hash_type="xxh128")
         if self.manager.config_manager.settings_data.dupe_cleanup_options.add_md5_hash:
-            await self._update_db_and_retrive_hash_helper(file, original_filename, referer, hash_type=self.md5)
+            await self._update_db_and_retrive_hash_helper(file, original_filename, referer, hash_type="md5")
         if self.manager.config_manager.settings_data.dupe_cleanup_options.add_sha256_hash:
-            await self._update_db_and_retrive_hash_helper(file, original_filename, referer, hash_type=self.sha256)
+            await self._update_db_and_retrive_hash_helper(file, original_filename, referer, hash_type="sha256")
         return hash
 
     async def _update_db_and_retrive_hash_helper(
         self,
-        file: Path | str,
+        file: Path,
         original_filename: str | None,
         referer: URL | None,
-        hash_type: str,
+        hash_type: Literal["xxh128", "md5", "sha256"],
     ) -> str | None:
         """Generates hash of a file."""
         self.manager.progress_manager.hash_progress.update_currently_hashing(file)
@@ -161,7 +159,7 @@ class HashClient:
         with self.manager.live_manager.get_remove_file_via_hash_live(stop=True):
             await self.final_dupe_cleanup(file_hashes_dict)
 
-    async def final_dupe_cleanup(self, final_dict: dict[str, dict]) -> None:
+    async def final_dupe_cleanup(self, final_dict: dict[str, dict[int, set[Path]]]) -> None:
         """cleanup files based on dedupe setting"""
 
         get_matches = self.manager.database.hash.get_files_with_hash_matches
@@ -198,8 +196,7 @@ class HashClient:
         finally:
             self._sem.release()
 
-    async def get_file_hashes_dict(self) -> dict:
-        """Get a dictionary of files based on matching file hashes and file size."""
+    async def get_file_hashes_dict(self) -> dict[str, dict[int, set[Path]]]:
         downloads = self.manager.completed_downloads
 
         async def exists(item: MediaItem) -> MediaItem | None:
