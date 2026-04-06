@@ -6,8 +6,8 @@ import json
 import logging
 import os
 import queue
-from contextvars import ContextVar
 from datetime import datetime
+from io import StringIO
 from logging.handlers import QueueHandler, QueueListener
 from pathlib import Path
 from typing import TYPE_CHECKING, ParamSpec, cast
@@ -29,12 +29,8 @@ logger = logging.getLogger("cyberdrop_dl")
 _DEFAULT_CONSOLE = Console()
 
 _USER_NAME = Path.home().name
-_NEW_ISSUE_URL = "https://github.com/NTFSvolume/cdl/issues/new/choose"
 _DEFAULT_CONSOLE_WIDTH = 240
 _LOCK: threading.RLock = cast("threading.RLock", logging._lock)  # pyright: ignore[ reportAttributeAccessIssue]
-_MAIN_LOGGER: ContextVar[LogHandler] = ContextVar("_MAIN_LOGGER")
-
-_capture_logs: ContextVar[bool] = ContextVar("_capture_logs", default=False)
 
 
 if TYPE_CHECKING:
@@ -93,13 +89,20 @@ logging.setLogRecordFactory(JsonLogRecord)
 class LogHandler(RichHandler):
     """Rich Handler with default settings, custom log render to remove padding in files and `color` extra"""
 
-    def __init__(self, level: int = logging.DEBUG, console: Console | None = None) -> None:
-        self.is_file: bool = bool(console)
+    def __init__(
+        self,
+        level: int = logging.DEBUG,
+        console: Console | None = None,
+        *,
+        show_time: bool = True,
+        padding: bool = True,
+        capture: bool = False,
+    ) -> None:
         self._buffer: list[Text] = []
         super().__init__(
             level,
             console,
-            show_time=self.is_file,
+            show_time=show_time,
             rich_tracebacks=True,
             tracebacks_show_locals=True,
             locals_max_string=_DEFAULT_CONSOLE_WIDTH,
@@ -107,8 +110,9 @@ class LogHandler(RichHandler):
             locals_max_length=20,
             show_path=False,
         )
-        if self.is_file:
+        if not padding:
             self._log_render = NoPaddingLogRender(
+                show_time=show_time,
                 show_level=True,
                 show_path=False,
                 level_width=10,
@@ -131,9 +135,6 @@ class LogHandler(RichHandler):
 
         if self.keywords:
             _ = message_text.highlight_words(self.keywords, "logging.keyword")
-
-        if self.is_file and _capture_logs.get():
-            self._buffer.append(message_text)
 
         return message_text
 
@@ -272,24 +273,27 @@ def setup_logging(file: Path, /, level: int = logging.DEBUG) -> Generator[None]:
     logger.setLevel(level)
     file.parent.mkdir(parents=True, exist_ok=True)
     with (
+        _setup_debug_logger() as debug_log_file,
         file.open("w+" if os.name == "nt" else "w", encoding="utf8") as fp,
-        _threaded_logger(LogHandler(level=level)) as console_out,
         _threaded_logger(
-            main_logger := LogHandler(
-                level=level,
+            LogHandler(
+                level,
+                show_time=False,
+            )
+        ) as console_out,
+        _threaded_logger(
+            LogHandler(
+                level,
+                show_time=True,
+                padding=False,
                 console=RedactedConsole(file=fp, width=_DEFAULT_CONSOLE_WIDTH * 2),
             )
         ) as file_out,
-        _setup_debug_logger() as debug_log_file,
     ):
-        token = _MAIN_LOGGER.set(main_logger)
         logger.addHandler(console_out)
         logger.addHandler(file_out)
-        try:
-            logger.info(f"Debug log file: '{debug_log_file}'")
-            yield
-        finally:
-            _MAIN_LOGGER.reset(token)
+        logger.info(f"Debug log file: '{debug_log_file}'")
+        yield
 
 
 @contextlib.contextmanager
@@ -315,8 +319,29 @@ def _setup_debug_logger() -> Generator[Path | None]:
     with (
         debug_log_file.open("w", encoding="utf8") as fp,
         _threaded_logger(
-            LogHandler(level=logging.DEBUG, console=Console(file=fp, width=_DEFAULT_CONSOLE_WIDTH * 2))
+            LogHandler(logging.DEBUG, console=Console(file=fp, width=_DEFAULT_CONSOLE_WIDTH * 2))
         ) as debug_handler,
     ):
         logger.addHandler(debug_handler)
         yield debug_log_file
+
+
+@contextlib.contextmanager
+def capture_logs() -> Generator[tuple[StringIO, Console]]:
+    file = StringIO()
+    console = Console(file=file, width=_DEFAULT_CONSOLE_WIDTH * 2, record=True)
+
+    with _threaded_logger(
+        LogHandler(
+            logging.DEBUG,
+            console=console,
+            show_time=False,
+            padding=False,
+            capture=True,
+        )
+    ) as memory_handler:
+        try:
+            logger.addHandler(memory_handler)
+            yield file, console
+        finally:
+            logger.removeHandler(memory_handler)
