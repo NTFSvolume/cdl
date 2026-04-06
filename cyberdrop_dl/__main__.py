@@ -101,7 +101,8 @@ def main(args: Sequence[str] | None = None) -> str | int | None:
         try:
             aio.run(_run(manager))
         except KeyboardInterrupt:
-            pass
+            logger.info("Exiting (Ctrl + C) ...")
+
         exit_code = 0
 
     return exit_code
