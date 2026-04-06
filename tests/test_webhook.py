@@ -5,7 +5,7 @@ import aiohttp
 import pytest
 
 from cyberdrop_dl.models import AppriseURL
-from cyberdrop_dl.utils.webhook import send_webhook_message
+from cyberdrop_dl.utils.webhook import send_webhook_notification
 
 webhook = AppriseURL.model_validate({"url": "https://example.com/webhook", "tags": {"no_logs"}})
 
@@ -24,7 +24,7 @@ async def test_send_webhook_message_success(caplog: pytest.LogCaptureFixture) ->
 
     with _mock_request(mock_response):
         with caplog.at_level(10):
-            await send_webhook_message("test", webhook)
+            await send_webhook_notification("test", webhook)
 
         assert "Webhook notifications: Success" in caplog.text
 
@@ -37,7 +37,7 @@ async def test_send_webhook_message_failure_with_json_error(caplog: pytest.LogCa
 
     with _mock_request(mock_response):
         with caplog.at_level(10):
-            await send_webhook_message("test", webhook)
+            await send_webhook_notification("test", webhook)
 
         assert "Webhook notification failed:" in caplog.text
         assert "Bad Request" in caplog.text
@@ -59,6 +59,6 @@ async def test_send_webhook_message_failure_with_non_json_error(caplog: pytest.L
 
     with _mock_request(mock_response):
         with caplog.at_level(10):
-            await send_webhook_message("test", webhook)
+            await send_webhook_notification("test", webhook)
 
         assert "ClientResponseError: 500" in caplog.text

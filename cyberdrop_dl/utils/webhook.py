@@ -5,42 +5,49 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 import aiohttp
-from aiohttp import FormData
 
 from cyberdrop_dl.utils.logger import MAIN_LOG_FILE, export_logs, log_spacer
 
 if TYPE_CHECKING:
+    import yarl
+
     from cyberdrop_dl.models import AppriseURL
 
-    pass
 
 logger = logging.getLogger(__name__)
 
 
-async def _prepare_form(content: str, *, attach_logs: bool) -> FormData:
-    form = FormData()
-    if attach_logs:
+async def send_webhook_notification(content: str, webhook: AppriseURL) -> None:
+    log_spacer()
+    url, logs = await _prepare_webhook(webhook)
+    form = _prepare_form(content, logs)
+    await _send_webhook(url, form)
+
+
+async def _prepare_webhook(webhook: AppriseURL) -> tuple[str, bytes | None]:
+    url = str(webhook.url.get_secret_value())
+    logs_content = None
+    if webhook.attach_logs:
         try:
             logs_content = await asyncio.to_thread(export_logs, size_limit=25 * 1e6)
         except Exception:
             logger.exception("Unable to attach log for webhook notification")
-        else:
-            form.add_field("file", logs_content, filename=MAIN_LOG_FILE.get().name)
 
-    form.add_fields(
-        ("content", content),
-        ("username", "cyberdrop-dl"),
-    )
+    return url, logs_content
+
+
+def _prepare_form(content: str, logs_content: bytes | None = None) -> aiohttp.FormData:
+    form = aiohttp.FormData()
+    if logs_content is not None:
+        form.add_field("file", logs_content, filename=MAIN_LOG_FILE.get().name)
+
+    form.add_field("content", content)
+    form.add_field("username", "cyberdrop-dl")
     return form
 
 
-async def send_webhook_message(content: str, webhook: AppriseURL) -> None:
-
+async def _send_webhook(url: yarl.URL | str, form: aiohttp.FormData) -> None:
     logger.info("Sending webhook notifications.. ")
-    url = str(webhook.url.get_secret_value())
-    form = await _prepare_form(content, attach_logs=webhook.attach_logs)
-
-    log_spacer()
     try:
         async with aiohttp.request("POST", url, data=form) as response:
             if response.ok:

@@ -16,7 +16,7 @@ from cyberdrop_dl.utils.apprise import send_apprise_notifications
 from cyberdrop_dl.utils.logger import capture_logs, log_spacer, setup_logging
 from cyberdrop_dl.utils.sorting import Sorter
 from cyberdrop_dl.utils.utilities import check_partials_and_empty_folders
-from cyberdrop_dl.utils.webhook import send_webhook_message
+from cyberdrop_dl.utils.webhook import send_webhook_notification
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -54,7 +54,7 @@ async def _scrape(manager: Manager) -> None:
             logger.info("Finished downloading. Enjoy :)", extra={"color": "green"})
 
             if manager.config.logs.webhook:
-                await send_webhook_message(stream.getvalue(), manager.config.logs.webhook)
+                await send_webhook_notification(stream.getvalue(), manager.config.logs.webhook)
 
             await send_apprise_notifications(manager)
 
