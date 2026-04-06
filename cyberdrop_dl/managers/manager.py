@@ -15,7 +15,7 @@ from cyberdrop_dl.cli import ParsedArgs, parse_args
 from cyberdrop_dl.database import Database
 from cyberdrop_dl.managers.client_manager import ClientManager
 from cyberdrop_dl.managers.config_manager import ConfigManager
-from cyberdrop_dl.managers.hash_manager import HashManager
+from cyberdrop_dl.managers.hash_manager import HashClient
 from cyberdrop_dl.managers.live_manager import LiveManager
 from cyberdrop_dl.managers.logs import LogManager
 from cyberdrop_dl.managers.progress_manager import ProgressManager
@@ -43,7 +43,6 @@ class Manager:
         self.parsed_args: ParsedArgs = field(init=False)
         self.cache: dict[str, Any] = {}
         self.config_manager: ConfigManager = field(init=False)
-        self.hash_manager: HashManager = field(init=False)
 
         self.logs: LogManager = field(init=False)
         self.database: Database = field(init=False)
@@ -65,6 +64,7 @@ class Manager:
 
         self._appdata: AppData | None = None
         self._completed_downloads: list[MediaItem] = []
+        self.hash_client: HashClient = HashClient(self)
 
     @property
     def config(self):
@@ -136,7 +136,6 @@ class Manager:
             self.config.runtime_options.ignore_history,
         )
 
-        self.hash_manager = HashManager(self)
         self.live_manager = LiveManager(self)
         self.progress_manager = ProgressManager(self)
 

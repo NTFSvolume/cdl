@@ -22,9 +22,6 @@ if TYPE_CHECKING:
     from cyberdrop_dl.managers.manager import Manager
 
 
-if TYPE_CHECKING:
-    from cyberdrop_dl.managers.manager import Manager
-
 _HASHERS: Final = {
     "md5": hashlib.md5,
     "xxh128": xxhash.xxh128,
@@ -34,12 +31,6 @@ _CHUNK_SIZE: Final = 1024 * 1024  # 1MB
 
 
 logger = logging.getLogger(__name__)
-
-
-class HashManager:
-    def __init__(self, manager: Manager) -> None:
-        self._cwd: Path = Path.cwd()
-        self.hash_client: HashClient = HashClient(manager)
 
 
 def _compute_hash(file: Path, algorithm: Literal["xxh128", "md5", "sha256"]) -> str:
@@ -56,7 +47,7 @@ def _compute_hash(file: Path, algorithm: Literal["xxh128", "md5", "sha256"]) -> 
 async def hash_directory_scanner(manager: Manager, path: Path) -> None:
     manager.async_db_hash_startup()
     async with manager.database:
-        await manager.hash_manager.hash_client.hash_directory(path)
+        await manager.hash_client.hash_directory(path)
         manager.progress_manager.print_dedupe_stats()
         manager.progress_manager.hash_progress.reset()
 
