@@ -100,7 +100,7 @@ class HTTPClient:
 
         else:
             _ = headers.setdefault("user-agent", self.client_manager.manager.global_config.general.user_agent)
-            request_params.setdefault("max_redirects", constants.MAX_REDIRECTS)
+            request_params.setdefault("max_redirects", 8)
 
         request_id = str(uuid.uuid4())
         logger.debug("Starting {} request to {} [id={}]\n{}", method, url, request_id, request_params)

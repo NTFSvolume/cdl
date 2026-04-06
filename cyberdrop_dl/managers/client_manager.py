@@ -17,7 +17,7 @@ import truststore
 from aiohttp import ClientResponse, ClientSession
 from aiolimiter import AsyncLimiter
 
-from cyberdrop_dl import constants, ddos_guard, env
+from cyberdrop_dl import ddos_guard, env
 from cyberdrop_dl.aio import WeakAsyncLocks
 from cyberdrop_dl.clients import HTTPClient
 from cyberdrop_dl.clients.download_client import DownloadClient
@@ -272,7 +272,7 @@ class ClientManager:
             verify=bool(self.ssl_context),
             proxy=proxy_or_none,
             timeout=self.rate_limiting_options._curl_timeout,
-            max_redirects=constants.MAX_REDIRECTS,
+            max_redirects=8,
             cookies={cookie.key: cookie.value for cookie in self.cookies},
         )
 
@@ -292,8 +292,8 @@ class ClientManager:
         )
 
     def _new_tcp_connector(self) -> aiohttp.TCPConnector:
-        assert constants.DNS_RESOLVER is not None
-        conn = aiohttp.TCPConnector(ssl=self.ssl_context, resolver=constants.DNS_RESOLVER())
+        assert DNS_RESOLVER is not None
+        conn = aiohttp.TCPConnector(ssl=self.ssl_context, resolver=DNS_RESOLVER())
         conn._resolver_owner = True
         return conn
 

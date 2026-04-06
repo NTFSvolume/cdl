@@ -4,15 +4,12 @@ import re
 from datetime import UTC, datetime
 from enum import auto
 from pathlib import Path
-from typing import TYPE_CHECKING, Final, final
+from typing import final
 
 from rich.text import Text
 
 from cyberdrop_dl import env
 from cyberdrop_dl.compat import CIStrEnum, Enum, StrEnum
-
-if TYPE_CHECKING:
-    from aiohttp.resolver import AsyncResolver, ThreadedResolver
 
 # TIME
 STARTUP_TIME = datetime.now()
@@ -21,8 +18,6 @@ LOGS_DATETIME_FORMAT = "%Y%m%d_%H%M%S"
 LOGS_DATE_FORMAT = "%Y_%m_%d"
 STARTUP_TIME_STR = STARTUP_TIME.strftime(LOGS_DATETIME_FORMAT)
 STARTUP_TIME_UTC_STR = STARTUP_TIME_UTC.strftime(LOGS_DATETIME_FORMAT)
-DNS_RESOLVER: type[AsyncResolver] | type[ThreadedResolver] | None = None
-MAX_REDIRECTS: Final[int] = 8
 
 
 # logging
