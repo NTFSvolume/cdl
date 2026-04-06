@@ -26,8 +26,7 @@ logger = logging.getLogger(__name__)
 _ = install_rich_tracebacks(width=None)
 
 
-async def _run_manager(manager: Manager) -> None:
-    """Runs the program and handles the UI."""
+async def _scrape(manager: Manager) -> None:
     manager.config.resolve_paths()
     manager.logs.delete_old_logs()
     start_time = manager.start_time
@@ -80,45 +79,25 @@ async def _post_runtime(manager: Manager) -> None:
         await manager.logs.update_last_forum_post(manager.config.files.input_file)
 
 
-class Director:
-    """Creates a manager and runs it"""
-
-    def __init__(self, args: Sequence[str] | None = None) -> None:
-        manager = Manager(args)
-
-        manager.startup()
-
-        if not manager.parsed_args.cli_only_args.download:
-            program_ui.run(manager)
-
-        self.manager = manager
-
-    def run(self) -> int:
-        return self._run()
-
-    async def async_run(self) -> None:
-        try:
-            await _run_manager(self.manager)
-        finally:
-            await self.manager.close()
-
-    def _run(self) -> int:
-        exit_code = 1
-        with contextlib.suppress(Exception):
-            aio.run(self.async_run())
-            exit_code = 0
-
-        return exit_code
+async def _run(manager: Manager) -> None:
+    try:
+        await _scrape(manager)
+    finally:
+        await manager.close()
 
 
 def main(args: Sequence[str] | None = None) -> str | int | None:
-    return _create_director(args).run()
+    manager = Manager(args)
+    manager.startup()
+    if not manager.parsed_args.cli_only_args.download:
+        program_ui.run(manager)
 
+    exit_code = 1
+    with contextlib.suppress(Exception):
+        aio.run(_run(manager))
+        exit_code = 0
 
-def _create_director(args: Sequence[str] | None = None) -> Director:
-    from cyberdrop_dl.__main__ import Director
-
-    return Director(args)
+    return exit_code
 
 
 if __name__ == "__main__":
