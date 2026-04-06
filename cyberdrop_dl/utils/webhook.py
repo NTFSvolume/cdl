@@ -17,14 +17,16 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-async def send_webhook_notification(content: str, webhook: AppriseURL) -> None:
+async def send_webhook_notification(webhook: AppriseURL, content: str | None = None) -> None:
     log_spacer()
-    url, logs = await _prepare_webhook(webhook)
-    form = _prepare_form(content, logs)
+    url, form = await _prepare_webhook(webhook)
+    if content:
+        form.add_field("content", content)
+
     await _send_webhook(url, form)
 
 
-async def _prepare_webhook(webhook: AppriseURL) -> tuple[str, bytes | None]:
+async def _prepare_webhook(webhook: AppriseURL) -> tuple[str, aiohttp.FormData]:
     url = str(webhook.url.get_secret_value())
     logs_content = None
     if webhook.attach_logs:
@@ -33,17 +35,12 @@ async def _prepare_webhook(webhook: AppriseURL) -> tuple[str, bytes | None]:
         except Exception:
             logger.exception("Unable to attach log for webhook notification")
 
-    return url, logs_content
-
-
-def _prepare_form(content: str, logs_content: bytes | None = None) -> aiohttp.FormData:
     form = aiohttp.FormData()
     if logs_content is not None:
         form.add_field("file", logs_content, filename=MAIN_LOG_FILE.get().name)
 
-    form.add_field("content", content)
     form.add_field("username", "cyberdrop-dl")
-    return form
+    return url, form
 
 
 async def _send_webhook(url: yarl.URL | str, form: aiohttp.FormData) -> None:

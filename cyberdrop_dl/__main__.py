@@ -54,7 +54,7 @@ async def _scrape(manager: Manager) -> None:
             logger.info("Finished downloading. Enjoy :)", extra={"color": "green"})
 
             if manager.config.logs.webhook:
-                await send_webhook_notification(stream.getvalue(), manager.config.logs.webhook)
+                await send_webhook_notification(manager.config.logs.webhook, stream.getvalue())
 
             await send_apprise_notifications(manager)
 
