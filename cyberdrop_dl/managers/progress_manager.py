@@ -117,12 +117,11 @@ class ProgressManager:
         """Prints the stats of the program."""
         if not self.manager.parsed_args.cli_only_args.print_stats:
             return
+
         end_time = time.perf_counter()
         runtime = timedelta(seconds=int(end_time - start_time))
         total_data_written = ByteSize(self.file_progress.total_data_written).human_readable(decimal=True)
 
-        log_spacer()
-        logger.info("Printing Stats...\n")
         config_path = self.manager.appdata.configs / self.manager.config_manager.loaded_config
         config_path_text = get_console_hyperlink(config_path, text=self.manager.config_manager.loaded_config)
         input_file_text = get_input(self.manager)

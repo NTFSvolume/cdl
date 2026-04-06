@@ -42,7 +42,10 @@ async def _scrape(manager: Manager) -> None:
             await _post_runtime(manager)
 
             with capture_logs() as stream:
-                manager.progress_manager.print_stats(start_time)
+                if manager.parsed_args.cli_only_args.print_stats:
+                    log_spacer()
+                    logger.info("Printing Stats...\n")
+                    manager.progress_manager.print_stats(start_time)
 
             log_spacer()
             check_latest_pypi()
@@ -95,7 +98,10 @@ def main(args: Sequence[str] | None = None) -> str | int | None:
 
     exit_code = 1
     with contextlib.suppress(Exception):
-        aio.run(_run(manager))
+        try:
+            aio.run(_run(manager))
+        except KeyboardInterrupt:
+            pass
         exit_code = 0
 
     return exit_code

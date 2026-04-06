@@ -21,11 +21,11 @@ async def _prepare_form(content: str, *, attach_logs: bool) -> FormData:
     form = FormData()
     if attach_logs:
         try:
-            logs = await asyncio.to_thread(export_logs, size_limit=25 * 1e6)
+            logs_content = await asyncio.to_thread(export_logs, size_limit=25 * 1e6)
         except Exception:
             logger.exception("Unable to attach log for webhook notification")
         else:
-            form.add_field("file", logs, filename=MAIN_LOG_FILE.get().name)
+            form.add_field("file", logs_content, filename=MAIN_LOG_FILE.get().name)
 
     form.add_fields(
         ("content", content),
