@@ -10,7 +10,7 @@ from datetime import datetime
 from io import StringIO
 from logging.handlers import QueueHandler, QueueListener
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, cast, final
 
 from rich._log_render import LogRender
 from rich.console import Console, Group
@@ -153,27 +153,25 @@ class BareQueueHandler(QueueHandler):
 
 @contextlib.contextmanager
 def _threaded_logger(log_handler: logging.Handler) -> Generator[tuple[BareQueueHandler, QueueListener]]:
-    """Context-manager to process logs from this handler in another thread.
-
-    It starts a QueueListener and yields the QueueHandler."""
+    """Context-manager to process logs from this handler in another thread"""
     q: queue.Queue[logging.LogRecord] = queue.Queue()
     q_handler: BareQueueHandler = BareQueueHandler(q)
-    listener: QueueListener = QueueListener(q, log_handler, respect_handler_level=True)
-    listener.start()
+    q_listener: QueueListener = QueueListener(q, log_handler, respect_handler_level=True)
+    q_listener.start()
     try:
-        yield q_handler, listener
+        yield q_handler, q_listener
     finally:
         try:
             q_handler.close()
         finally:
-            listener.stop()
-            for handler in listener.handlers[:]:
+            q_listener.stop()
+            for handler in q_listener.handlers[:]:
                 handler.close()
 
 
+@final
 class NoPaddingLogRender(LogRender):
     _cdl_padding: int = 0
-    EXCLUDE_PATH_LOGGING_FROM: tuple[str, ...] = "logger.py", "base.py", "session.py", "cache_control.py"
 
     def __call__(  # type: ignore[reportIncompatibleMethodOverride]  # pyright: ignore[reportIncompatibleMethodOverride]
         self,
@@ -196,21 +194,18 @@ class NoPaddingLogRender(LogRender):
                 else Text(log_time.strftime(time_format), style="log.time")
             )
             if log_time_display == self._last_time and self.omit_repeated_times:
-                _ = output.append(" " * len(log_time_display), style="log.time")
-                output.pad_right(1)
+                output.append(" " * len(log_time_display), style="log.time").pad_right(1)
             else:
-                _ = output.append_text(log_time_display)
-                output.pad_right(1)
+                output.append_text(log_time_display).pad_right(1)
                 self._last_time = log_time_display
 
         if self.show_level:
-            _ = output.append(level)
-            output.pad_right(1)
+            output.append(level).pad_right(1)
 
         if not self._cdl_padding:
             self._cdl_padding = console.measure(output).maximum
 
-        if self.show_path and path and not any(path.startswith(p) for p in self.EXCLUDE_PATH_LOGGING_FROM):
+        if self.show_path and path:
             path_text = Text(style="log.path")
             _ = path_text.append(path, style=f"link file://{link_path}" if link_path else "")
             if line_no:
@@ -219,8 +214,7 @@ class NoPaddingLogRender(LogRender):
                     f"{line_no}",
                     style=f"link file://{link_path}#{line_no}" if link_path else "",
                 )
-            _ = output.append_text(path_text)
-            output.pad_right(1)
+            output.append_text(path_text).pad_right(1)
 
         padded_lines: list[ConsoleRenderable] = []
 
