@@ -10,7 +10,7 @@ from datetime import datetime
 from io import StringIO
 from logging.handlers import QueueHandler, QueueListener
 from pathlib import Path
-from typing import TYPE_CHECKING, cast, final
+from typing import TYPE_CHECKING, final
 
 from rich._log_render import LogRender
 from rich.console import Console, Group
@@ -22,7 +22,6 @@ from typing_extensions import override
 from cyberdrop_dl import env
 
 if TYPE_CHECKING:
-    import threading
     from collections.abc import Generator
 
 logger = logging.getLogger("cyberdrop_dl")
@@ -30,8 +29,8 @@ _DEFAULT_CONSOLE = Console()
 
 _USER_NAME = Path.home().name
 _DEFAULT_CONSOLE_WIDTH = 240
-_LOCK: threading.RLock = cast("threading.RLock", logging._lock)  # pyright: ignore[ reportAttributeAccessIssue]
-_MAIN_LOGGER_LISTENER: ContextVar[QueueListener] = ContextVar("_MAIN_LOGGER_LISTENER")
+_MAIN_LOG_LISTENER: ContextVar[QueueListener] = ContextVar("_MAIN_LOGGER_LISTENER")
+_MAIN_LOG_FILE: ContextVar[Path] = ContextVar("_MAIN_LOGGER_FILE")
 
 
 if TYPE_CHECKING:
@@ -152,14 +151,15 @@ class BareQueueHandler(QueueHandler):
 
 
 @contextlib.contextmanager
-def _threaded_logger(log_handler: logging.Handler) -> Generator[tuple[BareQueueHandler, QueueListener]]:
+def _threaded_logger(log_handler: logging.Handler, *, main_log: bool = False) -> Generator[BareQueueHandler]:
     """Context-manager to process logs from this handler in another thread"""
     q: queue.Queue[logging.LogRecord] = queue.Queue()
     q_handler: BareQueueHandler = BareQueueHandler(q)
     q_listener: QueueListener = QueueListener(q, log_handler, respect_handler_level=True)
     q_listener.start()
+    token = _MAIN_LOG_LISTENER.set(q_listener) if main_log else None
     try:
-        yield q_handler, q_listener
+        yield q_handler
     finally:
         try:
             q_handler.close()
@@ -167,6 +167,8 @@ def _threaded_logger(log_handler: logging.Handler) -> Generator[tuple[BareQueueH
             q_listener.stop()
             for handler in q_listener.handlers[:]:
                 handler.close()
+            if token is not None:
+                _MAIN_LOG_LISTENER.reset(token)
 
 
 @final
@@ -258,23 +260,24 @@ def setup_logging(file: Path, /, level: int = logging.DEBUG) -> Generator[None]:
                 level,
                 show_time=False,
             )
-        ) as (console_out, _),
+        ) as console_out,
         _threaded_logger(
             LogHandler(
                 level,
                 show_time=True,
                 console=RedactedConsole(file=fp, width=_DEFAULT_CONSOLE_WIDTH * 2),
-            )
-        ) as (file_out, file_listener),
+            ),
+            main_log=True,
+        ) as file_out,
     ):
         logger.addHandler(console_out)
         logger.addHandler(file_out)
         logger.info(f"Debug log file: '{debug_log_file}'")
-        token = _MAIN_LOGGER_LISTENER.set(file_listener)
+        token = _MAIN_LOG_FILE.set(file)
         try:
             yield
         finally:
-            _MAIN_LOGGER_LISTENER.reset(token)
+            _MAIN_LOG_FILE.reset(token)
 
 
 @contextlib.contextmanager
@@ -305,7 +308,7 @@ def _setup_debug_logger() -> Generator[Path | None]:
                 console=Console(file=fp, width=_DEFAULT_CONSOLE_WIDTH * 2),
                 show_time=True,
             )
-        ) as (debug_handler, _),
+        ) as debug_handler,
     ):
         logger.addHandler(debug_handler)
         yield debug_log_file
@@ -321,12 +324,16 @@ def capture_logs() -> Generator[StringIO]:
         logger.removeHandler(in_memory_handler)
 
 
-def export_logs(path: Path, size_limit: int | None = None) -> bytes:
-    listener = _MAIN_LOGGER_LISTENER.get()
+def export_logs(size_limit: int | None = None) -> bytes:
+    flush_logs()
+    log_file = _MAIN_LOG_FILE.get()
+    if size_limit and log_file.stat().st_size > size_limit:
+        raise RuntimeError(f"Logs file '{log_file}' it's too big. Max size expected: {size_limit}")
+    return log_file.read_bytes()
+
+
+def flush_logs() -> None:
+    """Wait until every record that is currently queued has been written to disk"""
+    listener = _MAIN_LOG_LISTENER.get()
     listener.stop()
-    try:
-        if size_limit and path.stat().st_size > size_limit:
-            raise RuntimeError
-        return path.read_bytes()
-    finally:
-        listener.start()
+    listener.start()

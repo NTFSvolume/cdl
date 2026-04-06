@@ -22,7 +22,7 @@ def test_export_logs(tmp_path: Path) -> None:
         for line in TEXT.splitlines():
             logger.logger.debug(line)
 
-        content = logger.export_logs(log_file).decode("utf8")
+        content = logger.export_logs().decode("utf8")
 
     assert "Debug log file" in content
     for line in TEXT.splitlines():
