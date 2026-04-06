@@ -13,7 +13,7 @@ from cyberdrop_dl.scraper.scrape_mapper import ScrapeMapper
 from cyberdrop_dl.ui import program_ui
 from cyberdrop_dl.updates import check_latest_pypi
 from cyberdrop_dl.utils.apprise import send_apprise_notifications
-from cyberdrop_dl.utils.logger import log_spacer, setup_logging
+from cyberdrop_dl.utils.logger import capture_logs, log_spacer, setup_logging
 from cyberdrop_dl.utils.sorting import Sorter
 from cyberdrop_dl.utils.utilities import check_partials_and_empty_folders
 from cyberdrop_dl.utils.webhook import send_webhook_message
@@ -41,7 +41,8 @@ async def _scrape(manager: Manager) -> None:
             await _runtime(manager)
             await _post_runtime(manager)
 
-            manager.progress_manager.print_stats(start_time)
+            with capture_logs() as stream:
+                manager.progress_manager.print_stats(start_time)
 
             log_spacer()
             check_latest_pypi()
@@ -49,7 +50,9 @@ async def _scrape(manager: Manager) -> None:
             logger.info("Closing program...")
             logger.info("Finished downloading. Enjoy :)", extra={"color": "green"})
 
-            await send_webhook_message(manager)
+            if manager.config.logs.webhook:
+                await send_webhook_message(stream.getvalue(), manager.config.logs.webhook)
+
             await send_apprise_notifications(manager)
 
 

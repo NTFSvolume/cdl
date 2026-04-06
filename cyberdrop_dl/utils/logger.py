@@ -29,7 +29,7 @@ _DEFAULT_CONSOLE = Console()
 _USER_NAME = Path.home().name
 _DEFAULT_CONSOLE_WIDTH = 240
 _MAIN_LOG_LISTENER: ContextVar[QueueListener] = ContextVar("_MAIN_LOGGER_LISTENER")
-_MAIN_LOG_FILE: ContextVar[Path] = ContextVar("_MAIN_LOGGER_FILE")
+MAIN_LOG_FILE: ContextVar[Path] = ContextVar("_MAIN_LOGGER_FILE")
 
 
 if TYPE_CHECKING:
@@ -267,11 +267,11 @@ def setup_logging(file: Path, /, level: int = logging.DEBUG) -> Generator[None]:
         ),
     ):
         logger.info(f"Debug log file: '{debug_log_file}'")
-        token = _MAIN_LOG_FILE.set(file)
+        token = MAIN_LOG_FILE.set(file)
         try:
             yield
         finally:
-            _MAIN_LOG_FILE.reset(token)
+            MAIN_LOG_FILE.reset(token)
 
 
 @contextlib.contextmanager
@@ -285,9 +285,13 @@ def _setup_debug_logger() -> Generator[Path | None]:
     if env.DEBUG_LOG_FOLDER:
         debug_log_folder = Path(env.DEBUG_LOG_FOLDER)
 
-        if not debug_log_folder.is_dir():
+        if not debug_log_folder.exists():
             msg = f"Value of env var 'CDL_DEBUG_LOG_FOLDER' is invalid. Folder '{debug_log_folder}' does not exists"
             raise FileNotFoundError(None, msg, env.DEBUG_LOG_FOLDER)
+
+        if not debug_log_folder.is_dir():
+            msg = f"Value of env var 'CDL_DEBUG_LOG_FOLDER' is invalid. Folder '{debug_log_folder}' should a directory"
+            raise NotADirectoryError(None, msg, env.DEBUG_LOG_FOLDER)
 
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
         debug_log_file = debug_log_folder / f"cyberdrop_dl_debug_{now}.log"
@@ -317,11 +321,11 @@ def capture_logs() -> Generator[StringIO]:
         logger.removeHandler(in_memory_handler)
 
 
-def export_logs(*, size_limit: int | None = None) -> bytes:
+def export_logs(*, size_limit: float | None = None) -> bytes:
     flush_logs()
-    log_file = _MAIN_LOG_FILE.get()
+    log_file = MAIN_LOG_FILE.get()
     if size_limit and log_file.stat().st_size > size_limit:
-        raise RuntimeError(f"Logs file '{log_file}' it's too big. Max size expected: {size_limit}")
+        raise RuntimeError(f"Logs file '{log_file}' is too big. Max size expected: {size_limit}")
     return log_file.read_bytes()
 
 
