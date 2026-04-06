@@ -150,16 +150,18 @@ class BareQueueHandler(QueueHandler):
 
 
 @contextlib.contextmanager
-def _threaded_logger(log_handler: logging.Handler, *, main_log: bool = False) -> Generator[BareQueueHandler]:
+def _threaded_logger(log_handler: logging.Handler, *, is_main_log: bool = False) -> Generator[None]:
     """Context-manager to process logs from this handler in another thread"""
     q: queue.Queue[logging.LogRecord] = queue.Queue()
     q_handler: BareQueueHandler = BareQueueHandler(q)
     q_listener: QueueListener = QueueListener(q, log_handler, respect_handler_level=True)
     q_listener.start()
-    token = _MAIN_LOG_LISTENER.set(q_listener) if main_log else None
+    token = _MAIN_LOG_LISTENER.set(q_listener) if is_main_log else None
+    logger.addHandler(q_handler)
     try:
-        yield q_handler
+        yield
     finally:
+        logger.removeHandler(q_handler)
         try:
             q_handler.close()
         finally:
@@ -252,25 +254,18 @@ def setup_logging(file: Path, /, level: int = logging.DEBUG) -> Generator[None]:
     logger.setLevel(level)
     file.parent.mkdir(parents=True, exist_ok=True)
     with (
+        _threaded_logger(LogHandler(level, show_time=False)),
         _setup_debug_logger() as debug_log_file,
         file.open("w", encoding="utf8") as fp,
         _threaded_logger(
-            LogHandler(
-                level,
-                show_time=False,
-            )
-        ) as console_out,
-        _threaded_logger(
-            LogHandler(
+            is_main_log=True,
+            log_handler=LogHandler(
                 level,
                 show_time=True,
                 console=RedactedConsole(file=fp, width=_DEFAULT_CONSOLE_WIDTH * 2),
             ),
-            main_log=True,
-        ) as file_out,
+        ),
     ):
-        logger.addHandler(console_out)
-        logger.addHandler(file_out)
         logger.info(f"Debug log file: '{debug_log_file}'")
         token = _MAIN_LOG_FILE.set(file)
         try:
@@ -307,9 +302,8 @@ def _setup_debug_logger() -> Generator[Path | None]:
                 console=Console(file=fp, width=_DEFAULT_CONSOLE_WIDTH * 2),
                 show_time=True,
             )
-        ) as debug_handler,
+        ),
     ):
-        logger.addHandler(debug_handler)
         yield debug_log_file
 
 
