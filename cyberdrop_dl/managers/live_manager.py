@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 
 from rich.live import Live
 
-from cyberdrop_dl import constants
 from cyberdrop_dl.cli import is_terminal_in_portrait
 
 if TYPE_CHECKING:
@@ -62,13 +61,12 @@ class LiveManager:
         orientation_task = None
 
         try:
-            with self.replace_console():
-                self.live.start()
-                if layout:
-                    self.live.update(layout, refresh=True)
-                    if self.current_layout in ("vertical_layout", "horizontal_layout"):
-                        orientation_task = asyncio.create_task(self.watch_orientation(stop_event))
-                yield self.live
+            self.live.start()
+            if layout:
+                self.live.update(layout, refresh=True)
+                if self.current_layout in ("vertical_layout", "horizontal_layout"):
+                    orientation_task = asyncio.create_task(self.watch_orientation(stop_event))
+            yield self.live
         finally:
             stop_event.set()
             if orientation_task:
@@ -76,14 +74,3 @@ class LiveManager:
             if stop:
                 self.live.update("")
                 self.live.stop()
-
-    @contextmanager
-    def replace_console(self) -> Generator[None]:
-        """Disable the default console, replacing it with the internal live's console"""
-
-        default_console = constants.console_handler.console
-        try:
-            constants.console_handler.console = self.live.console
-            yield
-        finally:
-            constants.console_handler.console = default_console

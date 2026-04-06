@@ -1,18 +1,18 @@
+from __future__ import annotations
+
 import re
-from dataclasses import field
 from datetime import UTC, datetime
 from enum import auto
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, final
 
-from aiohttp.resolver import AsyncResolver, ThreadedResolver
 from rich.text import Text
 
 from cyberdrop_dl import env
 from cyberdrop_dl.compat import CIStrEnum, Enum, StrEnum
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.utils.logger import LogHandler
+    from aiohttp.resolver import AsyncResolver, ThreadedResolver
 
 # TIME
 STARTUP_TIME = datetime.now()
@@ -45,7 +45,6 @@ REGEX_LINKS = re.compile(r"(?:http.*?)(?=($|\n|\r\n|\r|\s|\"|\[/URL]|']\[|]\[|\[
 HTTP_REGEX_LINKS = re.compile(
     r"https?://(www\.)?[-a-zA-Z0-9@:%._+~#=]{2,256}\.[a-z]{2,12}\b([-a-zA-Z0-9@:%_+.~#?&/=]*)"
 )
-console_handler: "LogHandler"
 
 
 class TempExt(StrEnum):
@@ -82,7 +81,6 @@ class BlockedDomains:
 DEFAULT_APP_STORAGE = Path("./AppData")
 DEFAULT_DOWNLOAD_STORAGE = Path("./Downloads")
 RESERVED_CONFIG_NAMES = ["all", "default"]
-NOT_DEFINED = field(init=False)
 
 
 class HashType(StrEnum):
