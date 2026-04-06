@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING, Final, Literal
 import xxhash
 from send2trash import send2trash
 
-from cyberdrop_dl import aio, constants
-from cyberdrop_dl.constants import Hashing
+from cyberdrop_dl import aio
+from cyberdrop_dl.constants import Hashing, TempExt
 
 if TYPE_CHECKING:
     from yarl import URL
@@ -34,11 +34,11 @@ logger = logging.getLogger(__name__)
 
 
 def _compute_hash(file: Path, algorithm: Literal["xxh128", "md5", "sha256"]) -> str:
-    with file.open("rb") as file_io:
+    with file.open("rb") as fp:
         hash = _HASHERS[algorithm]()
-        buffer = bytearray(_CHUNK_SIZE)  # Reusable buffer to reduce allocations
+        buffer = bytearray(_CHUNK_SIZE)
         mem_view = memoryview(buffer)
-        while size := file_io.readinto(buffer):
+        while size := fp.readinto(buffer):
             hash.update(mem_view[:size])
 
     return hash.hexdigest()
@@ -115,7 +115,7 @@ class HashClient:
     ) -> str | None:
         file = Path(file)
 
-        if file.suffix in constants.TempExt:
+        if file.suffix in TempExt:
             return
 
         if not await aio.get_size(file):

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from cyberdrop_dl.clients.hash_client import hash_directory_scanner
+from cyberdrop_dl.hasher import hash_directory_scanner
 
 if TYPE_CHECKING:
     from pathlib import Path
