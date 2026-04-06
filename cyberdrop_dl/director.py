@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
-from enum import IntEnum
-from typing import TYPE_CHECKING, ParamSpec, TypeVar
+from typing import TYPE_CHECKING
 
 from rich.traceback import install as install_rich_tracebacks
 
@@ -22,18 +21,8 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 logger = logging.getLogger(__name__)
-P = ParamSpec("P")
-R = TypeVar("R")
 
-_ = install_rich_tracebacks()
-
-
-class ExitCode(IntEnum):
-    OK = 0
-    ERROR = 1
-
-
-_C = ExitCode
+_ = install_rich_tracebacks(width=None)
 
 
 async def _run_manager(manager: Manager) -> None:
@@ -113,9 +102,9 @@ class Director:
             await self.manager.close()
 
     def _run(self) -> int:
-        exit_code = _C.ERROR
+        exit_code = 1
         with contextlib.suppress(Exception):
             aio.run(self.async_run())
-            exit_code = _C.OK
+            exit_code = 0
 
         return exit_code
