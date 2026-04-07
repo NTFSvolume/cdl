@@ -21,7 +21,7 @@ from cyberdrop_dl.ui.progress.hash_progress import HashProgress
 from cyberdrop_dl.ui.progress.scraping_progress import ScrapingProgress
 from cyberdrop_dl.ui.progress.sort_progress import SortProgress
 from cyberdrop_dl.ui.progress.statistic_progress import DownloadStatsProgress, ScrapeStatsProgress
-from cyberdrop_dl.utils.logger import log_spacer
+from cyberdrop_dl.utils.logger import capture_logs, log_spacer
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Sequence
@@ -113,10 +113,19 @@ class ProgressManager:
             return self.vertical_layout
         return self.horizontal_layout
 
-    def print_stats(self, start_time: float) -> None:
-        """Prints the stats of the program."""
+    def print_stats(self, start_time: float) -> str:
         if not self.manager.parsed_args.cli_only_args.print_stats:
-            return
+            return ""
+
+        log_spacer()
+        logger.info("Printing Stats...\n")
+
+        with capture_logs() as stream:
+            self._print_stats(start_time)
+
+        return stream.getvalue()
+
+    def _print_stats(self, start_time: float) -> None:
 
         end_time = time.perf_counter()
         runtime = timedelta(seconds=int(end_time - start_time))
