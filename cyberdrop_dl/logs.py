@@ -38,6 +38,13 @@ if TYPE_CHECKING:
 
     from rich.console import ConsoleRenderable
 
+LOG_TO_CONSOLE: ContextVar[bool] = ContextVar("LOG_TO_CONSOLE", default=True)
+
+
+class ConsoleFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return LOG_TO_CONSOLE.get()
+
 
 class RedactedConsole(Console):
     """Custom console to remove username from logs"""
@@ -251,7 +258,9 @@ def log_spacer(char: str = "-") -> None:
 
 
 def setup_console_logging(level: int = logging.DEBUG) -> None:
-    logger.addHandler(LogHandler(level, show_time=False))
+    handler = LogHandler(level, show_time=False)
+    handler.addFilter(ConsoleFilter())
+    logger.addHandler(handler)
 
 
 @contextlib.contextmanager

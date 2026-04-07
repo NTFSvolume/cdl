@@ -11,6 +11,8 @@ from rich.markup import escape
 from rich.progress import Progress, Task, TaskID
 from rich.text import Text
 
+from cyberdrop_dl.logs import LOG_TO_CONSOLE
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Iterable
     from pathlib import Path
@@ -95,10 +97,14 @@ class LiveUI(ABC):
             yield None
             return
 
-        with Live(
-            refresh_per_second=REFRESH_RATE.get(),
-            auto_refresh=True,
-            transient=transient,
-            get_renderable=self.__rich__,
-        ):
-            yield
+        console_token = LOG_TO_CONSOLE.set(False)
+        try:
+            with Live(
+                refresh_per_second=REFRESH_RATE.get(),
+                auto_refresh=True,
+                transient=transient,
+                get_renderable=self.__rich__,
+            ):
+                yield
+        finally:
+            LOG_TO_CONSOLE.reset(console_token)
