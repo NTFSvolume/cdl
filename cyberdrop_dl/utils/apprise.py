@@ -75,7 +75,8 @@ async def notify(content: str, *urls: AppriseURL) -> None:
         return
 
     async with _temp_copy_of_main_log() as file:
-        attach_logs_msg.attachment = str(file)
+        if file:
+            attach_logs_msg.attachment = str(file)
         await _notify(apprise_obj, messages)
 
 
@@ -99,6 +100,13 @@ async def _notify(apprise_obj: apprise.Apprise, messages: Iterable[_AppriseMessa
 async def _temp_copy_of_main_log() -> AsyncGenerator[Path | None]:
     async with aio.temp_dir() as temp_dir:
         temp_file = temp_dir / MAIN_LOG_FILE.get().name
-        content = export_logs(size_limit=25 * 1e6)
-        _ = await aio.write_bytes(temp_file, content)
+        try:
+            logs = await asyncio.to_thread(export_logs, size_limit=25 * 1e6)
+        except Exception:
+            logger.exception("Unable to attach main log for apprise notifications")
+            yield
+            return
+
+        _ = await aio.write_bytes(temp_file, logs)
+
         yield temp_file
