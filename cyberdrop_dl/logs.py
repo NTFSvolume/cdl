@@ -260,11 +260,17 @@ def log_spacer(char: str = "-", *, log_to_console: bool = True) -> None:
         LOG_TO_CONSOLE.reset(token)
 
 
-def setup_console_logging(level: int = logging.DEBUG) -> None:
+@contextlib.contextmanager
+def setup_console_logging(level: int = logging.DEBUG) -> Generator[None]:
     handler = LogHandler(level, show_time=False)
-    handler.addFilter(ConsoleFilter())
-    logger.addHandler(handler)
     logger.setLevel(logging.DEBUG)
+    handler.addFilter(ConsoleFilter())
+    try:
+        with _threaded_logger(handler):
+            yield
+    finally:
+        # Re add it as a normal handler to make sure uncatched exceptions show up
+        logger.addHandler(handler)
 
 
 @contextlib.contextmanager

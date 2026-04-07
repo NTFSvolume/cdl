@@ -86,19 +86,19 @@ async def _run(manager: Manager) -> None:
 
 
 def main(args: Sequence[str] | None = None) -> int:
-    setup_console_logging()
-    manager = Manager(args)
-    manager.startup()
-    if not manager.parsed_args.cli_only_args.download:
-        program_ui.run(manager)
+    with setup_console_logging():
+        manager = Manager(args)
+        manager.startup()
+        if not manager.parsed_args.cli_only_args.download:
+            program_ui.run(manager)
 
-    try:
-        aio.run(_run(manager))
+        try:
+            aio.run(_run(manager))
 
-    except KeyboardInterrupt:
-        logger.info("Exiting (Ctrl + C) ...")
+        except KeyboardInterrupt:
+            logger.info("Exiting (Ctrl + C) ...")
 
-    return 0
+        return 0
 
 
 if __name__ == "__main__":
