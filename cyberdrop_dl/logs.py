@@ -81,7 +81,7 @@ class JsonLogRecord(logging.LogRecord):
     @staticmethod
     def _proccess_msg(msg: object) -> object:
         if callable(dump := getattr(msg, "model_dump_json", None)):
-            return dump()
+            return dump(indent=2, ensure_ascii=False)
         if isinstance(msg, dict):
             return json.dumps(msg, indent=2, ensure_ascii=False, default=str)
         return msg
