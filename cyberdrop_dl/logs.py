@@ -24,7 +24,6 @@ if TYPE_CHECKING:
     from collections.abc import Generator
 
 logger = logging.getLogger("cyberdrop_dl")
-logger.setLevel(logging.DEBUG)
 _DEFAULT_CONSOLE = Console()
 
 _USER_NAME = Path.home().name
@@ -253,21 +252,25 @@ def _indent_text(text: Text, console: Console, indent: int) -> Text:
     return first_line.append_text(new_text)
 
 
-def log_spacer(char: str = "-") -> None:
-    logger.info(char * 30, stacklevel=2)
+def log_spacer(char: str = "-", *, log_to_console: bool = True) -> None:
+    token = LOG_TO_CONSOLE.set(log_to_console)
+    try:
+        logger.info(char * 30, stacklevel=2)
+    finally:
+        LOG_TO_CONSOLE.reset(token)
 
 
 def setup_console_logging(level: int = logging.DEBUG) -> None:
     handler = LogHandler(level, show_time=False)
     handler.addFilter(ConsoleFilter())
     logger.addHandler(handler)
+    logger.setLevel(logging.DEBUG)
 
 
 @contextlib.contextmanager
 def setup_file_logging(file: Path, /, level: int = logging.DEBUG) -> Generator[None]:
     file.parent.mkdir(parents=True, exist_ok=True)
     with (
-        _threaded_logger(LogHandler(level, show_time=False)),
         _setup_debug_logger() as debug_log_file,
         file.open("w", encoding="utf8") as fp,
         _threaded_logger(
@@ -293,10 +296,10 @@ def _setup_debug_logger() -> Generator[Path | None]:
         yield
         return
 
-    debug_log_file = Path(__file__).parent.parent.parent / "cyberdrop_dl_debug.log"
+    debug_log_file = Path(__file__).parent.parent / "cyberdrop_dl_debug.log"
 
     if env.DEBUG_LOG_FOLDER:
-        debug_log_folder = Path(env.DEBUG_LOG_FOLDER)
+        debug_log_folder = Path(env.DEBUG_LOG_FOLDER).expanduser()
 
         if not debug_log_folder.exists():
             msg = f"Value of env var 'CDL_DEBUG_LOG_FOLDER' is invalid. Folder '{debug_log_folder}' does not exists"
@@ -309,7 +312,7 @@ def _setup_debug_logger() -> Generator[Path | None]:
         now = datetime.now().strftime("%Y%m%d_%H%M%S")
         debug_log_file = debug_log_folder / f"cyberdrop_dl_debug_{now}.log"
 
-    debug_log_file = debug_log_file.expanduser().resolve().absolute()
+    debug_log_file = debug_log_file.resolve().absolute()
 
     with (
         debug_log_file.open("w", encoding="utf8") as fp,

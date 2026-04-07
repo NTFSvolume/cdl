@@ -34,9 +34,10 @@ async def _scrape(manager: Manager) -> None:
 
         log_spacer()
         async with manager.database:
-            logger.info("Starting CDL...\n")
-
+            logger.info("Starting CDL...")
+            log_spacer(log_to_console=False)
             await _runtime(manager)
+            log_spacer()
             await _post_runtime(manager)
 
             stats = manager.progress_manager.print_stats(start_time)
@@ -63,8 +64,7 @@ async def _runtime(manager: Manager) -> None:
 
 async def _post_runtime(manager: Manager) -> None:
     """Actions to complete after main runtime, and before UI shutdown."""
-    log_spacer()
-    logger.info("Running Post-Download Processes", extra={"color": "green"})
+    logger.info("Running Post-Download Processes\n ", extra={"color": "green"})
 
     await manager.hasher.cleanup_dupes_after_download()
 

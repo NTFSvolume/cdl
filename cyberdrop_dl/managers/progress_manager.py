@@ -136,7 +136,7 @@ class ProgressManager:
         input_file_text = get_input(self.manager)
         log_folder_text = get_console_hyperlink(self.manager.config.logs.log_folder)
 
-        logger.info("Run Stats: ", config_path_text)
+        logger.info("Run Stats: ", config_path_text, extra={"color": "cyan"})
         logger.info("  Input File: ", input_file_text)
         logger.info(f"  Input URLs: {self.manager.scrape_mapper.count:,}")
         logger.info(f"  Input URL Groups: {self.manager.scrape_mapper.group_count:,}")
@@ -145,21 +145,21 @@ class ProgressManager:
         logger.info(f"  Total Downloaded Data: {total_data_written}")
 
         log_spacer()
-        logger.info("Download Stats:")
+        logger.info("Download Stats:", extra={"color": "cyan"})
         logger.info(f"  Downloaded: {self.download_progress.completed_files:,} files")
         logger.info(f"  Skipped (By Config): {self.download_progress.skipped_files:,} files")
         logger.info(f"  Skipped (Previously Downloaded): {self.download_progress.previously_completed_files:,} files")
         logger.info(f"  Failed: {self.download_stats_progress.failed_files:,} files")
 
         log_spacer()
-        logger.info("Unsupported URLs Stats:")
+        logger.info("Unsupported URLs Stats:", extra={"color": "cyan"})
         logger.info(f"  Sent to Jdownloader: {self.scrape_stats_progress.sent_to_jdownloader:,}")
         logger.info(f"  Skipped: {self.scrape_stats_progress.unsupported_urls_skipped:,}")
 
         self.print_dedupe_stats()
 
         log_spacer()
-        logger.info("Sort Stats:")
+        logger.info("Sort Stats:", extra={"color": "cyan"})
         logger.info(f"  Audios: {self.sort_progress.audio_count:,}")
         logger.info(f"  Images: {self.sort_progress.image_count:,}")
         logger.info(f"  Videos: {self.sort_progress.video_count:,}")
@@ -169,7 +169,7 @@ class ProgressManager:
 
     def print_dedupe_stats(self) -> None:
         log_spacer()
-        logger.info("Dupe Stats:")
+        logger.info("Dupe Stats:", extra={"color": "cyan"})
         logger.info(f"  Newly Hashed: {self.hash_progress.hashed_files:,} files")
         logger.info(f"  Previously Hashed: {self.hash_progress.prev_hashed_files:,} files")
         logger.info(f"  Removed (Downloads): {self.hash_progress.removed_files:,} files")
@@ -188,14 +188,16 @@ def _log_errors(scrape_errors: Sequence[UiFailureTotal], download_errors: Sequen
         ("Download Failures:", download_errors),
     ):
         log_spacer()
-        logger.info(title, extra={"color": "red"})
+        logger.info(title, extra={"color": "cyan"})
         if not errors:
-            logger.info(f"  {'None':>{padding}}")
-            return
+            logger.info(f"  {'None':>{padding}}", extra={"color": "green"})
+            continue
 
         for error in scrape_errors:
             error_code = error.code if error.code is not None else ""
-            logger.info(f"  {error_code:>{padding}}{' ' if padding else ''}{error.msg}: {error.count:,}")
+            logger.info(
+                f"  {error_code:>{padding}}{' ' if padding else ''}{error.msg}: {error.count:,}", extra={"color": "red"}
+            )
 
 
 def get_input(manager: Manager) -> Text | str:
