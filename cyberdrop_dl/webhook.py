@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 import aiohttp
 
-from cyberdrop_dl.utils.logger import MAIN_LOG_FILE, export_logs, log_spacer
+from cyberdrop_dl.logs import MAIN_LOG_FILE, export_logs, log_spacer
 
 if TYPE_CHECKING:
     import yarl

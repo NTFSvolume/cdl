@@ -8,8 +8,8 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any, Self
 
 from cyberdrop_dl.exceptions import get_origin
+from cyberdrop_dl.logs import log_spacer
 from cyberdrop_dl.utils import json
-from cyberdrop_dl.utils.logger import log_spacer
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator

@@ -8,16 +8,16 @@ import aiohttp
 from cyberdrop_dl import __version__ as current
 
 _PYPI_JSON_URL = "https://pypi.org/pypi/cyberdrop-dl-patched/json"
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 async def check_latest_pypi() -> None:
-    log.info("Checking for updates...")
+    logger.info("Checking for updates...")
     try:
         contents = await _request_pypi_info()
 
     except Exception as e:
-        log.error(f"Unable to get latest version information {e!r}")
+        logger.error(f"Unable to get latest version information {e!r}")
         raise
     else:
         _parse_pypi_resp(contents)
@@ -38,8 +38,8 @@ def _parse_pypi_resp(data: dict[str, Any]) -> None:
     releases: set[str] = set(data["releases"])
 
     if current not in releases:
-        log.warning(f"You are using an unreleased version of CDL: {current}. Latest stable release {latest}")
+        logger.warning(f"You are using an unreleased version of CDL: {current}. Latest stable release {latest}")
     elif current == latest:
-        log.info(f"You are using the latest version of CDL: {current}")
+        logger.info(f"You are using the latest version of CDL: {current}")
     else:
-        log.warning(f"A new version is available: {latest}")
+        logger.warning(f"A new version is available: {latest}")

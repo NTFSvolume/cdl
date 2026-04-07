@@ -15,13 +15,13 @@ from rich.text import Text
 from yarl import URL
 
 from cyberdrop_dl import __version__
+from cyberdrop_dl.logs import capture_logs, log_spacer
 from cyberdrop_dl.ui.progress.downloads_progress import DownloadsProgress
 from cyberdrop_dl.ui.progress.file_progress import FileProgress
 from cyberdrop_dl.ui.progress.hash_progress import HashProgress
 from cyberdrop_dl.ui.progress.scraping_progress import ScrapingProgress
 from cyberdrop_dl.ui.progress.sort_progress import SortProgress
 from cyberdrop_dl.ui.progress.statistic_progress import DownloadStatsProgress, ScrapeStatsProgress
-from cyberdrop_dl.utils.logger import capture_logs, log_spacer
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Sequence

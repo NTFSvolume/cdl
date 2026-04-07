@@ -22,7 +22,7 @@ from cyberdrop_dl.crawlers.realdebrid import RealDebridCrawler
 from cyberdrop_dl.crawlers.wordpress import WordPressHTMLCrawler, WordPressMediaCrawler
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.exceptions import JDownloaderError, NoExtensionError
-from cyberdrop_dl.utils.logger import log_spacer
+from cyberdrop_dl.logs import log_spacer
 from cyberdrop_dl.utils.utilities import get_download_path, remove_trailing_slash
 
 if TYPE_CHECKING:
