@@ -70,8 +70,9 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
 
     def __str__(self) -> str:
         me = self.__json__()
-        for key in ("content", "created_at"):
-            del me[key]
+        del me["created_at"]
+        if type(content := me["content"]) is str:
+            me["content"] = content[:200]
         return json.dumps(me, indent=2, ensure_ascii=False)
 
     def __json__(self) -> dict[str, Any]:
