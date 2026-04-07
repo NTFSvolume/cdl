@@ -184,7 +184,7 @@ class Manager:
             "ffmpeg version": ffmpeg.get_ffmpeg_version(),
             "ffprobe version": ffmpeg.get_ffprobe_version(),
         }
-        logger.info(args_info)
+        logger.debug(args_info)
 
     async def close(self) -> None:
 

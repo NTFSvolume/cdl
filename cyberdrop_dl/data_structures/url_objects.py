@@ -237,12 +237,12 @@ class MediaItem:
         else:
             self._task_id = task_id
 
-    def __json__(self) -> dict[str, Any]:
+    def serialize(self) -> dict[str, Any]:
         me = asdict(self)
         if self.hash:
             me["hash"] = f"xxh128:{self.hash}"
         for name in ("fallbacks", "_task_id", "is_segment", "parent_media_item"):
-            _ = me.pop(name)
+            del me[name]
         return me
 
 

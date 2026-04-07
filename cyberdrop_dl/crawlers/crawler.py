@@ -461,8 +461,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         if not self.manager.config.files.dump_json:
             return
 
-        data = [media_item.__json__()]
-        await self.manager.logs.write_jsonl(data)
+        await self.manager.logs.write_jsonl([media_item.serialize()])
 
     @final
     async def check_complete(self, url: AbsoluteHttpURL, referer: AbsoluteHttpURL) -> bool:

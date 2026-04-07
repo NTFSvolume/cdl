@@ -30,14 +30,13 @@ _USER_NAME = Path.home().name
 _DEFAULT_CONSOLE_WIDTH = 240
 _MAIN_LOG_LISTENER: ContextVar[QueueListener] = ContextVar("_MAIN_LOGGER_LISTENER")
 MAIN_LOG_FILE: ContextVar[Path] = ContextVar("_MAIN_LOGGER_FILE")
+LOG_TO_CONSOLE: ContextVar[bool] = ContextVar("LOG_TO_CONSOLE", default=True)
 
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
     from rich.console import ConsoleRenderable
-
-LOG_TO_CONSOLE: ContextVar[bool] = ContextVar("LOG_TO_CONSOLE", default=True)
 
 
 class RedactedConsole(Console):
@@ -73,12 +72,14 @@ class JsonLogRecord(logging.LogRecord):
         return msg
 
     @staticmethod
-    def _proccess_msg(msg: object) -> object:
-        if callable(dump := getattr(msg, "model_dump_json", None)):
+    def _proccess_msg(obj: object) -> object:
+        if callable(dump := getattr(obj, "model_dump_json", None)):
             return dump(indent=2, ensure_ascii=False)
-        if isinstance(msg, dict):
-            return json.dumps(msg, indent=2, ensure_ascii=False, default=str)
-        return msg
+        if callable(dump := getattr(obj, "__json__", None)):
+            return json.dumps(dump(), indent=2, ensure_ascii=False, default=str)
+        if isinstance(obj, dict):
+            return json.dumps(obj, indent=2, ensure_ascii=False, default=str)
+        return obj
 
 
 logging.setLogRecordFactory(JsonLogRecord)
@@ -252,7 +253,7 @@ def log_spacer(char: str = "-") -> None:
 
 
 @contextlib.contextmanager
-def setup_console_logging(level: int = logging.DEBUG) -> Generator[None]:
+def setup_console_logging(level: int = logging.INFO) -> Generator[None]:
     handler = LogHandler(level, show_time=False)
     logger.setLevel(logging.DEBUG)
     handler.addFilter(lambda _: LOG_TO_CONSOLE.get())

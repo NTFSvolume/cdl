@@ -33,22 +33,16 @@ class DiskPartition:
     fstype: str = dataclasses.field(compare=False)
     opts: str = dataclasses.field(compare=False)
 
-
-@dataclasses.dataclass(frozen=True, slots=True, order=True)
-class DiskPartitionStats:
-    partition: DiskPartition
-    free_space: ByteSize
-
-    def __str__(self) -> str:
-        free_space = self.free_space.human_readable(decimal=True)
-        stats = dataclasses.asdict(self.partition) | {"free_space": free_space}
-        return ", ".join(f"'{k}': '{v}'" for k, v in stats.items())
+    def __json__(self) -> dict[str, str]:
+        return {k: str(v) for k, v in dataclasses.asdict(self).items()}
 
 
 class _Stats:
+    def __json__(self) -> tuple[dict[str, str], ...]:
+        return tuple(_partition_stats())
+
     def __str__(self) -> str:
-        info = "\n".join(f"    {stats!s}" for stats in _partition_stats())
-        return f"Storage status:\n {info}"
+        return str(self.__json__())
 
 
 async def _get_free_space(path: Path) -> int:
@@ -89,7 +83,7 @@ async def has_sufficient_space(folder: Path, /, required_free_space: int) -> boo
 
                 free_space = _free_space[mount] = await _get_free_space(mount)
                 logger.info(f"A new mountpoint ('{mount!s}') will be used for '{folder}'")
-                logger.info(_Stats())
+                logger.info("Storage status \n{}", _Stats())
 
     return free_space == -1 or free_space > required_free_space
 
@@ -120,11 +114,13 @@ def _partitions() -> tuple[DiskPartition, ...]:
     return tuple(_PARTITIONS)
 
 
-def _partition_stats() -> Generator[DiskPartitionStats]:
+def _partition_stats() -> Generator[dict[str, str]]:
     for partition in _partitions():
         free_space = _free_space.get(partition.mountpoint)
         if free_space is not None:
-            yield DiskPartitionStats(partition, ByteSize(free_space))
+            stats = partition.__json__()
+            stats["free_space"] = ByteSize(free_space).human_readable(decimal=True)
+            yield stats
 
 
 def clear_cache() -> None:
@@ -153,7 +149,7 @@ async def start_loop() -> None:
             await update()
 
             if last_check % _LOG_PERIOD == 0:
-                logger.debug(_Stats())
+                logger.debug("Storage status \n{}", _Stats())
 
         await asyncio.sleep(_CHECK_PERIOD)
 

@@ -119,7 +119,7 @@ class HTTPClient:
                 exc = e
                 raise
             finally:
-                logger.debug("Finishing {} request [id={}]\n{}", method, request_id, resp)
+                logger.debug("Finishing {} request [id={}]\n{}", method, request_id, str(resp))
                 if self._save_responses_to_disk:
                     _ = self.client_manager.manager.task_group.create_task(
                         asyncio.to_thread(
