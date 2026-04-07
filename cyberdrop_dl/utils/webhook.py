@@ -17,27 +17,23 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-async def send_webhook_notification(webhook: AppriseURL, content: str | None = None) -> None:
+async def send_webhook_notification(webhook: AppriseURL, body: str) -> None:
     log_spacer()
     url, form = await _prepare_webhook(webhook)
-    if content:
-        form.add_field("content", content)
-
+    form.add_field("content", body)
     await _send_webhook(url, form)
 
 
 async def _prepare_webhook(webhook: AppriseURL) -> tuple[str, aiohttp.FormData]:
     url = str(webhook.url.get_secret_value())
-    logs_content = None
+    form = aiohttp.FormData()
     if webhook.attach_logs:
         try:
-            logs_content = await asyncio.to_thread(export_logs, size_limit=25 * 1e6)
+            logs = await asyncio.to_thread(export_logs, size_limit=25 * 1e6)
         except Exception:
             logger.exception("Unable to attach log for webhook notification")
-
-    form = aiohttp.FormData()
-    if logs_content is not None:
-        form.add_field("file", logs_content, filename=MAIN_LOG_FILE.get().name)
+        else:
+            form.add_field("file", logs, filename=MAIN_LOG_FILE.get().name)
 
     form.add_field("username", "cyberdrop-dl")
     return url, form
