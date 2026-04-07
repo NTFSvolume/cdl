@@ -31,6 +31,34 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+class _Request:
+    def __init__(self, params: Mapping[str, Any]) -> None:
+        self.params: Mapping[str, Any] = params
+
+    def __json__(self) -> dict[str, Any]:
+        params = {k: v for k, v in self.params.items() if v is not None}
+        params["headers"] = dict(params["headers"])
+        return params
+
+    def __str__(self) -> str:
+        return str(self.__json__())
+
+
+class _Response:
+    def __init__(self, response: AbstractResponse[Any]) -> None:
+        self.response = response
+
+    def __json__(self) -> dict[str, Any]:
+        resp = self.response.__json__()
+        del resp["created_at"]
+        if type(content := resp["content"]) is str:
+            resp["content"] = content[:200]
+        return resp
+
+    def __str__(self) -> str:
+        return str(self.__json__())
+
+
 @dataclasses.dataclass(slots=True)
 class HTTPClient:
     client_manager: ClientManager
@@ -101,15 +129,6 @@ class HTTPClient:
         else:
             _ = headers.setdefault("user-agent", self.client_manager.manager.global_config.general.user_agent)
 
-        request_id = str(uuid.uuid4())
-        logger.debug(
-            "Starting %s request to %s [id=%s]\n%s",
-            method,
-            url,
-            request_id,
-            request_params | {"headers": dict(headers)},
-        )
-
         async with self.__request(url, method, request_params, impersonate=bool(impersonate)) as resp:
             exc = None
             try:
@@ -118,7 +137,6 @@ class HTTPClient:
                 exc = e
                 raise
             finally:
-                logger.debug("Finishing %s request [id=%s]\n%s", method, request_id, str(resp))
                 if self._save_responses_to_disk:
                     _ = self.client_manager.manager.task_group.create_task(
                         asyncio.to_thread(
@@ -152,20 +170,29 @@ class HTTPClient:
         *,
         impersonate: bool,
     ) -> AsyncGenerator[AbstractResponse[Any]]:
+        request_id = str(uuid.uuid4())
+        logger.debug("Starting %s request to %s [id=%s]\n%s", method, url, request_id, _Request(request_params))
+        resp = None
+        try:
+            if impersonate:
+                async with contextlib.aclosing(
+                    await self.client_manager._curl_session.request(method, str(url), stream=True, **request_params)
+                ) as curl_resp:
+                    resp = AbstractResponse.create(curl_resp)
+                    yield resp
+                    self.__sync_session_cookies(url)
 
-        if impersonate:
-            async with contextlib.aclosing(
-                await self.client_manager._curl_session.request(method, str(url), stream=True, **request_params)
-            ) as curl_resp:
-                yield AbstractResponse.create(curl_resp)
-                self.__sync_session_cookies(url)
+                return
 
-            return
+            async with (
+                self.client_manager._session.request(method, url, **request_params) as aio_resp,
+            ):
+                resp = AbstractResponse.create(aio_resp)
+                yield resp
 
-        async with (
-            self.client_manager._session.request(method, url, **request_params) as aio_resp,
-        ):
-            yield AbstractResponse.create(aio_resp)
+        finally:
+            if resp is not None:
+                logger.debug("Finishing %s request [id=%s]\n%s", method, request_id, _Response(resp))
 
     async def _check_response(self, abs_resp: AbstractResponse[Any], url: AbsoluteHttpURL, data: Any | None = None):
         """Checks the HTTP response status and retries DDOS Guard errors with FlareSolverr.
