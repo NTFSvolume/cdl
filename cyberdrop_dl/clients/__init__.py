@@ -31,28 +31,32 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class _Request:
+class _LazyRequestLog:
     def __init__(self, params: Mapping[str, Any]) -> None:
         self.params: Mapping[str, Any] = params
 
     def __json__(self) -> dict[str, Any]:
-        params = {k: v for k, v in self.params.items() if v is not None}
-        params["headers"] = dict(params["headers"])
-        return params
+        return {k: v for k, v in self.params.items() if self._coerce(k, v) is not None}
+
+    @staticmethod
+    def _coerce(name: str, value: object) -> object:
+        if name == "headers":
+            value = dict(value) or None
+        return value
 
     def __str__(self) -> str:
         return str(self.__json__())
 
 
-class _Response:
+class _LazyResponseLog:
     def __init__(self, response: AbstractResponse[Any]) -> None:
         self.response = response
 
     def __json__(self) -> dict[str, Any]:
         resp = self.response.__json__()
         del resp["created_at"]
-        if type(content := resp["content"]) is str:
-            resp["content"] = content[:200]
+        if type(content := resp["content"]) is str and len(content) > 200:
+            resp["content"] = f"{content[:200]} ... ({len(content) - 200:,} chars omitted)"
         return resp
 
     def __str__(self) -> str:
@@ -171,7 +175,13 @@ class HTTPClient:
         impersonate: bool,
     ) -> AsyncGenerator[AbstractResponse[Any]]:
         request_id = str(uuid.uuid4())
-        logger.debug("Starting %s request to %s [id=%s]\n%s", method, url, request_id, _Request(request_params))
+        logger.debug(
+            "Starting %s request [id=%s] to %s \n%s",
+            method,
+            request_id,
+            url,
+            _LazyRequestLog(request_params),
+        )
         resp = None
         try:
             if impersonate:
@@ -192,7 +202,7 @@ class HTTPClient:
 
         finally:
             if resp is not None:
-                logger.debug("Finishing %s request [id=%s]\n%s", method, request_id, _Response(resp))
+                logger.debug("Finished %s request [id=%s]\n%s", method, request_id, _LazyResponseLog(resp))
 
     async def _check_response(self, abs_resp: AbstractResponse[Any], url: AbsoluteHttpURL, data: Any | None = None):
         """Checks the HTTP response status and retries DDOS Guard errors with FlareSolverr.
