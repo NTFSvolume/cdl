@@ -36,7 +36,11 @@ class _LazyRequestLog:
         self.params: Mapping[str, Any] = params
 
     def __json__(self) -> dict[str, Any]:
-        return {k: v for k, v in self.params.items() if self._coerce(k, v) is not None}
+        params = {k: v for k, v in self.params.items() if v is not None}
+        headers = dict(params.pop("headers")) or None
+        if headers:
+            params.update(headers=headers)
+        return params
 
     @staticmethod
     def _coerce(name: str, value: object) -> object:
