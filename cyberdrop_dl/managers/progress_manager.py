@@ -192,7 +192,7 @@ def _log_errors(scrape_errors: Sequence[UiFailureTotal], download_errors: Sequen
         for error in scrape_errors:
             error_code = error.code if error.code is not None else ""
             logger.info(
-                f"  {error_code:>{padding}}{' ' if padding else ''}{error.msg}: {error.count:,}", extra={"color": "red"}
+                f"  {error_code:>{padding}}{' ' if padding else ''}{error.msg}: {error.total:,}", extra={"color": "red"}
             )
 
 
