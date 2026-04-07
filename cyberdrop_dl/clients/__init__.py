@@ -42,7 +42,6 @@ class _LazyRequestLog:
             params.update(headers=headers)
         return params
 
-
     def __str__(self) -> str:
         return str(self.__json__())
 
