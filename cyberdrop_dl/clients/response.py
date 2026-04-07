@@ -84,7 +84,6 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
 
         return {
             "url": str(self.url),
-            "location": str(self.location) if self.location else None,
             "status_code": self.status,
             "created_at": str(self.created_at),
             "response_headers": dict(self.headers),

@@ -103,7 +103,13 @@ class HTTPClient:
             request_params.setdefault("max_redirects", 8)
 
         request_id = str(uuid.uuid4())
-        logger.debug("Starting {} request to {} [id={}]\n{}", method, url, request_id, request_params)
+        logger.debug(
+            "Starting {} request to {} [id={}]\n{}",
+            method,
+            url,
+            request_id,
+            request_params | {"headers": dict(headers)},
+        )
 
         async with self.__request(url, method, request_params, impersonate=bool(impersonate)) as resp:
             exc = None

@@ -62,7 +62,7 @@ async def send_notifications(content: str, *urls: AppriseURL) -> None:
     should_attach_logs: bool = False
 
     for webhook in urls:
-        should_attach_logs = should_attach_logs or webhook.attach_logs
+        should_attach_logs |= webhook.attach_logs
         _ = apprise_obj.add(str(webhook.url.get_secret_value()), tag=sorted(webhook.tags))
 
     messages = (
