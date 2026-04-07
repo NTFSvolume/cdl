@@ -40,11 +40,6 @@ if TYPE_CHECKING:
 LOG_TO_CONSOLE: ContextVar[bool] = ContextVar("LOG_TO_CONSOLE", default=True)
 
 
-class ConsoleFilter(logging.Filter):
-    def filter(self, record: logging.LogRecord) -> bool:
-        return LOG_TO_CONSOLE.get()
-
-
 class RedactedConsole(Console):
     """Custom console to remove username from logs"""
 
@@ -264,7 +259,7 @@ def log_spacer(char: str = "-", *, log_to_console: bool = True) -> None:
 def setup_console_logging(level: int = logging.DEBUG) -> Generator[None]:
     handler = LogHandler(level, show_time=False)
     logger.setLevel(logging.DEBUG)
-    handler.addFilter(ConsoleFilter())
+    handler.addFilter(lambda _: LOG_TO_CONSOLE.get())
     try:
         with _threaded_logger(handler):
             yield
