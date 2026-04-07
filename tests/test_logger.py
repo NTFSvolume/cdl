@@ -68,15 +68,15 @@ class TestBorrowLogger:
         assert other.propagate is True
 
     def test_exception_inside_block_restores_state(self) -> None:
-        third_party = logging.getLogger("third_party_exc")
+        other = logging.getLogger("third_party_exc")
         orig_handler = logging.NullHandler()
-        third_party.addHandler(orig_handler)
-        third_party.setLevel(logging.CRITICAL)
+        other.addHandler(orig_handler)
+        other.setLevel(logging.CRITICAL)
 
         with pytest.raises(RuntimeError):
             with logger.borrow_logger("third_party_exc", level=logging.INFO):
-                assert third_party.level == logging.INFO
+                assert other.level == logging.INFO
                 raise RuntimeError("boom")
 
-        assert third_party.handlers == [orig_handler]
-        assert third_party.level == logging.CRITICAL
+        assert other.handlers == [orig_handler]
+        assert other.level == logging.CRITICAL

@@ -3,17 +3,20 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
+import importlib
+import importlib.util
 import logging
 from typing import TYPE_CHECKING
 
 from cyberdrop_dl import aio
-from cyberdrop_dl.dependencies import apprise
 from cyberdrop_dl.models import AppriseURL
 from cyberdrop_dl.utils.logger import MAIN_LOG_FILE, borrow_logger, export_logs, log_spacer
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Iterable, Sequence
     from pathlib import Path
+
+    import apprise
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +48,7 @@ def _parse_apprise_url(*urls: str) -> tuple[AppriseURL, ...]:
     if not urls:
         return ()
 
-    if apprise is None:
+    if importlib.util.find_spec("apprise") is None:
         logger.warning("Found apprise URLs for notifications but apprise is not installed. Ignoring")
         return ()
 
@@ -55,6 +58,8 @@ def _parse_apprise_url(*urls: str) -> tuple[AppriseURL, ...]:
 async def send_notifications(urls: Sequence[AppriseURL], body: str) -> None:
     if not urls:
         return
+
+    import apprise
 
     log_spacer()
     logger.info("Sending Apprise notifications ... ")
