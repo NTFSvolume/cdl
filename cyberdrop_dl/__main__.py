@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from rich.traceback import install as install_rich_tracebacks
 
-from cyberdrop_dl import aio, storage
+from cyberdrop_dl import aio, storage, webhook
 from cyberdrop_dl.managers.manager import Manager
 from cyberdrop_dl.scraper.scrape_mapper import ScrapeMapper
 from cyberdrop_dl.ui import program_ui
@@ -16,7 +16,6 @@ from cyberdrop_dl.utils.apprise import send_apprise_notifications
 from cyberdrop_dl.utils.logger import log_spacer, setup_logging
 from cyberdrop_dl.utils.sorting import Sorter
 from cyberdrop_dl.utils.utilities import check_partials_and_empty_folders
-from cyberdrop_dl.utils.webhook import send_webhook_notification
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -50,7 +49,7 @@ async def _scrape(manager: Manager) -> None:
             logger.info("Finished downloading. Enjoy :)", extra={"color": "green"})
 
             if manager.config.logs.webhook:
-                await send_webhook_notification(manager.config.logs.webhook, stats)
+                await webhook.send_notification(manager.config.logs.webhook, stats)
 
             await send_apprise_notifications(manager)
 
@@ -63,7 +62,7 @@ async def _runtime(manager: Manager) -> None:
 
 
 async def _post_runtime(manager: Manager) -> None:
-    """Actions to complete after main runtime, and before ui shutdown."""
+    """Actions to complete after main runtime, and before UI shutdown."""
     log_spacer()
     logger.info("Running Post-Download Processes", extra={"color": "green"})
 

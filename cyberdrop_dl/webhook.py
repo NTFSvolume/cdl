@@ -17,14 +17,14 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-async def send_webhook_notification(webhook: AppriseURL, body: str) -> None:
+async def send_notification(webhook: AppriseURL, body: str) -> None:
     log_spacer()
-    url, form = await _prepare_webhook(webhook)
+    url, form = await _prepare(webhook)
     form.add_field("content", body)
-    await _send_webhook(url, form)
+    await _send_notification(url, form)
 
 
-async def _prepare_webhook(webhook: AppriseURL) -> tuple[str, aiohttp.FormData]:
+async def _prepare(webhook: AppriseURL) -> tuple[str, aiohttp.FormData]:
     url = str(webhook.url.get_secret_value())
     form = aiohttp.FormData()
     if webhook.attach_logs:
@@ -39,7 +39,7 @@ async def _prepare_webhook(webhook: AppriseURL) -> tuple[str, aiohttp.FormData]:
     return url, form
 
 
-async def _send_webhook(url: yarl.URL | str, form: aiohttp.FormData) -> None:
+async def _send_notification(url: yarl.URL | str, form: aiohttp.FormData) -> None:
     logger.info("Sending webhook notifications.. ")
     try:
         async with aiohttp.request("POST", url, data=form) as response:
