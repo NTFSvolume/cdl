@@ -20,7 +20,7 @@ def test_logs_capture() -> None:
 
 def test_export_logs(tmp_path: Path) -> None:
     log_file = tmp_path / "test-log.log"
-    with logger.setup_logging(log_file):
+    with logger.setup_file_logging(log_file):
         for line in TEXT.splitlines():
             logger.logger.debug(line)
 

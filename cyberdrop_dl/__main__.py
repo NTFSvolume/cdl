@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import sys
+import time
 from typing import TYPE_CHECKING
 
 from rich.traceback import install as install_rich_tracebacks
@@ -11,7 +12,7 @@ from cyberdrop_dl.managers.manager import Manager
 from cyberdrop_dl.scraper.scrape_mapper import ScrapeMapper
 from cyberdrop_dl.ui import program_ui
 from cyberdrop_dl.utils import apprise, check_latest_pypi
-from cyberdrop_dl.utils.logger import log_spacer, setup_logging
+from cyberdrop_dl.utils.logger import log_spacer, setup_console_logging, setup_file_logging
 from cyberdrop_dl.utils.sorting import Sorter
 from cyberdrop_dl.utils.utilities import check_partials_and_empty_folders
 
@@ -26,9 +27,9 @@ _ = install_rich_tracebacks(width=None)
 async def _scrape(manager: Manager) -> None:
     manager.config.resolve_paths()
     manager.logs.delete_old_logs()
-    start_time = manager.start_time
+    start_time = time.monotonic()
 
-    with setup_logging(manager.config.logs.main_log):
+    with setup_file_logging(manager.config.logs.main_log):
         await manager.async_startup()
 
         log_spacer()
@@ -85,6 +86,7 @@ async def _run(manager: Manager) -> None:
 
 
 def main(args: Sequence[str] | None = None) -> int:
+    setup_console_logging()
     manager = Manager(args)
     manager.startup()
     if not manager.parsed_args.cli_only_args.download:

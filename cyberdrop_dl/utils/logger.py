@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from collections.abc import Generator
 
 logger = logging.getLogger("cyberdrop_dl")
+logger.setLevel(logging.DEBUG)
 _DEFAULT_CONSOLE = Console()
 
 _USER_NAME = Path.home().name
@@ -249,9 +250,12 @@ def log_spacer(char: str = "-") -> None:
     logger.info(char * 30, stacklevel=2)
 
 
+def setup_console_logging(level: int = logging.DEBUG) -> None:
+    logger.addHandler(LogHandler(level, show_time=False))
+
+
 @contextlib.contextmanager
-def setup_logging(file: Path, /, level: int = logging.DEBUG) -> Generator[None]:
-    logger.setLevel(level)
+def setup_file_logging(file: Path, /, level: int = logging.DEBUG) -> Generator[None]:
     file.parent.mkdir(parents=True, exist_ok=True)
     with (
         _threaded_logger(LogHandler(level, show_time=False)),

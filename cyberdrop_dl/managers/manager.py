@@ -5,7 +5,6 @@ import dataclasses
 import logging
 from dataclasses import Field, field
 from pathlib import Path
-from time import perf_counter
 from typing import TYPE_CHECKING, Any, Self, TypeVar
 
 from pydantic import BaseModel
@@ -56,7 +55,6 @@ class Manager:
         self.task_group: TaskGroup = asyncio.TaskGroup()
         self.scrape_mapper: ScrapeMapper = field(init=False)
 
-        self.start_time: float = perf_counter()
         self.downloaded_data: int = 0
         self.args = args
 
