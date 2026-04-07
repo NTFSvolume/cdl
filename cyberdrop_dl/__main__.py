@@ -34,8 +34,8 @@ async def _scrape(manager: Manager) -> None:
 
         log_spacer()
         async with manager.database:
+            log_spacer()
             logger.info("Starting CDL...")
-            log_spacer(log_to_console=False)
             await _runtime(manager)
             log_spacer()
             await _post_runtime(manager)

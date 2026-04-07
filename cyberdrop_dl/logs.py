@@ -247,12 +247,8 @@ def _indent_text(text: Text, console: Console, indent: int) -> Text:
     return first_line.append_text(new_text)
 
 
-def log_spacer(char: str = "-", *, log_to_console: bool = True) -> None:
-    token = LOG_TO_CONSOLE.set(log_to_console)
-    try:
-        logger.info(char * 30, stacklevel=2)
-    finally:
-        LOG_TO_CONSOLE.reset(token)
+def log_spacer(char: str = "-") -> None:
+    logger.info(char * 30, stacklevel=2)
 
 
 @contextlib.contextmanager
