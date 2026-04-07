@@ -2,25 +2,29 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import dataclasses
 import logging
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING
 
 from cyberdrop_dl import aio
 from cyberdrop_dl.dependencies import apprise
 from cyberdrop_dl.models import AppriseURL
-from cyberdrop_dl.utils.logger import MAIN_LOG_FILE, borrow_logger, export_logs
+from cyberdrop_dl.utils.logger import MAIN_LOG_FILE, borrow_logger, export_logs, log_spacer
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator
+    from collections.abc import AsyncGenerator, Iterable
     from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_MSG: Final[dict[str, str]] = {
-    "body": "Finished downloading. Enjoy :)",
-    "title": "Cyberdrop-DL",
-    "body_format": "text",
-}
+
+@dataclasses.dataclass(slots=True)
+class _AppriseMessage:
+    tag: str
+    body: str = "Finished downloading. Enjoy :)"
+    title: str = "Cyberdrop-DL"
+    body_format: str = "text"
+    attachment: str | None = None
 
 
 def read_apprise_urls(file: Path) -> tuple[AppriseURL, ...]:
@@ -51,32 +55,44 @@ async def notify(content: str, *urls: AppriseURL) -> None:
     if not urls:
         return
 
+    log_spacer()
     logger.info("Sending Apprise notifications.. ")
     apprise_obj = apprise.Apprise()
-    attach_logs: bool = False
+    should_attach_logs: bool = False
+
     for webhook in urls:
-        if not attach_logs:
-            attach_logs = webhook.attach_logs
+        should_attach_logs = should_attach_logs or webhook.attach_logs
         _ = apprise_obj.add(str(webhook.url.get_secret_value()), tag=sorted(webhook.tags))
 
-    messages: dict[str, dict[str, str]] = {
-        "no_logs": _DEFAULT_MSG | {"body": content},
-        "attach_logs": _DEFAULT_MSG | {"body": content},
-        "simplified": _DEFAULT_MSG,
-    }
+    messages = (
+        attach_logs_msg := _AppriseMessage(body=content, tag="attach_logs"),
+        _AppriseMessage(body=content, tag="no_logs"),
+        _AppriseMessage(tag="simplified"),
+    )
 
-    async def notify() -> None:
-        with borrow_logger("apprise", level=logging.INFO):
-            _ = await asyncio.gather(*(apprise_obj.async_notify(**msg, tag=tag) for tag, msg in messages.items()))
-
-    if not attach_logs:
-        await notify()
+    if not should_attach_logs:
+        await _notify(apprise_obj, messages)
         return
 
     async with _temp_copy_of_main_log() as file:
-        messages["attach_logs"]["attach"] = str(file)
+        attach_logs_msg.attachment = str(file)
+        await _notify(apprise_obj, messages)
 
-        await notify()
+
+async def _notify(apprise_obj: apprise.Apprise, messages: Iterable[_AppriseMessage]) -> None:
+    with borrow_logger("apprise", level=logging.INFO):
+        _ = await asyncio.gather(
+            *(
+                apprise_obj.async_notify(
+                    title=msg.title,
+                    body=msg.body,
+                    body_format=msg.body_format,
+                    attach=msg.attachment,
+                    tag=msg.tag,
+                )
+                for msg in messages
+            )
+        )
 
 
 @contextlib.asynccontextmanager
