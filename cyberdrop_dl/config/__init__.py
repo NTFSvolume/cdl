@@ -7,7 +7,7 @@ from time import sleep
 from typing import TYPE_CHECKING
 
 from cyberdrop_dl import constants, env
-from cyberdrop_dl.utils.apprise import get_apprise_urls
+from cyberdrop_dl.utils.apprise import read_apprise_urls
 
 from .auth_model import AuthSettings
 from .config_model import ConfigSettings
@@ -15,7 +15,7 @@ from .global_model import GlobalSettings
 
 if TYPE_CHECKING:
     from cyberdrop_dl.cli import ParsedArgs
-    from cyberdrop_dl.utils.apprise import AppriseURL
+    from cyberdrop_dl.models import AppriseURL
 
 __all__ = [
     "AuthSettings",
@@ -84,7 +84,7 @@ class Config:
     auth: AuthSettings
     settings: ConfigSettings
     global_settings: GlobalSettings
-    apprise_urls: list[AppriseURL]
+    apprise_urls: tuple[AppriseURL, ...]
 
     def __init__(self, name: str) -> None:
         self.apprise_urls = []
@@ -103,7 +103,7 @@ class Config:
         self.auth = auth
         self.settings = settings
         self.global_settings = global_settings
-        self.apprise_urls = get_apprise_urls(file=self.apprise_file)
+        self.apprise_urls = read_apprise_urls(self.apprise_file)
         return self
 
     @staticmethod
@@ -120,7 +120,7 @@ class Config:
         self.auth = AuthSettings.load_file(self.auth_config_file, "socialmediagirls_username:")
         self.settings = ConfigSettings.load_file(self.config_file, "download_error_urls_filename:")
         self.global_settings = GlobalSettings.load_file(appdata.global_config_file, "Dupe_Cleanup_Options:")
-        self.apprise_urls = get_apprise_urls(file=self.apprise_file)
+        self.apprise_urls = read_apprise_urls(file=self.apprise_file)
 
     def _resolve_all_paths(self) -> None:
         self.settings.resolve_paths()

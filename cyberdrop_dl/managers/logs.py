@@ -67,7 +67,13 @@ class LogManager:
         if self._ready:
             return
         for path in self.files:
-            path.unlink(missing_ok=True)
+            try:
+                path.unlink()
+            except FileNotFoundError:
+                pass
+            else:
+                logger.warning(f"Deleted conflicting old log file: '{path}'")
+
         self._ready = True
 
     async def write_jsonl(self, data: Iterable[dict[str, Any]]) -> None:

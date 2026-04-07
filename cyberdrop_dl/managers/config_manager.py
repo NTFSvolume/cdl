@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from cyberdrop_dl import yaml
 from cyberdrop_dl.config import AuthSettings, ConfigSettings, GlobalSettings
 from cyberdrop_dl.exceptions import InvalidYamlError
-from cyberdrop_dl.utils.apprise import get_apprise_urls
+from cyberdrop_dl.utils.apprise import read_apprise_urls
 
 if TYPE_CHECKING:
     from pydantic import BaseModel
@@ -25,7 +25,7 @@ class ConfigManager:
         self.settings: Path = field(init=False)
         self.global_settings: Path = field(init=False)
         self.deep_scrape: bool = False
-        self.apprise_urls: list[AppriseURL] = []
+        self.apprise_urls: tuple[AppriseURL, ...] = []
 
         self.authentication_data: AuthSettings = field(init=False)
         self.settings_data: ConfigSettings = field(init=False)
@@ -52,7 +52,7 @@ class ConfigManager:
         self._load_global_settings_config()
         self._load_settings_config()
         self.apprise_file = self.manager.appdata.configs / self.loaded_config / "apprise.txt"
-        self.apprise_urls = get_apprise_urls(file=self.apprise_file)
+        self.apprise_urls = read_apprise_urls(self.apprise_file)
 
     @staticmethod
     def get_model_fields(model: BaseModel, *, exclude_unset: bool = True) -> set[str]:

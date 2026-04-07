@@ -1,203 +1,88 @@
 from __future__ import annotations
 
 import asyncio
-import json
+import contextlib
 import logging
-import shutil
-import tempfile
-from dataclasses import dataclass
-from enum import IntEnum
-from io import StringIO
-from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Final
 
-import rich
-from rich.text import Text
-
-from cyberdrop_dl import constants
+from cyberdrop_dl import aio
 from cyberdrop_dl.dependencies import apprise
 from cyberdrop_dl.models import AppriseURL
-from cyberdrop_dl.utils.logger import log_spacer
+from cyberdrop_dl.utils.logger import MAIN_LOG_FILE, borrow_logger, export_logs
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.managers.manager import Manager
+    from collections.abc import AsyncGenerator
+    from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-
-class LogLevel(IntEnum):
-    NOTSET = 0
-    DEBUG = 10
-    INFO = 20
-    WARNING = 30
-    ERROR = 40
-    CRITICAL = 50
+_DEFAULT_MSG: Final[dict[str, str]] = {
+    "body": "Finished downloading. Enjoy :)",
+    "title": "Cyberdrop-DL",
+    "body_format": "text",
+}
 
 
-_LOG_LEVEL_NAMES = [x.name for x in LogLevel]
+def read_apprise_urls(file: Path) -> tuple[AppriseURL, ...]:
+    return _parse_apprise_url(*_read_apprise_urls(file))
 
 
-@dataclass
-class LogLine:
-    level: LogLevel = LogLevel.INFO
-    msg: str = ""
-
-
-def get_apprise_urls(*, file: Path | None = None, urls: list[str] | None = None) -> list[AppriseURL]:
-    """
-    Get Apprise URLs from the specified file or directly from a provided URL.
-
-    Args:
-        file (Path, optional): The path to the file containing Apprise URLs.
-        url (str, optional): A single Apprise URL to be processed.
-
-    Returns:
-        list[AppriseURL] | None: A list of processed Apprise URLs, or None if no valid URLs are found.
-    """
-
-    if not (urls or file):
-        raise ValueError("Neither url of file were supplied")
-    if urls and file:
-        raise ValueError("url of file are mutually exclusive")
-
-    if file:
-        if not file.is_file():
-            return []
+def _read_apprise_urls(file: Path) -> tuple[str, ...]:
+    try:
         with file.open(encoding="utf8") as apprise_file:
-            urls = [line.strip() for line in apprise_file if line.strip()]
+            return tuple(line.strip() for line in apprise_file if line.strip())
+    except OSError:
+        logger.exception(f"Unable to read apprise URL from '{file}'. Ignoring")
+        return ()
 
+
+def _parse_apprise_url(*urls: str) -> tuple[AppriseURL, ...]:
     if not urls:
-        return []
+        return ()
+
     if apprise is None:
         logger.warning("Found apprise URLs for notifications but apprise is not installed. Ignoring")
-        return []
+        return ()
 
-    return [AppriseURL.model_validate(url) for url in set(urls)]
-
-
-def _process_results(
-    all_urls: list[str], results: dict[str, bool | None], apprise_logs: str
-) -> tuple[constants.NotificationResult, list[LogLine]]:
-    result = [r for r in results.values() if r is not None]
-    result_dict = {}
-    for key, value in results.items():
-        if value:
-            result_dict[key] = str(constants.NotificationResult.SUCCESS.value)
-        elif value is None:
-            result_dict[key] = str(constants.NotificationResult.NONE.value)
-        else:
-            result_dict[key] = str(constants.NotificationResult.FAILED.value)
-
-    if all(result):
-        final_result = constants.NotificationResult.SUCCESS
-    elif any(result):
-        final_result = constants.NotificationResult.PARTIAL
-    else:
-        final_result = constants.NotificationResult.FAILED
-
-    log_spacer()
-    rich.print("Apprise notifications results:", final_result.value)
-    log = logger.debug if all(result) else logger.info
-    log(f"Apprise notifications results: {final_result.value}")
-    log(f"PARSED_APPRISE_URLs: \n{json.dumps(all_urls, indent=4)}\n")
-    log(f"RESULTS_BY_TAGS: \n{json.dumps(result_dict, indent=4)}")
-    log_spacer()
-    parsed_log_lines = _parse_apprise_logs(apprise_logs)
-    for line in parsed_log_lines:
-        log(line.msg)
-    return final_result, parsed_log_lines
+    return tuple(AppriseURL.model_validate({"url": url}) for url in set(urls))
 
 
-def _reduce_logs(apprise_logs: str) -> list[str]:
-    lines = apprise_logs.splitlines()
-    to_exclude = ["Running Post-Download Processes For Config"]
-    return [line for line in lines if all(word not in line for word in to_exclude)]
+async def notify(content: str, *urls: AppriseURL) -> None:
+    if not urls:
+        return
 
-
-def _parse_apprise_logs(apprise_logs: str) -> list[LogLine]:
-    lines = _reduce_logs(apprise_logs)
-    current_line: LogLine = LogLine()
-    parsed_lines: list[LogLine] = []
-    for line in lines:
-        log_level = line[0:8].strip()
-        if log_level and log_level not in _LOG_LEVEL_NAMES:  # pragma: no cover
-            current_line.msg += f"\n{line}"
-            continue
-
-        if current_line.msg != "":
-            parsed_lines.append(current_line)
-        current_line = LogLine(LogLevel[log_level], line[10::])
-    if lines:
-        parsed_lines.append(current_line)
-    return parsed_lines
-
-
-async def send_apprise_notifications(manager: Manager) -> tuple[constants.NotificationResult, list[LogLine]]:
-    """
-    Send notifications using Apprise based on the URLs set in the manager.
-
-    Args:
-        manager (Manager): The manager instance containing.
-
-    Returns:
-        tuple[NotificationResult, list[LogLine]]: A tuple containing the overall notification result and a list of log lines.
-
-    """
-    apprise_urls = manager.config_manager.apprise_urls
-    if not apprise_urls:
-        return constants.NotificationResult.NONE, [LogLine(msg=constants.NotificationResult.NONE.value.plain)]
-
-    rich.print("\nSending Apprise Notifications.. ")
-    text: Text = constants.LOG_OUTPUT_TEXT
-    constants.LOG_OUTPUT_TEXT = Text("")
-
+    logger.info("Sending Apprise notifications.. ")
     apprise_obj = apprise.Apprise()
-
     attach_logs: bool = False
-    for webhook in apprise_urls:
+    for webhook in urls:
         if not attach_logs:
             attach_logs = webhook.attach_logs
         _ = apprise_obj.add(str(webhook.url.get_secret_value()), tag=sorted(webhook.tags))
 
-    main_log = manager.config.logs.main_log
-    all_urls = [str(x) for x in apprise_urls]
-    log_lines = []
+    messages: dict[str, dict[str, str]] = {
+        "no_logs": _DEFAULT_MSG | {"body": content},
+        "attach_logs": _DEFAULT_MSG | {"body": content},
+        "simplified": _DEFAULT_MSG,
+    }
 
-    with (
-        apprise.LogCapture(level=10, fmt="%(levelname)-7s - %(message)s") as capture,
-        tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as temp_dir,
-    ):
-        temp_dir = Path(temp_dir)
-        assert isinstance(capture, StringIO)
-        temp_main_log = temp_dir / main_log.name
-        notifications_to_send: dict[str, dict[str, Any]] = {
-            "no_logs": {"body": text.plain},
-            "attach_logs": {"body": text.plain},
-            "simplified": {},
-        }
-        attach_file_failed_msg = "Unable to get copy of main log file. 'attach_logs' URLs will be processed without it"
-        log_lines = [LogLine(LogLevel.ERROR, attach_file_failed_msg)]
-        try:
-            shutil.copy(main_log, temp_main_log)
-            notifications_to_send["attach_logs"]["attach"] = str(temp_main_log.resolve())
-        except OSError:
-            logger.exception(attach_file_failed_msg)
+    async def notify() -> None:
+        with borrow_logger("apprise", level=logging.INFO):
+            _ = await asyncio.gather(*(apprise_obj.async_notify(**msg, tag=tag) for tag, msg in messages.items()))
 
-        async def notify(tag: str, msg: dict[str, Any]) -> tuple[str, bool | None]:
-            result = await apprise_obj.async_notify(**msg, tag=tag)
-            return tag, result
+    if not attach_logs:
+        await notify()
+        return
 
-        def prepare_notifications():
-            for tag, extras in notifications_to_send.items():
-                msg = {
-                    "body": "Finished downloading. Enjoy :)",
-                    "title": "Cyberdrop-DL",
-                    "body_format": apprise.NotifyFormat.TEXT,
-                } | extras
-                yield notify(tag, msg)
+    async with _temp_copy_of_main_log() as file:
+        messages["attach_logs"]["attach"] = str(file)
 
-        results = dict(await asyncio.gather(*prepare_notifications()))
-        apprise_logs = capture.getvalue()
+        await notify()
 
-    result, new_log_lines = _process_results(all_urls, results, apprise_logs)
-    return result, log_lines + new_log_lines
+
+@contextlib.asynccontextmanager
+async def _temp_copy_of_main_log() -> AsyncGenerator[Path | None]:
+    async with aio.temp_dir() as temp_dir:
+        temp_file = temp_dir / MAIN_LOG_FILE.get().name
+        content = export_logs(size_limit=25 * 1e6)
+        _ = await aio.write_bytes(temp_file, content)
+        yield temp_file

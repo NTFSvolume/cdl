@@ -334,3 +334,31 @@ def flush_logs() -> None:
     listener = _MAIN_LOG_LISTENER.get()
     listener.stop()
     listener.start()
+
+
+@contextlib.contextmanager
+def borrow_logger(name: str, level: int = logging.INFO) -> Generator[None]:
+    """Context manager to temporarily add CDL's log handlers to a third party logger"""
+    _3p_logger = logging.getLogger(name)
+    _3p_level = _3p_logger.level
+    _3p_propagate = _3p_logger.propagate
+    _3p_handlers = _3p_logger.handlers.copy()
+
+    def replace_handlers_with(*new_handlers: logging.Handler) -> None:
+        for handler in _3p_logger.handlers[:]:
+            _3p_logger.removeHandler(handler)
+
+        for handler in new_handlers:
+            _3p_logger.addHandler(handler)
+
+    replace_handlers_with(*logger.handlers)
+
+    _3p_logger.propagate = False
+    _3p_logger.setLevel(level)
+
+    try:
+        yield
+    finally:
+        replace_handlers_with(*_3p_handlers)
+        _3p_logger.propagate = _3p_propagate
+        _3p_logger.setLevel(_3p_level)

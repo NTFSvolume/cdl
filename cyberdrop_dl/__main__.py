@@ -12,7 +12,7 @@ from cyberdrop_dl.managers.manager import Manager
 from cyberdrop_dl.scraper.scrape_mapper import ScrapeMapper
 from cyberdrop_dl.ui import program_ui
 from cyberdrop_dl.updates import check_latest_pypi
-from cyberdrop_dl.utils.apprise import send_apprise_notifications
+from cyberdrop_dl.utils import apprise
 from cyberdrop_dl.utils.logger import log_spacer, setup_logging
 from cyberdrop_dl.utils.sorting import Sorter
 from cyberdrop_dl.utils.utilities import check_partials_and_empty_folders
@@ -51,7 +51,7 @@ async def _scrape(manager: Manager) -> None:
             if manager.config.logs.webhook:
                 await webhook.send_notification(manager.config.logs.webhook, stats)
 
-            await send_apprise_notifications(manager)
+            await apprise.notify(stats, *manager.config_manager.apprise_urls)
 
 
 async def _runtime(manager: Manager) -> None:
