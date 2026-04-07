@@ -22,7 +22,7 @@ _PARTITIONS: list[DiskPartition] = []
 _UNAVAILABLE: set[Path] = set()
 _LOCKS: dict[Path, asyncio.Lock] = defaultdict(asyncio.Lock)
 _CHECK_PERIOD: Final = 2  # how often the check_free_space_loop will run (in seconds)
-_LOG_PERIOD: Final = 10  # log storage details every <x> loops, AKA log every 20 (2x10) seconds,
+_LOG_PERIOD: Final = 60  # log storage details every <x> loops
 _free_space: dict[Path, int] = {}
 
 
@@ -83,7 +83,7 @@ async def has_sufficient_space(folder: Path, /, required_free_space: int) -> boo
 
                 free_space = _free_space[mount] = await _get_free_space(mount)
                 logger.info(f"A new mountpoint ('{mount!s}') will be used for '{folder}'")
-                logger.info("Storage status \n{}", _Stats())
+                logger.info("Storage status \n%s", _Stats())
 
     return free_space == -1 or free_space > required_free_space
 
@@ -149,7 +149,7 @@ async def start_loop() -> None:
             await update()
 
             if last_check % _LOG_PERIOD == 0:
-                logger.debug("Storage status \n{}", _Stats())
+                logger.debug("Storage status \n%s", _Stats())
 
         await asyncio.sleep(_CHECK_PERIOD)
 

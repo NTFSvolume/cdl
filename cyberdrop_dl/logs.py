@@ -64,10 +64,14 @@ class JsonLogRecord(logging.LogRecord):
         msg = str(self._proccess_msg(self.msg))
         if self.args:
             args = tuple(map(self._proccess_msg, self.args))
-            try:
-                return msg.format(*args)
-            except Exception:
-                return msg % args
+            if "%" in msg:
+                try:
+                    return msg % args
+                except TypeError as e:
+                    if not e.args or "not all arguments converted" in e.args[0]:
+                        raise
+
+            return msg.format(*args)
 
         return msg
 

@@ -100,11 +100,10 @@ class HTTPClient:
 
         else:
             _ = headers.setdefault("user-agent", self.client_manager.manager.global_config.general.user_agent)
-            request_params.setdefault("max_redirects", 8)
 
         request_id = str(uuid.uuid4())
         logger.debug(
-            "Starting {} request to {} [id={}]\n{}",
+            "Starting %s request to %s [id=%s]\n%s",
             method,
             url,
             request_id,
@@ -119,7 +118,7 @@ class HTTPClient:
                 exc = e
                 raise
             finally:
-                logger.debug("Finishing {} request [id={}]\n{}", method, request_id, str(resp))
+                logger.debug("Finishing %s request [id=%s]\n%s", method, request_id, str(resp))
                 if self._save_responses_to_disk:
                     _ = self.client_manager.manager.task_group.create_task(
                         asyncio.to_thread(
