@@ -35,12 +35,12 @@ class TestReadAppriseUrls:
         _ = apprise_file.write_text("\n".join(("# line1\n", "  # line2\n\t\n")))
         assert _read_apprise_urls(apprise_file) == ()
 
-    def test_missing_file(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    def test_missing_file_does_not_raise_error(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
         apprise_file = tmp_path / "gone.txt"
         with caplog.at_level(logging.ERROR):
             assert _read_apprise_urls(apprise_file) == ()
 
-        assert "Unable to read apprise URL" in caplog.text
+        assert "Unable to read apprise URL" not in caplog.text
 
     @pytest.mark.skipif(os.name == "nt", reason="chmod not on Windows")
     def test_permission_error(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:

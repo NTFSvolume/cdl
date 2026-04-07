@@ -39,8 +39,8 @@ def test_export_logs(tmp_path: Path) -> None:
 class TestBorrowLogger:
     def test_handlers_swapped_temporarily(self) -> None:
         root_handler = logging.StreamHandler()
+        logs.logger.handlers.clear()
         logs.logger.addHandler(root_handler)
-
         try:
             other = logging.getLogger("third_party")
             original_handler = logging.NullHandler()
