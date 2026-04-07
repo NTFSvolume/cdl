@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import contextlib
 import logging
 import sys
 from typing import TYPE_CHECKING
@@ -85,22 +84,19 @@ async def _run(manager: Manager) -> None:
         await manager.close()
 
 
-def main(args: Sequence[str] | None = None) -> str | int | None:
+def main(args: Sequence[str] | None = None) -> int:
     manager = Manager(args)
     manager.startup()
     if not manager.parsed_args.cli_only_args.download:
         program_ui.run(manager)
 
-    exit_code = 1
-    with contextlib.suppress(Exception):
-        try:
-            aio.run(_run(manager))
-        except KeyboardInterrupt:
-            logger.info("Exiting (Ctrl + C) ...")
+    try:
+        aio.run(_run(manager))
 
-        exit_code = 0
+    except KeyboardInterrupt:
+        logger.info("Exiting (Ctrl + C) ...")
 
-    return exit_code
+    return 0
 
 
 if __name__ == "__main__":
