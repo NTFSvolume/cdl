@@ -9,14 +9,14 @@ from cyberdrop_dl.managers.manager import Manager
 from cyberdrop_dl.scraper import scrape_mapper
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator
+    from collections.abc import AsyncGenerator, Generator
     from pathlib import Path
 
     class Config(pytest.Config):  # type: ignore
         test_crawlers_domains: set[str]
 
 
-def pytest_addoption(parser: pytest.Parser):
+def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addoption(
         "--test-crawlers",
         action="store",
@@ -52,9 +52,10 @@ def pytest_collection_modifyitems(config: Config, items: list[pytest.Item]) -> N
 
 
 @pytest.fixture(autouse=True)
-def tmp_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    monkeypatch.chdir(tmp_path)
-    return tmp_path
+def tmp_cwd(tmp_path: Path) -> Generator[Path]:
+    with pytest.MonkeyPatch.context() as m:
+        m.chdir(tmp_path)
+        yield tmp_path
 
 
 @pytest.fixture
