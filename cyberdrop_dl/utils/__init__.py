@@ -35,6 +35,6 @@ def _parse_pypi_resp(data: dict[str, Any]) -> None:
     if current not in releases:
         logger.warning(f"You are using an unreleased version of CDL: {current}. Latest stable release {latest}")
     elif current == latest:
-        logger.info(f"You are using an latest version of CDL: {current}")
+        logger.info(f"You are using the latest version of CDL: {current}")
     else:
         logger.warning(f"A new version is available: {latest}")
