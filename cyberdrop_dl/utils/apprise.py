@@ -33,8 +33,9 @@ def read_apprise_urls(file: Path) -> tuple[AppriseURL, ...]:
 
 def _read_apprise_urls(file: Path) -> tuple[str, ...]:
     try:
-        with file.open(encoding="utf8") as apprise_file:
-            return tuple(line.strip() for line in apprise_file if line.strip())
+        with file.open(encoding="utf8") as fp:
+            return tuple(url for line in fp if (url := line.strip()) and not url.startswith("#"))
+
     except OSError:
         logger.exception(f"Unable to read apprise URL from '{file}'. Ignoring")
         return ()
@@ -51,12 +52,12 @@ def _parse_apprise_url(*urls: str) -> tuple[AppriseURL, ...]:
     return tuple(AppriseURL.model_validate({"url": url}) for url in set(urls))
 
 
-async def notify(content: str, *urls: AppriseURL) -> None:
+async def send_notifications(content: str, *urls: AppriseURL) -> None:
     if not urls:
         return
 
     log_spacer()
-    logger.info("Sending Apprise notifications.. ")
+    logger.info("Sending Apprise notifications ... ")
     apprise_obj = apprise.Apprise()
     should_attach_logs: bool = False
 

@@ -51,7 +51,7 @@ async def _scrape(manager: Manager) -> None:
             if manager.config.logs.webhook:
                 await webhook.send_notification(manager.config.logs.webhook, stats)
 
-            await apprise.notify(stats, *manager.config_manager.apprise_urls)
+            await apprise.send_notifications(stats, *manager.config_manager.apprise_urls)
 
 
 async def _runtime(manager: Manager) -> None:

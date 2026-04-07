@@ -120,7 +120,7 @@ class Config:
         self.auth = AuthSettings.load_file(self.auth_config_file, "socialmediagirls_username:")
         self.settings = ConfigSettings.load_file(self.config_file, "download_error_urls_filename:")
         self.global_settings = GlobalSettings.load_file(appdata.global_config_file, "Dupe_Cleanup_Options:")
-        self.apprise_urls = read_apprise_urls(file=self.apprise_file)
+        self.apprise_urls = read_apprise_urls(self.apprise_file)
 
     def _resolve_all_paths(self) -> None:
         self.settings.resolve_paths()
