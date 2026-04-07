@@ -1,4 +1,5 @@
 import logging
+import os
 from pathlib import Path
 
 import pytest
@@ -41,6 +42,7 @@ class TestReadAppriseUrls:
 
         assert "Unable to read apprise URL" in caplog.text
 
+    @pytest.mark.skipif(os.name == "nt", reason="chmod not on Windows")
     def test_permission_error(self, tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
         apprise_file = tmp_path / "no_access.txt"
         _ = apprise_file.write_text("mailto://a@b.c")

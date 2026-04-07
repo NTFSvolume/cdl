@@ -12,7 +12,7 @@ from cyberdrop_dl.models import AppriseURL
 from cyberdrop_dl.utils.logger import MAIN_LOG_FILE, borrow_logger, export_logs, log_spacer
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Iterable
+    from collections.abc import AsyncGenerator, Iterable, Sequence
     from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -52,7 +52,7 @@ def _parse_apprise_url(*urls: str) -> tuple[AppriseURL, ...]:
     return tuple(AppriseURL.model_validate({"url": url}) for url in set(urls))
 
 
-async def send_notifications(content: str, *urls: AppriseURL) -> None:
+async def send_notifications(urls: Sequence[AppriseURL], body: str) -> None:
     if not urls:
         return
 
@@ -66,8 +66,8 @@ async def send_notifications(content: str, *urls: AppriseURL) -> None:
         _ = apprise_obj.add(str(webhook.url.get_secret_value()), tag=sorted(webhook.tags))
 
     messages = (
-        attach_logs_msg := _AppriseMessage(body=content, tag="attach_logs"),
-        _AppriseMessage(body=content, tag="no_logs"),
+        attach_logs_msg := _AppriseMessage(body=body, tag="attach_logs"),
+        _AppriseMessage(body=body, tag="no_logs"),
         _AppriseMessage(tag="simplified"),
     )
 
