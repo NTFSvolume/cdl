@@ -34,3 +34,49 @@ def test_export_logs(tmp_path: Path) -> None:
     assert "Debug log file" in content
     for line in TEXT.splitlines():
         assert line in content
+
+
+class TestBorrowLogger:
+    def test_handlers_swapped_temporarily(self) -> None:
+        root_handler = logging.StreamHandler()
+        logger.logger.addHandler(root_handler)
+
+        try:
+            other = logging.getLogger("third_party")
+            original_handler = logging.NullHandler()
+            other.addHandler(original_handler)
+
+            assert other.handlers == [original_handler]
+
+            with logger.borrow_logger("third_party"):
+                assert other.handlers == [root_handler]
+
+            assert other.handlers == [original_handler]
+        finally:
+            logger.logger.removeHandler(root_handler)
+
+    def test_level_and_propagate_restored(self) -> None:
+        other = logging.getLogger("third_party_restore")
+        other.setLevel(logging.WARNING)
+        other.propagate = True
+
+        with logger.borrow_logger("third_party_restore", level=logging.DEBUG):
+            assert other.level == logging.DEBUG
+            assert other.propagate is False
+
+        assert other.level == logging.WARNING
+        assert other.propagate is True
+
+    def test_exception_inside_block_restores_state(self) -> None:
+        third_party = logging.getLogger("third_party_exc")
+        orig_handler = logging.NullHandler()
+        third_party.addHandler(orig_handler)
+        third_party.setLevel(logging.CRITICAL)
+
+        with pytest.raises(RuntimeError):
+            with logger.borrow_logger("third_party_exc", level=logging.INFO):
+                assert third_party.level == logging.INFO
+                raise RuntimeError("boom")
+
+        assert third_party.handlers == [orig_handler]
+        assert third_party.level == logging.CRITICAL

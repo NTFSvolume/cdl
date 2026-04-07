@@ -338,7 +338,7 @@ def flush_logs() -> None:
 
 @contextlib.contextmanager
 def borrow_logger(name: str, level: int = logging.INFO) -> Generator[None]:
-    """Context manager to temporarily add CDL's log handlers to a third party logger"""
+    """Context manager to temporarily add our log handlers to a third party logger"""
     _3p_logger = logging.getLogger(name)
     _3p_level = _3p_logger.level
     _3p_propagate = _3p_logger.propagate
