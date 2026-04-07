@@ -11,8 +11,7 @@ from cyberdrop_dl import aio, storage, webhook
 from cyberdrop_dl.managers.manager import Manager
 from cyberdrop_dl.scraper.scrape_mapper import ScrapeMapper
 from cyberdrop_dl.ui import program_ui
-from cyberdrop_dl.updates import check_latest_pypi
-from cyberdrop_dl.utils import apprise
+from cyberdrop_dl.utils import apprise, check_latest_pypi
 from cyberdrop_dl.utils.logger import log_spacer, setup_logging
 from cyberdrop_dl.utils.sorting import Sorter
 from cyberdrop_dl.utils.utilities import check_partials_and_empty_folders
@@ -43,7 +42,7 @@ async def _scrape(manager: Manager) -> None:
             stats = manager.progress_manager.print_stats(start_time)
 
             log_spacer()
-            check_latest_pypi()
+            await check_latest_pypi()
             log_spacer()
             logger.info("Closing program...")
             logger.info("Finished downloading. Enjoy :)", extra={"color": "green"})
