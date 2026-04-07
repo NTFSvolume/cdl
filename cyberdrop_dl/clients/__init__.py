@@ -42,11 +42,6 @@ class _LazyRequestLog:
             params.update(headers=headers)
         return params
 
-    @staticmethod
-    def _coerce(name: str, value: object) -> object:
-        if name == "headers":
-            value = dict(value) or None
-        return value
 
     def __str__(self) -> str:
         return str(self.__json__())
@@ -59,7 +54,7 @@ class _LazyResponseLog:
     def __json__(self) -> dict[str, Any]:
         resp = self.response.__json__()
         del resp["created_at"]
-        if type(content := resp["content"]) is str and len(content) > 200:
+        if type(content := resp["content"]) is str and len(content) > 230:
             resp["content"] = f"{content[:200]} ... ({len(content) - 200:,} chars omitted)"
         return resp
 
