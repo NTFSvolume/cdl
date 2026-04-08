@@ -135,7 +135,7 @@ class ProgressManager:
         logger.info(f"  Config file: {config_path}")
         logger.info(f"  Input file: {input_file_text}")
         logger.info(f"  URLs: {self.manager.scrape_mapper.count:,}")
-        logger.info(f"  URL Groups: {self.manager.scrape_mapper.group_count:,}")
+        logger.info(f"  URL Groups: {len(self.manager.scrape_mapper.groups):,}")
         logger.info(f"  Logs folder: {self.manager.config.logs.log_folder}")
         logger.info(f"  Total runtime: {elapsed}")
         logger.info(f"  Total downloaded data: {total_data_written}")

@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
     import aiosqlite
 
-    from cyberdrop_dl.config.global_model import GenericCrawlerInstances, GlobalSettings
+    from cyberdrop_dl.config.global_model import GenericCrawlerInstances
     from cyberdrop_dl.managers.manager import Manager
 
 _T = TypeVar("_T")
@@ -71,7 +71,7 @@ class ScrapeMapper:
     """This class maps links to their respective handlers, or JDownloader if they are unsupported."""
 
     manager: Manager
-    direct_crawler: DirectHttpFile = dataclasses.field(init=False)
+    direct_http: DirectHttpFile = dataclasses.field(init=False)
     jdownloader: JDownloader = dataclasses.field(init=False)
     real_debrid: RealDebridCrawler = dataclasses.field(init=False)
 
@@ -85,7 +85,7 @@ class ScrapeMapper:
     _seen_urls: set[AbsoluteHttpURL] = dataclasses.field(init=False, default_factory=set)
 
     def __post_init__(self) -> None:
-        self.direct_crawler = DirectHttpFile(self.manager)
+        self.direct_http = DirectHttpFile(self.manager)
         self.jdownloader = JDownloader.from_manager(self.manager)
         self.existing_crawlers["real-debrid"] = self.real_debrid = RealDebridCrawler(self.manager)
 
@@ -95,23 +95,15 @@ class ScrapeMapper:
     def create_download_task(self, coro: Coroutine[Any, Any, _T]) -> None:
         _ = self.task_groups.downloads.create_task(coro)
 
-    @property
-    def group_count(self) -> int:
-        return len(self.groups)
-
-    @property
-    def global_settings(self) -> GlobalSettings:
-        return self.manager.global_config
-
     def _init_crawlers(self) -> None:
         from cyberdrop_dl import plugins
 
         crawlers = get_crawlers_mapping()
 
-        for crawler in _create_generic_crawlers(self.global_settings.generic_crawlers_instances):
+        for crawler in _create_generic_crawlers(self.manager.global_config.generic_crawlers_instances):
             register_crawler(crawlers, crawler, from_user=True)
 
-        _disable_crawlers_by_config(crawlers, self.global_settings.general.disable_crawlers)
+        _disable_crawlers_by_config(crawlers, self.manager.global_config.general.disable_crawlers)
 
         self.existing_crawlers.update((domain, crawler(self.manager)) for domain, crawler in crawlers.items())
 
@@ -136,18 +128,17 @@ class ScrapeMapper:
 
     async def run(self) -> None:
         self._init_crawlers()
-        await self.manager.database.history.update_previously_unsupported(self.existing_crawlers)
         try:
             await self.jdownloader.connect()
         except JDownloaderError:
             logger.exception("Failed to connect to jDownloader")
 
         await self.real_debrid.__async_init__()
-        self.direct_crawler.__init_downloader__()
-        async for item in self.get_input_items():
+        self.direct_http.__init_downloader__()
+        async for item in self._source():
             self.create_task(self._send_to_crawler(item))
 
-    async def get_input_items(self) -> AsyncGenerator[ScrapeItem]:
+    async def _source(self) -> AsyncGenerator[ScrapeItem]:
         item_limit = 0
         if self.manager.parsed_args.cli_only_args.retry_any and self.manager.parsed_args.cli_only_args.max_items_retry:
             item_limit = self.manager.parsed_args.cli_only_args.max_items_retry
@@ -172,8 +163,7 @@ class ScrapeMapper:
         if not self.count:
             logger.warning("No valid links found")
 
-    async def parse_input_file_groups(self) -> AsyncGenerator[tuple[str, list[AbsoluteHttpURL]]]:
-        """Split URLs from input file by their groups."""
+    async def _parse_input_file_groups(self) -> AsyncGenerator[tuple[str, list[AbsoluteHttpURL]]]:
         input_file = self.manager.config.files.input_file
         if not await aio.is_file(input_file):
             yield ("", [])
@@ -198,7 +188,7 @@ class ScrapeMapper:
     async def _load_links(self) -> AsyncGenerator[ScrapeItem]:
         if not self.manager.parsed_args.cli_only_args.links:
             self.using_input_file = True
-            async for group_name, urls in self.parse_input_file_groups():
+            async for group_name, urls in self._parse_input_file_groups():
                 for url in urls:
                     if not url:
                         continue
@@ -218,13 +208,12 @@ class ScrapeMapper:
             await self._send_to_crawler(scrape_item)
 
     async def _send_to_crawler(self, scrape_item: ScrapeItem) -> None:
-        """Maps URLs to their respective handlers."""
         scrape_item.url = remove_trailing_slash(scrape_item.url)
-        crawler_match = _best_match(self.existing_crawlers, scrape_item.url.host)
+        crawler = _best_match(self.existing_crawlers, scrape_item.url.host)
 
-        if crawler_match:
-            await crawler_match.__async_init__()
-            self.create_task(crawler_match.run(scrape_item))
+        if crawler:
+            await crawler.__async_init__()
+            self.create_task(crawler.run(scrape_item))
             return
 
         if not self.real_debrid.disabled and self.real_debrid.api.is_supported(scrape_item.url):
@@ -233,7 +222,7 @@ class ScrapeMapper:
             return
 
         try:
-            await self.direct_crawler.fetch(scrape_item)
+            await self.direct_http.fetch(scrape_item)
             return
 
         except (NoExtensionError, ValueError):
@@ -241,7 +230,7 @@ class ScrapeMapper:
 
         if self.jdownloader.is_enabled_for(scrape_item.url):
             logger.info(f"Sending unsupported URL to JDownloader: {scrape_item.url}")
-            success = False
+
             try:
                 download_folder = get_download_path(self.manager, scrape_item, "jdownloader")
                 relative_download_dir = download_folder.relative_to(self.manager.config.files.download_folder)
@@ -250,26 +239,25 @@ class ScrapeMapper:
                     scrape_item.parent_title,
                     relative_download_dir,
                 )
-                success = True
+
             except JDownloaderError as e:
                 logger.error(f"Failed to send {scrape_item.url} to JDownloader\n{e.message}")
                 self.manager.logs.write_unsupported(
                     scrape_item.url,
                     scrape_item.parents[0] if scrape_item.parents else None,
                 )
+                success = False
+            else:
+                success = True
+
             self.manager.progress_manager.scrape_stats_progress.add_unsupported(sent_to_jdownloader=success)
             return
 
         logger.warning(f"Unsupported URL: {scrape_item.url}")
-        self.manager.logs.write_unsupported(
-            scrape_item.url,
-            scrape_item.parents[0] if scrape_item.parents else None,
-        )
+        self.manager.logs.write_unsupported(scrape_item.url, scrape_item.parents[0] if scrape_item.parents else None)
         self.manager.progress_manager.scrape_stats_progress.add_unsupported()
 
     def _should_scrape(self, scrape_item: ScrapeItem) -> bool:
-        """Pre-filter scrape items base on URL."""
-
         if scrape_item.url in self._seen_urls:
             return False
 

@@ -14,7 +14,6 @@ if TYPE_CHECKING:
     import aiosqlite
     from yarl import URL
 
-    from cyberdrop_dl.crawlers import Crawler
     from cyberdrop_dl.data_structures.url_objects import MediaItem
     from cyberdrop_dl.database import Database
 
@@ -57,22 +56,6 @@ class HistoryTable:
         await self.fix_primary_keys()
         await self.add_columns_media()
         await self.run_updates()
-
-    async def update_previously_unsupported(self, crawlers: dict[str, Crawler]) -> None:
-        """Update old `no_crawler` entries that are now supported."""
-        domains_to_update = {
-            crawler.DOMAIN: f"http%{crawler.PRIMARY_URL.host}%"
-            for crawler in crawlers.values()
-            if crawler.UPDATE_UNSUPPORTED
-        }
-        if not domains_to_update:
-            return
-
-        query = "UPDATE OR IGNORE media SET domain = ? WHERE domain = 'no_crawler' AND referer LIKE ?"
-        cursor = await self.db_conn.executemany(query, domains_to_update.items())
-        query = "DELETE FROM media WHERE domain = 'no_crawler' AND referer LIKE ?"
-        await cursor.executemany(query, [[x] for x in domains_to_update.values()])
-        await self.db_conn.commit()
 
     async def run_updates(self) -> None:
         updates = (
