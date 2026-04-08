@@ -200,7 +200,7 @@ async def test_direct_http_crawler(running_manager: Manager, url: str, filename:
 
     with _crawler_mock() as func:
         async with ScrapeMapper(running_manager)() as scrape_mapper:
-            crawler = scrape_mapper.direct_http
+            crawler = scrape_mapper._direct_http
             await scrape_mapper.run()
             item = ScrapeItem(url=parse_url(test_case.input_url))
             await crawler.fetch(item)

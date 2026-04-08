@@ -118,12 +118,12 @@ class ScrapeMapper:
     """This class maps links to their respective handlers, or JDownloader if they are unsupported."""
 
     manager: Manager
-    direct_http: DirectHttpFile = dataclasses.field(init=False)
-    jdownloader: JDownloader = dataclasses.field(init=False)
-    real_debrid: RealDebridCrawler = dataclasses.field(init=False)
 
-    source_name: str = dataclasses.field(init=False, default="")
     crawlers: dict[str, type[Crawler]] = dataclasses.field(init=False, default_factory=dict)
+
+    _direct_http: DirectHttpFile = dataclasses.field(init=False)
+    _jdownloader: JDownloader = dataclasses.field(init=False)
+    _real_debrid: RealDebridCrawler = dataclasses.field(init=False)
     _task_groups: TaskGroups = dataclasses.field(
         init=False, default_factory=lambda: TaskGroups(asyncio.TaskGroup(), asyncio.TaskGroup())
     )
@@ -132,9 +132,9 @@ class ScrapeMapper:
     _factory: CrawlerFactory = dataclasses.field(init=False)
 
     def __post_init__(self) -> None:
-        self.direct_http = DirectHttpFile(self.manager)
-        self.jdownloader = JDownloader.from_manager(self.manager)
-        self.real_debrid = RealDebridCrawler(self.manager)
+        self._direct_http = DirectHttpFile(self.manager)
+        self._jdownloader = JDownloader.from_manager(self.manager)
+        self._real_debrid = RealDebridCrawler(self.manager)
         self._factory = CrawlerFactory(self.manager)
 
     def create_task(self, coro: Coroutine[Any, Any, _T]) -> None:
@@ -181,12 +181,12 @@ class ScrapeMapper:
     async def run(self) -> ScrapeStats:
         self._init_crawlers()
         try:
-            await self.jdownloader.connect()
+            await self._jdownloader.connect()
         except JDownloaderError:
             logger.exception("Failed to connect to jDownloader")
 
-        await self.real_debrid.__async_init__()
-        self.direct_http.__init_downloader__()
+        await self._real_debrid.__async_init__()
+        self._direct_http.__init_downloader__()
 
         item_limit = 0
         if self.manager.parsed_args.cli_only_args.retry_any and self.manager.parsed_args.cli_only_args.max_items_retry:
@@ -230,25 +230,25 @@ class ScrapeMapper:
             self.create_task(crawler.run(scrape_item))
             return
 
-        if not self.real_debrid.disabled and self.real_debrid.api.is_supported(scrape_item.url):
+        if not self._real_debrid.disabled and self._real_debrid.api.is_supported(scrape_item.url):
             logger.info(f"Using RealDebrid for unsupported URL: {scrape_item.url}")
-            self.create_task(self.real_debrid.run(scrape_item))
+            self.create_task(self._real_debrid.run(scrape_item))
             return
 
         try:
-            await self.direct_http.fetch(scrape_item)
+            await self._direct_http.fetch(scrape_item)
             return
 
         except (NoExtensionError, ValueError):
             pass
 
-        if self.jdownloader.is_enabled_for(scrape_item.url):
+        if self._jdownloader.is_enabled_for(scrape_item.url):
             logger.info(f"Sending unsupported URL to JDownloader: {scrape_item.url}")
 
             try:
                 download_folder = get_download_path(self.manager, scrape_item, "jdownloader")
                 relative_download_dir = download_folder.relative_to(self.manager.config.files.download_folder)
-                await self.jdownloader.send(
+                await self._jdownloader.send(
                     scrape_item.url,
                     scrape_item.parent_title,
                     relative_download_dir,

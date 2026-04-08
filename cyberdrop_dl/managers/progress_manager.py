@@ -129,11 +129,10 @@ class ProgressManager:
         total_data_written = ByteSize(self.file_progress.total_data_written).human_readable(decimal=True)
 
         config_path = self.manager.appdata.configs / self.manager.config_manager.loaded_config
-        urls_source = self.manager.scrape_mapper.source_name
 
         logger.info("Run Stats:", extra={"color": "cyan"})
         logger.info(f"  Config file: {config_path}")
-        logger.info(f"  URLs source: {urls_source}")
+        logger.info(f"  URLs source: {stats.source}")
         logger.info(f"  URLs: {stats.count:,}")
         logger.info(f"  URL groups: {len(stats.unique_groups):,}")
         logger.info(f"  Logs folder: {self.manager.config.logs.log_folder}")
