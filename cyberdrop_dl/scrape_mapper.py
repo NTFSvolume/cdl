@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import dataclasses
 import datetime
 import logging
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, Self, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, Self, TypeVar
 
 import aiofiles
 from yarl import URL
@@ -27,7 +28,7 @@ from cyberdrop_dl.logs import log_spacer
 from cyberdrop_dl.utils.utilities import get_download_path, remove_trailing_slash
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Generator, Sequence
+    from collections.abc import AsyncGenerator, Coroutine, Generator, Sequence
 
     import aiosqlite
 
@@ -61,6 +62,12 @@ def is_in_domain_list(scrape_item: ScrapeItem, domain_list: Sequence[str]) -> bo
 
 
 @dataclasses.dataclass(slots=True)
+class TaskGroups:
+    scrape: asyncio.TaskGroup
+    downloads: asyncio.TaskGroup
+
+
+@dataclasses.dataclass(slots=True)
 class ScrapeMapper:
     """This class maps links to their respective handlers, or JDownloader if they are unsupported."""
 
@@ -73,11 +80,20 @@ class ScrapeMapper:
     groups: set[str] = dataclasses.field(init=False, default_factory=set)
     count: int = dataclasses.field(init=False, default=0)
     existing_crawlers: dict[str, Crawler] = dataclasses.field(init=False, default_factory=dict)
+    task_groups: TaskGroups = dataclasses.field(
+        init=False, default_factory=lambda: TaskGroups(asyncio.TaskGroup(), asyncio.TaskGroup())
+    )
 
     def __post_init__(self) -> None:
         self.direct_crawler = DirectHttpFile(self.manager)
         self.jdownloader = JDownloader.from_manager(self.manager)
         self.existing_crawlers["real-debrid"] = self.real_debrid = RealDebridCrawler(self.manager)
+
+    def create_task(self, coro: Coroutine[Any, Any, _T]) -> None:
+        _ = self.task_groups.scrape.create_task(coro)
+
+    def create_download_task(self, coro: Coroutine[Any, Any, _T]) -> None:
+        _ = self.task_groups.downloads.create_task(coro)
 
     @property
     def group_count(self) -> int:
@@ -85,7 +101,7 @@ class ScrapeMapper:
 
     @property
     def global_settings(self) -> GlobalSettings:
-        return self.manager.config_manager.global_settings_data
+        return self.manager.global_config
 
     def start_scrapers(self) -> None:
         """Starts all scrapers."""
@@ -111,7 +127,12 @@ class ScrapeMapper:
         self = cls(manager)
         await self.manager.client_manager.load_cookie_files()
 
-        async with self.manager.client_manager, self.manager.task_group:
+        async with (
+            self.manager.client_manager,
+            self.manager.task_group,
+            self.task_groups.downloads,
+            self.task_groups.scrape,
+        ):
             self.manager.scrape_mapper = self
             yield self
 
@@ -127,7 +148,7 @@ class ScrapeMapper:
         await self.real_debrid.__async_init__()
         self.direct_crawler.__init_downloader__()
         async for item in self.get_input_items():
-            self.manager.task_group.create_task(self.send_to_crawler(item))
+            self.create_task(self.send_to_crawler(item))
 
     async def get_input_items(self) -> AsyncGenerator[ScrapeItem]:
         item_limit = 0
@@ -237,12 +258,12 @@ class ScrapeMapper:
 
         if crawler_match:
             await crawler_match.__async_init__()
-            self.manager.task_group.create_task(crawler_match.run(scrape_item))
+            self.create_task(crawler_match.run(scrape_item))
             return
 
         if not self.real_debrid.disabled and self.real_debrid.api.is_supported(scrape_item.url):
             logger.info(f"Using RealDebrid for unsupported URL: {scrape_item.url}")
-            self.manager.task_group.create_task(self.real_debrid.run(scrape_item))
+            self.create_task(self.real_debrid.run(scrape_item))
             return
 
         try:
