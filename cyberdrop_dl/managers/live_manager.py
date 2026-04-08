@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from rich.live import Live
 
 from cyberdrop_dl.cli import is_terminal_in_portrait
+from cyberdrop_dl.logs import LOG_TO_CONSOLE
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -29,8 +30,12 @@ class LiveManager:
     @contextmanager
     def get_live(self, name: str, stop: bool = False) -> Generator[Live | None]:
         layout = self.get_layout(name)
-        with self.live_context_manager(layout, stop=stop) as live:
-            yield live
+        token = LOG_TO_CONSOLE.set(False)
+        try:
+            with self.live_context_manager(layout, stop=stop) as live:
+                yield live
+        finally:
+            LOG_TO_CONSOLE.reset(token)
 
     get_sort_live = partialmethod(get_live, name="sort_layout")
     get_main_live = partialmethod(get_live, name="main_layout")
