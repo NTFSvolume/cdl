@@ -161,14 +161,17 @@ class ScrapeMapper:
 
         await self.manager.client_manager.load_cookie_files()
 
-        async with self.manager.client_manager, self.manager.logs.task_group, self._task_groups.downloads:
+        ## The order of each context matter
+        async with (
+            self.manager.client_manager,
+            storage.monitor(self.manager.global_config.general.required_free_space),
+            self.manager.logs.task_group,
+            self._task_groups.downloads,
+        ):
             done = asyncio.Event()
             token = CURRENT_SCRAPE_DONE.set(done)
             try:
-                async with (
-                    self._task_groups.scrape,
-                    storage.monitor(self.manager.global_config.general.required_free_space),
-                ):
+                async with self._task_groups.scrape:
                     self.manager.scrape_mapper = self
 
                     yield self
