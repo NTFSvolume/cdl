@@ -58,7 +58,7 @@ def test_storage_only_work_with_abs_paths() -> None:
 
 
 @pytest.mark.skipif(os.name == "nt", reason="Test paths are only posix")
-async def test_find_partition_finds_the_correct_partition() -> None:
+def test_find_partition_finds_the_correct_partition() -> None:
 
     root, home, usb, external_ssd = partitions = [
         create_partition(path) for path in ("/", "/home", "/mnt/USB", "/home/external_SSD")
@@ -74,7 +74,7 @@ async def test_find_partition_finds_the_correct_partition() -> None:
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Test paths are only for windows")
-async def test_find_partition_finds_the_correct_partition_windows() -> None:
+def test_find_partition_finds_the_correct_partition_windows() -> None:
     c_drive, d_drive = partitions = [create_partition(path) for path in ("C:/", "D:/")]
 
     _psutil._PARTITIONS = partitions  # pyright: ignore[reportPrivateUsage]
@@ -85,14 +85,27 @@ async def test_find_partition_finds_the_correct_partition_windows() -> None:
     assert find_partition("Z:/") is None
 
 
-async def test_no_psutil_check_do_not_raise_exception(tmp_path: Path) -> None:
+async def test_no_psutil_check_does_not_raise_exception(tmp_path: Path) -> None:
     with mock.patch.object(storage, "_psutil_loop", None):
         async with storage.monitor(100):
             assert await storage.has_sufficient_space(tmp_path)
 
 
-def test_no_psutil_file_not_found_returns_size_of_closes_parent(tmp_path: Path) -> None:
+def test_no_psutil_returns_size_of_closes_parent_on_file_that_does_not_exists(tmp_path: Path) -> None:
     folder = tmp_path / "folder_abc/that/does/not/exists"
     result = storage._disk_usage(folder)
     assert result > 0
     assert result == storage._disk_usage(tmp_path)
+
+
+async def test_psutil_returns_size_of_closes_parent_on_file_that_does_not_exists(tmp_path: Path) -> None:
+    folder = tmp_path / "folder_abc/that/does/not/exists"
+    result = await _psutil.get_free_space(folder)
+    assert result > 0
+    assert result == await _psutil.get_free_space(tmp_path)
+
+
+async def test_psutil_raw_raises_file_not_found_error_on_file_that_does_not_exists(tmp_path: Path) -> None:
+    folder = tmp_path / "folder_abc/that/does/not/exists"
+    with pytest.raises(FileNotFoundError):
+        _ = _psutil._disk_usage(folder)
