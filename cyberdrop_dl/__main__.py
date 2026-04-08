@@ -10,7 +10,7 @@ from rich.traceback import install as install_rich_tracebacks
 from cyberdrop_dl import aio, storage, webhook
 from cyberdrop_dl.logs import log_spacer, setup_console_logging, setup_file_logging
 from cyberdrop_dl.managers.manager import Manager
-from cyberdrop_dl.scraper.scrape_mapper import ScrapeMapper
+from cyberdrop_dl.scrape_mapper import ScrapeMapper
 from cyberdrop_dl.ui import program_ui
 from cyberdrop_dl.utils import apprise, check_latest_pypi
 from cyberdrop_dl.utils.sorting import Sorter

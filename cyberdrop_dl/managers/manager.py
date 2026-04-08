@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from os import PathLike
 
     from cyberdrop_dl.data_structures.url_objects import MediaItem
-    from cyberdrop_dl.scraper.scrape_mapper import ScrapeMapper
+    from cyberdrop_dl.scrape_mapper import ScrapeMapper
 
 
 logger = logging.getLogger(__name__)
