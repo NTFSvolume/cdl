@@ -45,7 +45,7 @@ class LogFiles:
 @dataclasses.dataclass(slots=True)
 class LogManager:
     files: LogFiles
-    task_group: asyncio.TaskGroup
+    task_group: asyncio.TaskGroup = dataclasses.field(init=False, default_factory=asyncio.TaskGroup)
     _file_locks: dict[Path, asyncio.Lock] = dataclasses.field(
         init=False, default_factory=lambda: defaultdict(asyncio.Lock)
     )
@@ -61,7 +61,7 @@ class LogManager:
             download_error_log=manager.config.logs.download_error_urls,
             scrape_error_log=manager.config.logs.scrape_error_urls,
         )
-        return cls(files, manager.task_group)
+        return cls(files)
 
     def delete_old_logs(self) -> None:
         if self._ready:

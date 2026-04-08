@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import dataclasses
 import logging
 from dataclasses import Field, field
@@ -18,11 +17,9 @@ from cyberdrop_dl.managers.config_manager import ConfigManager
 from cyberdrop_dl.managers.live_manager import LiveManager
 from cyberdrop_dl.managers.logs import LogManager
 from cyberdrop_dl.managers.progress_manager import ProgressManager
-from cyberdrop_dl.utils import filepath
 from cyberdrop_dl.utils.utilities import get_system_information
 
 if TYPE_CHECKING:
-    from asyncio import TaskGroup
     from collections.abc import Sequence
     from os import PathLike
 
@@ -52,7 +49,6 @@ class Manager:
         self._loaded_args_config: bool = False
         self._made_portable: bool = False
 
-        self.task_group: TaskGroup = asyncio.TaskGroup()
         self.scrape_mapper: ScrapeMapper = field(init=False)
 
         self.downloaded_data: int = 0
@@ -121,9 +117,6 @@ class Manager:
 
         self.client_manager = ClientManager(self)
         await self.client_manager.startup()
-
-        filepath.MAX_FILE_LEN.set(self.config_manager.global_settings_data.general.max_file_name_length)
-        filepath.MAX_FOLDER_LEN.set(self.config_manager.global_settings_data.general.max_folder_name_length)
 
     def async_db_hash_startup(self) -> None:
 

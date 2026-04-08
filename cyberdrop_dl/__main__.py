@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from rich.traceback import install as install_rich_tracebacks
 
-from cyberdrop_dl import aio, storage, webhook
+from cyberdrop_dl import aio, webhook
 from cyberdrop_dl.logs import log_spacer, setup_console_logging, setup_file_logging
 from cyberdrop_dl.managers.manager import Manager
 from cyberdrop_dl.scrape_mapper import ScrapeMapper
@@ -56,10 +56,9 @@ async def _scrape(manager: Manager) -> None:
 
 
 async def _runtime(manager: Manager) -> None:
-    async with storage.monitor(manager.global_config.general.required_free_space):
-        with manager.live_manager.get_main_live(stop=True):
-            async with ScrapeMapper.managed(manager) as scrape_mapper:
-                await scrape_mapper.run()
+    with manager.live_manager.get_main_live(stop=True):
+        async with ScrapeMapper.managed(manager) as scrape_mapper:
+            await scrape_mapper.run()
 
 
 async def _post_runtime(manager: Manager) -> None:

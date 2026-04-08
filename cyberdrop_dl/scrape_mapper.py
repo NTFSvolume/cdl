@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any, Literal, Self, TypeVar
 
 import aiofiles
 
-from cyberdrop_dl import aio, plugins
+from cyberdrop_dl import aio, plugins, storage
 from cyberdrop_dl.clients.jdownloader import JDownloader
 from cyberdrop_dl.constants import BlockedDomains
 from cyberdrop_dl.crawlers import create_crawlers
@@ -25,6 +25,7 @@ from cyberdrop_dl.crawlers.wordpress import WordPressHTMLCrawler, WordPressMedia
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.exceptions import JDownloaderError, NoExtensionError
 from cyberdrop_dl.logs import log_spacer
+from cyberdrop_dl.utils import filepath
 from cyberdrop_dl.utils.utilities import get_download_path, remove_trailing_slash
 
 if TYPE_CHECKING:
@@ -158,13 +159,17 @@ class ScrapeMapper:
         """Creates a new scrape mapper that auto closses http session on exit"""
 
         self = cls(manager)
+        _ = filepath.MAX_FILE_LEN.set(self.manager.global_config.general.max_file_name_length)
+        _ = filepath.MAX_FOLDER_LEN.set(self.manager.global_config.general.max_folder_name_length)
+
         await self.manager.client_manager.load_cookie_files()
 
         async with (
             self.manager.client_manager,
-            self.manager.task_group,
             self._task_groups.downloads,
             self._task_groups.scrape,
+            self.manager.logs.task_group,
+            storage.monitor(manager.global_config.general.required_free_space),
         ):
             self.manager.scrape_mapper = self
             yield self

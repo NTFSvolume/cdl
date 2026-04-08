@@ -140,7 +140,7 @@ class HTTPClient:
                 raise
             finally:
                 if self._save_responses_to_disk:
-                    _ = self.client_manager.manager.task_group.create_task(
+                    _ = self.client_manager.manager.logs.task_group.create_task(
                         asyncio.to_thread(
                             _write_resp_to_disk,
                             self._responses_folder,
