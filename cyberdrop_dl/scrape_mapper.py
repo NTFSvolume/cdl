@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import dataclasses
 import datetime
 import logging
 import re
@@ -59,20 +60,24 @@ def is_in_domain_list(scrape_item: ScrapeItem, domain_list: Sequence[str]) -> bo
     return any(domain in scrape_item.url.host for domain in domain_list)
 
 
+@dataclasses.dataclass(slots=True)
 class ScrapeMapper:
     """This class maps links to their respective handlers, or JDownloader if they are unsupported."""
 
-    def __init__(self, manager: Manager) -> None:
-        self.manager = manager
-        self.existing_crawlers: dict[str, Crawler] = {}
+    manager: Manager
+    direct_crawler: DirectHttpFile = dataclasses.field(init=False)
+    jdownloader: JDownloader = dataclasses.field(init=False)
+    real_debrid: RealDebridCrawler = dataclasses.field(init=False)
+
+    using_input_file: bool = dataclasses.field(init=False, default=False)
+    groups: set[str] = dataclasses.field(init=False, default_factory=set)
+    count: int = dataclasses.field(init=False, default=0)
+    existing_crawlers: dict[str, Crawler] = dataclasses.field(init=False, default_factory=dict)
+
+    def __post_init__(self) -> None:
         self.direct_crawler = DirectHttpFile(self.manager)
         self.jdownloader = JDownloader.from_manager(self.manager)
-        self.using_input_file = False
-        self.groups = set()
-        self.count = 0
-        self.real_debrid: RealDebridCrawler
-
-    """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
+        self.existing_crawlers["real-debrid"] = self.real_debrid = RealDebridCrawler(self.manager)
 
     @property
     def group_count(self) -> int:
@@ -98,11 +103,6 @@ class ScrapeMapper:
 
         plugins.load(self.manager)
 
-    async def start_real_debrid(self) -> None:
-        """Starts RealDebrid."""
-        self.existing_crawlers["real-debrid"] = self.real_debrid = real = RealDebridCrawler(self.manager)
-        await real.ready()
-
     @classmethod
     @contextlib.asynccontextmanager
     async def managed(cls, manager: Manager) -> AsyncGenerator[Self]:
@@ -124,7 +124,7 @@ class ScrapeMapper:
         except JDownloaderError:
             logger.exception("Failed to connect to jDownloader")
 
-        await self.start_real_debrid()
+        await self.real_debrid.__async_init__()
         self.direct_crawler.__init_downloader__()
         async for item in self.get_input_items():
             self.manager.task_group.create_task(self.send_to_crawler(item))
@@ -236,7 +236,7 @@ class ScrapeMapper:
         crawler_match = match_url_to_crawler(self.existing_crawlers, scrape_item.url)
 
         if crawler_match:
-            await crawler_match.ready()
+            await crawler_match.__async_init__()
             self.manager.task_group.create_task(crawler_match.run(scrape_item))
             return
 

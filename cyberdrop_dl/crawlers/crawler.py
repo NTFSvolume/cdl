@@ -185,6 +185,8 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
 
     @final
     async def __async_init__(self) -> None:
+        if self._ready:
+            return
         async with self._startup_lock:
             if self._ready:
                 return
@@ -204,11 +206,6 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         ex: login, getting API tokens, etc..
 
         This method its called once and only if the crawler is actually going to be scrape something"""
-
-    @final
-    async def ready(self) -> None:
-        if not self._ready:
-            await self.__async_init__()
 
     def __init_subclass__(
         cls,
