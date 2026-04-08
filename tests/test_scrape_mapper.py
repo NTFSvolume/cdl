@@ -16,11 +16,10 @@ from cyberdrop_dl.crawlers._chevereto import CheveretoCrawler
         "https://cyberfile.me/abhl",
         "https://forums.plex.tv/",
         "https://forums.socialmediagirls.com/threads/en-fr-tools-to-download-upload-content-websites-softwares-extensions.13930/#post-2070848",
-        "https://forums.plex.tv/",
     ],
 )
 def test_generic_crawlers_that_match_supported_crawlers_should_not_be_created(link: str) -> None:
-    crawlers = scrape_mapper.get_crawlers_mapping().copy()
+    crawlers = scrape_mapper.get_crawlers_mapping()
     crawler = next(iter(create_crawlers([link], CheveretoCrawler)))
     with pytest.raises(ValueError) as exc_info:
         scrape_mapper.register_crawler(crawlers, crawler, from_user="raise")
@@ -36,10 +35,9 @@ def test_generic_crawlers_that_match_supported_crawlers_should_not_be_created(li
     ],
 )
 def test_generic_crawlers_that_do_no_match_supported_crawlers_should_be_created(link: str) -> None:
-    _ = scrape_mapper.get_crawlers_mapping()
-    crawler = next(iter(create_crawlers([link], CheveretoCrawler)))
     existing_crawlers = scrape_mapper.get_crawlers_mapping()
     crawlers_before = set(existing_crawlers.values())
+    crawler = next(iter(create_crawlers([link], CheveretoCrawler)))
     scrape_mapper.register_crawler(existing_crawlers, crawler, from_user="raise")
     new_crawlers = set(existing_crawlers.values()) - crawlers_before
     assert len(new_crawlers) == 1

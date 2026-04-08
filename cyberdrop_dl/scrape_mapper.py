@@ -16,7 +16,6 @@ from cyberdrop_dl.clients.jdownloader import JDownloader
 from cyberdrop_dl.constants import BlockedDomains
 from cyberdrop_dl.crawlers import create_crawlers
 from cyberdrop_dl.crawlers._chevereto import CheveretoCrawler
-from cyberdrop_dl.crawlers.crawler import Crawler
 from cyberdrop_dl.crawlers.discourse import DiscourseCrawler
 from cyberdrop_dl.crawlers.http_direct import DirectHttpFile
 from cyberdrop_dl.crawlers.realdebrid import RealDebridCrawler
@@ -32,10 +31,10 @@ if TYPE_CHECKING:
     import aiosqlite
 
     from cyberdrop_dl.config.global_model import GenericCrawlerInstances
+    from cyberdrop_dl.crawlers.crawler import Crawler
     from cyberdrop_dl.managers.manager import Manager
 
 _T = TypeVar("_T")
-_CrawlerT = TypeVar("_CrawlerT", bound=Crawler)
 logger = logging.getLogger(__name__)
 
 
@@ -79,7 +78,7 @@ class ScrapeMapper:
     groups: set[str] = dataclasses.field(init=False, default_factory=set)
     count: int = dataclasses.field(init=False, default=0)
     existing_crawlers: dict[str, Crawler] = dataclasses.field(init=False, default_factory=dict)
-    task_groups: TaskGroups = dataclasses.field(
+    _task_groups: TaskGroups = dataclasses.field(
         init=False, default_factory=lambda: TaskGroups(asyncio.TaskGroup(), asyncio.TaskGroup())
     )
     _seen_urls: set[AbsoluteHttpURL] = dataclasses.field(init=False, default_factory=set)
@@ -90,10 +89,10 @@ class ScrapeMapper:
         self.existing_crawlers["real-debrid"] = self.real_debrid = RealDebridCrawler(self.manager)
 
     def create_task(self, coro: Coroutine[Any, Any, _T]) -> None:
-        _ = self.task_groups.scrape.create_task(coro)
+        _ = self._task_groups.scrape.create_task(coro)
 
     def create_download_task(self, coro: Coroutine[Any, Any, _T]) -> None:
-        _ = self.task_groups.downloads.create_task(coro)
+        _ = self._task_groups.downloads.create_task(coro)
 
     def _init_crawlers(self) -> None:
         from cyberdrop_dl import plugins
@@ -103,7 +102,7 @@ class ScrapeMapper:
         for crawler in _create_generic_crawlers(self.manager.global_config.generic_crawlers_instances):
             register_crawler(crawlers, crawler, from_user=True)
 
-        _disable_crawlers_by_config(crawlers, self.manager.global_config.general.disable_crawlers)
+        _disable_crawlers_by_config(crawlers, *self.manager.global_config.general.disable_crawlers)
 
         self.existing_crawlers.update((domain, crawler(self.manager)) for domain, crawler in crawlers.items())
 
@@ -120,8 +119,8 @@ class ScrapeMapper:
         async with (
             self.manager.client_manager,
             self.manager.task_group,
-            self.task_groups.downloads,
-            self.task_groups.scrape,
+            self._task_groups.downloads,
+            self._task_groups.scrape,
         ):
             self.manager.scrape_mapper = self
             yield self
@@ -384,11 +383,11 @@ def register_crawler(
                 logger.error(msg)
                 continue
             else:
-                logger.info(f"Successfully mapped {crawler.PRIMARY_URL} to crawler {crawler.NAME}")
+                logger.info("Successfully mapped %s to crawler %s", crawler.PRIMARY_URL, crawler.NAME)
 
         elif other:
-            msg = f"{domain} from {crawler.NAME} already registered by {other}"
-            assert domain not in existing_crawlers, msg
+            if domain in existing_crawlers:
+                logger.warning("%s from %s already registered by %s", domain, crawler.NAME, other)
 
         existing_crawlers[domain] = crawler
 
@@ -404,11 +403,11 @@ def _create_generic_crawlers(generics_config: GenericCrawlerInstances) -> Genera
         yield from create_crawlers(generics_config.chevereto, CheveretoCrawler)
 
 
-def _disable_crawlers_by_config(current_crawlers: dict[str, type[Crawler]], crawlers_to_disable: list[str]) -> None:
+def _disable_crawlers_by_config(current_crawlers: dict[str, type[Crawler]], *crawlers_to_disable: str) -> None:
     if not crawlers_to_disable:
         return
 
-    crawlers_to_disable = sorted({name.casefold() for name in crawlers_to_disable})
+    crawlers_to_disable = tuple(sorted({name.casefold() for name in crawlers_to_disable}))
 
     new_crawlers_mapping = {
         key: crawler
