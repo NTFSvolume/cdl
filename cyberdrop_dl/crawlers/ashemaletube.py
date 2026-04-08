@@ -198,7 +198,7 @@ class AShemaleTubeCrawler(Crawler):
     async def parse_player_info(self, script_text: str) -> tuple[Format, object]:
         sources = get_text_between(script_text, "sources: ", "aspectRatio").strip().strip(",")
         sources_data = json.loads(sources)
-        url = AbsoluteHttpURL(sources_data["hlsAuto"])
+        url = self.parse_url(sources_data["hlsAuto"])
 
         m3u8_group, playlist_info = await self.get_m3u8_from_playlist_url(url)
         resolution = playlist_info.resolution.name
