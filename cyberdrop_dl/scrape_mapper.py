@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Self, TypeVar
 
 import aiofiles
-from yarl import URL
 
 from cyberdrop_dl import aio
 from cyberdrop_dl.clients.jdownloader import JDownloader
@@ -40,13 +39,12 @@ _CrawlerT = TypeVar("_CrawlerT", bound=Crawler)
 logger = logging.getLogger(__name__)
 
 
-_seen_urls: set[AbsoluteHttpURL] = set()
 _crawlers_disabled_at_runtime: set[str] = set()
 
 REGEX_LINKS = re.compile(r"(?:http.*?)(?=($|\n|\r\n|\r|\s|\"|\[/URL]|']\[|]\[|\[/img]))")
 
 
-def is_outside_date_range(scrape_item: ScrapeItem, before: datetime.date | None, after: datetime.date | None) -> bool:
+def _is_outside_date_range(scrape_item: ScrapeItem, before: datetime.date | None, after: datetime.date | None) -> bool:
     skip = False
     item_date = scrape_item.completed_at or scrape_item.created_at
     if not item_date:
@@ -58,7 +56,7 @@ def is_outside_date_range(scrape_item: ScrapeItem, before: datetime.date | None,
     return skip
 
 
-def is_in_domain_list(scrape_item: ScrapeItem, domain_list: Sequence[str]) -> bool:
+def _is_in_domain_list(scrape_item: ScrapeItem, domain_list: Sequence[str]) -> bool:
     return any(domain in scrape_item.url.host for domain in domain_list)
 
 
@@ -84,6 +82,7 @@ class ScrapeMapper:
     task_groups: TaskGroups = dataclasses.field(
         init=False, default_factory=lambda: TaskGroups(asyncio.TaskGroup(), asyncio.TaskGroup())
     )
+    _seen_urls: set[AbsoluteHttpURL] = dataclasses.field(init=False, default_factory=set)
 
     def __post_init__(self) -> None:
         self.direct_crawler = DirectHttpFile(self.manager)
@@ -104,19 +103,17 @@ class ScrapeMapper:
     def global_settings(self) -> GlobalSettings:
         return self.manager.global_config
 
-    def start_scrapers(self) -> None:
-        """Starts all scrapers."""
+    def _init_crawlers(self) -> None:
         from cyberdrop_dl import plugins
 
         crawlers = get_crawlers_mapping()
 
-        generic_crawlers = create_generic_crawlers_by_config(self.global_settings.generic_crawlers_instances)
-        for crawler in generic_crawlers:
+        for crawler in _create_generic_crawlers(self.global_settings.generic_crawlers_instances):
             register_crawler(crawlers, crawler, from_user=True)
 
-        disable_crawlers_by_config(crawlers, self.global_settings.general.disable_crawlers)
+        _disable_crawlers_by_config(crawlers, self.global_settings.general.disable_crawlers)
 
-        self.existing_crawlers = {domain: crawler(self.manager) for domain, crawler in crawlers.items()}
+        self.existing_crawlers.update((domain, crawler(self.manager)) for domain, crawler in crawlers.items())
 
         plugins.load(self.manager)
 
@@ -138,8 +135,7 @@ class ScrapeMapper:
             yield self
 
     async def run(self) -> None:
-        """Starts the orchestra."""
-        self.start_scrapers()
+        self._init_crawlers()
         await self.manager.database.history.update_previously_unsupported(self.existing_crawlers)
         try:
             await self.jdownloader.connect()
@@ -149,7 +145,7 @@ class ScrapeMapper:
         await self.real_debrid.__async_init__()
         self.direct_crawler.__init_downloader__()
         async for item in self.get_input_items():
-            self.create_task(self.send_to_crawler(item))
+            self.create_task(self._send_to_crawler(item))
 
     async def get_input_items(self) -> AsyncGenerator[ScrapeItem]:
         item_limit = 0
@@ -157,17 +153,17 @@ class ScrapeMapper:
             item_limit = self.manager.parsed_args.cli_only_args.max_items_retry
 
         if self.manager.parsed_args.cli_only_args.retry_failed:
-            items_generator = self.load_failed_links()
+            items_generator = load_failed_links(self.manager)
         elif self.manager.parsed_args.cli_only_args.retry_all:
-            items_generator = self.load_all_links()
+            items_generator = load_all_links(self.manager)
         elif self.manager.parsed_args.cli_only_args.retry_maintenance:
-            items_generator = self.load_all_bunkr_failed_links_via_hash()
+            items_generator = load_all_bunkr_failed_links_via_hash(self.manager)
         else:
-            items_generator = self.load_links()
+            items_generator = self._load_links()
 
         async for item in items_generator:
             item.children_limits = self.manager.config.download_options.maximum_number_of_children
-            if self.filter_items(item):
+            if self._should_scrape(item):
                 if item_limit and self.count >= item_limit:
                     break
                 yield item
@@ -175,8 +171,6 @@ class ScrapeMapper:
 
         if not self.count:
             logger.warning("No valid links found")
-
-    """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
 
     async def parse_input_file_groups(self) -> AsyncGenerator[tuple[str, list[AbsoluteHttpURL]]]:
         """Split URLs from input file by their groups."""
@@ -201,11 +195,7 @@ class ScrapeMapper:
                 if not block_quote:
                     yield ("", list(regex_links(line)))
 
-    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~``
-
-    async def load_links(self) -> AsyncGenerator[ScrapeItem]:
-        """Loads links from args / input file."""
-
+    async def _load_links(self) -> AsyncGenerator[ScrapeItem]:
         if not self.manager.parsed_args.cli_only_args.links:
             self.using_input_file = True
             async for group_name, urls in self.parse_input_file_groups():
@@ -223,39 +213,14 @@ class ScrapeMapper:
         for url in self.manager.parsed_args.cli_only_args.links:
             yield ScrapeItem(url=url)
 
-    async def load_failed_links(self) -> AsyncGenerator[ScrapeItem]:
-        """Loads failed links from database."""
-        async for rows in self.manager.database.history.get_failed_items():
-            for row in rows:
-                yield _create_item_from_row(row)
+    async def scrape(self, scrape_item: ScrapeItem) -> None:
+        if self._should_scrape(scrape_item):
+            await self._send_to_crawler(scrape_item)
 
-    async def load_all_links(self) -> AsyncGenerator[ScrapeItem]:
-        """Loads all links from database."""
-        after = self.manager.parsed_args.cli_only_args.completed_after or datetime.date.min
-        before = self.manager.parsed_args.cli_only_args.completed_before or datetime.date.today()
-        async for rows in self.manager.database.history.get_all_items(after, before):
-            for row in rows:
-                yield _create_item_from_row(row)
-
-    async def load_all_bunkr_failed_links_via_hash(self) -> AsyncGenerator[ScrapeItem]:
-        """Loads all bunkr links with maintenance hash."""
-        async for rows in self.manager.database.history.get_all_bunkr_failed():
-            for row in rows:
-                yield _create_item_from_row(row)
-
-    """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
-
-    async def filter_and_send_to_crawler(self, scrape_item: ScrapeItem) -> None:
-        """Send scrape_item to a supported crawler."""
-        if not isinstance(scrape_item.url, URL):
-            scrape_item.url = AbsoluteHttpURL(scrape_item.url)
-        if self.filter_items(scrape_item):
-            await self.send_to_crawler(scrape_item)
-
-    async def send_to_crawler(self, scrape_item: ScrapeItem) -> None:
+    async def _send_to_crawler(self, scrape_item: ScrapeItem) -> None:
         """Maps URLs to their respective handlers."""
         scrape_item.url = remove_trailing_slash(scrape_item.url)
-        crawler_match = match_url_to_crawler(self.existing_crawlers, scrape_item.url)
+        crawler_match = _best_match(self.existing_crawlers, scrape_item.url.host)
 
         if crawler_match:
             await crawler_match.__async_init__()
@@ -302,15 +267,16 @@ class ScrapeMapper:
         )
         self.manager.progress_manager.scrape_stats_progress.add_unsupported()
 
-    def filter_items(self, scrape_item: ScrapeItem) -> bool:
+    def _should_scrape(self, scrape_item: ScrapeItem) -> bool:
         """Pre-filter scrape items base on URL."""
 
-        if scrape_item.url in _seen_urls:
+        if scrape_item.url in self._seen_urls:
             return False
-        _seen_urls.add(scrape_item.url)
+
+        self._seen_urls.add(scrape_item.url)
 
         if (
-            is_in_domain_list(scrape_item, BlockedDomains.partial_match)
+            _is_in_domain_list(scrape_item, BlockedDomains.partial_match)
             or scrape_item.url.host in BlockedDomains.exact_match
         ):
             logger.info(f"Skipping {scrape_item.url} as it is a blocked domain")
@@ -318,18 +284,19 @@ class ScrapeMapper:
 
         before = self.manager.parsed_args.cli_only_args.completed_before
         after = self.manager.parsed_args.cli_only_args.completed_after
-        if is_outside_date_range(scrape_item, before, after):
+
+        if _is_outside_date_range(scrape_item, before, after):
             logger.info(f"Skipping {scrape_item.url} as it is outside of the desired date range")
             return False
 
         skip_hosts = self.manager.config.ignore_options.skip_hosts
-        if skip_hosts and is_in_domain_list(scrape_item, skip_hosts):
-            logger.info(f"Skipping URL by skip_hosts config: {scrape_item.url}")
+        if skip_hosts and _is_in_domain_list(scrape_item, skip_hosts):
+            logger.info(f"Skipping {scrape_item.url} by skip_hosts config")
             return False
 
         only_hosts = self.manager.config.ignore_options.only_hosts
-        if only_hosts and not is_in_domain_list(scrape_item, only_hosts):
-            logger.info(f"Skipping URL by only_hosts config: {scrape_item.url}")
+        if only_hosts and not _is_in_domain_list(scrape_item, only_hosts):
+            logger.info(f"Skipping {scrape_item.url} by only_hosts config")
             return False
 
         return True
@@ -388,19 +355,12 @@ def _create_item_from_row(row: aiosqlite.Row) -> ScrapeItem:
 
 
 def get_crawlers_mapping(include_generics: bool = False) -> dict[str, type[Crawler]]:
-    """Returns a mapping with an instance of all crawlers.
-
-    Crawlers are only created on the first calls. Future calls always return a reference to the same crawlers
-
-    If manager is `None`, the `MOCK_MANAGER` will be used, which means the crawlers won't be able to actually run"""
-
     from cyberdrop_dl.crawlers.crawler import Registry
 
     Registry.import_all()
-    crawlers = Registry.generic | Registry.concrete
 
     crawlers_map: dict[str, type[Crawler]] = {}
-    for crawler in crawlers:
+    for crawler in sorted(Registry.generic | Registry.concrete, key=lambda c: c.NAME):
         register_crawler(crawlers_map, crawler, include_generics)
 
     copy = crawlers_map.copy()
@@ -423,7 +383,7 @@ def register_crawler(
     for domain in keys:
         other = existing_crawlers.get(domain)
         if from_user:
-            if not other and (match := match_url_to_crawler(existing_crawlers, crawler.PRIMARY_URL)):
+            if not other and (match := _best_match(existing_crawlers, crawler.PRIMARY_URL.host)):
                 other = match
             if other:
                 msg = (
@@ -441,23 +401,22 @@ def register_crawler(
         elif other:
             msg = f"{domain} from {crawler.NAME} already registered by {other}"
             assert domain not in existing_crawlers, msg
+
         existing_crawlers[domain] = crawler
 
 
-def create_generic_crawlers_by_config(generic_crawlers: GenericCrawlerInstances) -> set[type[Crawler]]:
-    new_crawlers: set[type[Crawler]] = set()
-    if generic_crawlers.wordpress_html:
-        new_crawlers.update(create_crawlers(generic_crawlers.wordpress_html, WordPressHTMLCrawler))
-    if generic_crawlers.wordpress_media:
-        new_crawlers.update(create_crawlers(generic_crawlers.wordpress_media, WordPressMediaCrawler))
-    if generic_crawlers.discourse:
-        new_crawlers.update(create_crawlers(generic_crawlers.discourse, DiscourseCrawler))
-    if generic_crawlers.chevereto:
-        new_crawlers.update(create_crawlers(generic_crawlers.chevereto, CheveretoCrawler))
-    return new_crawlers
+def _create_generic_crawlers(generics_config: GenericCrawlerInstances) -> Generator[type[Crawler]]:
+    if generics_config.wordpress_html:
+        yield from create_crawlers(generics_config.wordpress_html, WordPressHTMLCrawler)
+    if generics_config.wordpress_media:
+        yield from create_crawlers(generics_config.wordpress_media, WordPressMediaCrawler)
+    if generics_config.discourse:
+        yield from create_crawlers(generics_config.discourse, DiscourseCrawler)
+    if generics_config.chevereto:
+        yield from create_crawlers(generics_config.chevereto, CheveretoCrawler)
 
 
-def disable_crawlers_by_config(existing_crawlers: dict[str, type[Crawler]], crawlers_to_disable: list[str]) -> None:
+def _disable_crawlers_by_config(current_crawlers: dict[str, type[Crawler]], crawlers_to_disable: list[str]) -> None:
     if not crawlers_to_disable:
         return
 
@@ -465,10 +424,11 @@ def disable_crawlers_by_config(existing_crawlers: dict[str, type[Crawler]], craw
 
     new_crawlers_mapping = {
         key: crawler
-        for key, crawler in existing_crawlers.items()
+        for key, crawler in current_crawlers.items()
         if crawler.INFO.site.casefold() not in crawlers_to_disable
     }
-    disabled_crawlers = set(existing_crawlers.values()) - set(new_crawlers_mapping.values())
+    disabled_crawlers = set(current_crawlers.values()) - set(new_crawlers_mapping.values())
+
     if len(disabled_crawlers) != len(crawlers_to_disable):
         msg = (
             f"{len(crawlers_to_disable)} Crawler names where provided to disable"
@@ -477,8 +437,8 @@ def disable_crawlers_by_config(existing_crawlers: dict[str, type[Crawler]], craw
         logger.warning(msg)
 
     if disabled_crawlers:
-        existing_crawlers.clear()
-        existing_crawlers.update(new_crawlers_mapping)
+        current_crawlers.clear()
+        current_crawlers.update(new_crawlers_mapping)
         crawlers_info = "\n".join(
             str({info.site: info.supported_domains}) for info in sorted(c.INFO for c in disabled_crawlers)
         )
@@ -487,15 +447,34 @@ def disable_crawlers_by_config(existing_crawlers: dict[str, type[Crawler]], craw
     log_spacer()
 
 
-def match_url_to_crawler(existing_crawlers: dict[str, _T], url: AbsoluteHttpURL) -> _T | None:
-    # match exact domain
-    if crawler := existing_crawlers.get(url.host):
-        return crawler
+def _best_match(current_map: dict[str, _T], key: str) -> _T | None:
+    if found := current_map.get(key):
+        return found
 
-    # get most restrictive domain if multiple domain matches
     try:
-        domain = max((domain for domain in existing_crawlers if domain in url.host), key=len)
-        existing_crawlers[url.host] = crawler = existing_crawlers[domain]
-        return crawler
+        best_match = max((k for k in current_map if k in key), key=len)
     except (ValueError, TypeError):
         return
+    else:
+        current_map[key] = found = current_map[best_match]
+        return found
+
+
+async def load_failed_links(manager: Manager) -> AsyncGenerator[ScrapeItem]:
+    async for rows in manager.database.history.get_failed_items():
+        for row in rows:
+            yield _create_item_from_row(row)
+
+
+async def load_all_links(manager: Manager) -> AsyncGenerator[ScrapeItem]:
+    after = manager.parsed_args.cli_only_args.completed_after or datetime.date.min
+    before = manager.parsed_args.cli_only_args.completed_before or datetime.date.today()
+    async for rows in manager.database.history.get_all_items(after, before):
+        for row in rows:
+            yield _create_item_from_row(row)
+
+
+async def load_all_bunkr_failed_links_via_hash(manager: Manager) -> AsyncGenerator[ScrapeItem]:
+    async for rows in manager.database.history.get_all_bunkr_failed():
+        for row in rows:
+            yield _create_item_from_row(row)

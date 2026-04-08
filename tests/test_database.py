@@ -134,7 +134,7 @@ def test_invalid_date_format(row) -> None:
 def test_create_db_path(url: str, expected: str) -> None:
     crawlers = scrape_mapper.get_crawlers_mapping()
     url_ = parse_url(url)
-    crawler = scrape_mapper.match_url_to_crawler(crawlers, url_)
+    crawler = scrape_mapper._best_match(crawlers, url_.host)
     assert crawler
     path = crawler.__db_path__(url_)
     assert path == expected
