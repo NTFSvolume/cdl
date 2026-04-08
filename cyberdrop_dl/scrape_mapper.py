@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 
 REGEX_LINKS = re.compile(r"(?:http.*?)(?=($|\n|\r\n|\r|\s|\"|\[/URL]|']\[|]\[|\[/img]))")
 
-CURRENT_SCRAPE_DONE: ContextVar[asyncio.Event] = ContextVar("CURRENT_SCRAPE")
+CURRENT_SCRAPE_DONE: ContextVar[asyncio.Event] = ContextVar("CURRENT_SCRAPE_DONE")
 
 
 def _filter_by_date(scrape_item: ScrapeItem, before: datetime.date | None, after: datetime.date | None) -> bool:
@@ -118,7 +118,6 @@ class ScrapeMapper:
     """This class maps links to their respective handlers, or JDownloader if they are unsupported."""
 
     manager: Manager
-
     crawlers: dict[str, type[Crawler]] = dataclasses.field(init=False, default_factory=dict)
 
     _direct_http: DirectHttpFile = dataclasses.field(init=False)
@@ -161,7 +160,7 @@ class ScrapeMapper:
 
         await self.manager.client_manager.load_cookie_files()
 
-        ## The order of each context matter
+        ## IMPORTANT: Order of each context matters!
         async with (
             self.manager.client_manager,
             storage.monitor(self.manager.global_config.general.required_free_space),
@@ -248,9 +247,9 @@ class ScrapeMapper:
         if self._jdownloader.is_enabled_for(scrape_item.url):
             logger.info(f"Sending unsupported URL to JDownloader: {scrape_item.url}")
 
-            try:
-                download_folder = get_download_path(self.manager, scrape_item, "jdownloader")
-                relative_download_dir = download_folder.relative_to(self.manager.config.files.download_folder)
+            download_folder = get_download_path(self.manager, scrape_item, "jdownloader")
+            relative_download_dir = download_folder.relative_to(self.manager.config.files.download_folder)
+                try:
                 await self._jdownloader.send(
                     scrape_item.url,
                     scrape_item.parent_title,

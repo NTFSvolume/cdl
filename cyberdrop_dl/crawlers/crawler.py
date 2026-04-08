@@ -277,7 +277,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
 
     @final
     def create_task(self, coro: Coroutine[Any, Any, _T]) -> None:
-        _ = self.manager.scrape_mapper._task_groups.scrape.create_task(coro)
+        _ = self.manager.scrape_mapper.create_task(coro)
 
     @abstractmethod
     async def fetch(self, scrape_item: ScrapeItem) -> None:
@@ -483,7 +483,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
             self.manager.progress_manager.download_progress.add_skipped()
             return
 
-        _ = self.manager.scrape_mapper.create_download_task(self._download(media_item, m3u8))
+        self.manager.scrape_mapper.create_download_task(self._download(media_item, m3u8))
 
     @final
     async def check_skip_by_config(self, media_item: MediaItem) -> bool:
