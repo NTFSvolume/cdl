@@ -153,12 +153,8 @@ class ScrapeMapper:
 
         plugins.load(self.manager)
 
-    @classmethod
     @contextlib.asynccontextmanager
-    async def managed(cls, manager: Manager) -> AsyncGenerator[Self]:
-        """Creates a new scrape mapper that auto closses http session on exit"""
-
-        self = cls(manager)
+    async def __call__(self) -> AsyncGenerator[Self]:
         _ = filepath.MAX_FILE_LEN.set(self.manager.global_config.general.max_file_name_length)
         _ = filepath.MAX_FOLDER_LEN.set(self.manager.global_config.general.max_folder_name_length)
 
@@ -169,7 +165,7 @@ class ScrapeMapper:
             self._task_groups.downloads,
             self._task_groups.scrape,
             self.manager.logs.task_group,
-            storage.monitor(manager.global_config.general.required_free_space),
+            storage.monitor(self.manager.global_config.general.required_free_space),
         ):
             self.manager.scrape_mapper = self
             yield self

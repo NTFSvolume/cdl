@@ -57,7 +57,7 @@ async def _scrape(manager: Manager) -> None:
 
 async def _runtime(manager: Manager) -> None:
     with manager.live_manager.get_main_live(stop=True):
-        async with ScrapeMapper.managed(manager) as scrape_mapper:
+        async with ScrapeMapper(manager)() as scrape_mapper:
             await scrape_mapper.run()
 
 
