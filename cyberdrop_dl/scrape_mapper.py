@@ -195,8 +195,18 @@ class ScrapeMapper:
             item_limit = self.manager.parsed_args.cli_only_args.max_items_retry
 
         source_name, source = _source(self.manager)
-        stats = ScrapeStats(source_name)
         async with contextlib.aclosing(source) as items:
+            stats = ScrapeStats(source_name)
+            done = CURRENT_SCRAPE_DONE.get()
+
+            async def wait_until_scrape_is_done() -> None:
+                _ = await done.wait()
+                stats.url_count.update(
+                    (crawler.DOMAIN, count) for crawler in self._factory if (count := len(crawler._scraped_items))
+                )
+
+            self.create_download_task(wait_until_scrape_is_done())
+
             async for item in items:
                 item.children_limits = self.manager.config.download_options.maximum_number_of_children
                 if self._should_scrape(item):
@@ -204,16 +214,6 @@ class ScrapeMapper:
                         break
                     stats.update(item)
                     self.create_task(self._send_to_crawler(item))
-
-        done = CURRENT_SCRAPE_DONE.get()
-
-        async def wait_until_scrape_is_done() -> None:
-            _ = await done.wait()
-            stats.url_count.update(
-                (crawler.DOMAIN, count) for crawler in self._factory if (count := len(crawler._scraped_items))
-            )
-
-        self.create_download_task(wait_until_scrape_is_done())
 
         if not stats.count:
             logger.warning("No valid links found")
@@ -249,7 +249,7 @@ class ScrapeMapper:
 
             download_folder = get_download_path(self.manager, scrape_item, "jdownloader")
             relative_download_dir = download_folder.relative_to(self.manager.config.files.download_folder)
-                try:
+            try:
                 await self._jdownloader.send(
                     scrape_item.url,
                     scrape_item.parent_title,
