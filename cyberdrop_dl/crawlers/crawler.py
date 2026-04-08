@@ -158,6 +158,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
     _RATE_LIMIT: ClassVar[RateLimit] = 25, 1
     _DOWNLOAD_SLOTS: ClassVar[int | None] = None
     _USE_DOWNLOAD_SERVERS_LOCKS: ClassVar[bool] = False
+    disabled: bool = False
 
     @staticmethod
     def __db_path__(url: AbsoluteHttpURL, /) -> str:
@@ -170,7 +171,6 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         self.client: HTTPClient = dataclasses.field(init=False)
         self._startup_lock: asyncio.Lock = asyncio.Lock()
         self._ready: bool = False
-        self.disabled: bool = False
         self._logged_in: bool = False
         self._scraped_items: set[str] = set()
 

@@ -27,7 +27,7 @@ class ScrapingProgress(DequeProgress):
         """Returns the number of tasks in the scraper queue."""
         total = 0
         unique_crawler_ids = set()
-        for crawler in self.manager.scrape_mapper.existing_crawlers.values():
+        for crawler in self.manager.scrape_mapper._factory:
             crawler_id = id(crawler)  # Only count each instance of the crawler once
             if crawler_id in unique_crawler_ids:
                 continue

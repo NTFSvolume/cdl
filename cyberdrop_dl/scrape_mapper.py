@@ -6,6 +6,7 @@ import dataclasses
 import datetime
 import logging
 import re
+import time
 from collections.abc import Generator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Self, TypeVar
@@ -27,7 +28,7 @@ from cyberdrop_dl.logs import log_spacer
 from cyberdrop_dl.utils.utilities import get_download_path, remove_trailing_slash
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Coroutine, Generator, Iterable, Sequence
+    from collections.abc import AsyncGenerator, Coroutine, Generator, Iterable, Iterator, Sequence
 
     import aiosqlite
 
@@ -35,14 +36,16 @@ if TYPE_CHECKING:
     from cyberdrop_dl.crawlers.crawler import Crawler
     from cyberdrop_dl.managers.manager import Manager
 
-_T = TypeVar("_T")
+    _T = TypeVar("_T")
+    _CrawlerT = TypeVar("_CrawlerT", bound=Crawler)
+
 logger = logging.getLogger(__name__)
 
 
 REGEX_LINKS = re.compile(r"(?:http.*?)(?=($|\n|\r\n|\r|\s|\"|\[/URL]|']\[|]\[|\[/img]))")
 
 
-def _is_outside_date_range(scrape_item: ScrapeItem, before: datetime.date | None, after: datetime.date | None) -> bool:
+def _filter_by_date(scrape_item: ScrapeItem, before: datetime.date | None, after: datetime.date | None) -> bool:
     skip = False
     item_date = scrape_item.completed_at or scrape_item.created_at
     if not item_date:
@@ -54,8 +57,51 @@ def _is_outside_date_range(scrape_item: ScrapeItem, before: datetime.date | None
     return skip
 
 
-def _is_in_domain_list(scrape_item: ScrapeItem, domain_list: Sequence[str]) -> bool:
+def _filter_by_domain(scrape_item: ScrapeItem, domain_list: Sequence[str]) -> bool:
     return any(domain in scrape_item.url.host for domain in domain_list)
+
+
+@dataclasses.dataclass(slots=True, eq=False)
+class CrawlerFactory:
+    manager: Manager
+    _instances: dict[type[Crawler], Crawler] = dataclasses.field(default_factory=dict)
+
+    def __getitem__(self, obj: type[_CrawlerT]) -> _CrawlerT:
+        instance = self.get(obj)
+        if instance is None:
+            instance = self._instances[obj] = obj(self.manager)
+        return instance
+
+    def __contains__(self, obj: type[_CrawlerT]) -> bool:
+        return obj in self._instances
+
+    def get(self, obj: type[_CrawlerT]) -> _CrawlerT | None:
+        return self._instances.get(obj)  # pyright: ignore[reportReturnType]
+
+    def __iter__(self) -> Iterator[Crawler]:
+        return iter(self._instances.values())
+
+
+@dataclasses.dataclass(slots=True)
+class ScrapeStats:
+    source: Path | None = None
+    count: int = dataclasses.field(init=False, default=0)
+    groups: list[str] = dataclasses.field(init=False, default_factory=list)
+    url_count: dict[str, int] = dataclasses.field(init=False, default_factory=dict)
+    start_time: float = dataclasses.field(init=False, default_factory=time.monotonic)
+
+    @property
+    def unique_groups(self) -> list[str]:
+        return list(dict.fromkeys(self.groups))
+
+    @property
+    def domain_stats(self) -> dict[str, int]:
+        return dict(sorted(self.url_count.items(), key=lambda x: x[1]))
+
+    def update(self, item: ScrapeItem) -> None:
+        self.count += 1
+        if item.parent_title:
+            self.groups.append(item.parent_title)
 
 
 @dataclasses.dataclass(slots=True)
@@ -74,19 +120,20 @@ class ScrapeMapper:
     real_debrid: RealDebridCrawler = dataclasses.field(init=False)
 
     source_name: str = dataclasses.field(init=False, default="")
-    groups: set[str] = dataclasses.field(init=False, default_factory=set)
     count: int = dataclasses.field(init=False, default=0)
-    existing_crawlers: dict[str, Crawler] = dataclasses.field(init=False, default_factory=dict)
+    crawlers: dict[str, type[Crawler]] = dataclasses.field(init=False, default_factory=dict)
     _task_groups: TaskGroups = dataclasses.field(
         init=False, default_factory=lambda: TaskGroups(asyncio.TaskGroup(), asyncio.TaskGroup())
     )
     _seen_urls: set[AbsoluteHttpURL] = dataclasses.field(init=False, default_factory=set)
     _crawlers_disabled_at_runtime: set[str] = dataclasses.field(init=False, default_factory=set)
+    _factory: CrawlerFactory = dataclasses.field(init=False)
 
     def __post_init__(self) -> None:
         self.direct_http = DirectHttpFile(self.manager)
         self.jdownloader = JDownloader.from_manager(self.manager)
-        self.existing_crawlers["real-debrid"] = self.real_debrid = RealDebridCrawler(self.manager)
+        self.real_debrid = RealDebridCrawler(self.manager)
+        self._factory = CrawlerFactory(self.manager)
 
     def create_task(self, coro: Coroutine[Any, Any, _T]) -> None:
         _ = self._task_groups.scrape.create_task(coro)
@@ -96,14 +143,12 @@ class ScrapeMapper:
 
     def _init_crawlers(self) -> None:
 
-        crawlers = get_crawlers_mapping()
+        self.crawlers.update(get_crawlers_mapping())
 
         for crawler in _create_generic_crawlers(self.manager.global_config.generic_crawlers_instances):
-            register_crawler(crawlers, crawler, from_user=True)
+            register_crawler(self.crawlers, crawler, from_user=True)
 
-        _disable_crawlers_by_config(crawlers, *self.manager.global_config.general.disable_crawlers)
-
-        self.existing_crawlers.update((domain, crawler(self.manager)) for domain, crawler in crawlers.items())
+        _disable_crawlers_by_config(self.crawlers, *self.manager.global_config.general.disable_crawlers)
 
         plugins.load(self.manager)
 
@@ -157,9 +202,8 @@ class ScrapeMapper:
 
     async def _send_to_crawler(self, scrape_item: ScrapeItem) -> None:
         scrape_item.url = remove_trailing_slash(scrape_item.url)
-        crawler = _best_match(self.existing_crawlers, scrape_item.url.host)
-
-        if crawler:
+        if cls := _best_match(self.crawlers, scrape_item.url.host):
+            crawler = self._factory[cls]
             await crawler.__async_init__()
             self.create_task(crawler.run(scrape_item))
             return
@@ -212,7 +256,7 @@ class ScrapeMapper:
         self._seen_urls.add(scrape_item.url)
 
         if (
-            _is_in_domain_list(scrape_item, BlockedDomains.partial_match)
+            _filter_by_domain(scrape_item, BlockedDomains.partial_match)
             or scrape_item.url.host in BlockedDomains.exact_match
         ):
             logger.info(f"Skipping {scrape_item.url} as it is a blocked domain")
@@ -221,23 +265,23 @@ class ScrapeMapper:
         before = self.manager.parsed_args.cli_only_args.completed_before
         after = self.manager.parsed_args.cli_only_args.completed_after
 
-        if _is_outside_date_range(scrape_item, before, after):
+        if _filter_by_date(scrape_item, before, after):
             logger.info(f"Skipping {scrape_item.url} as it is outside of the desired date range")
             return False
 
         skip_hosts = self.manager.config.ignore_options.skip_hosts
-        if skip_hosts and _is_in_domain_list(scrape_item, skip_hosts):
+        if skip_hosts and _filter_by_domain(scrape_item, skip_hosts):
             logger.info(f"Skipping {scrape_item.url} by skip_hosts config")
             return False
 
         only_hosts = self.manager.config.ignore_options.only_hosts
-        if only_hosts and not _is_in_domain_list(scrape_item, only_hosts):
+        if only_hosts and not _filter_by_domain(scrape_item, only_hosts):
             logger.info(f"Skipping {scrape_item.url} by only_hosts config")
             return False
 
         return True
 
-    def disable_crawler(self, domain: str) -> Crawler | None:
+    def disable_crawler(self, domain: str) -> type[Crawler] | None:
         """Disables a crawler at runtime, after the scrape mapper is already running.
 
         It does not remove the crawler from the crawlers map, it just sets it as `disabled"`
@@ -253,11 +297,15 @@ class ScrapeMapper:
         if domain in self._crawlers_disabled_at_runtime:
             return
 
-        crawler = next((crawler for crawler in self.existing_crawlers.values() if crawler.DOMAIN == domain), None)
-        if crawler and not crawler.disabled:
-            crawler.disabled = True
-            self._crawlers_disabled_at_runtime.add(domain)
-            return crawler
+        crawler = next((crawler for crawler in self.crawlers.values() if crawler.DOMAIN == domain), None)
+        if not crawler or crawler.disabled:
+            return
+
+        crawler.disabled = True
+        self._crawlers_disabled_at_runtime.add(domain)
+        if instance := self._factory.get(crawler):
+            instance.disabled = True
+        return crawler
 
 
 def _source(manager: Manager) -> tuple[str, AsyncGenerator[ScrapeItem]]:
@@ -298,12 +346,12 @@ async def _parse_input_file_groups(input_file: Path) -> AsyncGenerator[tuple[str
                 current_group_name = line.replace("---", "").replace("===", "").strip()
 
             if current_group_name:
-                yield (current_group_name, list(regex_links(line)))
+                yield (current_group_name, list(_regex_links(line)))
                 continue
 
             block_quote = not block_quote if line == "#\n" else block_quote
             if not block_quote:
-                yield ("", list(regex_links(line)))
+                yield ("", list(_regex_links(line)))
 
 
 async def _load_cli_links(links: Iterable[AbsoluteHttpURL]) -> AsyncGenerator[ScrapeItem]:
@@ -311,7 +359,7 @@ async def _load_cli_links(links: Iterable[AbsoluteHttpURL]) -> AsyncGenerator[Sc
         yield ScrapeItem(url=url)
 
 
-def regex_links(line: str) -> Generator[AbsoluteHttpURL]:
+def _regex_links(line: str) -> Generator[AbsoluteHttpURL]:
     """Regex grab the links from the URLs.txt file.
 
     This allows code blocks or full paragraphs to be copy and pasted into the URLs.txt.
@@ -321,7 +369,7 @@ def regex_links(line: str) -> Generator[AbsoluteHttpURL]:
     if line.startswith("#"):
         return
 
-    http_urls = (x.group().replace(".md.", ".") for x in re.finditer(REGEX_LINKS, line))
+    http_urls = (url.group().replace(".md.", ".") for url in re.finditer(REGEX_LINKS, line))
     for link in http_urls:
         try:
             encoded = "%" in link

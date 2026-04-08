@@ -102,7 +102,7 @@ async def test_crawler(running_manager: Manager, crawler_test_case: CrawlerTestC
         async with ScrapeMapper.managed(running_manager) as scrape_mapper:
             await scrape_mapper.run()
             crawler = next(
-                (crawler for crawler in scrape_mapper.existing_crawlers.values() if crawler.DOMAIN == test_case.domain),
+                (crawler for crawler in scrape_mapper._factory if crawler.DOMAIN == test_case.domain),
                 None,
             )
             assert crawler, f"{test_case.domain} is not a valid crawler domain. Test case is invalid"
