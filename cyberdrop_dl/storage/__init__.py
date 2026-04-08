@@ -19,15 +19,31 @@ if TYPE_CHECKING:
 
 _required_free_space: ContextVar[int] = ContextVar("_required_free_space")
 
+
+def _disk_usage(folder: Path) -> int:
+    path = folder
+    while True:
+        try:
+            return shutil.disk_usage(path).free
+        except FileNotFoundError:
+            if path.parent == path:
+                return 0
+            path = path.parent
+
+
 try:
-    from ._psutil import has_sufficient_space as _has_sufficient_space
+    from ._psutil import get_free_space as _get_free_space
     from ._psutil import start_loop as _psutil_loop
 except ImportError:
     _psutil_loop = None
 
-    async def _has_sufficient_space(folder: Path, /, required_free_space: int) -> bool:
-        usage = await asyncio.to_thread(shutil.disk_usage, folder)
-        return usage.free > required_free_space
+    async def _get_free_space(folder: Path) -> int:
+        return await asyncio.to_thread(_disk_usage, folder)
+
+
+async def has_sufficient_space(folder: Path, /, required_free_space: int | None = None) -> bool:
+    free_space = await _get_free_space(folder)
+    return free_space == -1 or free_space > (required_free_space or _required_free_space.get())
 
 
 def create_free_space_checker(media_item: MediaItem, *, frecuency: int = 5) -> Callable[[], Awaitable[None]]:
@@ -42,10 +58,6 @@ def create_free_space_checker(media_item: MediaItem, *, frecuency: int = 5) -> C
         current_chunk += 1
 
     return checker
-
-
-async def has_sufficient_space(folder: Path, /) -> bool:
-    return await _has_sufficient_space(folder, _required_free_space.get())
 
 
 @contextlib.asynccontextmanager

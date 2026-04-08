@@ -45,7 +45,7 @@ class _Stats:
         return str(self.__json__())
 
 
-async def _get_free_space(path: Path) -> int:
+async def _raw_get_free_space(path: Path) -> int:
     unsupported = None
     free_space = 0
 
@@ -68,11 +68,10 @@ async def _get_free_space(path: Path) -> int:
     return free_space
 
 
-async def has_sufficient_space(folder: Path, /, required_free_space: int) -> bool:
-    await _check_nt_network_drive(folder)
+async def get_free_space(folder: Path) -> int:
     mount = _get_mount_point(folder)
     if not mount:
-        return False
+        return 0
 
     free_space = _free_space.get(mount)
     if free_space is None:
@@ -81,11 +80,11 @@ async def has_sufficient_space(folder: Path, /, required_free_space: int) -> boo
             if free_space is None:
                 # Manually query this mount now. Next time it will be part of the loop
 
-                free_space = _free_space[mount] = await _get_free_space(mount)
+                free_space = _free_space[mount] = await _raw_get_free_space(mount)
                 logger.info(f"A new mountpoint ('{mount!s}') will be used for '{folder}'")
                 logger.info("Storage status \n%s", _Stats())
 
-    return free_space == -1 or free_space > required_free_space
+    return free_space
 
 
 def _find_partition(path: Path) -> DiskPartition | None:
@@ -139,7 +138,7 @@ async def start_loop() -> None:
         if not mountpoints:
             return
 
-        results = await asyncio.gather(*map(_get_free_space, mountpoints))
+        results = await asyncio.gather(*map(_raw_get_free_space, mountpoints), return_exceptions=False)
         _free_space.update(zip(mountpoints, results, strict=True))
 
     last_check = -1

@@ -21,15 +21,15 @@ def find_partition(path: str):
 
 async def test_unsupported_fs_should_not_return_zero() -> None:
     cwd = await aio.resolve(Path())
-    free_space = await _psutil._get_free_space(cwd)
+    free_space = await _psutil._raw_get_free_space(cwd)
     assert free_space > 0
     with mock.patch("psutil.disk_usage", side_effect=OSError(None, "operation not supported")):
-        free_space = await _psutil._get_free_space(cwd)
+        free_space = await _psutil._raw_get_free_space(cwd)
         assert free_space == -1
 
     with mock.patch("psutil.disk_usage", side_effect=OSError(None, "another error")):
         with pytest.raises(OSError):
-            _ = await _psutil._get_free_space(cwd)
+            _ = await _psutil._raw_get_free_space(cwd)
 
 
 async def test_fuse_filesystem_should_not_return_zero() -> None:
@@ -40,14 +40,14 @@ async def test_fuse_filesystem_should_not_return_zero() -> None:
     _psutil._PARTITIONS = [dataclasses.replace(partition, fstype="fuse")]  # pyright: ignore[reportPrivateUsage]
     assert _psutil._is_fuse_fs(cwd)
 
-    free_space = await _psutil._get_free_space(cwd)
+    free_space = await _psutil._raw_get_free_space(cwd)
     assert free_space > 0
 
     class NullUsage:
         free = 0
 
     with mock.patch("psutil.disk_usage", return_value=NullUsage()):
-        free_space = await _psutil._get_free_space(cwd)
+        free_space = await _psutil._raw_get_free_space(cwd)
         assert free_space == -1
 
 
@@ -87,7 +87,14 @@ async def test_find_partition_finds_the_correct_partition_windows() -> None:
     assert find_partition("Z:/") is None
 
 
-async def test_no_psutil_still_works(tmp_path: Path) -> None:
+async def test_no_psutil_check_do_not_raise_exception(tmp_path: Path) -> None:
     with mock.patch.object(storage, "_psutil_loop", None):
         async with storage.monitor(100):
             assert await storage.has_sufficient_space(tmp_path)
+
+
+def test_no_psutil_file_not_found_returns_size_of_closes_parent(tmp_path: Path) -> None:
+    folder = tmp_path / "folder_abc/that/does/not/exists"
+    result = storage._disk_usage(folder)
+    assert result > 0
+    assert result == storage._disk_usage(tmp_path)
