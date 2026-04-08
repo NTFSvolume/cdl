@@ -136,11 +136,14 @@ class ProgressManager:
         logger.info(f"  URLs source: {urls_source}")
         logger.info(f"  URLs: {stats.count:,}")
         logger.info(f"  URL groups: {len(stats.unique_groups):,}")
-        for domain, count in stats.url_count.items():
-            logger.info(f"  - {domain}: {count:,}")
         logger.info(f"  Logs folder: {self.manager.config.logs.log_folder}")
         logger.info(f"  Total runtime: {elapsed}")
         logger.info(f"  Total downloaded data: {total_data_written}")
+
+        if stats.domain_stats:
+            log_spacer()
+            logger.info("URLs by domain:", extra={"color": "cyan"})
+            logger.info(" - " + "\n - ".join(map(str, stats.domain_stats.items())))
 
         log_spacer()
         logger.info("Download Stats:", extra={"color": "cyan"})
@@ -191,7 +194,7 @@ def _log_errors(scrape_errors: Sequence[UiFailureTotal], download_errors: Sequen
             logger.info(f"  {'None':>{padding}}", extra={"color": "green"})
             continue
 
-        for error in scrape_errors:
+        for error in errors:
             error_code = error.code if error.code is not None else ""
             logger.info(
                 f"  {error_code:>{padding}}{' ' if padding else ''}{error.msg}: {error.total:,}", extra={"color": "red"}

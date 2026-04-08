@@ -7,7 +7,7 @@ import datetime
 import logging
 import re
 import time
-from collections.abc import Generator
+from contextvars import ContextVar
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Self, TypeVar
 
@@ -44,6 +44,8 @@ logger = logging.getLogger(__name__)
 
 
 REGEX_LINKS = re.compile(r"(?:http.*?)(?=($|\n|\r\n|\r|\s|\"|\[/URL]|']\[|]\[|\[/img]))")
+
+CURRENT_SCRAPE_DONE: ContextVar[asyncio.Event] = ContextVar("CURRENT_SCRAPE")
 
 
 def _filter_by_date(scrape_item: ScrapeItem, before: datetime.date | None, after: datetime.date | None) -> bool:
@@ -159,15 +161,22 @@ class ScrapeMapper:
 
         await self.manager.client_manager.load_cookie_files()
 
-        async with (
-            self.manager.client_manager,
-            self._task_groups.downloads,
-            self._task_groups.scrape,
-            self.manager.logs.task_group,
-            storage.monitor(self.manager.global_config.general.required_free_space),
-        ):
-            self.manager.scrape_mapper = self
-            yield self
+        async with self.manager.client_manager, self.manager.logs.task_group, self._task_groups.downloads:
+            done = asyncio.Event()
+            token = CURRENT_SCRAPE_DONE.set(done)
+            try:
+                async with (
+                    self._task_groups.scrape,
+                    storage.monitor(self.manager.global_config.general.required_free_space),
+                ):
+                    self.manager.scrape_mapper = self
+
+                    yield self
+
+            finally:
+                # The done event signals that all scraping is done, but there may still be downloads pending
+                done.set()
+                CURRENT_SCRAPE_DONE.reset(token)
 
     async def run(self) -> ScrapeStats:
         self._init_crawlers()
@@ -186,18 +195,23 @@ class ScrapeMapper:
         source_name, source = _source(self.manager)
         stats = ScrapeStats(source_name)
         async with contextlib.aclosing(source) as items:
-            try:
-                async for item in items:
-                    item.children_limits = self.manager.config.download_options.maximum_number_of_children
-                    if self._should_scrape(item):
-                        if item_limit and stats.count >= item_limit:
-                            break
-                        stats.update(item)
-                        self.create_task(self._send_to_crawler(item))
-            finally:
-                stats.url_count.update(
-                    (crawler.DOMAIN, count) for crawler in self._factory if (count := len(crawler._scraped_items))
-                )
+            async for item in items:
+                item.children_limits = self.manager.config.download_options.maximum_number_of_children
+                if self._should_scrape(item):
+                    if item_limit and stats.count >= item_limit:
+                        break
+                    stats.update(item)
+                    self.create_task(self._send_to_crawler(item))
+
+        done = CURRENT_SCRAPE_DONE.get()
+
+        async def wait_until_scrape_is_done() -> None:
+            _ = await done.wait()
+            stats.url_count.update(
+                (crawler.DOMAIN, count) for crawler in self._factory if (count := len(crawler._scraped_items))
+            )
+
+        self.create_download_task(wait_until_scrape_is_done())
 
         if not stats.count:
             logger.warning("No valid links found")
