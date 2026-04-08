@@ -21,15 +21,15 @@ def find_partition(path: str):
 
 async def test_unsupported_fs_should_not_return_zero() -> None:
     cwd = await aio.resolve(Path())
-    free_space = await _psutil._raw_get_free_space(cwd)
+    free_space = await _psutil._disk_usage(cwd)
     assert free_space > 0
     with mock.patch("psutil.disk_usage", side_effect=OSError(None, "operation not supported")):
-        free_space = await _psutil._raw_get_free_space(cwd)
+        free_space = await _psutil._disk_usage(cwd)
         assert free_space == -1
 
     with mock.patch("psutil.disk_usage", side_effect=OSError(None, "another error")):
         with pytest.raises(OSError):
-            _ = await _psutil._raw_get_free_space(cwd)
+            _ = await _psutil._disk_usage(cwd)
 
 
 async def test_fuse_filesystem_should_not_return_zero() -> None:
@@ -40,14 +40,14 @@ async def test_fuse_filesystem_should_not_return_zero() -> None:
     _psutil._PARTITIONS = [dataclasses.replace(partition, fstype="fuse")]  # pyright: ignore[reportPrivateUsage]
     assert _psutil._is_fuse_fs(cwd)
 
-    free_space = await _psutil._raw_get_free_space(cwd)
+    free_space = await _psutil._disk_usage(cwd)
     assert free_space > 0
 
     class NullUsage:
         free = 0
 
     with mock.patch("psutil.disk_usage", return_value=NullUsage()):
-        free_space = await _psutil._raw_get_free_space(cwd)
+        free_space = await _psutil._disk_usage(cwd)
         assert free_space == -1
 
 
