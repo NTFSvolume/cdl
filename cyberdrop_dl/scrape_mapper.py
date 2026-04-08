@@ -38,7 +38,8 @@ if TYPE_CHECKING:
 _T = TypeVar("_T")
 _CrawlerT = TypeVar("_CrawlerT", bound=Crawler)
 logger = logging.getLogger(__name__)
-existing_crawlers: dict[str, type[Crawler]] = {}
+
+
 _seen_urls: set[AbsoluteHttpURL] = set()
 _crawlers_disabled_at_runtime: set[str] = set()
 
@@ -395,20 +396,17 @@ def get_crawlers_mapping(include_generics: bool = False) -> dict[str, type[Crawl
 
     from cyberdrop_dl.crawlers.crawler import Registry
 
-    global existing_crawlers
-    if existing_crawlers:
-        return existing_crawlers
-
     Registry.import_all()
     crawlers = Registry.generic | Registry.concrete
 
+    crawlers_map: dict[str, type[Crawler]] = {}
     for crawler in crawlers:
-        register_crawler(existing_crawlers, crawler, include_generics)
+        register_crawler(crawlers_map, crawler, include_generics)
 
-    copy = existing_crawlers.copy()
-    existing_crawlers.clear()
-    existing_crawlers.update(sorted(copy.items()))
-    return existing_crawlers
+    copy = crawlers_map.copy()
+    crawlers_map.clear()
+    crawlers_map.update(sorted(copy.items()))
+    return crawlers_map
 
 
 def register_crawler(
