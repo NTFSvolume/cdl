@@ -389,7 +389,7 @@ class Downloader:
             ClientConnectorError,
         ) as e:
             ui_message = getattr(e, "status", type(e).__name__)
-            if size := await aio.get_size(media_item.partial_file):
+            if media_item.partial_file and (size := await aio.get_size(media_item.partial_file)):
                 if self._current_attempt_filesize.get(media_item.filename, 0) >= size:
                     raise DownloadError(ui_message, message=f"{self.log_prefix} failed", retry=True) from None
 
