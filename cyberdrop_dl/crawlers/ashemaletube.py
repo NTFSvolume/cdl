@@ -2,17 +2,18 @@ from __future__ import annotations
 
 import json
 from enum import StrEnum
-from typing import TYPE_CHECKING, ClassVar, NamedTuple
+from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import css
+from cyberdrop_dl.utils import css, m3u8
 from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_text_between
 
 if TYPE_CHECKING:
     from bs4 import BeautifulSoup, Tag
 
+    from cyberdrop_dl.data_structures.mediaprops import Resolution
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
 
@@ -32,12 +33,6 @@ class Selectors:
 
 
 _SELECTORS = Selectors()
-
-
-class Format(NamedTuple):
-    resolution: str
-    url: AbsoluteHttpURL
-    hls: bool
 
 
 class CollectionType(StrEnum):
@@ -175,7 +170,7 @@ class AShemaleTubeCrawler(Crawler):
         if soup.select_one(_SELECTORS.LOGIN_REQUIRED):
             raise ScrapeError(401)
         js_text = css.select_text(soup, _SELECTORS.JS_PLAYER)
-        best_format, m3u8 = await self.parse_player_info(js_text)
+        resolution, url, m3u8 = await self.parse_player_info(js_text)
 
         if video_object := soup.select_one(_SELECTORS.VIDEO_PROPS_JS):
             json_data = json.loads(css.text(video_object))
@@ -183,8 +178,8 @@ class AShemaleTubeCrawler(Crawler):
 
         title = css.select_text(soup, "title").split("- aShemaletube.com")[0].strip()
         scrape_item.url = canonical_url
-        filename, ext = self.get_filename_and_ext(best_format.url.name, assume_ext=".mp4")
-        custom_filename = self.create_custom_filename(title, ext, file_id=video_id, resolution=best_format.resolution)
+        filename, ext = self.get_filename_and_ext(url.name, assume_ext=".mp4")
+        custom_filename = self.create_custom_filename(title, ext, file_id=video_id, resolution=resolution)
 
         return await self.handle_file(
             canonical_url,
@@ -195,12 +190,11 @@ class AShemaleTubeCrawler(Crawler):
             m3u8=m3u8,
         )
 
-    async def parse_player_info(self, script_text: str) -> tuple[Format, object]:
+    async def parse_player_info(self, script_text: str) -> tuple[Resolution, AbsoluteHttpURL, m3u8.Rendition]:
         sources = get_text_between(script_text, "sources: ", "aspectRatio").strip().strip(",")
         sources_data = json.loads(sources)
         url = self.parse_url(sources_data["hlsAuto"])
 
-        m3u8_group, playlist_info = await self.get_m3u8_from_playlist_url(url)
-        resolution = playlist_info.resolution.name
+        rendition, playlist_info = await self.get_m3u8_from_playlist_url(url)
 
-        return Format(resolution, url, True), m3u8_group
+        return playlist_info.resolution, url, rendition
