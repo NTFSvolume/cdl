@@ -465,14 +465,15 @@ def register_crawler(
 
 
 def _create_generic_crawlers(generics_config: GenericCrawlerInstances) -> Generator[type[Crawler]]:
-    if generics_config.wordpress_html:
-        yield from create_crawlers(generics_config.wordpress_html, WordPressHTMLCrawler)
-    if generics_config.wordpress_media:
-        yield from create_crawlers(generics_config.wordpress_media, WordPressMediaCrawler)
-    if generics_config.discourse:
-        yield from create_crawlers(generics_config.discourse, DiscourseCrawler)
-    if generics_config.chevereto:
-        yield from create_crawlers(generics_config.chevereto, CheveretoCrawler)
+
+    for domains, cls in (
+        (generics_config.wordpress_html, WordPressHTMLCrawler),
+        (generics_config.wordpress_media, WordPressMediaCrawler),
+        (generics_config.discourse, DiscourseCrawler),
+        (generics_config.chevereto, CheveretoCrawler),
+    ):
+        if domains:
+            yield from create_crawlers(domains, cls)
 
 
 def _disable_crawlers_by_config(current_crawlers: dict[str, type[Crawler]], *crawlers_to_disable: str) -> None:
@@ -482,10 +483,11 @@ def _disable_crawlers_by_config(current_crawlers: dict[str, type[Crawler]], *cra
     crawlers_to_disable = tuple(sorted({name.casefold() for name in crawlers_to_disable}))
 
     new_crawlers_mapping = {
-        key: crawler
-        for key, crawler in current_crawlers.items()
+        domain: crawler
+        for domain, crawler in current_crawlers.items()
         if crawler.INFO.site.casefold() not in crawlers_to_disable
     }
+
     disabled_crawlers = set(current_crawlers.values()) - set(new_crawlers_mapping.values())
 
     if len(disabled_crawlers) != len(crawlers_to_disable):
@@ -506,16 +508,16 @@ def _disable_crawlers_by_config(current_crawlers: dict[str, type[Crawler]], *cra
     log_spacer()
 
 
-def _best_match(current_map: dict[str, _T], key: str) -> _T | None:
-    if found := current_map.get(key):
+def _best_match(current_map: dict[str, _T], domain: str) -> _T | None:
+    if found := current_map.get(domain):
         return found
 
     try:
-        best_match = max((k for k in current_map if k in key), key=len)
+        best_match = max((host for host in current_map if host in domain), key=len)
     except (ValueError, TypeError):
         return
     else:
-        current_map[key] = found = current_map[best_match]
+        current_map[domain] = found = current_map[best_match]
         return found
 
 
