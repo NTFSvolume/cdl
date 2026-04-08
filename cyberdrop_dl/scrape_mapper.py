@@ -6,12 +6,13 @@ import dataclasses
 import datetime
 import logging
 import re
+from collections.abc import Generator
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Self, TypeVar
 
 import aiofiles
 
-from cyberdrop_dl import aio
+from cyberdrop_dl import aio, plugins
 from cyberdrop_dl.clients.jdownloader import JDownloader
 from cyberdrop_dl.constants import BlockedDomains
 from cyberdrop_dl.crawlers import create_crawlers
@@ -26,7 +27,7 @@ from cyberdrop_dl.logs import log_spacer
 from cyberdrop_dl.utils.utilities import get_download_path, remove_trailing_slash
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Coroutine, Generator, Sequence
+    from collections.abc import AsyncGenerator, Coroutine, Generator, Iterable, Sequence
 
     import aiosqlite
 
@@ -37,8 +38,6 @@ if TYPE_CHECKING:
 _T = TypeVar("_T")
 logger = logging.getLogger(__name__)
 
-
-_crawlers_disabled_at_runtime: set[str] = set()
 
 REGEX_LINKS = re.compile(r"(?:http.*?)(?=($|\n|\r\n|\r|\s|\"|\[/URL]|']\[|]\[|\[/img]))")
 
@@ -74,7 +73,7 @@ class ScrapeMapper:
     jdownloader: JDownloader = dataclasses.field(init=False)
     real_debrid: RealDebridCrawler = dataclasses.field(init=False)
 
-    using_input_file: bool = dataclasses.field(init=False, default=False)
+    source_name: str = dataclasses.field(init=False, default="")
     groups: set[str] = dataclasses.field(init=False, default_factory=set)
     count: int = dataclasses.field(init=False, default=0)
     existing_crawlers: dict[str, Crawler] = dataclasses.field(init=False, default_factory=dict)
@@ -82,6 +81,7 @@ class ScrapeMapper:
         init=False, default_factory=lambda: TaskGroups(asyncio.TaskGroup(), asyncio.TaskGroup())
     )
     _seen_urls: set[AbsoluteHttpURL] = dataclasses.field(init=False, default_factory=set)
+    _crawlers_disabled_at_runtime: set[str] = dataclasses.field(init=False, default_factory=set)
 
     def __post_init__(self) -> None:
         self.direct_http = DirectHttpFile(self.manager)
@@ -95,7 +95,6 @@ class ScrapeMapper:
         _ = self._task_groups.downloads.create_task(coro)
 
     def _init_crawlers(self) -> None:
-        from cyberdrop_dl import plugins
 
         crawlers = get_crawlers_mapping()
 
@@ -134,73 +133,23 @@ class ScrapeMapper:
 
         await self.real_debrid.__async_init__()
         self.direct_http.__init_downloader__()
-        async for item in self._source():
-            self.create_task(self._send_to_crawler(item))
 
-    async def _source(self) -> AsyncGenerator[ScrapeItem]:
         item_limit = 0
         if self.manager.parsed_args.cli_only_args.retry_any and self.manager.parsed_args.cli_only_args.max_items_retry:
             item_limit = self.manager.parsed_args.cli_only_args.max_items_retry
 
-        if self.manager.parsed_args.cli_only_args.retry_failed:
-            items_generator = load_failed_links(self.manager)
-        elif self.manager.parsed_args.cli_only_args.retry_all:
-            items_generator = load_all_links(self.manager)
-        elif self.manager.parsed_args.cli_only_args.retry_maintenance:
-            items_generator = load_all_bunkr_failed_links_via_hash(self.manager)
-        else:
-            items_generator = self._load_links()
-
-        async for item in items_generator:
-            item.children_limits = self.manager.config.download_options.maximum_number_of_children
-            if self._should_scrape(item):
-                if item_limit and self.count >= item_limit:
-                    break
-                yield item
-                self.count += 1
+        self.source_name, source = _source(self.manager)
+        async with contextlib.aclosing(source) as items:
+            async for item in items:
+                item.children_limits = self.manager.config.download_options.maximum_number_of_children
+                if self._should_scrape(item):
+                    if item_limit and self.count >= item_limit:
+                        return
+                    self.create_task(self._send_to_crawler(item))
+                    self.count += 1
 
         if not self.count:
             logger.warning("No valid links found")
-
-    async def _parse_input_file_groups(self) -> AsyncGenerator[tuple[str, list[AbsoluteHttpURL]]]:
-        input_file = self.manager.config.files.input_file
-        if not await aio.is_file(input_file):
-            yield ("", [])
-            return
-
-        block_quote = False
-        current_group_name = ""
-        async with aiofiles.open(input_file, encoding="utf8") as f:
-            async for line in f:
-                if line.startswith(("---", "===")):  # New group begins here
-                    current_group_name = line.replace("---", "").replace("===", "").strip()
-
-                if current_group_name:
-                    self.groups.add(current_group_name)
-                    yield (current_group_name, list(regex_links(line)))
-                    continue
-
-                block_quote = not block_quote if line == "#\n" else block_quote
-                if not block_quote:
-                    yield ("", list(regex_links(line)))
-
-    async def _load_links(self) -> AsyncGenerator[ScrapeItem]:
-        if not self.manager.parsed_args.cli_only_args.links:
-            self.using_input_file = True
-            async for group_name, urls in self._parse_input_file_groups():
-                for url in urls:
-                    if not url:
-                        continue
-                    item = ScrapeItem(url=url)
-                    if group_name:
-                        item.add_to_parent_title(group_name)
-                        item.part_of_album = True
-                    yield item
-
-            return
-
-        for url in self.manager.parsed_args.cli_only_args.links:
-            yield ScrapeItem(url=url)
 
     async def scrape(self, scrape_item: ScrapeItem) -> None:
         if self._should_scrape(scrape_item):
@@ -301,14 +250,65 @@ class ScrapeMapper:
 
         """
 
-        if domain in _crawlers_disabled_at_runtime:
+        if domain in self._crawlers_disabled_at_runtime:
             return
 
         crawler = next((crawler for crawler in self.existing_crawlers.values() if crawler.DOMAIN == domain), None)
         if crawler and not crawler.disabled:
             crawler.disabled = True
-            _crawlers_disabled_at_runtime.add(domain)
+            self._crawlers_disabled_at_runtime.add(domain)
             return crawler
+
+
+def _source(manager: Manager) -> tuple[str, AsyncGenerator[ScrapeItem]]:
+    cli_args = manager.parsed_args.cli_only_args
+
+    if cli_args.retry_failed:
+        return "--retry-failed", load_failed_links(manager)
+    if cli_args.retry_all:
+        return "--retry-all", load_all_links(manager)
+    if cli_args.retry_maintenance:
+        return "--retry-maintenance", load_all_bunkr_failed_links_via_hash(manager)
+    if cli_args.links:
+        return "--links (CLI args)", _load_cli_links(cli_args.links)
+
+    return str(manager.config.files.input_file), _load_urls_from_file(manager.config.files.input_file)
+
+
+async def _load_urls_from_file(file: Path) -> AsyncGenerator[ScrapeItem]:
+    async for group_name, urls in _parse_input_file_groups(file):
+        for url in urls:
+            item = ScrapeItem(url=url)
+            if group_name:
+                item.add_to_parent_title(group_name)
+                item.part_of_album = True
+            yield item
+
+
+async def _parse_input_file_groups(input_file: Path) -> AsyncGenerator[tuple[str, list[AbsoluteHttpURL]]]:
+    if not await aio.is_file(input_file):
+        yield ("", [])
+        return
+
+    block_quote = False
+    current_group_name = ""
+    async with aiofiles.open(input_file, encoding="utf8") as f:
+        async for line in f:
+            if line.startswith(("---", "===")):  # New group begins here
+                current_group_name = line.replace("---", "").replace("===", "").strip()
+
+            if current_group_name:
+                yield (current_group_name, list(regex_links(line)))
+                continue
+
+            block_quote = not block_quote if line == "#\n" else block_quote
+            if not block_quote:
+                yield ("", list(regex_links(line)))
+
+
+async def _load_cli_links(links: Iterable[AbsoluteHttpURL]) -> AsyncGenerator[ScrapeItem]:
+    for url in links:
+        yield ScrapeItem(url=url)
 
 
 def regex_links(line: str) -> Generator[AbsoluteHttpURL]:
@@ -347,8 +347,13 @@ def get_crawlers_mapping(include_generics: bool = False) -> dict[str, type[Crawl
     Registry.import_all()
 
     crawlers_map: dict[str, type[Crawler]] = {}
-    for crawler in sorted(Registry.generic | Registry.concrete, key=lambda c: c.NAME):
-        register_crawler(crawlers_map, crawler, include_generics)
+
+    crawlers = Registry.concrete
+    if include_generics:
+        crawlers.update(Registry.generic)
+
+    for crawler in sorted(crawlers, key=lambda c: c.NAME):
+        register_crawler(crawlers_map, crawler)
 
     copy = crawlers_map.copy()
     crawlers_map.clear()
@@ -357,20 +362,15 @@ def get_crawlers_mapping(include_generics: bool = False) -> dict[str, type[Crawl
 
 
 def register_crawler(
-    existing_crawlers: dict[str, type[Crawler]],
+    crawlers_map: dict[str, type[Crawler]],
     crawler: type[Crawler],
-    include_generics: bool = False,
     from_user: bool | Literal["raise"] = False,
 ) -> None:
-    if crawler.IS_GENERIC and include_generics:
-        keys = (crawler.NAME,)
-    else:
-        keys = crawler.SCRAPE_MAPPER_KEYS
 
-    for domain in keys:
-        other = existing_crawlers.get(domain)
+    for domain in crawler.SCRAPE_MAPPER_KEYS:
+        other = crawlers_map.get(domain)
         if from_user:
-            if not other and (match := _best_match(existing_crawlers, crawler.PRIMARY_URL.host)):
+            if not other and (match := _best_match(crawlers_map, crawler.PRIMARY_URL.host)):
                 other = match
             if other:
                 msg = (
@@ -386,10 +386,10 @@ def register_crawler(
                 logger.info("Successfully mapped %s to crawler %s", crawler.PRIMARY_URL, crawler.NAME)
 
         elif other:
-            if domain in existing_crawlers:
+            if domain in crawlers_map:
                 logger.warning("%s from %s already registered by %s", domain, crawler.NAME, other)
 
-        existing_crawlers[domain] = crawler
+        crawlers_map[domain] = crawler
 
 
 def _create_generic_crawlers(generics_config: GenericCrawlerInstances) -> Generator[type[Crawler]]:

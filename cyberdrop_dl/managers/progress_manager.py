@@ -23,7 +23,6 @@ from cyberdrop_dl.ui.progress.statistic_progress import DownloadStatsProgress, S
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Sequence
-    from pathlib import Path
 
     from rich.panel import Panel
 
@@ -129,11 +128,11 @@ class ProgressManager:
         total_data_written = ByteSize(self.file_progress.total_data_written).human_readable(decimal=True)
 
         config_path = self.manager.appdata.configs / self.manager.config_manager.loaded_config
-        input_file_text = get_input(self.manager)
+        urls_source = self.manager.scrape_mapper.source_name
 
         logger.info("Run Stats:", extra={"color": "cyan"})
         logger.info(f"  Config file: {config_path}")
-        logger.info(f"  Input file: {input_file_text}")
+        logger.info(f"  URLs source: {urls_source}")
         logger.info(f"  URLs: {self.manager.scrape_mapper.count:,}")
         logger.info(f"  URL Groups: {len(self.manager.scrape_mapper.groups):,}")
         logger.info(f"  Logs folder: {self.manager.config.logs.log_folder}")
@@ -194,15 +193,3 @@ def _log_errors(scrape_errors: Sequence[UiFailureTotal], download_errors: Sequen
             logger.info(
                 f"  {error_code:>{padding}}{' ' if padding else ''}{error.msg}: {error.total:,}", extra={"color": "red"}
             )
-
-
-def get_input(manager: Manager) -> Path | str:
-    if manager.parsed_args.cli_only_args.retry_all:
-        return "--retry-all"
-    if manager.parsed_args.cli_only_args.retry_failed:
-        return "--retry-failed"
-    if manager.parsed_args.cli_only_args.retry_maintenance:
-        return "--retry-maintenance"
-    if manager.scrape_mapper.using_input_file:
-        return manager.config.files.input_file
-    return "--links (CLI args)"
