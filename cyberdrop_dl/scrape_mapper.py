@@ -85,7 +85,7 @@ class CrawlerFactory:
 
 @dataclasses.dataclass(slots=True)
 class ScrapeStats:
-    source: Path | None = None
+    source: Path | str
     count: int = dataclasses.field(init=False, default=0)
     groups: list[str] = dataclasses.field(init=False, default_factory=list)
     url_count: dict[str, int] = dataclasses.field(init=False, default_factory=dict)
@@ -121,7 +121,6 @@ class ScrapeMapper:
     real_debrid: RealDebridCrawler = dataclasses.field(init=False)
 
     source_name: str = dataclasses.field(init=False, default="")
-    count: int = dataclasses.field(init=False, default=0)
     crawlers: dict[str, type[Crawler]] = dataclasses.field(init=False, default_factory=dict)
     _task_groups: TaskGroups = dataclasses.field(
         init=False, default_factory=lambda: TaskGroups(asyncio.TaskGroup(), asyncio.TaskGroup())
@@ -170,7 +169,7 @@ class ScrapeMapper:
             self.manager.scrape_mapper = self
             yield self
 
-    async def run(self) -> None:
+    async def run(self) -> ScrapeStats:
         self._init_crawlers()
         try:
             await self.jdownloader.connect()
@@ -184,20 +183,28 @@ class ScrapeMapper:
         if self.manager.parsed_args.cli_only_args.retry_any and self.manager.parsed_args.cli_only_args.max_items_retry:
             item_limit = self.manager.parsed_args.cli_only_args.max_items_retry
 
-        self.source_name, source = _source(self.manager)
+        source_name, source = _source(self.manager)
+        stats = ScrapeStats(source_name)
         async with contextlib.aclosing(source) as items:
-            async for item in items:
-                item.children_limits = self.manager.config.download_options.maximum_number_of_children
-                if self._should_scrape(item):
-                    if item_limit and self.count >= item_limit:
-                        return
-                    self.create_task(self._send_to_crawler(item))
-                    self.count += 1
+            try:
+                async for item in items:
+                    item.children_limits = self.manager.config.download_options.maximum_number_of_children
+                    if self._should_scrape(item):
+                        if item_limit and stats.count >= item_limit:
+                            break
+                        stats.update(item)
+                        self.create_task(self._send_to_crawler(item))
+            finally:
+                stats.url_count.update(
+                    (crawler.DOMAIN, count) for crawler in self._factory if (count := len(crawler._scraped_items))
+                )
 
-        if not self.count:
+        if not stats.count:
             logger.warning("No valid links found")
 
-    async def scrape(self, scrape_item: ScrapeItem) -> None:
+        return stats
+
+    async def send_to_crawler(self, scrape_item: ScrapeItem) -> None:
         if self._should_scrape(scrape_item):
             await self._send_to_crawler(scrape_item)
 

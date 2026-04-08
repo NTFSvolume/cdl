@@ -542,7 +542,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         """Maps external links to the scraper class."""
         if reset:
             scrape_item.reset()
-        self.create_task(self.manager.scrape_mapper.scrape(scrape_item))
+        self.create_task(self.manager.scrape_mapper.send_to_crawler(scrape_item))
 
     @final
     def get_filename_and_ext(
