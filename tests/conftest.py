@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from cyberdrop_dl import scrape_mapper
 from cyberdrop_dl.managers.manager import Manager
-from cyberdrop_dl.scraper import scrape_mapper
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Generator
