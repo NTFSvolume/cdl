@@ -7,7 +7,7 @@ from unittest import mock
 
 import pytest
 
-from cyberdrop_dl import aio, storage
+from cyberdrop_dl import storage
 from cyberdrop_dl.storage import _psutil
 
 
@@ -19,35 +19,33 @@ def find_partition(path: str):
     return _psutil._find_partition(Path(path))
 
 
-async def test_unsupported_fs_should_not_return_zero() -> None:
-    cwd = await aio.resolve(Path())
-    free_space = await _psutil._disk_usage(cwd)
+async def test_unsupported_fs_should_not_return_zero(tmp_path: Path) -> None:
+    free_space = _psutil._disk_usage(tmp_path)
     assert free_space > 0
     with mock.patch("psutil.disk_usage", side_effect=OSError(None, "operation not supported")):
-        free_space = await _psutil._disk_usage(cwd)
+        free_space = _psutil._disk_usage(tmp_path)
         assert free_space == -1
 
     with mock.patch("psutil.disk_usage", side_effect=OSError(None, "another error")):
         with pytest.raises(OSError):
-            _ = await _psutil._disk_usage(cwd)
+            _ = _psutil._disk_usage(tmp_path)
 
 
-async def test_fuse_filesystem_should_not_return_zero() -> None:
-    cwd = await aio.resolve(Path())
-    partition = _psutil._find_partition(cwd)
+def test_fuse_filesystem_should_not_return_zero(tmp_path: Path) -> None:
+    partition = _psutil._find_partition(tmp_path)
     assert partition
-    assert not _psutil._is_fuse_fs(cwd)
+    assert not _psutil._is_fuse_fs(tmp_path)
     _psutil._PARTITIONS = [dataclasses.replace(partition, fstype="fuse")]  # pyright: ignore[reportPrivateUsage]
-    assert _psutil._is_fuse_fs(cwd)
+    assert _psutil._is_fuse_fs(tmp_path)
 
-    free_space = await _psutil._disk_usage(cwd)
+    free_space = _psutil._disk_usage(tmp_path)
     assert free_space > 0
 
     class NullUsage:
         free = 0
 
     with mock.patch("psutil.disk_usage", return_value=NullUsage()):
-        free_space = await _psutil._disk_usage(cwd)
+        free_space = _psutil._disk_usage(tmp_path)
         assert free_space == -1
 
 
