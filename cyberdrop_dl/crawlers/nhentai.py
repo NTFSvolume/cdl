@@ -75,7 +75,7 @@ class NHentaiCrawler(Crawler):
     @error_handling_wrapper
     async def gallery(self, scrape_item: ScrapeItem) -> None:
         gallery_id = scrape_item.url.name
-        api_url = self.PRIMARY_URL / "api/gallery" / gallery_id
+        api_url = self.PRIMARY_URL / "api/v2/galleries" / gallery_id
         json_resp: dict[str, Any] = await self.request_json(api_url, impersonate=True)
 
         titles: dict[str, str] = json_resp["title"]
@@ -91,14 +91,6 @@ class NHentaiCrawler(Crawler):
 
 
 def _gen_image_urls(json_resp: dict[str, Any]) -> Generator[tuple[int, AbsoluteHttpURL]]:
-    media_id: str = json_resp["media_id"]
-    for index, page in enumerate(json_resp["images"]["pages"], 1):
-        ext = {
-            "a": ".avif",
-            "g": ".gif",
-            "j": ".jpg",
-            "p": ".png",
-            "w": ".webp",
-        }.get(page["t"], ".jpg")
+    for index, page in enumerate(json_resp["pages"], 1):
         cdn = random.randint(1, 4)
-        yield index, AbsoluteHttpURL(f"https://i{cdn}.nhentai.net/galleries/{media_id}/{index}{ext}")
+        yield index, AbsoluteHttpURL(f"https://i{cdn}.nhentai.net") / page["path"]
