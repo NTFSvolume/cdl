@@ -3,11 +3,17 @@ from datetime import date, datetime, timedelta
 from logging import DEBUG
 from pathlib import Path
 
-from pydantic import BaseModel, ByteSize, Field, NonNegativeInt, field_validator
+from pydantic import BaseModel, ByteSize, Field, NonNegativeInt, PrivateAttr, field_validator
 from typing_extensions import override
 
-from cyberdrop_dl import constants
-from cyberdrop_dl.constants import DEFAULT_APP_STORAGE, DEFAULT_DOWNLOAD_STORAGE, Browser, Hashing
+from cyberdrop_dl.constants import (
+    DEFAULT_APP_STORAGE,
+    DEFAULT_DOWNLOAD_STORAGE,
+    LOGS_DATE_FORMAT,
+    LOGS_DATETIME_FORMAT,
+    Browser,
+    Hashing,
+)
 from cyberdrop_dl.models import AliasModel, AppriseURL
 from cyberdrop_dl.models.types import (
     ByteSizeSerilized,
@@ -23,7 +29,6 @@ from cyberdrop_dl.models.validators import falsy_as, to_timedelta
 from cyberdrop_dl.utils.strings import validate_format_string
 from cyberdrop_dl.utils.utilities import delete_empty_files_and_folders
 
-ALL_SUPPORTED_SITES = ["<<ALL_SUPPORTED_SITES>>"]
 _SORTING_COMMON_FIELDS = {
     "base_dir",
     "ext",
@@ -78,7 +83,7 @@ class Logs(AliasModel):
     unsupported_urls: LogPath = Path("Unsupported_URLs.csv")
     webhook: AppriseURL | None = None
 
-    _created_at: datetime = Field(default_factory=datetime.now)
+    _created_at: datetime = PrivateAttr(default_factory=datetime.now)
 
     @override
     def model_post_init(self, *_) -> None:
@@ -97,8 +102,8 @@ class Logs(AliasModel):
 
     def _resolve_filenames(self) -> None:
         object.__setattr__(self, "folder", self.folder.expanduser().resolve().absolute())
-        now_file_iso: str = self._created_at.strftime(constants.LOGS_DATETIME_FORMAT)
-        now_folder_iso: str = self._created_at.strftime(constants.LOGS_DATE_FORMAT)
+        now_file_iso: str = self._created_at.strftime(LOGS_DATETIME_FORMAT)
+        now_folder_iso: str = self._created_at.strftime(LOGS_DATE_FORMAT)
         for name, log_file in vars(self).items():
             if name == "folder" or not isinstance(log_file, Path) or log_file.suffix not in (".csv", ".log"):
                 continue
@@ -296,7 +301,8 @@ class ConfigSettings(AliasModel):
             if isinstance(value, Path):
                 if "{config}" in str(value):
                     raise RuntimeError(f"Using '{{config}}' as reference on a path is no longer support: {value}")
-                setattr(model, name, value.expanduser().resolve().absolute())
+
+                object.__setattr__(model, name, value.expanduser().resolve().absolute())
 
             elif isinstance(value, BaseModel):
                 cls._resolve_paths(value)
