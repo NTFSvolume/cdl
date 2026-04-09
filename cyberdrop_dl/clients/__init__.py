@@ -71,8 +71,8 @@ class HTTPClient:
     def from_client(cls, client_manager: ClientManager) -> Self:
         return cls(
             client_manager,
-            client_manager.manager.config.files.save_pages_html,
-            client_manager.manager.config.logs.main_log.parent / "cdl_responses",
+            client_manager.manager.config_manager.settings.files.save_pages_html,
+            client_manager.manager.config_manager.settings.logs.main_log.parent / "cdl_responses",
         )
 
     @property

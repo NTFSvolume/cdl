@@ -37,7 +37,7 @@ class Manager:
 
         self.parsed_args: ParsedArgs = field(init=False)
         self.cache: dict[str, Any] = {}
-        self.config_manager: ConfigManager = field(init=False)
+        self.config_manager: ConfigManager
 
         self.logs: LogManager = field(init=False)
         self.database: Database = field(init=False)
@@ -57,10 +57,6 @@ class Manager:
         self._completed_downloads: list[MediaItem] = []
         self.hasher: Hasher = Hasher(self)
 
-    @property
-    def config(self):
-        return self.config_manager.settings
-
     async def __aenter__(self) -> Self:
         cache_file = self.appdata.cache_file
         try:
@@ -79,7 +75,7 @@ class Manager:
         self.appdata.mkdirs()
         self.config_manager = ConfigManager.from_manager(self)
         _merge_cli_and_config_args(self)
-        self.config.resolve_paths()
+        self.config_manager.settings.resolve_paths()
         self.logs = LogManager.from_manager(self)
 
     def add_completed(self, media_item: MediaItem) -> None:
@@ -101,7 +97,7 @@ class Manager:
     def async_db_hash_startup(self) -> None:
         self.database = Database(
             self.appdata.db_file,
-            self.config.runtime_options.ignore_history,
+            self.config_manager.settings.runtime_options.ignore_history,
         )
 
         self.live_manager = LiveManager(self)
@@ -120,8 +116,8 @@ class Manager:
         args_info = {
             "System": get_system_information(),
             "Config File": self.config_manager.source,
-            "Input File": self.config.files.input_file,
-            "Download Folder": self.config.files.download_folder,
+            "Input File": self.config_manager.settings.files.input_file,
+            "Download Folder": self.config_manager.settings.files.download_folder,
             "Database File": self.appdata.db_file,
             "CLI only options": self.parsed_args.cli_only_args.model_dump(mode="json"),
             "Auth": auth,

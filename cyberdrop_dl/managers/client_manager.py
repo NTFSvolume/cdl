@@ -210,7 +210,7 @@ class ClientManager:
 
     def is_allowed_filetype(self, media_item: MediaItem) -> bool:
         """Checks if the file type is allowed to download."""
-        ignore_options = self.manager.config.ignore_options
+        ignore_options = self.manager.config_manager.settings.ignore_options
         ext = media_item.ext.lower()
 
         return not (
@@ -227,7 +227,7 @@ class ClientManager:
             return True
 
         item_date = datetime.date()
-        ignore_options = self.manager.config.ignore_options
+        ignore_options = self.manager.config_manager.settings.ignore_options
 
         if ignore_options.exclude_before and item_date < ignore_options.exclude_before:
             return False
@@ -323,9 +323,9 @@ class ClientManager:
             pass
 
     async def load_cookie_files(self) -> None:
-        if self.manager.config.browser_cookies.auto_import:
-            assert self.manager.config.browser_cookies.browser
-            cookies = await extract_cookies(self.manager.config.browser_cookies.browser)
+        if self.manager.config_manager.settings.browser_cookies.auto_import:
+            assert self.manager.config_manager.settings.browser_cookies.browser
+            cookies = await extract_cookies(self.manager.config_manager.settings.browser_cookies.browser)
             await export_cookies(cookies, output_path=self.manager.appdata.cookies)
 
         cookie_files = await asyncio.to_thread(lambda: sorted(self.manager.appdata.cookies.glob("*.txt")))
@@ -398,7 +398,7 @@ class ClientManager:
         if not (is_video or is_audio):
             return True
 
-        duration_limits = self.manager.config.media_duration_limits
+        duration_limits = self.manager.config_manager.settings.media_duration_limits
         min_video_duration: float = duration_limits.minimum_video_duration.total_seconds()
         max_video_duration: float = duration_limits.maximum_video_duration.total_seconds()
         min_audio_duration: float = duration_limits.minimum_audio_duration.total_seconds()

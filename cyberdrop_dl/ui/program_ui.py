@@ -68,7 +68,7 @@ def _retry_failed_download(manager: Manager) -> bool:
 def _scan_and_create_hashes(manager: Manager) -> None:
     path = _ask_dir(
         "Select the directory to scan",
-        default=manager.config.files.download_folder,
+        default=manager.config_manager.settings.files.download_folder,
     )
     asyncio.run(hash_directory_scanner(manager, path))
     _enter_to_continue()
@@ -88,7 +88,7 @@ def _sort_files(manager: Manager) -> None:
 
 def _edit_urls(manager: Manager) -> None:
     try:
-        text_editor.open(manager.config.files.input_file)
+        text_editor.open(manager.config_manager.settings.files.input_file)
     except ValueError as e:
         _CONSOLE.print(_ERROR, str(e))
         _enter_to_continue()
@@ -122,7 +122,7 @@ def _app_header(manager: Manager) -> None:
     _CONSOLE.rule(style="blue")
     _CONSOLE.print("Config file:  ", hyperlink(manager.config_manager.source))
     _CONSOLE.print("Database file:", hyperlink(manager.appdata.db_file))
-    _CONSOLE.print("URLs file:    ", hyperlink(manager.config.files.input_file))
+    _CONSOLE.print("URLs file:    ", hyperlink(manager.config_manager.settings.files.input_file))
     _CONSOLE.line()
 
 

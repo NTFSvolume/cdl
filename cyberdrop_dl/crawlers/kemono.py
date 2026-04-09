@@ -215,11 +215,11 @@ class KemonoBaseCrawler(Crawler, is_abc=True):
 
     @property
     def ignore_content(self) -> bool:
-        return self.manager.config.ignore_options.ignore_coomer_post_content
+        return self.manager.config_manager.settings.ignore_options.ignore_coomer_post_content
 
     @property
     def ignore_ads(self) -> bool:
-        return self.manager.config.ignore_options.ignore_coomer_ads
+        return self.manager.config_manager.settings.ignore_options.ignore_coomer_ads
 
     async def __async_post_init__(self) -> None:
         if getattr(self, "API_ENTRYPOINT", None):

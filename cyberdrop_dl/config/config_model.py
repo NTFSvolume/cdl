@@ -75,7 +75,7 @@ class Files(AliasModel):
 class Logs(AliasModel):
     download_error_urls: LogPath = Path("Download_Error_URLs.csv")
     last_forum_post: LogPath = Path("Last_Scraped_Forum_Posts.csv")
-    folder: Path = DEFAULT_APP_STORAGE / "Logs"
+    log_folder: Path = DEFAULT_APP_STORAGE / "Logs"
     logs_expire_after: timedelta | None = None
     main_log: MainLogPath = Path("downloader.log")
     rotate_logs: bool = False
@@ -101,14 +101,14 @@ class Logs(AliasModel):
             return to_timedelta(value)
 
     def _resolve_filenames(self) -> None:
-        object.__setattr__(self, "folder", self.folder.expanduser().resolve().absolute())
+        object.__setattr__(self, "log_folder", self.log_folder.expanduser().resolve().absolute())
         now_file_iso: str = self._created_at.strftime(LOGS_DATETIME_FORMAT)
         now_folder_iso: str = self._created_at.strftime(LOGS_DATE_FORMAT)
         for name, log_file in vars(self).items():
-            if name == "folder" or not isinstance(log_file, Path) or log_file.suffix not in (".csv", ".log"):
+            if name == "log_folder" or not isinstance(log_file, Path) or log_file.suffix not in (".csv", ".log"):
                 continue
 
-            log_file = self.folder / log_file
+            log_file = self.log_folder / log_file
 
             if self.rotate_logs:
                 file_name = f"{log_file.stem}_{now_file_iso}{log_file.suffix}"
@@ -120,14 +120,14 @@ class Logs(AliasModel):
         if not self.logs_expire_after:
             return
 
-        for file in self.folder.rglob("*"):
+        for file in self.log_folder.rglob("*"):
             if file.suffix.lower() not in (".log", ".csv"):
                 continue
 
             if (self._created_at - datetime.fromtimestamp(file.stat().st_ctime)) > self.logs_expire_after:
                 file.unlink()
 
-        _ = delete_empty_files_and_folders(self.folder)
+        _ = delete_empty_files_and_folders(self.log_folder)
 
 
 class FileSizeLimits(BaseModel):

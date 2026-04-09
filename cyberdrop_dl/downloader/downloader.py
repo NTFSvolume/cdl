@@ -68,7 +68,7 @@ class Downloader:
         self._additional_headers = {}
         self._current_attempt_filesize: dict[str, int] = {}
         self._file_lock_vault = manager.client_manager.file_locks
-        self._ignore_history = manager.config.runtime_options.ignore_history
+        self._ignore_history = manager.config_manager.settings.runtime_options.ignore_history
         self._semaphore: asyncio.Semaphore = field(init=False)
 
     @error_handling_wrapper
@@ -95,7 +95,7 @@ class Downloader:
 
     @property
     def max_attempts(self):
-        if self.manager.config.download_options.disable_download_attempt_limit:
+        if self.manager.config_manager.settings.download_options.disable_download_attempt_limit:
             return 1
         return self.manager.config_manager.global_settings.rate_limiting_options.download_attempts
 
@@ -104,9 +104,9 @@ class Downloader:
         self.client = self.manager.client_manager.download_client
         self._semaphore = asyncio.Semaphore(self.manager.client_manager.get_download_slots(self.domain))
 
-        self.manager.config.files.download_folder.mkdir(parents=True, exist_ok=True)
-        if self.manager.config.sorting.sort_downloads:
-            self.manager.config.sorting.sort_folder.mkdir(parents=True, exist_ok=True)
+        self.manager.config_manager.settings.files.download_folder.mkdir(parents=True, exist_ok=True)
+        if self.manager.config_manager.settings.sorting.sort_downloads:
+            self.manager.config_manager.settings.sorting.sort_folder.mkdir(parents=True, exist_ok=True)
 
     def update_queued_files(self, increase_total: bool = True):
         queued_files = self.manager.progress_manager.file_progress.get_queue_length()
@@ -305,7 +305,7 @@ class Downloader:
         if media_item.is_segment:
             return
 
-        if self.manager.config.download_options.disable_file_timestamps:
+        if self.manager.config_manager.settings.download_options.disable_file_timestamps:
             return
         if not media_item.uploaded_at:
             logger.warning(f"Unable to parse upload date for {media_item.url}, using current datetime as file datetime")

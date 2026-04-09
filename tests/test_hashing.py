@@ -54,15 +54,15 @@ async def test_hash_directory_scanner(manager: Manager, expected_results: set[tu
     n_files = max(count.values())
     algos = count.keys()
     assert len(expected_results) == len(algos) * n_files
-    manager.config.dupe_cleanup_options.add_md5_hash = "md5" in algos
-    manager.config.dupe_cleanup_options.add_sha256_hash = "sha256" in algos
+    manager.config_manager.settings.dupe_cleanup_options.add_md5_hash = "md5" in algos
+    manager.config_manager.settings.dupe_cleanup_options.add_sha256_hash = "sha256" in algos
 
-    manager.config.files.download_folder.mkdir(parents=True)
+    manager.config_manager.settings.files.download_folder.mkdir(parents=True)
     db_path = manager.appdata.db_file
-    await hash_directory_scanner(manager, manager.config.files.download_folder)
+    await hash_directory_scanner(manager, manager.config_manager.settings.files.download_folder)
     assert not get_hashes(db_path)
-    create_files(manager.config.files.download_folder, n_files)
-    await hash_directory_scanner(manager, manager.config.files.download_folder)
+    create_files(manager.config_manager.settings.files.download_folder, n_files)
+    await hash_directory_scanner(manager, manager.config_manager.settings.files.download_folder)
     results = get_hashes(db_path)
     assert len(results) == len(expected_results)
     assert results == expected_results

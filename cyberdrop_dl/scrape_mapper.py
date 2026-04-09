@@ -210,7 +210,7 @@ class ScrapeMapper:
             self.create_download_task(wait_until_scrape_is_done())
 
             async for item in items:
-                item.children_limits = self.manager.config.download_options.maximum_number_of_children
+                item.children_limits = self.manager.config_manager.settings.download_options.maximum_number_of_children
                 if self._should_scrape(item):
                     if item_limit and stats.count >= item_limit:
                         break
@@ -250,7 +250,9 @@ class ScrapeMapper:
             logger.info(f"Sending unsupported URL to JDownloader: {scrape_item.url}")
 
             download_folder = get_download_path(self.manager, scrape_item, "jdownloader")
-            relative_download_dir = download_folder.relative_to(self.manager.config.files.download_folder)
+            relative_download_dir = download_folder.relative_to(
+                self.manager.config_manager.settings.files.download_folder
+            )
             try:
                 await self._jdownloader.send(
                     scrape_item.url,
@@ -295,12 +297,12 @@ class ScrapeMapper:
             logger.info(f"Skipping {scrape_item.url} as it is outside of the desired date range")
             return False
 
-        skip_hosts = self.manager.config.ignore_options.skip_hosts
+        skip_hosts = self.manager.config_manager.settings.ignore_options.skip_hosts
         if skip_hosts and _filter_by_domain(scrape_item, skip_hosts):
             logger.info(f"Skipping {scrape_item.url} by skip_hosts config")
             return False
 
-        only_hosts = self.manager.config.ignore_options.only_hosts
+        only_hosts = self.manager.config_manager.settings.ignore_options.only_hosts
         if only_hosts and not _filter_by_domain(scrape_item, only_hosts):
             logger.info(f"Skipping {scrape_item.url} by only_hosts config")
             return False
@@ -346,7 +348,9 @@ def _source(manager: Manager) -> tuple[str, AsyncGenerator[ScrapeItem]]:
     if cli_args.links:
         return "--links (CLI args)", _load_cli_links(cli_args.links)
 
-    return str(manager.config.files.input_file), _load_urls_from_file(manager.config.files.input_file)
+    return str(manager.config_manager.settings.files.input_file), _load_urls_from_file(
+        manager.config_manager.settings.files.input_file
+    )
 
 
 async def _load_urls_from_file(file: Path) -> AsyncGenerator[ScrapeItem]:

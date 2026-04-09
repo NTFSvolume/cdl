@@ -25,10 +25,10 @@ logger = logging.getLogger("cyberdrop_dl")
 
 
 async def _scrape(manager: Manager) -> None:
-    manager.config.resolve_paths()
+    manager.config_manager.settings.resolve_paths()
     manager.logs.delete_old_logs()
 
-    with setup_file_logging(manager.config.logs.main_log):
+    with setup_file_logging(manager.config_manager.settings.logs.main_log):
         await manager.async_startup()
 
         log_spacer()
@@ -50,8 +50,8 @@ async def _scrape(manager: Manager) -> None:
             logger.info("Closing program...")
             logger.info("Finished downloading. Enjoy :)", extra={"color": "green"})
 
-            if manager.config.logs.webhook:
-                await webhook.send_notification(manager.config.logs.webhook, stats_summary)
+            if manager.config_manager.settings.logs.webhook:
+                await webhook.send_notification(manager.config_manager.settings.logs.webhook, stats_summary)
 
             if manager.config_manager.apprise_urls:
                 await apprise.send_notifications(manager.config_manager.apprise_urls, stats_summary)
@@ -63,14 +63,14 @@ async def _post_runtime(manager: Manager) -> None:
 
     await manager.hasher.cleanup_dupes_after_download()
 
-    if manager.config.sorting.sort_downloads and not manager.parsed_args.cli_only_args.retry_any:
+    if manager.config_manager.settings.sorting.sort_downloads and not manager.parsed_args.cli_only_args.retry_any:
         sorter = Sorter.from_manager(manager)
         await sorter.run()
 
     check_partials_and_empty_folders(manager)
 
-    if manager.config.runtime_options.update_last_forum_post:
-        await manager.logs.update_last_forum_post(manager.config.files.input_file)
+    if manager.config_manager.settings.runtime_options.update_last_forum_post:
+        await manager.logs.update_last_forum_post(manager.config_manager.settings.files.input_file)
 
 
 async def _run(manager: Manager) -> None:
