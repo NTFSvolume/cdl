@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
     from pydantic import BaseModel
 
-    from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.managers.manager import AppData, Manager
     from cyberdrop_dl.models import AppriseURL
 
     _BaseModelT = TypeVar("_BaseModelT", bound=BaseModel)
@@ -33,13 +33,11 @@ class Config:
     apprise_urls: tuple[AppriseURL, ...] = ()
 
     @classmethod
-    def from_manager(cls, manager: Manager) -> Self:
-        appdata = manager.appdata
-
+    def create(cls, appdata: AppData, config_file: Path | None = None) -> Self:
         apprise_file = appdata.configs / "apprise.txt"
         global_settings = appdata.configs / "global_settings.yaml"
         auth_file = appdata.configs / "authentication.yaml"
-        config_file = manager.cli_args.config_file or appdata.config_file
+        config_file = config_file or appdata.config_file
 
         return cls(
             source=config_file,
@@ -48,6 +46,10 @@ class Config:
             global_settings=_load_config_file(global_settings, GlobalSettings),
             apprise_urls=read_apprise_urls(apprise_file),
         )
+
+    @classmethod
+    def from_manager(cls, manager: Manager) -> Self:
+        return cls.create(manager.appdata, manager.cli_args.config_file)
 
 
 def _load_config_file(file: Path, model: type[_BaseModelT]) -> _BaseModelT:

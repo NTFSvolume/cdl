@@ -4,11 +4,10 @@ import dataclasses
 import logging
 from dataclasses import field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Self, TypeVar
-
-from pydantic import BaseModel
+from typing import TYPE_CHECKING, Any, Self
 
 from cyberdrop_dl import __version__, ffmpeg, yaml
+from cyberdrop_dl.cli.model import CLIargs
 from cyberdrop_dl.config import Config
 from cyberdrop_dl.database import Database
 from cyberdrop_dl.hasher import Hasher
@@ -21,8 +20,6 @@ from cyberdrop_dl.utils.utilities import get_system_information
 if TYPE_CHECKING:
     from os import PathLike
 
-    from cyberdrop_dl.cli import ParsedArgs
-    from cyberdrop_dl.cli.model import CLIargs
     from cyberdrop_dl.data_structures.url_objects import MediaItem
     from cyberdrop_dl.scrape_mapper import ScrapeMapper
 
@@ -31,9 +28,17 @@ logger = logging.getLogger(__name__)
 
 
 class Manager:
-    def __init__(self, cli_args: CLIargs, config: Config | None = None) -> None:
+    def __init__(
+        self,
+        cli_args: CLIargs | None = None,
+        appdata: AppData | None = None,
+        config: Config | None = None,
+    ) -> None:
         self.cache: dict[str, Any] = {}
-        self.config: Config = config
+
+        self.appdata: AppData = appdata or AppData.default()
+        self.cli_args: CLIargs = cli_args or CLIargs()
+        self.config: Config = config or Config.from_manager(self)
 
         self.logs: LogManager = field(init=False)
         self.database: Database = field(init=False)
@@ -48,10 +53,10 @@ class Manager:
 
         self.downloaded_data: int = 0
 
-        self._appdata: AppData | None = None
         self._completed_downloads: list[MediaItem] = []
         self.hasher: Hasher = Hasher(self)
-        self.cli_args: CLIargs
+
+        self.logs = LogManager.from_manager(self)
 
     async def __aenter__(self) -> Self:
         cache_file = self.appdata.cache_file
@@ -65,13 +70,6 @@ class Manager:
     async def __aexit__(self, *_) -> None:
         self.cache["version"] = __version__
         yaml.save(self.appdata.cache_file, self.cache)
-
-    def startup(self) -> None:
-        self.appdata.mkdirs()
-        self.config = Config.from_manager(self)
-        _merge_cli_and_config_args(self)
-        self.config.settings.resolve_paths()
-        self.logs = LogManager.from_manager(self)
 
     def add_completed(self, media_item: MediaItem) -> None:
         if media_item.is_segment:
@@ -126,82 +124,6 @@ class Manager:
     async def close(self) -> None:
         await self.client_manager.close()
 
-    @property
-    def appdata(self) -> AppData:
-        if self._appdata is None:
-            if folder := self.cli_args.appdata_folder:
-                path = folder / "AppData"
-            else:
-                path = Path("AppData")
-
-            self._appdata = AppData.from_path(path.resolve())
-
-        return self._appdata
-
-
-def add_or_remove_lists(cli_values: list[str], config_values: list[str]) -> None:
-    exclude = {"+", "-"}
-    if cli_values:
-        if cli_values[0] == "+":
-            new_values_set = set(config_values + cli_values)
-            cli_values.clear()
-            cli_values.extend(sorted(new_values_set - exclude))
-        elif cli_values[0] == "-":
-            new_values_set = set(config_values) - set(cli_values)
-            cli_values.clear()
-            cli_values.extend(sorted(new_values_set - exclude))
-
-
-def merge_dicts(dict1: dict[str, Any], dict2: dict[str, Any]) -> dict[str, Any]:
-    for key, val in dict1.items():
-        if isinstance(val, dict):
-            if key in dict2 and isinstance(dict2[key], dict):
-                merge_dicts(dict1[key], dict2[key])
-        else:
-            if key in dict2:
-                dict1[key] = dict2[key]
-
-    for key, val in dict2.items():
-        if key not in dict1:
-            dict1[key] = val
-
-    return dict1
-
-
-def _merge_additive_args(manager: Manager, parsed_args: ParsedArgs) -> None:
-    cli_general_options = parsed_args.global_settings.general
-    cli_ignore_options = parsed_args.config_settings.ignore_options
-    config_ignore_options = manager.config.settings.ignore_options
-    config_general_options = manager.config.global_settings.general
-
-    add_or_remove_lists(cli_ignore_options.skip_hosts, config_ignore_options.skip_hosts)
-    add_or_remove_lists(cli_ignore_options.only_hosts, config_ignore_options.only_hosts)
-    add_or_remove_lists(cli_general_options.disable_crawlers, config_general_options.disable_crawlers)
-
-
-def _merge_cli_and_config_args(manager: Manager, parsed_args: ParsedArgs) -> None:
-    """Consolidates runtime arguments with config values."""
-    _merge_additive_args(manager, parsed_args)
-
-    conf = merge_models(manager.config.settings, parsed_args.config_settings)
-    global_conf = merge_models(manager.config.global_settings, parsed_args.global_settings)
-    deep_scrape = parsed_args.config_settings.runtime_options.deep_scrape or manager.config.deep_scrape
-
-    manager.config.settings = conf
-    manager.config.global_settings = global_conf
-    manager.config.deep_scrape = deep_scrape
-
-
-M = TypeVar("M", bound=BaseModel)
-
-
-def merge_models(default: M, new: M) -> M:
-    default_dict = default.model_dump()
-    new_dict = new.model_dump(exclude_unset=True)
-
-    updated_dict = merge_dicts(default_dict, new_dict)
-    return default.model_validate(updated_dict)
-
 
 @dataclasses.dataclass(slots=True, frozen=True, kw_only=True)
 class AppData:
@@ -213,6 +135,10 @@ class AppData:
     cache: Path
     cookies: Path
     configs: Path
+
+    @classmethod
+    def default(cls) -> Self:
+        return cls.from_path(Path("AppData").resolve())
 
     @classmethod
     def from_path(cls, path: Path) -> Self:

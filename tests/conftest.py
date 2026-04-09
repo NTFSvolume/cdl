@@ -64,20 +64,19 @@ async def logs(caplog: pytest.LogCaptureFixture) -> pytest.LogCaptureFixture:
 
 
 @pytest.fixture(scope="function", name="manager")
-def post_startup_manager(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Manager:
-    appdata = str(tmp_path)
-    downloads = str(tmp_path / "Downloads")
-    monkeypatch.chdir(tmp_path)
-    bare_manager = Manager(("--appdata-folder", appdata, "-d", downloads, "--download-tiktok-audios"))
-    bare_manager.startup()
-    bare_manager.config.settings.resolve_paths()
-    bare_manager.logs.delete_old_logs()
-    return bare_manager
+def post_startup_manager() -> Manager:
+    manager = Manager()
+    manager.appdata.mkdirs()
+    manager.config.settings.resolve_paths()
+    manager.logs.delete_old_logs()
+    return manager
 
 
 @pytest.fixture(scope="function")
 async def running_manager(manager: Manager) -> AsyncGenerator[Manager]:
     await manager.async_startup()
-    async with manager.database:
-        yield manager
-    await manager.close()
+    try:
+        async with manager.database:
+            yield manager
+    finally:
+        await manager.close()

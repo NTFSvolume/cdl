@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -12,10 +12,6 @@ from cyberdrop_dl.crawlers.xenforo import xenforo
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.managers.manager import Manager
-
-if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator
-    from pathlib import Path
 
 
 def _item(url: str) -> ScrapeItem:
@@ -69,18 +65,8 @@ def _amock(func: str = "process_child", crawler: xenforo.XenforoCrawler | None =
 
 
 @pytest.fixture(name="manager")
-async def post_startup_manager(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncGenerator[Manager]:
-    appdata = str(tmp_path)
-    downloads = str(tmp_path / "Downloads")
-    monkeypatch.chdir(tmp_path)
-    manager = Manager(("--appdata-folder", appdata, "-d", downloads))
-    manager.startup()
-    manager.config.settings.resolve_paths()
-    manager.logs.delete_old_logs()
-    await manager.async_startup()
-    async with manager.database:
-        yield manager
-    await manager.close()
+def post_startup_manager(running_manager: Manager) -> Manager:
+    return running_manager
 
 
 @pytest.mark.parametrize(
