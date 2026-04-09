@@ -26,14 +26,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ⚠️**IMPORTANT**
 
-> This verions logs raw http requests anc responses to the main log files. They may include credentials, IP, etc. Remove personal information before share the logs
-> Options to change log level currently are ignored. It will be fixed on a future version
+> This version logs raw HTTP requests and responses to the main log file. They may include credentials, IP, etc. Remove personal information before sharing them or just extract the relevant logs
+> Options to change log level are ignored. It will be fixed on a future version
 
 ### Added
 
 - Gupload.xyz support
 - Vidara support
-- Owncloud support
+- OwnCloud support
 - Support premium URLs (MediaFire)
 - Support subfolders (Filester)
 - Add support for archives (.zip) files (ImagePond)
@@ -43,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Adjust default rate limit (RedGifs)
 - Create crawlers only if they are going to be used
 - Webhook notifications will now be sent as plain text
-- Use oririnal filenames (ImagePond)
+- Use original filenames (ImagePond)
 - New UI while sorting files
 - CDL is way more verbose now
 - Several performance improvents
@@ -54,12 +54,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
-- All settings and UI options about changing configs have been removed. CDL will always use the default config at `AppData/Configs/Default/setting.yaml` a diferent config can be used via CLI `--config-file`
-- Option of exporting cookies from the UI has been removed
+- All settings and UI options about changing configs have been removed. CDL will always use the default config at `AppData/Configs/Default/setting.yaml`. A different config can be specified only via CLI args (`--config-file`)
+- The UI Option to export cookies has been removed
 
 ### Fixed
 
-- PMVHaven only downloading the first 50 videos on a playlist
+- Download all videos on paginated playlists (50+ videos) (PMVHaven )
 - Handle deleted videos (TubeCorporate)
 - 404 downloads (Bunkr)
 - Update selectors for files with MD5 hashes instead of SHA256 (Filester)
@@ -103,7 +103,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Use original filename for turbo.cr
-- Apprise is now an optional dependency (Required for notifications)
+- Apprise is now an optional dependency (required for notifications)
 
 ### Removed
 
