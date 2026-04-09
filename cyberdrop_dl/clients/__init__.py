@@ -121,7 +121,7 @@ class HTTPClient:
         if method == "GET" and (data or json):
             method = "POST"
 
-        impersonate = self.client_manager.manager.parsed_args.cli_only_args.impersonate or impersonate
+        impersonate = self.client_manager.manager.cli_args.impersonate or impersonate
         if impersonate:
             self.client_manager.check_curl_cffi_is_available()
             if impersonate is True:

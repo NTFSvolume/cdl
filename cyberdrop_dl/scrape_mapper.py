@@ -191,8 +191,8 @@ class ScrapeMapper:
         self._direct_http.__init_downloader__()
 
         item_limit = 0
-        if self.manager.parsed_args.cli_only_args.retry_any and self.manager.parsed_args.cli_only_args.max_items_retry:
-            item_limit = self.manager.parsed_args.cli_only_args.max_items_retry
+        if self.manager.cli_args.retry_any and self.manager.cli_args.max_items_retry:
+            item_limit = self.manager.cli_args.max_items_retry
 
         source_name, source = _source(self.manager)
         async with contextlib.aclosing(source) as items:
@@ -286,8 +286,8 @@ class ScrapeMapper:
             logger.info(f"Skipping {scrape_item.url} as it is a blocked domain")
             return False
 
-        before = self.manager.parsed_args.cli_only_args.completed_before
-        after = self.manager.parsed_args.cli_only_args.completed_after
+        before = self.manager.cli_args.completed_before
+        after = self.manager.cli_args.completed_after
 
         if _filter_by_date(scrape_item, before, after):
             logger.info(f"Skipping {scrape_item.url} as it is outside of the desired date range")
@@ -333,7 +333,7 @@ class ScrapeMapper:
 
 
 def _source(manager: Manager) -> tuple[str, AsyncGenerator[ScrapeItem]]:
-    cli_args = manager.parsed_args.cli_only_args
+    cli_args = manager.cli_args
 
     if cli_args.retry_failed:
         return "--retry-failed", load_failed_links(manager)
@@ -526,8 +526,8 @@ async def load_failed_links(manager: Manager) -> AsyncGenerator[ScrapeItem]:
 
 
 async def load_all_links(manager: Manager) -> AsyncGenerator[ScrapeItem]:
-    after = manager.parsed_args.cli_only_args.completed_after or datetime.date.min
-    before = manager.parsed_args.cli_only_args.completed_before or datetime.date.today()
+    after = manager.cli_args.completed_after or datetime.date.min
+    before = manager.cli_args.completed_before or datetime.date.today()
     async for rows in manager.database.history.get_all_items(after, before):
         for row in rows:
             yield _create_item_from_row(row)

@@ -39,7 +39,7 @@ class Config:
         apprise_file = appdata.configs / "apprise.txt"
         global_settings = appdata.configs / "global_settings.yaml"
         auth_file = appdata.configs / "authentication.yaml"
-        config_file = manager.parsed_args.cli_only_args.config_file or appdata.config_file
+        config_file = manager.cli_args.config_file or appdata.config_file
 
         return cls(
             source=config_file,

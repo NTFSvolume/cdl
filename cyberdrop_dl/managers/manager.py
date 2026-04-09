@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any, Self, TypeVar
 from pydantic import BaseModel
 
 from cyberdrop_dl import __version__, ffmpeg, yaml
-from cyberdrop_dl.cli import ParsedArgs, parse_args
 from cyberdrop_dl.config import Config
 from cyberdrop_dl.database import Database
 from cyberdrop_dl.hasher import Hasher
@@ -20,9 +19,10 @@ from cyberdrop_dl.managers.progress_manager import ProgressManager
 from cyberdrop_dl.utils.utilities import get_system_information
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
     from os import PathLike
 
+    from cyberdrop_dl.cli import ParsedArgs
+    from cyberdrop_dl.cli.model import CLIargs
     from cyberdrop_dl.data_structures.url_objects import MediaItem
     from cyberdrop_dl.scrape_mapper import ScrapeMapper
 
@@ -31,13 +31,9 @@ logger = logging.getLogger(__name__)
 
 
 class Manager:
-    def __init__(self, args: Sequence[str] | None = None) -> None:
-        if isinstance(args, str):
-            args = [args]
-
-        self.parsed_args: ParsedArgs = field(init=False)
+    def __init__(self, cli_args: CLIargs, config: Config | None = None) -> None:
         self.cache: dict[str, Any] = {}
-        self.config: Config
+        self.config: Config = config
 
         self.logs: LogManager = field(init=False)
         self.database: Database = field(init=False)
@@ -51,11 +47,11 @@ class Manager:
         self.scrape_mapper: ScrapeMapper
 
         self.downloaded_data: int = 0
-        self.args = args
 
         self._appdata: AppData | None = None
         self._completed_downloads: list[MediaItem] = []
         self.hasher: Hasher = Hasher(self)
+        self.cli_args: CLIargs
 
     async def __aenter__(self) -> Self:
         cache_file = self.appdata.cache_file
@@ -71,7 +67,6 @@ class Manager:
         yaml.save(self.appdata.cache_file, self.cache)
 
     def startup(self) -> None:
-        self.parsed_args = parse_args(self.args)
         self.appdata.mkdirs()
         self.config = Config.from_manager(self)
         _merge_cli_and_config_args(self)
@@ -119,7 +114,7 @@ class Manager:
             "Input File": self.config.settings.files.input_file,
             "Download Folder": self.config.settings.files.download_folder,
             "Database File": self.appdata.db_file,
-            "CLI only options": self.parsed_args.cli_only_args.model_dump(mode="json"),
+            "CLI only options": self.cli_args.model_dump(mode="json"),
             "Auth": auth,
             "Settings": config_settings.model_dump(mode="json"),
             "Global Settings": self.config.global_settings.model_dump(mode="json"),
@@ -134,7 +129,7 @@ class Manager:
     @property
     def appdata(self) -> AppData:
         if self._appdata is None:
-            if folder := self.parsed_args.cli_only_args.appdata_folder:
+            if folder := self.cli_args.appdata_folder:
                 path = folder / "AppData"
             else:
                 path = Path("AppData")
@@ -173,9 +168,9 @@ def merge_dicts(dict1: dict[str, Any], dict2: dict[str, Any]) -> dict[str, Any]:
     return dict1
 
 
-def _merge_additive_args(manager: Manager) -> None:
-    cli_general_options = manager.parsed_args.global_settings.general
-    cli_ignore_options = manager.parsed_args.config_settings.ignore_options
+def _merge_additive_args(manager: Manager, parsed_args: ParsedArgs) -> None:
+    cli_general_options = parsed_args.global_settings.general
+    cli_ignore_options = parsed_args.config_settings.ignore_options
     config_ignore_options = manager.config.settings.ignore_options
     config_general_options = manager.config.global_settings.general
 
@@ -184,13 +179,13 @@ def _merge_additive_args(manager: Manager) -> None:
     add_or_remove_lists(cli_general_options.disable_crawlers, config_general_options.disable_crawlers)
 
 
-def _merge_cli_and_config_args(manager: Manager) -> None:
+def _merge_cli_and_config_args(manager: Manager, parsed_args: ParsedArgs) -> None:
     """Consolidates runtime arguments with config values."""
-    _merge_additive_args(manager)
+    _merge_additive_args(manager, parsed_args)
 
-    conf = merge_models(manager.config.settings, manager.parsed_args.config_settings)
-    global_conf = merge_models(manager.config.global_settings, manager.parsed_args.global_settings)
-    deep_scrape = manager.parsed_args.config_settings.runtime_options.deep_scrape or manager.config.deep_scrape
+    conf = merge_models(manager.config.settings, parsed_args.config_settings)
+    global_conf = merge_models(manager.config.global_settings, parsed_args.global_settings)
+    deep_scrape = parsed_args.config_settings.runtime_options.deep_scrape or manager.config.deep_scrape
 
     manager.config.settings = conf
     manager.config.global_settings = global_conf

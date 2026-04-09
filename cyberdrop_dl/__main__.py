@@ -63,7 +63,7 @@ async def _post_runtime(manager: Manager) -> None:
 
     await manager.hasher.cleanup_dupes_after_download()
 
-    if manager.config.settings.sorting.sort_downloads and not manager.parsed_args.cli_only_args.retry_any:
+    if manager.config.settings.sorting.sort_downloads and not manager.cli_args.retry_any:
         sorter = Sorter.from_manager(manager)
         await sorter.run()
 
@@ -84,7 +84,7 @@ def main(args: Sequence[str] | None = None) -> int:
     with setup_console_logging():
         manager = Manager(args)
         manager.startup()
-        if not manager.parsed_args.cli_only_args.download:
+        if not manager.cli_args.download:
             program_ui.run(manager)
 
         try:

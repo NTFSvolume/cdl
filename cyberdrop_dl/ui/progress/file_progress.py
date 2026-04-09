@@ -38,7 +38,7 @@ class FileProgress(DequeProgress):
         )
         vertical_columns = (*progress_colums, DownloadColumn(), "━", TransferSpeedColumn())
         use_columns = horizontal_columns
-        if manager.parsed_args.cli_only_args.portrait:
+        if manager.cli_args.portrait:
             use_columns = vertical_columns
         self._progress = Progress(*use_columns)
         self.total_data_written = 0

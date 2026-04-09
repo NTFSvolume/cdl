@@ -61,7 +61,7 @@ def run(manager: Manager) -> None:
 
 
 def _retry_failed_download(manager: Manager) -> bool:
-    manager.parsed_args.cli_only_args.retry_failed = True
+    manager.cli_args.retry_failed = True
     return True
 
 

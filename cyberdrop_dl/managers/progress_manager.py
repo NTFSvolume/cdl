@@ -42,7 +42,7 @@ class ProgressManager:
         # File Download Bars
         self.manager = manager
         ui_options = manager.config.global_settings.ui_options
-        self.portrait = manager.parsed_args.cli_only_args.portrait
+        self.portrait = manager.cli_args.portrait
         self.file_progress = FileProgress(manager)
         self.scraping_progress = ScrapingProgress(manager)
 
@@ -112,7 +112,7 @@ class ProgressManager:
         return self.horizontal_layout
 
     def print_stats(self, stats: ScrapeStats) -> str:
-        if not self.manager.parsed_args.cli_only_args.print_stats:
+        if not self.manager.cli_args.print_stats:
             return ""
 
         log_spacer()

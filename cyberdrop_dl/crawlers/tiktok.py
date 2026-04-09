@@ -91,11 +91,11 @@ class TikTokCrawler(Crawler):
 
     @property
     def download_audios(self) -> bool:
-        return self.manager.parsed_args.cli_only_args.download_tiktok_audios
+        return self.manager.cli_args.download_tiktok_audios
 
     @property
     def download_src_quality_videos(self) -> bool:
-        return self.manager.parsed_args.cli_only_args.download_tiktok_src_quality_videos
+        return self.manager.cli_args.download_tiktok_src_quality_videos
 
     def __post_init__(self) -> None:
         self._headers: dict[str, Any] = {"X-Requested-With": "XMLHttpRequest"}
@@ -225,7 +225,7 @@ class TikTokCrawler(Crawler):
             scrape_item.add_children()
 
     def _handle_audio(self, scrape_item: ScrapeItem, post: Post) -> None:
-        if not self.manager.parsed_args.cli_only_args.download_tiktok_audios:
+        if not self.manager.cli_args.download_tiktok_audios:
             return
 
         audio, ext = post.music_info, ".mp3"
