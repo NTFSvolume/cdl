@@ -10,10 +10,10 @@ from pydantic import BaseModel
 
 from cyberdrop_dl import __version__, ffmpeg, yaml
 from cyberdrop_dl.cli import ParsedArgs, parse_args
+from cyberdrop_dl.config import Config
 from cyberdrop_dl.database import Database
 from cyberdrop_dl.hasher import Hasher
 from cyberdrop_dl.managers.client_manager import ClientManager
-from cyberdrop_dl.managers.config_manager import Config
 from cyberdrop_dl.managers.live_manager import LiveManager
 from cyberdrop_dl.managers.logs import LogManager
 from cyberdrop_dl.managers.progress_manager import ProgressManager
