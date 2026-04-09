@@ -165,7 +165,6 @@ class Manager:
 
         args_info = {
             "System": get_system_information(),
-            "Config": self.config_manager.loaded_config,
             "Config File": self.config_manager.settings,
             "Input File": self.config.files.input_file,
             "Download Folder": self.config.files.download_folder,
@@ -174,10 +173,10 @@ class Manager:
             "Auth": auth,
             "Settings": config_settings.model_dump(mode="json"),
             "Global Settings": self.config_manager.global_settings_data.model_dump(mode="json"),
-            "ffmpeg version": ffmpeg.get_ffmpeg_version(),
-            "ffprobe version": ffmpeg.get_ffprobe_version(),
         }
         logger.debug(args_info)
+        logger.debug("ffmpeg version: %s", ffmpeg.get_ffmpeg_version())
+        logger.debug("ffprobe version: %s", ffmpeg.get_ffprobe_version())
 
     async def close(self) -> None:
 
