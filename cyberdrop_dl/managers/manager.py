@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
-from dataclasses import Field, field
+from dataclasses import field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Self, TypeVar
 
@@ -47,9 +47,8 @@ class Manager:
         self.live_manager: LiveManager = field(init=False)
 
         self._loaded_args_config: bool = False
-        self._made_portable: bool = False
 
-        self.scrape_mapper: ScrapeMapper = field(init=False)
+        self.scrape_mapper: ScrapeMapper
 
         self.downloaded_data: int = 0
         self.args = args
@@ -76,16 +75,10 @@ class Manager:
         yaml.save(self.appdata.cache_file, self.cache)
 
     def startup(self) -> None:
-        """Startup process for the manager."""
-
-        if isinstance(self.parsed_args, Field):
-            self.parsed_args = parse_args(self.args)
-
+        self.parsed_args = parse_args(self.args)
         self.appdata.mkdirs()
-
         self.config_manager = ConfigManager.from_manager(self)
-
-        self.args_consolidation()
+        _merge_cli_and_config_args(self)
         self.config.resolve_paths()
         self.logs = LogManager.from_manager(self)
 
@@ -98,19 +91,14 @@ class Manager:
     def completed_downloads(self) -> list[MediaItem]:
         return self._completed_downloads
 
-    """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
-
     async def async_startup(self) -> None:
-        """Async startup process for the manager."""
-
-        self.args_logging()
+        self._log_config()
         self.async_db_hash_startup()
 
         self.client_manager = ClientManager(self)
         await self.client_manager.startup()
 
     def async_db_hash_startup(self) -> None:
-
         self.database = Database(
             self.appdata.db_file,
             self.config.runtime_options.ignore_history,
@@ -119,29 +107,7 @@ class Manager:
         self.live_manager = LiveManager(self)
         self.progress_manager = ProgressManager(self)
 
-    def process_additive_args(self) -> None:
-        cli_general_options = self.parsed_args.global_settings.general
-        cli_ignore_options = self.parsed_args.config_settings.ignore_options
-        config_ignore_options = self.config_manager.settings.ignore_options
-        config_general_options = self.config_manager.global_settings.general
-
-        add_or_remove_lists(cli_ignore_options.skip_hosts, config_ignore_options.skip_hosts)
-        add_or_remove_lists(cli_ignore_options.only_hosts, config_ignore_options.only_hosts)
-        add_or_remove_lists(cli_general_options.disable_crawlers, config_general_options.disable_crawlers)
-
-    def args_consolidation(self) -> None:
-        """Consolidates runtime arguments with config values."""
-        self.process_additive_args()
-
-        conf = merge_models(self.config_manager.settings, self.parsed_args.config_settings)
-        global_conf = merge_models(self.config_manager.global_settings, self.parsed_args.global_settings)
-        deep_scrape = self.parsed_args.config_settings.runtime_options.deep_scrape or self.config_manager.deep_scrape
-
-        self.config_manager.settings = conf
-        self.config_manager.global_settings = global_conf
-        self.config_manager.deep_scrape = deep_scrape
-
-    def args_logging(self) -> None:
+    def _log_config(self) -> None:
         """Logs the runtime arguments."""
 
         auth = {site: all(credentials.values()) for site, credentials in self.config_manager.auth.model_dump().items()}
@@ -167,7 +133,6 @@ class Manager:
         logger.debug("ffprobe version: %s", ffmpeg.get_ffprobe_version())
 
     async def close(self) -> None:
-
         await self.client_manager.close()
 
     @property
@@ -210,6 +175,30 @@ def merge_dicts(dict1: dict[str, Any], dict2: dict[str, Any]) -> dict[str, Any]:
             dict1[key] = val
 
     return dict1
+
+
+def _merge_additive_args(manager: Manager) -> None:
+    cli_general_options = manager.parsed_args.global_settings.general
+    cli_ignore_options = manager.parsed_args.config_settings.ignore_options
+    config_ignore_options = manager.config_manager.settings.ignore_options
+    config_general_options = manager.config_manager.global_settings.general
+
+    add_or_remove_lists(cli_ignore_options.skip_hosts, config_ignore_options.skip_hosts)
+    add_or_remove_lists(cli_ignore_options.only_hosts, config_ignore_options.only_hosts)
+    add_or_remove_lists(cli_general_options.disable_crawlers, config_general_options.disable_crawlers)
+
+
+def _merge_cli_and_config_args(manager: Manager) -> None:
+    """Consolidates runtime arguments with config values."""
+    _merge_additive_args(manager)
+
+    conf = merge_models(manager.config_manager.settings, manager.parsed_args.config_settings)
+    global_conf = merge_models(manager.config_manager.global_settings, manager.parsed_args.global_settings)
+    deep_scrape = manager.parsed_args.config_settings.runtime_options.deep_scrape or manager.config_manager.deep_scrape
+
+    manager.config_manager.settings = conf
+    manager.config_manager.global_settings = global_conf
+    manager.config_manager.deep_scrape = deep_scrape
 
 
 M = TypeVar("M", bound=BaseModel)

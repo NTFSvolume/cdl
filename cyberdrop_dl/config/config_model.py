@@ -1,10 +1,10 @@
 import re
-from collections.abc import Generator
 from datetime import date, datetime, timedelta
 from logging import DEBUG
 from pathlib import Path
 
 from pydantic import BaseModel, ByteSize, Field, NonNegativeInt, field_validator
+from typing_extensions import override
 
 from cyberdrop_dl import constants
 from cyberdrop_dl.constants import DEFAULT_APP_STORAGE, DEFAULT_DOWNLOAD_STORAGE, Browser, Hashing
@@ -70,13 +70,19 @@ class Files(AliasModel):
 class Logs(AliasModel):
     download_error_urls: LogPath = Path("Download_Error_URLs.csv")
     last_forum_post: LogPath = Path("Last_Scraped_Forum_Posts.csv")
-    log_folder: Path = DEFAULT_APP_STORAGE / "Logs"
+    folder: Path = DEFAULT_APP_STORAGE / "Logs"
     logs_expire_after: timedelta | None = None
     main_log: MainLogPath = Path("downloader.log")
     rotate_logs: bool = False
     scrape_error_urls: LogPath = Path("Scrape_Error_URLs.csv")
     unsupported_urls: LogPath = Path("Unsupported_URLs.csv")
     webhook: AppriseURL | None = None
+
+    _created_at: datetime = Field(default_factory=datetime.now)
+
+    @override
+    def model_post_init(self, *_) -> None:
+        self._resolve_filenames()
 
     @field_validator("webhook", mode="before")
     @classmethod
@@ -89,39 +95,34 @@ class Logs(AliasModel):
         if value := falsy_as(input_date, None):
             return to_timedelta(value)
 
-    def _files(self) -> Generator[tuple[str, Path]]:
+    def _resolve_filenames(self) -> None:
+        object.__setattr__(self, "folder", self.folder.expanduser().resolve().absolute())
+        now_file_iso: str = self._created_at.strftime(constants.LOGS_DATETIME_FORMAT)
+        now_folder_iso: str = self._created_at.strftime(constants.LOGS_DATE_FORMAT)
         for name, log_file in vars(self).items():
-            if name == "log_folder" or not isinstance(log_file, Path) or log_file.suffix not in (".csv", ".log"):
+            if name == "folder" or not isinstance(log_file, Path) or log_file.suffix not in (".csv", ".log"):
                 continue
-            yield name, log_file
 
-    def _set_output_filenames(self, now: datetime) -> None:
-        self.log_folder = self.log_folder.resolve()
-        self.log_folder.mkdir(exist_ok=True, parents=True)
-        current_time_file_iso: str = now.strftime(constants.LOGS_DATETIME_FORMAT)
-        current_time_folder_iso: str = now.strftime(constants.LOGS_DATE_FORMAT)
-        for name, log_file in self._files():
-            log_file = self.log_folder / log_file
+            log_file = self.folder / log_file
+
             if self.rotate_logs:
-                new_name = f"{log_file.stem}_{current_time_file_iso}{log_file.suffix}"
-                log_file = log_file.parent / current_time_folder_iso / new_name
+                file_name = f"{log_file.stem}_{now_file_iso}{log_file.suffix}"
+                log_file = log_file.parent / now_folder_iso / file_name
 
-            setattr(self, name, log_file)
+            object.__setattr__(self, name, log_file)
 
-    def mkdirs(self):
-        for _, log_file in self._files():
-            log_file.parent.mkdir(exist_ok=True, parents=True)
+    def delete_old_logs_and_folders(self) -> None:
+        if not self.logs_expire_after:
+            return
 
-    def _delete_old_logs_and_folders(self, now: datetime) -> None:
-        if self.logs_expire_after:
-            for file in self.log_folder.rglob("*"):
-                if file.suffix.lower() not in (".log", ".csv"):
-                    continue
+        for file in self.folder.rglob("*"):
+            if file.suffix.lower() not in (".log", ".csv"):
+                continue
 
-                if (now - datetime.fromtimestamp(file.stat().st_ctime)) > self.logs_expire_after:
-                    file.unlink()
+            if (self._created_at - datetime.fromtimestamp(file.stat().st_ctime)) > self.logs_expire_after:
+                file.unlink()
 
-        delete_empty_files_and_folders(self.log_folder)
+        _ = delete_empty_files_and_folders(self.folder)
 
 
 class FileSizeLimits(BaseModel):
@@ -284,11 +285,8 @@ class ConfigSettings(AliasModel):
         if self._resolved:
             return
 
-        now = datetime.now()
-        self.logs._set_output_filenames(now)
         self._resolve_paths(self)
-        self.logs._delete_old_logs_and_folders(now)
-        self.logs.mkdirs()
+        self.logs.delete_old_logs_and_folders()
         self._resolved = True
 
     @classmethod

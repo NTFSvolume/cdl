@@ -133,7 +133,7 @@ class ProgressManager:
         logger.info(f"  URLs source: {stats.source}")
         logger.info(f"  URLs: {stats.count:,}")
         logger.info(f"  URL groups: {len(stats.unique_groups):,}")
-        logger.info(f"  Logs folder: {self.manager.config.logs.log_folder}")
+        logger.info(f"  Logs folder: {self.manager.config.logs.folder}")
         logger.info(f"  Total runtime: {elapsed}")
         logger.info(f"  Total downloaded data: {total_data_written}")
 
