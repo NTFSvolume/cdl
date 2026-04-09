@@ -23,8 +23,6 @@ from cyberdrop_dl.models.validators import falsy_as, to_timedelta
 from cyberdrop_dl.utils.strings import validate_format_string
 from cyberdrop_dl.utils.utilities import delete_empty_files_and_folders
 
-from ._common import ConfigModel
-
 ALL_SUPPORTED_SITES = ["<<ALL_SUPPORTED_SITES>>"]
 _SORTING_COMMON_FIELDS = {
     "base_dir",
@@ -269,7 +267,7 @@ class DupeCleanup(BaseModel):
     send_deleted_to_trash: bool = True
 
 
-class ConfigSettings(ConfigModel):
+class ConfigSettings(AliasModel):
     browser_cookies: BrowserCookies = BrowserCookies()
     download_options: DownloadOptions = DownloadOptions()
     dupe_cleanup_options: DupeCleanup = DupeCleanup()

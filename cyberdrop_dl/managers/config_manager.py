@@ -29,8 +29,6 @@ class ConfigManager:
 
     @classmethod
     def from_manager(cls, manager: Manager) -> Self:
-        """Startup process for the config manager."""
-
         appdata = manager.appdata
 
         apprise_file = appdata.configs / "apprise.txt"

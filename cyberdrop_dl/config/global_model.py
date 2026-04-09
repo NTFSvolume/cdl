@@ -13,7 +13,7 @@ from pydantic import (
 )
 from yarl import URL
 
-from cyberdrop_dl.config._common import ConfigModel
+from cyberdrop_dl.models import AliasModel
 from cyberdrop_dl.models.types import ByteSizeSerilized, HttpURL, ListNonEmptyStr, ListPydanticURL, NonEmptyStr
 from cyberdrop_dl.models.validators import falsy_as, falsy_as_none, to_bytesize
 
@@ -106,7 +106,7 @@ class GenericCrawlerInstances(BaseModel):
     chevereto: ListPydanticURL = []
 
 
-class GlobalSettings(ConfigModel):
+class GlobalSettings(AliasModel):
     general: General = General()
     rate_limiting_options: RateLimiting = RateLimiting()
     ui_options: UIOptions = UIOptions()
