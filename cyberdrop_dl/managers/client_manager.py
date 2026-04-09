@@ -118,7 +118,7 @@ class ClientManager:
 
     def __init__(self, manager: Manager) -> None:
         self.manager = manager
-        ssl_context = self.manager.global_config.general.ssl_context
+        ssl_context = self.manager.config_manager.global_settings.general.ssl_context
         if not ssl_context:
             self.ssl_context = False
         elif ssl_context == "certifi":
@@ -153,7 +153,7 @@ class ClientManager:
 
     @property
     def flaresolverr(self) -> FlareSolverrClient | None:
-        if self._flaresolverr is None and (url := self.manager.global_config.general.flaresolverr):
+        if self._flaresolverr is None and (url := self.manager.config_manager.global_settings.general.flaresolverr):
             self._flaresolverr = FlareSolverrClient(url, self._session)
         return self._flaresolverr
 
@@ -181,7 +181,7 @@ class ClientManager:
 
     @property
     def rate_limiting_options(self):
-        return self.manager.global_config.rate_limiting_options
+        return self.manager.config_manager.global_settings.rate_limiting_options
 
     def get_download_slots(self, domain: str) -> int:
         """Returns the download limit for a domain."""
@@ -263,7 +263,7 @@ class ClientManager:
             warnings.filterwarnings("ignore", category=CurlCffiWarning)
             acurl = AsyncCurl(loop=loop)
 
-        proxy_or_none = str(proxy) if (proxy := self.manager.global_config.general.proxy) else None
+        proxy_or_none = str(proxy) if (proxy := self.manager.config_manager.global_settings.general.proxy) else None
 
         return AsyncSession(
             loop=loop,
@@ -281,12 +281,12 @@ class ClientManager:
     ) -> ClientSession:
         return ClientSession(
             headers={
-                "user-agent": self.manager.global_config.general.user_agent,
+                "user-agent": self.manager.config_manager.global_settings.general.user_agent,
             },
             raise_for_status=False,
             cookie_jar=self.cookies,
             timeout=self.rate_limiting_options._aiohttp_timeout,
-            proxy=self.manager.global_config.general.proxy,
+            proxy=self.manager.config_manager.global_settings.general.proxy,
             connector=self._new_tcp_connector(),
             requote_redirect_url=False,
         )

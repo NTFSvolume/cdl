@@ -34,9 +34,9 @@ class Config:
         download_dir = manager.config.runtime_options.jdownloader_download_dir or manager.config.files.download_folder
         return Config(
             enabled=manager.config.runtime_options.send_unsupported_to_jdownloader,
-            device=manager.auth_config.jdownloader.device,
-            username=manager.auth_config.jdownloader.username,
-            password=manager.auth_config.jdownloader.password,
+            device=manager.config_manager.auth.jdownloader.device,
+            username=manager.config_manager.auth.jdownloader.username,
+            password=manager.config_manager.auth.jdownloader.password,
             download_dir=download_dir.resolve(),
             autostart=manager.config.runtime_options.jdownloader_autostart,
             whitelist=tuple(manager.config.runtime_options.jdownloader_whitelist),

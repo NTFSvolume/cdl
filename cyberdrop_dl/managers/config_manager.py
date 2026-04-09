@@ -20,6 +20,8 @@ if TYPE_CHECKING:
 
 @dataclasses.dataclass(slots=True)
 class ConfigManager:
+    source: Path
+
     auth: AuthSettings
     settings: ConfigSettings
     global_settings: GlobalSettings
@@ -37,6 +39,7 @@ class ConfigManager:
         config_file = manager.parsed_args.cli_only_args.config_file or appdata.config_file
 
         return cls(
+            source=config_file,
             auth=_load_config_file(auth_file, AuthSettings),
             settings=_load_config_file(config_file, ConfigSettings),
             global_settings=_load_config_file(global_settings, GlobalSettings),

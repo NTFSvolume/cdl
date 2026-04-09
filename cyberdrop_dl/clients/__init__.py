@@ -129,7 +129,9 @@ class HTTPClient:
             request_params["impersonate"] = impersonate
 
         else:
-            _ = headers.setdefault("user-agent", self.client_manager.manager.global_config.general.user_agent)
+            _ = headers.setdefault(
+                "user-agent", self.client_manager.manager.config_manager.global_settings.general.user_agent
+            )
 
         async with self.__request(url, method, request_params, impersonate=bool(impersonate)) as resp:
             exc = None
@@ -219,7 +221,9 @@ class HTTPClient:
                 raise e from None
 
             self.client_manager.cookies.update_cookies(solution.cookies)
-            await _check_flaresolverr_resp(self.client_manager.manager.global_config.general.user_agent, solution)
+            await _check_flaresolverr_resp(
+                self.client_manager.manager.config_manager.global_settings.general.user_agent, solution
+            )
             return AbstractResponse.create(solution)
 
 

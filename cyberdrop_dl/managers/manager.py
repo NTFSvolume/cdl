@@ -62,14 +62,6 @@ class Manager:
     def config(self):
         return self.config_manager.settings
 
-    @property
-    def auth_config(self):
-        return self.config_manager.auth
-
-    @property
-    def global_config(self):
-        return self.config_manager.global_settings
-
     async def __aenter__(self) -> Self:
         cache_file = self.appdata.cache_file
         try:
@@ -161,7 +153,7 @@ class Manager:
 
         args_info = {
             "System": get_system_information(),
-            "Config File": self.appdata.config_file,
+            "Config File": self.config_manager.source,
             "Input File": self.config.files.input_file,
             "Download Folder": self.config.files.download_folder,
             "Database File": self.appdata.db_file,

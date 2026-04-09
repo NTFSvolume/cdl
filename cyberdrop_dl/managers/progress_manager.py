@@ -129,7 +129,7 @@ class ProgressManager:
         total_data_written = ByteSize(self.file_progress.total_data_written).human_readable(decimal=True)
 
         logger.info("Run Stats:", extra={"color": "cyan"})
-        logger.info(f"  Config file: {self.manager.appdata.config_file}")
+        logger.info(f"  Config file: {self.manager.config_manager.source}")
         logger.info(f"  URLs source: {stats.source}")
         logger.info(f"  URLs: {stats.count:,}")
         logger.info(f"  URL groups: {len(stats.unique_groups):,}")

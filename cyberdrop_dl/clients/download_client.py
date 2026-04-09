@@ -67,7 +67,7 @@ class DownloadClient:
 
     def _get_download_headers(self, domain: str, referer: AbsoluteHttpURL) -> dict[str, str]:
         download_headers = {
-            "User-Agent": self.manager.global_config.general.user_agent,
+            "User-Agent": self.manager.config_manager.global_settings.general.user_agent,
             "Referer": str(referer),
         }
         auth_data = self.manager.config_manager.auth
