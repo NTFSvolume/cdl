@@ -22,6 +22,51 @@ All notable changes to this project will be documented here. For more details, v
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.1.0] - 2026-04-08
+
+⚠️**IMPORTANT**
+
+> This verions logs raw http requests anc responses to the main log files. They may include credentials, IP, etc. Remove personal information before share the logs
+> Options to change log level currently are ignored. It will be fixed on a future version
+
+### Added
+
+- Gupload.xyz support
+- Vidara support
+- Owncloud support
+- Support premium URLs (MediaFire)
+- Support subfolders (Filester)
+- Add support for archives (.zip) files (ImagePond)
+
+### Changed
+
+- Adjust default rate limit (RedGifs)
+- Create crawlers only if they are going to be used
+- Webhook notifications will now be sent as plain text
+- Use oririnal filenames (ImagePond)
+- New UI while sorting files
+- CDL is way more verbose now
+- Several performance improvents
+
+### Deprecated
+
+- Auto import cookies
+
+### Removed
+
+- All settings and UI options about changing configs have been removed. CDL will always use the default config at `AppData/Configs/Default/setting.yaml` a diferent config can be used via CLI `--config-file`
+- Option of exporting cookies from the UI has been removed
+
+### Fixed
+
+- PMVHaven only downloading the first 50 videos on a playlist
+- Handle deleted videos (TubeCorporate)
+- 404 downloads (Bunkr)
+- Update selectors for files with MD5 hashes instead of SHA256 (Filester)
+- Profile, albums and images crawling (ImagePond)
+- Android support (requires python 3.13)
+- Player info parsing (ashemaletube)
+
 ## [9.0.2] - 2026-03-25
 
 ### Changed
@@ -47,7 +92,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [9.0.0] - 2026-03-09
 
 ⚠️**BREAKING CHANGES**
-You can only upgrade to this version from v8.10.
+
+ > You can only upgrade to this version from v8.10.
 
 ### Added
 
@@ -57,8 +103,11 @@ You can only upgrade to this version from v8.10.
 ### Changed
 
 - Use original filename for turbo.cr
+- Apprise is now an optional dependency (Required for notifications)
 
 ### Removed
+
+- Reddit support
 
 Several config options:
 
