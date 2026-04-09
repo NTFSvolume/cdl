@@ -66,9 +66,7 @@ async def logs(caplog: pytest.LogCaptureFixture) -> pytest.LogCaptureFixture:
 @pytest.fixture(scope="function", name="manager")
 def post_startup_manager() -> Manager:
     manager = Manager()
-    manager.appdata.mkdirs()
-    manager.config.settings.resolve_paths()
-    manager.logs.delete_old_logs()
+    manager.resolve_paths()
     return manager
 
 

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import dataclasses
 import logging
-from dataclasses import field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Self
 
@@ -40,23 +39,21 @@ class Manager:
         self.cli_args: CLIargs = cli_args or CLIargs()
         self.config: Config = config or Config.from_manager(self)
 
-        self.logs: LogManager = field(init=False)
-        self.database: Database = field(init=False)
-        self.client_manager: ClientManager = field(init=False)
-
-        self.progress_manager: ProgressManager = field(init=False)
-        self.live_manager: LiveManager = field(init=False)
-
-        self._loaded_args_config: bool = False
-
-        self.scrape_mapper: ScrapeMapper
-
-        self.downloaded_data: int = 0
-
         self._completed_downloads: list[MediaItem] = []
         self.hasher: Hasher = Hasher(self)
+        self.logs: LogManager = LogManager.from_manager(self)
+        self.live_manager: LiveManager = LiveManager(self)
+        self.progress_manager: ProgressManager = ProgressManager(self)
 
+        self.scrape_mapper: ScrapeMapper
+        self.database: Database
+        self.client_manager: ClientManager
+
+    def resolve_paths(self) -> None:
+        self.appdata.mkdirs()
+        self.config.settings.resolve_paths()
         self.logs = LogManager.from_manager(self)
+        self.logs.delete_old_logs()
 
     async def __aenter__(self) -> Self:
         cache_file = self.appdata.cache_file
@@ -81,7 +78,7 @@ class Manager:
         return self._completed_downloads
 
     async def async_startup(self) -> None:
-        self._log_config()
+        self._log_config_settings()
         self.async_db_hash_startup()
 
         self.client_manager = ClientManager(self)
@@ -93,14 +90,8 @@ class Manager:
             self.config.settings.runtime_options.ignore_history,
         )
 
-        self.live_manager = LiveManager(self)
-        self.progress_manager = ProgressManager(self)
-
-    def _log_config(self) -> None:
-        """Logs the runtime arguments."""
-
+    def _log_config_settings(self) -> None:
         auth = {site: all(credentials.values()) for site, credentials in self.config.auth.model_dump().items()}
-
         config_settings = self.config.settings.model_copy()
         config_settings.runtime_options.deep_scrape = self.config.deep_scrape
 
@@ -129,8 +120,8 @@ class Manager:
 class AppData:
     path: Path
     cache_file: Path
-    db_file: Path
     config_file: Path
+    db_file: Path
 
     cache: Path
     cookies: Path

@@ -29,9 +29,6 @@ logger = logging.getLogger("cyberdrop_dl")
 
 
 async def _scrape(manager: Manager) -> None:
-    manager.config.settings.resolve_paths()
-    manager.logs.delete_old_logs()
-
     with setup_file_logging(manager.config.settings.logs.main_log):
         await manager.async_startup()
 
@@ -97,9 +94,7 @@ def main(args: Sequence[str] | None = None) -> int:
 
         merge_cli_and_config_args(config, parsed_args)
         manager = Manager(parsed_args.cli_only_args, appdata, config)
-        manager.appdata.mkdirs()
-        manager.config.settings.resolve_paths()
-        manager.logs.delete_old_logs()
+        manager.resolve_paths()
         if not manager.cli_args.download:
             program_ui.run(manager)
 
