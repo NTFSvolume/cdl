@@ -53,11 +53,11 @@ class MegaNzCrawler(Crawler, db_path="path_qs_frag"):
 
     @property
     def user(self) -> str | None:
-        return self.manager.config_manager.auth.meganz.email or None
+        return self.manager.config.auth.meganz.email or None
 
     @property
     def password(self) -> str | None:
-        return self.manager.config_manager.auth.meganz.password or None
+        return self.manager.config.auth.meganz.password or None
 
     @override
     def __init_downloader__(self) -> None:

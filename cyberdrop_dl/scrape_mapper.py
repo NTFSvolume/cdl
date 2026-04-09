@@ -146,26 +146,24 @@ class ScrapeMapper:
 
         self.crawlers.update(get_crawlers_mapping())
 
-        for crawler in _create_generic_crawlers(self.manager.config_manager.global_settings.generic_crawlers_instances):
+        for crawler in _create_generic_crawlers(self.manager.config.global_settings.generic_crawlers_instances):
             register_crawler(self.crawlers, crawler, from_user=True)
 
-        _disable_crawlers_by_config(
-            self.crawlers, *self.manager.config_manager.global_settings.general.disable_crawlers
-        )
+        _disable_crawlers_by_config(self.crawlers, *self.manager.config.global_settings.general.disable_crawlers)
 
         plugins.load(self.manager)
 
     @contextlib.asynccontextmanager
     async def __call__(self) -> AsyncGenerator[Self]:
-        _ = filepath.MAX_FILE_LEN.set(self.manager.config_manager.global_settings.general.max_file_name_length)
-        _ = filepath.MAX_FOLDER_LEN.set(self.manager.config_manager.global_settings.general.max_folder_name_length)
+        _ = filepath.MAX_FILE_LEN.set(self.manager.config.global_settings.general.max_file_name_length)
+        _ = filepath.MAX_FOLDER_LEN.set(self.manager.config.global_settings.general.max_folder_name_length)
 
         await self.manager.client_manager.load_cookie_files()
 
         ## IMPORTANT: Order of each context matters!
         async with (
             self.manager.client_manager,
-            storage.monitor(self.manager.config_manager.global_settings.general.required_free_space),
+            storage.monitor(self.manager.config.global_settings.general.required_free_space),
             self.manager.logs.task_group,
             self._task_groups.downloads,
         ):
@@ -210,7 +208,7 @@ class ScrapeMapper:
             self.create_download_task(wait_until_scrape_is_done())
 
             async for item in items:
-                item.children_limits = self.manager.config_manager.settings.download_options.maximum_number_of_children
+                item.children_limits = self.manager.config.settings.download_options.maximum_number_of_children
                 if self._should_scrape(item):
                     if item_limit and stats.count >= item_limit:
                         break
@@ -250,9 +248,7 @@ class ScrapeMapper:
             logger.info(f"Sending unsupported URL to JDownloader: {scrape_item.url}")
 
             download_folder = get_download_path(self.manager, scrape_item, "jdownloader")
-            relative_download_dir = download_folder.relative_to(
-                self.manager.config_manager.settings.files.download_folder
-            )
+            relative_download_dir = download_folder.relative_to(self.manager.config.settings.files.download_folder)
             try:
                 await self._jdownloader.send(
                     scrape_item.url,
@@ -297,12 +293,12 @@ class ScrapeMapper:
             logger.info(f"Skipping {scrape_item.url} as it is outside of the desired date range")
             return False
 
-        skip_hosts = self.manager.config_manager.settings.ignore_options.skip_hosts
+        skip_hosts = self.manager.config.settings.ignore_options.skip_hosts
         if skip_hosts and _filter_by_domain(scrape_item, skip_hosts):
             logger.info(f"Skipping {scrape_item.url} by skip_hosts config")
             return False
 
-        only_hosts = self.manager.config_manager.settings.ignore_options.only_hosts
+        only_hosts = self.manager.config.settings.ignore_options.only_hosts
         if only_hosts and not _filter_by_domain(scrape_item, only_hosts):
             logger.info(f"Skipping {scrape_item.url} by only_hosts config")
             return False
@@ -348,9 +344,7 @@ def _source(manager: Manager) -> tuple[str, AsyncGenerator[ScrapeItem]]:
     if cli_args.links:
         return "--links (CLI args)", _load_cli_links(cli_args.links)
 
-    return str(manager.config_manager.settings.files.input_file), _load_urls_from_file(
-        manager.config_manager.settings.files.input_file
-    )
+    return str(manager.config.settings.files.input_file), _load_urls_from_file(manager.config.settings.files.input_file)
 
 
 async def _load_urls_from_file(file: Path) -> AsyncGenerator[ScrapeItem]:

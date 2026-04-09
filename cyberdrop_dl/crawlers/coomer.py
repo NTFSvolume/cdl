@@ -16,4 +16,4 @@ class CoomerCrawler(KemonoBaseCrawler):
 
     @property
     def session_cookie(self) -> str:
-        return self.manager.config_manager.auth.coomer.session
+        return self.manager.config.auth.coomer.session

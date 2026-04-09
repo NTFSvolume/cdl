@@ -300,15 +300,15 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
     @final
     @property
     def deep_scrape(self) -> bool:
-        return self.manager.config_manager.deep_scrape
+        return self.manager.config.deep_scrape
 
     @property
     def allow_no_extension(self) -> bool:
-        return not self.manager.config_manager.settings.ignore_options.exclude_files_with_no_extension
+        return not self.manager.config.settings.ignore_options.exclude_files_with_no_extension
 
     @property
     def separate_posts(self) -> bool:
-        return self.manager.config_manager.settings.download_options.separate_posts
+        return self.manager.config.settings.download_options.separate_posts
 
     @final
     @contextlib.contextmanager
@@ -455,7 +455,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
             await self.__write_to_jsonl(media_item)
 
     async def __write_to_jsonl(self, media_item: MediaItem) -> None:
-        if not self.manager.config_manager.settings.files.dump_json:
+        if not self.manager.config.settings.files.dump_json:
             return
 
         await self.manager.logs.write_jsonl([media_item.serialize()])
@@ -488,7 +488,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
     @final
     async def check_skip_by_config(self, media_item: MediaItem) -> bool:
         media_host = media_item.url.host
-        ignore_options = self.manager.config_manager.settings.ignore_options
+        ignore_options = self.manager.config.settings.ignore_options
 
         if (hosts := ignore_options.skip_hosts) and any(host in media_host for host in hosts):
             logger.info(f"Download skipped {media_item.url} due to skip_hosts config")
@@ -582,13 +582,13 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         """Creates the title for the scrape item."""
         title = (title or "Untitled").strip()
 
-        if album_id and self.manager.config_manager.settings.download_options.include_album_id_in_folder_name:
+        if album_id and self.manager.config.settings.download_options.include_album_id_in_folder_name:
             title = f"{title} {album_id}"
 
-        if thread_id and self.manager.config_manager.settings.download_options.include_thread_id_in_folder_name:
+        if thread_id and self.manager.config.settings.download_options.include_thread_id_in_folder_name:
             title = f"{title} {thread_id}"
 
-        if not self.manager.config_manager.settings.download_options.remove_domains_from_folder_names:
+        if not self.manager.config.settings.download_options.remove_domains_from_folder_names:
             title = f"{title} ({self.FOLDER_DOMAIN})"
 
         # Remove double spaces
@@ -605,7 +605,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
     ) -> str:
         if not self.separate_posts:
             return ""
-        title_format = self.manager.config_manager.settings.download_options.separate_posts_format
+        title_format = self.manager.config.settings.download_options.separate_posts_format
         if title_format.strip().casefold() == "{default}":
             title_format = self.DEFAULT_POST_TITLE_FORMAT
         if isinstance(date, int):

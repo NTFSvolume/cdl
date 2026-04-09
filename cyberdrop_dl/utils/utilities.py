@@ -186,7 +186,7 @@ def error_handling_wrapper(
 
 def get_download_path(manager: Manager, scrape_item: ScrapeItem, domain: str) -> Path:
     """Returns the path to the download folder."""
-    download_dir = manager.config_manager.settings.files.download_folder
+    download_dir = manager.config.settings.files.download_folder
 
     return download_dir / scrape_item.create_download_path(domain)
 
@@ -234,10 +234,10 @@ def delete_empty_files_and_folders(dirname: Path | str) -> bool:
 
 
 def check_partials_and_empty_folders(manager: Manager) -> None:
-    download_folder = manager.config_manager.settings.files.download_folder
+    download_folder = manager.config.settings.files.download_folder
 
     _check_for_partial_files(download_folder)
-    settings = manager.config_manager.settings.runtime_options
+    settings = manager.config.settings.runtime_options
     if settings.delete_partial_files:
         logger.info("Deleting partial downloads...")
         for file in _partial_files(download_folder):
@@ -250,8 +250,8 @@ def check_partials_and_empty_folders(manager: Manager) -> None:
     logger.info("Deleting empty files and folders...")
     _ = delete_empty_files_and_folders(download_folder)
 
-    sorted_folder = manager.config_manager.settings.sorting.sort_folder
-    if sorted_folder and manager.config_manager.settings.sorting.sort_downloads:
+    sorted_folder = manager.config.settings.sorting.sort_folder
+    if sorted_folder and manager.config.settings.sorting.sort_downloads:
         _ = delete_empty_files_and_folders(sorted_folder)
 
 

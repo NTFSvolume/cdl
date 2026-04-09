@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 
 @dataclasses.dataclass(slots=True)
-class ConfigManager:
+class Config:
     source: Path
 
     auth: AuthSettings

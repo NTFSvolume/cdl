@@ -13,7 +13,7 @@ from cyberdrop_dl.cli import ParsedArgs, parse_args
 from cyberdrop_dl.database import Database
 from cyberdrop_dl.hasher import Hasher
 from cyberdrop_dl.managers.client_manager import ClientManager
-from cyberdrop_dl.managers.config_manager import ConfigManager
+from cyberdrop_dl.managers.config_manager import Config
 from cyberdrop_dl.managers.live_manager import LiveManager
 from cyberdrop_dl.managers.logs import LogManager
 from cyberdrop_dl.managers.progress_manager import ProgressManager
@@ -37,7 +37,7 @@ class Manager:
 
         self.parsed_args: ParsedArgs = field(init=False)
         self.cache: dict[str, Any] = {}
-        self.config_manager: ConfigManager
+        self.config: Config
 
         self.logs: LogManager = field(init=False)
         self.database: Database = field(init=False)
@@ -73,9 +73,9 @@ class Manager:
     def startup(self) -> None:
         self.parsed_args = parse_args(self.args)
         self.appdata.mkdirs()
-        self.config_manager = ConfigManager.from_manager(self)
+        self.config = Config.from_manager(self)
         _merge_cli_and_config_args(self)
-        self.config_manager.settings.resolve_paths()
+        self.config.settings.resolve_paths()
         self.logs = LogManager.from_manager(self)
 
     def add_completed(self, media_item: MediaItem) -> None:
@@ -97,7 +97,7 @@ class Manager:
     def async_db_hash_startup(self) -> None:
         self.database = Database(
             self.appdata.db_file,
-            self.config_manager.settings.runtime_options.ignore_history,
+            self.config.settings.runtime_options.ignore_history,
         )
 
         self.live_manager = LiveManager(self)
@@ -106,23 +106,23 @@ class Manager:
     def _log_config(self) -> None:
         """Logs the runtime arguments."""
 
-        auth = {site: all(credentials.values()) for site, credentials in self.config_manager.auth.model_dump().items()}
+        auth = {site: all(credentials.values()) for site, credentials in self.config.auth.model_dump().items()}
 
-        config_settings = self.config_manager.settings.model_copy()
-        config_settings.runtime_options.deep_scrape = self.config_manager.deep_scrape
+        config_settings = self.config.settings.model_copy()
+        config_settings.runtime_options.deep_scrape = self.config.deep_scrape
 
         logger.info(f"Running cyberdrop-dl v{__version__}")
 
         args_info = {
             "System": get_system_information(),
-            "Config File": self.config_manager.source,
-            "Input File": self.config_manager.settings.files.input_file,
-            "Download Folder": self.config_manager.settings.files.download_folder,
+            "Config File": self.config.source,
+            "Input File": self.config.settings.files.input_file,
+            "Download Folder": self.config.settings.files.download_folder,
             "Database File": self.appdata.db_file,
             "CLI only options": self.parsed_args.cli_only_args.model_dump(mode="json"),
             "Auth": auth,
             "Settings": config_settings.model_dump(mode="json"),
-            "Global Settings": self.config_manager.global_settings.model_dump(mode="json"),
+            "Global Settings": self.config.global_settings.model_dump(mode="json"),
         }
         logger.debug(args_info)
         logger.debug("ffmpeg version: %s", ffmpeg.get_ffmpeg_version())
@@ -176,8 +176,8 @@ def merge_dicts(dict1: dict[str, Any], dict2: dict[str, Any]) -> dict[str, Any]:
 def _merge_additive_args(manager: Manager) -> None:
     cli_general_options = manager.parsed_args.global_settings.general
     cli_ignore_options = manager.parsed_args.config_settings.ignore_options
-    config_ignore_options = manager.config_manager.settings.ignore_options
-    config_general_options = manager.config_manager.global_settings.general
+    config_ignore_options = manager.config.settings.ignore_options
+    config_general_options = manager.config.global_settings.general
 
     add_or_remove_lists(cli_ignore_options.skip_hosts, config_ignore_options.skip_hosts)
     add_or_remove_lists(cli_ignore_options.only_hosts, config_ignore_options.only_hosts)
@@ -188,13 +188,13 @@ def _merge_cli_and_config_args(manager: Manager) -> None:
     """Consolidates runtime arguments with config values."""
     _merge_additive_args(manager)
 
-    conf = merge_models(manager.config_manager.settings, manager.parsed_args.config_settings)
-    global_conf = merge_models(manager.config_manager.global_settings, manager.parsed_args.global_settings)
-    deep_scrape = manager.parsed_args.config_settings.runtime_options.deep_scrape or manager.config_manager.deep_scrape
+    conf = merge_models(manager.config.settings, manager.parsed_args.config_settings)
+    global_conf = merge_models(manager.config.global_settings, manager.parsed_args.global_settings)
+    deep_scrape = manager.parsed_args.config_settings.runtime_options.deep_scrape or manager.config.deep_scrape
 
-    manager.config_manager.settings = conf
-    manager.config_manager.global_settings = global_conf
-    manager.config_manager.deep_scrape = deep_scrape
+    manager.config.settings = conf
+    manager.config.global_settings = global_conf
+    manager.config.deep_scrape = deep_scrape
 
 
 M = TypeVar("M", bound=BaseModel)

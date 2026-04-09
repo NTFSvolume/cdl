@@ -118,7 +118,7 @@ class ClientManager:
 
     def __init__(self, manager: Manager) -> None:
         self.manager = manager
-        ssl_context = self.manager.config_manager.global_settings.general.ssl_context
+        ssl_context = self.manager.config.global_settings.general.ssl_context
         if not ssl_context:
             self.ssl_context = False
         elif ssl_context == "certifi":
@@ -153,7 +153,7 @@ class ClientManager:
 
     @property
     def flaresolverr(self) -> FlareSolverrClient | None:
-        if self._flaresolverr is None and (url := self.manager.config_manager.global_settings.general.flaresolverr):
+        if self._flaresolverr is None and (url := self.manager.config.global_settings.general.flaresolverr):
             self._flaresolverr = FlareSolverrClient(url, self._session)
         return self._flaresolverr
 
@@ -181,7 +181,7 @@ class ClientManager:
 
     @property
     def rate_limiting_options(self):
-        return self.manager.config_manager.global_settings.rate_limiting_options
+        return self.manager.config.global_settings.rate_limiting_options
 
     def get_download_slots(self, domain: str) -> int:
         """Returns the download limit for a domain."""
@@ -210,7 +210,7 @@ class ClientManager:
 
     def is_allowed_filetype(self, media_item: MediaItem) -> bool:
         """Checks if the file type is allowed to download."""
-        ignore_options = self.manager.config_manager.settings.ignore_options
+        ignore_options = self.manager.config.settings.ignore_options
         ext = media_item.ext.lower()
 
         return not (
@@ -227,7 +227,7 @@ class ClientManager:
             return True
 
         item_date = datetime.date()
-        ignore_options = self.manager.config_manager.settings.ignore_options
+        ignore_options = self.manager.config.settings.ignore_options
 
         if ignore_options.exclude_before and item_date < ignore_options.exclude_before:
             return False
@@ -263,7 +263,7 @@ class ClientManager:
             warnings.filterwarnings("ignore", category=CurlCffiWarning)
             acurl = AsyncCurl(loop=loop)
 
-        proxy_or_none = str(proxy) if (proxy := self.manager.config_manager.global_settings.general.proxy) else None
+        proxy_or_none = str(proxy) if (proxy := self.manager.config.global_settings.general.proxy) else None
 
         return AsyncSession(
             loop=loop,
@@ -281,12 +281,12 @@ class ClientManager:
     ) -> ClientSession:
         return ClientSession(
             headers={
-                "user-agent": self.manager.config_manager.global_settings.general.user_agent,
+                "User-agent": self.manager.config.global_settings.general.user_agent,
             },
             raise_for_status=False,
             cookie_jar=self.cookies,
             timeout=self.rate_limiting_options._aiohttp_timeout,
-            proxy=self.manager.config_manager.global_settings.general.proxy,
+            proxy=self.manager.config.global_settings.general.proxy,
             connector=self._new_tcp_connector(),
             requote_redirect_url=False,
         )
@@ -323,9 +323,9 @@ class ClientManager:
             pass
 
     async def load_cookie_files(self) -> None:
-        if self.manager.config_manager.settings.browser_cookies.auto_import:
-            assert self.manager.config_manager.settings.browser_cookies.browser
-            cookies = await extract_cookies(self.manager.config_manager.settings.browser_cookies.browser)
+        if self.manager.config.settings.browser_cookies.auto_import:
+            assert self.manager.config.settings.browser_cookies.browser
+            cookies = await extract_cookies(self.manager.config.settings.browser_cookies.browser)
             await export_cookies(cookies, output_path=self.manager.appdata.cookies)
 
         cookie_files = await asyncio.to_thread(lambda: sorted(self.manager.appdata.cookies.glob("*.txt")))
@@ -398,7 +398,7 @@ class ClientManager:
         if not (is_video or is_audio):
             return True
 
-        duration_limits = self.manager.config_manager.settings.media_duration_limits
+        duration_limits = self.manager.config.settings.media_duration_limits
         min_video_duration: float = duration_limits.minimum_video_duration.total_seconds()
         max_video_duration: float = duration_limits.maximum_video_duration.total_seconds()
         min_audio_duration: float = duration_limits.minimum_audio_duration.total_seconds()

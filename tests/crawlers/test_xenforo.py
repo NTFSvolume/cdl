@@ -75,7 +75,7 @@ async def post_startup_manager(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.chdir(tmp_path)
     manager = Manager(("--appdata-folder", appdata, "-d", downloads))
     manager.startup()
-    manager.config_manager.settings.resolve_paths()
+    manager.config.settings.resolve_paths()
     manager.logs.delete_old_logs()
     await manager.async_startup()
     async with manager.database:

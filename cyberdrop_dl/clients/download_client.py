@@ -49,7 +49,7 @@ class DownloadClient:
     def __init__(self, manager: Manager, client_manager: ClientManager) -> None:
         self.manager = manager
         self.client_manager = client_manager
-        self.download_speed_threshold = self.manager.config_manager.settings.runtime_options.slow_download_speed
+        self.download_speed_threshold = self.manager.config.settings.runtime_options.slow_download_speed
         self._server_locks = aio.WeakAsyncLocks[str]()
         self.server_locked_domains: set[str] = set()
         self._supports_ranges: bool = True
@@ -67,10 +67,10 @@ class DownloadClient:
 
     def _get_download_headers(self, domain: str, referer: AbsoluteHttpURL) -> dict[str, str]:
         download_headers = {
-            "User-Agent": self.manager.config_manager.global_settings.general.user_agent,
+            "User-Agent": self.manager.config.global_settings.general.user_agent,
             "Referer": str(referer),
         }
-        auth_data = self.manager.config_manager.auth
+        auth_data = self.manager.config.auth
         if domain == "pixeldrain" and auth_data.pixeldrain.api_key:
             download_headers["Authorization"] = self.manager.client_manager.basic_auth(
                 "Cyberdrop-DL", auth_data.pixeldrain.api_key
@@ -107,7 +107,7 @@ class DownloadClient:
             resume_point = size
             download_headers["Range"] = f"bytes={size}-"
 
-        await asyncio.sleep(self.manager.config_manager.global_settings.rate_limiting_options.total_delay)
+        await asyncio.sleep(self.manager.config.global_settings.rate_limiting_options.total_delay)
 
         def process_response(resp: aiohttp.ClientResponse | AbstractResponse):
             return self._process_response(media_item, domain, resume_point, resp)
@@ -285,10 +285,7 @@ class DownloadClient:
 
     async def download_file(self, domain: str, media_item: MediaItem) -> bool:
         """Starts a file."""
-        if (
-            self.manager.config_manager.settings.download_options.skip_download_mark_completed
-            and not media_item.is_segment
-        ):
+        if self.manager.config.settings.download_options.skip_download_mark_completed and not media_item.is_segment:
             logger.info(f"Download removed {media_item.url} due to mark completed option")
             self.manager.progress_manager.download_progress.add_skipped()
             # set completed path
@@ -352,8 +349,8 @@ class DownloadClient:
         if self.manager.parsed_args.cli_only_args.retry_any:
             return download_folder
 
-        if self.manager.config_manager.settings.download_options.block_download_sub_folders:
-            while download_folder.parent != self.manager.config_manager.settings.files.download_folder:
+        if self.manager.config.settings.download_options.block_download_sub_folders:
+            while download_folder.parent != self.manager.config.settings.files.download_folder:
                 download_folder = download_folder.parent
             media_item.download_folder = download_folder
         return download_folder
@@ -466,7 +463,7 @@ class DownloadClient:
 
     def check_filesize_limits(self, media: MediaItem) -> bool:
         """Checks if the file size is within the limits."""
-        file_size_limits = self.manager.config_manager.settings.file_size_limits
+        file_size_limits = self.manager.config.settings.file_size_limits
         max_video_filesize = file_size_limits.maximum_video_size or float("inf")
         min_video_filesize = file_size_limits.minimum_video_size
         max_image_filesize = file_size_limits.maximum_image_size or float("inf")

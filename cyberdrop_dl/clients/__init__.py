@@ -71,8 +71,8 @@ class HTTPClient:
     def from_client(cls, client_manager: ClientManager) -> Self:
         return cls(
             client_manager,
-            client_manager.manager.config_manager.settings.files.save_pages_html,
-            client_manager.manager.config_manager.settings.logs.main_log.parent / "cdl_responses",
+            client_manager.manager.config.settings.files.save_pages_html,
+            client_manager.manager.config.settings.logs.main_log.parent / "cdl_responses",
         )
 
     @property
@@ -129,9 +129,7 @@ class HTTPClient:
             request_params["impersonate"] = impersonate
 
         else:
-            _ = headers.setdefault(
-                "user-agent", self.client_manager.manager.config_manager.global_settings.general.user_agent
-            )
+            _ = headers.setdefault("User-agent", self.client_manager.manager.config.global_settings.general.user_agent)
 
         async with self.__request(url, method, request_params, impersonate=bool(impersonate)) as resp:
             exc = None
@@ -222,7 +220,7 @@ class HTTPClient:
 
             self.client_manager.cookies.update_cookies(solution.cookies)
             await _check_flaresolverr_resp(
-                self.client_manager.manager.config_manager.global_settings.general.user_agent, solution
+                self.client_manager.manager.config.global_settings.general.user_agent, solution
             )
             return AbstractResponse.create(solution)
 
