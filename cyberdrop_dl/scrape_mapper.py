@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
     import aiosqlite
 
-    from cyberdrop_dl.config.global_model import GenericCrawlerInstances
+    from cyberdrop_dl.config._global import GenericCrawlerInstances
     from cyberdrop_dl.crawlers.crawler import Crawler
     from cyberdrop_dl.managers.manager import Manager
 

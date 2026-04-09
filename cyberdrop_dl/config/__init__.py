@@ -6,9 +6,9 @@ from typing import TYPE_CHECKING, Self, TypeVar
 from cyberdrop_dl import yaml
 from cyberdrop_dl.utils.apprise import read_apprise_urls
 
-from .auth_model import AuthSettings
-from .config_model import ConfigSettings
-from .global_model import GlobalSettings
+from ._global import GlobalSettings
+from .auth import AuthSettings
+from .settings import ConfigSettings
 
 if TYPE_CHECKING:
     from pathlib import Path
