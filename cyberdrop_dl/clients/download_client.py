@@ -70,7 +70,7 @@ class DownloadClient:
             "User-Agent": self.manager.global_config.general.user_agent,
             "Referer": str(referer),
         }
-        auth_data = self.manager.config_manager.authentication_data
+        auth_data = self.manager.config_manager.auth
         if domain == "pixeldrain" and auth_data.pixeldrain.api_key:
             download_headers["Authorization"] = self.manager.client_manager.basic_auth(
                 "Cyberdrop-DL", auth_data.pixeldrain.api_key
@@ -107,7 +107,7 @@ class DownloadClient:
             resume_point = size
             download_headers["Range"] = f"bytes={size}-"
 
-        await asyncio.sleep(self.manager.config_manager.global_settings_data.rate_limiting_options.total_delay)
+        await asyncio.sleep(self.manager.config_manager.global_settings.rate_limiting_options.total_delay)
 
         def process_response(resp: aiohttp.ClientResponse | AbstractResponse):
             return self._process_response(media_item, domain, resume_point, resp)

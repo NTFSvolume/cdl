@@ -120,7 +120,7 @@ def _app_header(manager: Manager) -> None:
     _clear_term()
     _CONSOLE.print(f"[bold]cyberdrop-dl ([blue]v{__version__!s}[/blue])[/bold]")
     _CONSOLE.rule(style="blue")
-    _CONSOLE.print("Config file:  ", hyperlink(manager.config_manager.settings))
+    _CONSOLE.print("Config file:  ", hyperlink(manager.appdata.config_file))
     _CONSOLE.print("Database file:", hyperlink(manager.appdata.db_file))
     _CONSOLE.print("URLs file:    ", hyperlink(manager.config.files.input_file))
     _CONSOLE.line()

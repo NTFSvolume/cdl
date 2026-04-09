@@ -42,7 +42,7 @@ class SortProgress(DequeProgress):
         """Returns the progress bar."""
         return Panel(
             self._progress_group,
-            title=f"Sorting Downloads ━ Config: {self.manager.config_manager.loaded_config}",
+            title="Sorting Downloads",
             border_style="green",
             padding=(1, 1),
         )

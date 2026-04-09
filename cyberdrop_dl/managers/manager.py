@@ -60,15 +60,15 @@ class Manager:
 
     @property
     def config(self):
-        return self.config_manager.settings_data
+        return self.config_manager.settings
 
     @property
     def auth_config(self):
-        return self.config_manager.authentication_data
+        return self.config_manager.auth
 
     @property
     def global_config(self):
-        return self.config_manager.global_settings_data
+        return self.config_manager.global_settings
 
     async def __aenter__(self) -> Self:
         cache_file = self.appdata.cache_file
@@ -91,8 +91,7 @@ class Manager:
 
         self.appdata.mkdirs()
 
-        self.config_manager = ConfigManager(self)
-        self.config_manager.startup()
+        self.config_manager = ConfigManager.from_manager(self)
 
         self.args_consolidation()
         self.config.resolve_paths()
@@ -131,8 +130,8 @@ class Manager:
     def process_additive_args(self) -> None:
         cli_general_options = self.parsed_args.global_settings.general
         cli_ignore_options = self.parsed_args.config_settings.ignore_options
-        config_ignore_options = self.config_manager.settings_data.ignore_options
-        config_general_options = self.config_manager.global_settings_data.general
+        config_ignore_options = self.config_manager.settings.ignore_options
+        config_general_options = self.config_manager.global_settings.general
 
         add_or_remove_lists(cli_ignore_options.skip_hosts, config_ignore_options.skip_hosts)
         add_or_remove_lists(cli_ignore_options.only_hosts, config_ignore_options.only_hosts)
@@ -142,37 +141,34 @@ class Manager:
         """Consolidates runtime arguments with config values."""
         self.process_additive_args()
 
-        conf = merge_models(self.config_manager.settings_data, self.parsed_args.config_settings)
-        global_conf = merge_models(self.config_manager.global_settings_data, self.parsed_args.global_settings)
+        conf = merge_models(self.config_manager.settings, self.parsed_args.config_settings)
+        global_conf = merge_models(self.config_manager.global_settings, self.parsed_args.global_settings)
         deep_scrape = self.parsed_args.config_settings.runtime_options.deep_scrape or self.config_manager.deep_scrape
 
-        self.config_manager.settings_data = conf
-        self.config_manager.global_settings_data = global_conf
+        self.config_manager.settings = conf
+        self.config_manager.global_settings = global_conf
         self.config_manager.deep_scrape = deep_scrape
 
     def args_logging(self) -> None:
         """Logs the runtime arguments."""
 
-        auth = {
-            site: all(credentials.values())
-            for site, credentials in self.config_manager.authentication_data.model_dump().items()
-        }
+        auth = {site: all(credentials.values()) for site, credentials in self.config_manager.auth.model_dump().items()}
 
-        config_settings = self.config_manager.settings_data.model_copy()
+        config_settings = self.config_manager.settings.model_copy()
         config_settings.runtime_options.deep_scrape = self.config_manager.deep_scrape
 
         logger.info(f"Running cyberdrop-dl v{__version__}")
 
         args_info = {
             "System": get_system_information(),
-            "Config File": self.config_manager.settings,
+            "Config File": self.appdata.config_file,
             "Input File": self.config.files.input_file,
             "Download Folder": self.config.files.download_folder,
             "Database File": self.appdata.db_file,
             "CLI only options": self.parsed_args.cli_only_args.model_dump(mode="json"),
             "Auth": auth,
             "Settings": config_settings.model_dump(mode="json"),
-            "Global Settings": self.config_manager.global_settings_data.model_dump(mode="json"),
+            "Global Settings": self.config_manager.global_settings.model_dump(mode="json"),
         }
         logger.debug(args_info)
         logger.debug("ffmpeg version: %s", ffmpeg.get_ffmpeg_version())

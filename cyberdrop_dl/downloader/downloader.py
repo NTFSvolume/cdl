@@ -97,7 +97,7 @@ class Downloader:
     def max_attempts(self):
         if self.manager.config.download_options.disable_download_attempt_limit:
             return 1
-        return self.manager.config_manager.global_settings_data.rate_limiting_options.download_attempts
+        return self.manager.config_manager.global_settings.rate_limiting_options.download_attempts
 
     def startup(self) -> None:
         """Starts the downloader."""

@@ -37,7 +37,7 @@ class DownloadsProgress:
         self.failed_files = 0
         self.panel = Panel(
             self.progress_group,
-            title=f"Config: {self.manager.config_manager.loaded_config}",
+            title="Files",
             border_style="green",
             padding=(1, 1),
             subtitle=f"Total Files: [white]{self.total_files:,}",

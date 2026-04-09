@@ -70,7 +70,7 @@ class HashProgress:
         """Returns the progress bar."""
         return Panel(
             self.hash_progress_group,
-            title=f"Config: {self.manager.config_manager.loaded_config}",
+            title="Hashing",
             border_style="green",
             padding=(1, 1),
         )

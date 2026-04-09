@@ -41,7 +41,7 @@ class ProgressManager:
     def __init__(self, manager: Manager) -> None:
         # File Download Bars
         self.manager = manager
-        ui_options = manager.config_manager.global_settings_data.ui_options
+        ui_options = manager.config_manager.global_settings.ui_options
         self.portrait = manager.parsed_args.cli_only_args.portrait
         self.file_progress = FileProgress(manager)
         self.scraping_progress = ScrapingProgress(manager)
@@ -128,10 +128,8 @@ class ProgressManager:
         elapsed = timedelta(seconds=int(time.monotonic() - stats.start_time))
         total_data_written = ByteSize(self.file_progress.total_data_written).human_readable(decimal=True)
 
-        config_path = self.manager.appdata.configs / self.manager.config_manager.loaded_config
-
         logger.info("Run Stats:", extra={"color": "cyan"})
-        logger.info(f"  Config file: {config_path}")
+        logger.info(f"  Config file: {self.manager.appdata.config_file}")
         logger.info(f"  URLs source: {stats.source}")
         logger.info(f"  URLs: {stats.count:,}")
         logger.info(f"  URL groups: {len(stats.unique_groups):,}")
