@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -54,6 +55,7 @@ def create_test_files(file: Path) -> None:
 
         site2.setdefault(url, []).append(results)
 
+    test_files: list[Path] = []
     for site, cases in all_results.items():
         domain = site.replace(".", "_")
         test_cases = [(url, results) for url, results in cases.items()]
@@ -61,6 +63,9 @@ def create_test_files(file: Path) -> None:
 
         test_file = TEST_FOLDER / f"test_case_{domain}.py"
         _ = test_file.write_text(content)
+        test_files.append(test_file)
+
+    _ = subprocess.run(["ruff", "format", *test_files], check=False)
 
 
 if __name__ == "__main__":
