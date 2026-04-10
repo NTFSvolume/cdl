@@ -48,7 +48,7 @@ class DirtyShipCrawler(Crawler):
         title: str = ""
         async for soup in self.web_pager(scrape_item.url):
             if not title:
-                name = css.select_text(soup, "title").split("Archives",1)[0]
+                name = css.select_text(soup, "title").split("Archives", 1)[0]
                 title = self.create_title(f"{name} [{type_}]")
                 scrape_item.setup_as_album(title)
 
