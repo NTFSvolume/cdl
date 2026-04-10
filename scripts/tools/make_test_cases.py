@@ -20,11 +20,10 @@ TEST_FOLDER = ROOT / "tests/crawlers/test_cases"
 TestCase = dict[str, Any]
 
 
-def parse(file: Path) -> Generator[tuple[str, str, TestCase]]:
+def parse_jsonl(file: Path) -> Generator[tuple[str, str, TestCase]]:
     for line in file.read_text().splitlines():
         media = json.loads(line)
         url = media["parents"][0] if media["parents"] else media["referer"]
-
         media["download_folder"] = "re:" + media["download_folder"].split("/")[-1]
         yield media["domain"], url, {key: media[key] for key in KEYS}
 
@@ -50,28 +49,24 @@ def run(url_txt: Path, main_log: Path) -> None:
 
 def create_test_files(file: Path) -> None:
     all_results: dict[str, dict[str, list[TestCase]]] = {}
-    for domain, url, results in parse(file):
-        site2 = all_results.setdefault(domain, {})
-
-        site2.setdefault(url, []).append(results)
+    for domain, url, results in parse_jsonl(file):
+        site_tests = all_results.setdefault(domain, {})
+        site_tests.setdefault(url, []).append(results)
 
     test_files: list[Path] = []
-    for site, cases in all_results.items():
-        domain = site.replace(".", "_")
+    for domain, cases in all_results.items():
+        domain = domain.replace(".", "_")
         test_cases = [(url, results) for url, results in cases.items()]
-        content = f"DOMAIN = {site!r}\nTEST_CASES = {test_cases}"
-
         test_file = TEST_FOLDER / f"test_case_{domain}.py"
-        _ = test_file.write_text(content)
+        _ = test_file.write_text(f"DOMAIN = {domain!r}\nTEST_CASES = {test_cases}")
         test_files.append(test_file)
 
-    _ = subprocess.run(["ruff", "format", *test_files], check=False)
+    if test_files:
+        _ = subprocess.run(["ruff", "format", *test_files], check=False)
 
 
 if __name__ == "__main__":
-    main_log = Path("test_run.log").resolve()
-    url_txt = Path("URLs.txt").resolve()
-    main_log, url_txt = [Path(f).resolve() for f in (*sys.argv[1:], "test_run.log", "URLs.txt")[:2]]
+    main_log, url_txt = [Path(file).resolve() for file in (*sys.argv[1:], "test_run.log", "URLs.txt")[:2]]
     run(url_txt, main_log)
     json_l = main_log.with_suffix(".results.jsonl")
     create_test_files(json_l)
