@@ -3,7 +3,7 @@ from __future__ import annotations
 import dataclasses
 import importlib.util
 import re
-from collections.abc import Sequence
+from collections.abc import Generator, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple, NotRequired
 from unittest import mock
@@ -34,7 +34,7 @@ class Result(TypedDict):
     original_filename: NotRequired[str | type]
     referer: NotRequired[str | type]
     album_id: NotRequired[str | None | type]
-    datetime: NotRequired[int | None | type]
+    uploaded_at: NotRequired[int | None | type]
     download_folder: NotRequired[str | type]
 
 
@@ -57,7 +57,8 @@ class CrawlerTestCase(NamedTuple):
 
 
 _TEST_CASE_ADAPTER = TypeAdapter(CrawlerTestCase)
-_TEST_DATA: dict[str, list[tuple[str, list[Result], int, Config]]] = {}
+TestTuple = tuple[str, list[Result], int, Config]
+_TEST_DATA: dict[str, list[TestTuple]] = {}
 
 
 def _load_test_cases(path: Path) -> None:
@@ -65,7 +66,19 @@ def _load_test_cases(path: Path) -> None:
     assert module_spec and module_spec.loader
     module = importlib.util.module_from_spec(module_spec)
     module_spec.loader.exec_module(module)
-    _TEST_DATA[module.DOMAIN] = module.TEST_CASES
+
+    _TEST_DATA[module.DOMAIN] = list(_fix_test_cases(module.TEST_CASES))
+
+
+def _fix_test_cases(test_cases: list[TestTuple]) -> Generator[TestTuple]:
+    for test_case in test_cases:
+        results = test_case[1]
+
+        for result in results:
+            if "datetime" in result:
+                result["uploaded_at"] = result.pop("datetime")
+
+        yield test_case
 
 
 def _load_test_data() -> None:
@@ -146,7 +159,7 @@ def _validate_results(crawler: Crawler, test_case: CrawlerTestCase, results: lis
     origin = getattr(crawler, "PRIMARY_URL", AbsoluteHttpURL("https://google.com"))
     for index, (expected, media_item) in enumerate(zip(expected_results, results, strict=False), 1):
         for attr_name, expected_value in expected.items():
-            result_value = getattr(media_item, attr_name if attr_name != "datetime" else "uploaded_at")
+            result_value = getattr(media_item, attr_name)
 
             match expected_value:
                 case type():

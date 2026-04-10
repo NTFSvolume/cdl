@@ -21,10 +21,11 @@ TestCase = dict[str, Any]
 
 
 def parse_jsonl(file: Path) -> Generator[tuple[str, str, TestCase]]:
+    base = Path.cwd() / "Downloads"
     for line in file.read_text().splitlines():
         media = json.loads(line)
         url = media["parents"][0] if media["parents"] else media["referer"]
-        media["download_folder"] = "re:" + media["download_folder"].split("/")[-1]
+        media["download_folder"] = "re:" + str(Path(media["download_folder"]).relative_to(base))
         yield media["domain"], url, {key: media[key] for key in KEYS}
 
 
@@ -49,6 +50,8 @@ def run(url_txt: Path, main_log: Path) -> None:
 
 def create_test_files(file: Path) -> None:
     all_results: dict[str, dict[str, list[TestCase]]] = {}
+    if not file.exists():
+        return
     for domain, url, results in parse_jsonl(file):
         site_tests = all_results.setdefault(domain, {})
         site_tests.setdefault(url, []).append(results)
@@ -56,7 +59,7 @@ def create_test_files(file: Path) -> None:
     test_files: list[Path] = []
     for domain, cases in all_results.items():
         domain = domain.replace(".", "_")
-        test_cases = [(url, results) for url, results in cases.items()]
+        test_cases = [(url, results, len(results)) for url, results in cases.items()]
         test_file = TEST_FOLDER / f"test_case_{domain}.py"
         _ = test_file.write_text(f"DOMAIN = {domain!r}\nTEST_CASES = {test_cases}")
         test_files.append(test_file)
