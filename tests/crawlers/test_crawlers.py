@@ -67,6 +67,8 @@ def _load_test_cases(path: Path) -> None:
     assert module_spec and module_spec.loader
     module = importlib.util.module_from_spec(module_spec)
     module_spec.loader.exec_module(module)
+    if module.DOMAIN in _TEST_DATA:
+        raise RuntimeError(f"Multiple tests files for {module.DOMAIN}")
     _TEST_DATA[module.DOMAIN] = list(_fix_test_cases(module.TEST_CASES))
 
 
