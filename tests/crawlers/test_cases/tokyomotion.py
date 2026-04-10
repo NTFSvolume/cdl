@@ -354,4 +354,17 @@ TEST_CASES = [
         ],
         7,
     ),
+    (
+        "https://www.tokyomotion.net/photo/895409/",
+        [
+            {
+                "url": "https://cdn.tokyo-motion.net/media/photos/895409.jpg",
+                "filename": "895409.jpg",
+                "referer": "https://www.tokyomotion.net/photo/895409/",
+                "album_id": None,
+                "uploaded_at": None,
+                "download_folder": "re:Loose Files (Tokyomotion)",
+            },
+        ],
+    ),
 ]
