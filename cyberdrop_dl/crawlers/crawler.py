@@ -11,10 +11,11 @@ import re
 import weakref
 from abc import ABC, abstractmethod
 from collections import Counter
+from contextvars import ContextVar
 from functools import wraps
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, ClassVar, Concatenate, Final, Literal, ParamSpec, Self, TypeAlias, TypeVar, final
+from typing import TYPE_CHECKING, Any, ClassVar, Concatenate, Final, Literal, ParamSpec, Self, TypeVar, final
 
 from aiolimiter import AsyncLimiter
 from typing_extensions import deprecated
@@ -54,10 +55,11 @@ _P = ParamSpec("_P")
 _R = TypeVar("_R")
 _T = TypeVar("_T")
 
-OneOrTuple: TypeAlias = _T | tuple[_T, ...]
-SupportedPaths: TypeAlias = dict[str, OneOrTuple[str]]
-SupportedDomains: TypeAlias = OneOrTuple[str]
+OneOrTuple = _T | tuple[_T, ...]
+SupportedPaths = dict[str, OneOrTuple[str]]
+SupportedDomains = OneOrTuple[str]
 RateLimit = tuple[float, float]
+SKIP_DOWNLOAD: ContextVar[bool] = ContextVar("SKIP_DOWNLOAD", default=False)
 
 
 _HASH_PREFIXES = "md5:", "sha1:", "sha256:", "xxh128:"
@@ -446,6 +448,8 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
     @final
     async def _download(self, media_item: MediaItem, m3u8: m3u8.Rendition | None) -> None:
         try:
+            if SKIP_DOWNLOAD.get():
+                return
             if m3u8:
                 await self.downloader.download_hls(media_item, m3u8)
             else:
