@@ -41,6 +41,8 @@ class FourChanCrawler(Crawler):
                 return await self.thread(scrape_item, board, thread_id)
             case [board]:
                 return await self.board(scrape_item, board)
+            case [board, _]:
+                return await self.board(scrape_item, board)
             case _:
                 raise ValueError
 
