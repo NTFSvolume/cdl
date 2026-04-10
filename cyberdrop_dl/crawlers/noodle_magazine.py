@@ -1,101 +1,131 @@
 from __future__ import annotations
 
+import dataclasses
 import itertools
 import json
-from typing import TYPE_CHECKING, Any, ClassVar, NamedTuple
+from typing import TYPE_CHECKING, ClassVar
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
+from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths
 from cyberdrop_dl.data_structures.mediaprops import Resolution
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_text_between
+from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_text_between, parse_url
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
+
+    from bs4 import BeautifulSoup
+
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
 
-PLAYLIST_SELECTOR = "script:-soup-contains('window.playlist')"
-METADATA_SELECTOR = "script[type='application/ld+json']"
-SEARCH_STRING_SELECTOR = "div.mh_line > h1.c_title"
-VIDEOS_SELECTOR = "div#list_videos a.item_link"
+class Selector:
+    PLAYLIST = "script:-soup-contains('window.playlist')"
+    VIDEOS = "div#list_videos a.item_link"
 
 
-class Source(NamedTuple):
+@dataclasses.dataclass(slots=True)
+class Video:
+    id: str
+    title: str
+    uploaded_at: str
+
     resolution: Resolution
-    file: str
-
-    @staticmethod
-    def new(source_dict: dict[str, Any]) -> Source:
-        resolution = Resolution.parse(source_dict["label"])
-        return Source(resolution, source_dict["file"])
+    content_url: AbsoluteHttpURL
+    src: AbsoluteHttpURL
 
 
-PRIMARY_URL = AbsoluteHttpURL("https://noodlemagazine.com")
+_VIDEO_PER_PAGE = 24
 
 
 class NoodleMagazineCrawler(Crawler):
-    SUPPORTED_PATHS: ClassVar[SupportedPaths] = {"Search": "/video/<search_query", "Video": "/watch/<video_id>"}
-    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = PRIMARY_URL
+    SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
+        "Search": "/video/<search_query>",
+        "Video": "/watch/<video_id>",
+    }
+    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://noodlemagazine.com")
     DOMAIN: ClassVar[str] = "noodlemagazine"
     FOLDER_DOMAIN: ClassVar[str] = "NoodleMagazine"
+
     _DOWNLOAD_SLOTS: ClassVar[int | None] = 2
-    _RATE_LIMIT = 1, 3
+    _RATE_LIMIT: ClassVar[RateLimit] = 1, 3
+    _IMPERSONATE: ClassVar[str | bool | None] = True
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
-        if "video" in scrape_item.url.parts:
-            return await self.search(scrape_item)
-        elif "watch" in scrape_item.url.parts:
-            return await self.video(scrape_item)
-        raise ValueError
+        match scrape_item.url.parts[1:]:
+            case ["watch", _]:
+                return await self.video(scrape_item)
+            case ["video", query]:
+                return await self.search(scrape_item, query)
+            case _:
+                raise ValueError
 
     @error_handling_wrapper
-    async def search(self, scrape_item: ScrapeItem) -> None:
-        title: str = ""
+    async def search(self, scrape_item: ScrapeItem, query: str) -> None:
+        scrape_item.setup_as_album(self.create_title(f"{query} [search]"))
         init_page = int(scrape_item.url.query.get("p") or 1)
         seen_urls: set[AbsoluteHttpURL] = set()
+
         for page in itertools.count(1, init_page):
             n_videos = 0
             page_url = scrape_item.url.with_query(p=page)
-            soup = await self.request_soup(page_url, impersonate=True)
+            soup = await self.request_soup(page_url)
 
-            if not title:
-                search_string: str = css.select_text(soup, SEARCH_STRING_SELECTOR)
-                title = search_string.rsplit(" videos", 1)[0]
-                title = self.create_title(f"{title} [search]")
-                scrape_item.setup_as_album(title)
-
-            for _, new_scrape_item in self.iter_children(scrape_item, soup, VIDEOS_SELECTOR):
+            for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.VIDEOS):
                 if new_scrape_item.url not in seen_urls:
                     seen_urls.add(new_scrape_item.url)
                     n_videos += 1
                     self.create_task(self.run(new_scrape_item))
 
-            if n_videos < 24:
+            if n_videos < _VIDEO_PER_PAGE:
                 break
 
     @error_handling_wrapper
     async def video(self, scrape_item: ScrapeItem) -> None:
         if await self.check_complete_from_referer(scrape_item.url):
             return
-        soup = await self.request_soup(scrape_item.url, impersonate=True)
 
-        metadata_text = css.select(soup, METADATA_SELECTOR).get_text()
-        metadata = json.loads(metadata_text.strip())
-        playlist = soup.select_one(PLAYLIST_SELECTOR)
-        if not playlist:
-            raise ScrapeError(404)
+        soup = await self.request_soup(scrape_item.url)
+        video = _parse_video(soup)
 
-        playlist_data = json.loads(get_text_between(playlist.text, "window.playlist = ", ";\nwindow.ads"))
-        best_source = max(Source.new(source) for source in playlist_data["sources"])
-        title: str = css.select(soup, "title").get_text().split(" watch online")[0]
-
-        scrape_item.uploaded_at = self.parse_iso_date(metadata["uploadDate"])
-        content_url = self.parse_url(metadata["contentUrl"])
-        filename, ext = self.get_filename_and_ext(content_url.name)
-        video_id = filename.removesuffix(ext)
-        custom_filename = self.create_custom_filename(title, ext, file_id=video_id, resolution=best_source.resolution)
-        src_url = self.parse_url(best_source.file)
+        scrape_item.uploaded_at = self.parse_iso_date(video.uploaded_at)
+        _, ext = self.get_filename_and_ext(filename=video.content_url.name)
+        filename = self.create_custom_filename(video.title, ext, file_id=video.id, resolution=video.resolution)
         await self.handle_file(
-            content_url, scrape_item, filename, ext, custom_filename=custom_filename, debrid_link=src_url
+            video.content_url,
+            scrape_item,
+            video.title,
+            ext,
+            custom_filename=filename,
+            debrid_link=video.src,
         )
+
+
+def _parse_video(soup: BeautifulSoup) -> Video:
+    json_ld = css.json_ld(soup)
+
+    try:
+        playlist_js = css.select_text(soup, Selector.PLAYLIST)
+    except css.SelectorError:
+        raise ScrapeError(404) from None
+
+    playlist = json.loads(get_text_between(playlist_js, "window.playlist = ", ";\nwindow.ads"))
+
+    resolution, src = max(_parse_sources(playlist["sources"]))
+    content_url = parse_url(json_ld["contentUrl"])
+
+    return Video(
+        title=json_ld["name"],
+        uploaded_at=json_ld["uploadDate"],
+        content_url=content_url,
+        id=content_url.name.removesuffix(content_url.suffix),
+        resolution=resolution,
+        src=src,
+    )
+
+
+def _parse_sources(sources: list[dict[str, str]]) -> Generator[tuple[Resolution, AbsoluteHttpURL]]:
+    for source in sources:
+        resolution = Resolution.parse(source["label"])
+        yield resolution, parse_url(source["file"])
