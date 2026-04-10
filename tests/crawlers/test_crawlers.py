@@ -46,6 +46,8 @@ class Config:
 
 _default_config = Config()
 
+TestTuple = tuple[str, list[Result], int, Config]
+
 
 class CrawlerTestCase(NamedTuple):
     domain: str
@@ -57,7 +59,6 @@ class CrawlerTestCase(NamedTuple):
 
 
 _TEST_CASE_ADAPTER = TypeAdapter(CrawlerTestCase)
-TestTuple = tuple[str, list[Result], int, Config]
 _TEST_DATA: dict[str, list[TestTuple]] = {}
 
 
@@ -66,15 +67,12 @@ def _load_test_cases(path: Path) -> None:
     assert module_spec and module_spec.loader
     module = importlib.util.module_from_spec(module_spec)
     module_spec.loader.exec_module(module)
-
     _TEST_DATA[module.DOMAIN] = list(_fix_test_cases(module.TEST_CASES))
 
 
 def _fix_test_cases(test_cases: list[TestTuple]) -> Generator[TestTuple]:
     for test_case in test_cases:
-        results = test_case[1]
-
-        for result in results:
+        for result in test_case[1]:
             if "datetime" in result:
                 result["uploaded_at"] = result.pop("datetime")
 
