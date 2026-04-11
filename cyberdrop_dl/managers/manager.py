@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Self
 
 from cyberdrop_dl import __version__, ffmpeg, yaml
-from cyberdrop_dl.cli.model import CLIargs
+from cyberdrop_dl.cli import CLIargs
 from cyberdrop_dl.config import Config
 from cyberdrop_dl.database import Database
 from cyberdrop_dl.hasher import Hasher

@@ -2,12 +2,11 @@ import datetime
 from collections.abc import Iterable
 from enum import StrEnum, auto
 from pathlib import Path
-from typing import Annotated, Any, Literal, Self
+from typing import Any, Literal, Self
 
+from cyclopts import Parameter
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
-from cyberdrop_dl.cli.arguments import ArgumentParams
-from cyberdrop_dl.config import ConfigSettings, GlobalSettings
 from cyberdrop_dl.models.types import HttpURL
 
 
@@ -18,11 +17,9 @@ class UIOptions(StrEnum):
     FULLSCREEN = auto()
 
 
+@Parameter(name="*")
 class CLIargs(BaseModel):
-    links: Annotated[
-        list[HttpURL],
-        ArgumentParams(positional_only=True, metavar="LINK(s)"),
-    ] = Field(
+    links: list[HttpURL] = Field(
         default=[],
         description="link(s) to content to download (passing multiple links is supported)",
     )
@@ -56,7 +53,7 @@ class CLIargs(BaseModel):
         default=False,
         description="download TikTok videos in source quality",
     )
-    impersonate: Annotated[
+    impersonate: (
         Literal[
             "chrome",
             "edge",
@@ -66,9 +63,8 @@ class CLIargs(BaseModel):
             "firefox",
         ]
         | bool
-        | None,
-        ArgumentParams(nargs="?", const=True),
-    ] = Field(
+        | None
+    ) = Field(
         default=None,
         description="Use this target as impersonation for all scrape requests",
     )
@@ -133,21 +129,3 @@ class CLIargs(BaseModel):
 def _check_mutually_exclusive(group: Iterable[Any], msg: str) -> None:
     if sum(1 for value in group if value) >= 2:
         raise ValueError(msg)
-
-
-class ParsedArgs(BaseModel):
-    cli_only_args: CLIargs = CLIargs()
-    config_settings: ConfigSettings = ConfigSettings()
-    global_settings: GlobalSettings = GlobalSettings()
-
-    def model_post_init(self, *_) -> None:
-        if self.cli_only_args.retry_all or self.cli_only_args.retry_maintenance:
-            self.config_settings.runtime_options.ignore_history = True
-
-        if (
-            not self.cli_only_args.fullscreen_ui
-            or self.cli_only_args.retry_any
-            or self.cli_only_args.config_file
-            or self.config_settings.sorting.sort_downloads
-        ):
-            self.cli_only_args.download = True

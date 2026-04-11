@@ -1,9 +1,13 @@
 from __future__ import annotations
 
-import dataclasses
+from pathlib import Path  # noqa: TC003
 from typing import TYPE_CHECKING, Self, TypeVar
 
+from pydantic import BaseModel, Field
+
 from cyberdrop_dl import yaml
+from cyberdrop_dl.config.merge import merge_models
+from cyberdrop_dl.models import AppriseURL  # noqa: TC001
 from cyberdrop_dl.utils.apprise import read_apprise_urls
 
 from ._global import GlobalSettings
@@ -11,23 +15,17 @@ from .auth import AuthSettings
 from .settings import ConfigSettings
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
-    from pydantic import BaseModel
-
     from cyberdrop_dl.managers.manager import AppData, Manager
-    from cyberdrop_dl.models import AppriseURL
 
     _BaseModelT = TypeVar("_BaseModelT", bound=BaseModel)
 
 
-@dataclasses.dataclass(slots=True)
-class Config:
-    source: Path
+class Config(BaseModel):
+    source: Path | None = None
 
-    auth: AuthSettings
-    settings: ConfigSettings
-    global_settings: GlobalSettings
+    auth: AuthSettings = Field(default_factory=AuthSettings)
+    settings: ConfigSettings = Field(default_factory=ConfigSettings)
+    global_settings: GlobalSettings = Field(default_factory=GlobalSettings)
 
     deep_scrape: bool = False
     apprise_urls: tuple[AppriseURL, ...] = ()
@@ -50,6 +48,9 @@ class Config:
     @classmethod
     def from_manager(cls, manager: Manager) -> Self:
         return cls.create(manager.appdata, manager.cli_args.config_file)
+
+    def update(self, other: Self) -> Self:
+        return merge_models(self, other)
 
 
 def _load_config_file(file: Path, model: type[_BaseModelT]) -> _BaseModelT:

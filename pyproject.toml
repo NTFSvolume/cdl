@@ -21,6 +21,7 @@ dependencies = [
     "brotlicffi; implementation_name!='cpython' and sys_platform!='ios'",
     "certifi >=2026.2.25",
     "curl-cffi >=0.15; implementation_name == 'cpython' ",
+    "cyclopts>=4.10.2",
     "imagesize >=2.0.0",
     "inquirer>=3.4.1",
     "jeepney >=0.9.0; 'bsd' in sys_platform or sys_platform == 'linux'",

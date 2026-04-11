@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+import shutil
 from contextlib import contextmanager
 from functools import partialmethod
 from typing import TYPE_CHECKING
 
 from rich.live import Live
 
-from cyberdrop_dl.cli import is_terminal_in_portrait
+from cyberdrop_dl import env
 from cyberdrop_dl.logs import LOG_TO_CONSOLE
 
 if TYPE_CHECKING:
@@ -16,6 +17,28 @@ if TYPE_CHECKING:
     from rich.console import RenderableType
 
     from cyberdrop_dl.managers.manager import Manager
+
+
+def is_terminal_in_portrait() -> bool:
+    """Check if CDL is being run in portrait mode based on a few conditions."""
+
+    if env.PORTRAIT_MODE:
+        return True
+
+    terminal_size = shutil.get_terminal_size()
+    width, height = terminal_size.columns, terminal_size.lines
+    aspect_ratio = width / height
+
+    # High aspect ratios are likely to be in landscape mode
+    if aspect_ratio >= 3.2:
+        return False
+
+    # Check for mobile device in portrait mode
+    if (aspect_ratio < 1.5 and height >= 40) or (width <= 85 and aspect_ratio < 2.3):
+        return True
+
+    # Assume landscape mode for other cases
+    return False
 
 
 class LiveManager:

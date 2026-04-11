@@ -1,19 +1,20 @@
 # ruff: noqa: E402
 from __future__ import annotations
 
+from rich.traceback import install as install_rich_tracebacks
+
+_ = install_rich_tracebacks(width=None)
+
+
 import logging
 import sys
 from typing import TYPE_CHECKING
 
-from rich.traceback import install as install_rich_tracebacks
+from cyclopts import App, Parameter
 
-from cyberdrop_dl.cli import parse_args
+from cyberdrop_dl import __version__, aio, webhook
+from cyberdrop_dl.cli import CLIargs
 from cyberdrop_dl.config import Config
-from cyberdrop_dl.config.merge import merge_cli_and_config_args
-
-_ = install_rich_tracebacks(width=None)
-
-from cyberdrop_dl import aio, webhook
 from cyberdrop_dl.logs import log_spacer, setup_console_logging, setup_file_logging
 from cyberdrop_dl.managers.manager import AppData, Manager
 from cyberdrop_dl.scrape_mapper import ScrapeMapper
@@ -81,30 +82,53 @@ async def _run(manager: Manager) -> None:
         await manager.close()
 
 
-def main(args: Sequence[str] | None = None) -> int:
+def _main(manager: Manager) -> None:
+    manager.resolve_paths()
+    if not manager.cli_args.download:
+        program_ui.run(manager)
+
+    try:
+        aio.run(_run(manager))
+
+    except KeyboardInterrupt:
+        logger.info("Exiting (Ctrl + C) ...")
+
+
+app = App(
+    name="cyberdrop-dl",
+    help="Bulk asynchronous downloader for multiple file hosts",
+    version=f"{__version__}.NTFS",
+    default_parameter=Parameter(negative_iterable=[]),
+)
+
+
+@app.default()
+def download(
+    cli: CLIargs | None = None,
+    config: Config | None = None,
+):
+    cli = cli or CLIargs()
+    config = config or Config()
+    appdata = AppData.from_path(cli.appdata_folder) if cli.appdata_folder else AppData.default()
+    if cli.config_file:
+        config = Config.create(appdata, cli.config_file).update(config)
+
+    manager = Manager(cli, appdata, config)
+    _main(manager)
+
+
+@app.command()
+def show() -> None:
+    """Show a list of all supported sites"""
+    from cyberdrop_dl.supported_sites import get_crawlers_info_as_rich_table
+
+    table = get_crawlers_info_as_rich_table()
+    app.console.print(table)
+
+
+def main(args: Sequence[str] | None = None) -> None:
     with setup_console_logging():
-        parsed_args = parse_args(args)
-        appdata = (
-            AppData.from_path(parsed_args.cli_only_args.appdata_folder)
-            if parsed_args.cli_only_args.appdata_folder
-            else AppData.default()
-        )
-
-        config = Config.create(appdata, parsed_args.cli_only_args.config_file)
-
-        merge_cli_and_config_args(config, parsed_args)
-        manager = Manager(parsed_args.cli_only_args, appdata, config)
-        manager.resolve_paths()
-        if not manager.cli_args.download:
-            program_ui.run(manager)
-
-        try:
-            aio.run(_run(manager))
-
-        except KeyboardInterrupt:
-            logger.info("Exiting (Ctrl + C) ...")
-
-        return 0
+        app(args)
 
 
 if __name__ == "__main__":
