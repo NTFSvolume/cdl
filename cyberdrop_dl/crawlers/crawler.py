@@ -465,17 +465,24 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         await self.manager.logs.write_jsonl([media_item.serialize()])
 
     @final
-    async def check_complete(self, url: AbsoluteHttpURL, referer: AbsoluteHttpURL) -> bool:
+    async def check_complete(self, url: AbsoluteHttpURL, referer: AbsoluteHttpURL | None = None) -> bool:
         """Checks if this URL has been download before.
 
         This method is called automatically on a created media item,
         but Crawler code can use it to skip unnecessary requests"""
+
         db_path = self.__db_path__(url)
-        was_completed = await self.manager.database.history.check_complete(self.DOMAIN, url, referer, db_path)
-        if was_completed:
-            logger.info(f"Skipping {url} as it has already been downloaded")
+        current_referer, downloaded = await self.manager.database.history.check_complete(self.DOMAIN, db_path)
+        if downloaded:
+            logger.info("Skipping %s as it has already been downloaded", url)
             self.manager.progress_manager.download_progress.add_previously_completed()
-        return was_completed
+
+            if referer and url != referer and str(referer) != current_referer:
+                # Update the referer if it has changed so that check_complete_by_referer can work
+                logger.info("Updating referer of %s from %s to %s", url, current_referer, referer)
+                await self.manager.database.history.update_referer(self.DOMAIN, db_path, referer)
+
+        return downloaded
 
     async def handle_media_item(self, media_item: MediaItem, m3u8: m3u8.Rendition | None = None) -> None:
         if await self.check_complete(media_item.url, media_item.referer):
