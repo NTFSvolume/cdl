@@ -52,8 +52,5 @@ class ArchiveBateCrawler(Crawler):
 
         scrape_item.uploaded_at = self.parse_iso_date(upload_date)
         scrape_item.add_to_parent_title(f"Show on {upload_date}")
-        download_url = self.parse_url(css.select(soup, Selector.VIDEO, "value"))
-        self.handle_external_links(
-            scrape_item.create_child(download_url),
-            reset=False,
-        )
+        embed_url = self.parse_url(css.select(soup, Selector.VIDEO, "value"))
+        self.handle_embed(scrape_item.create_child(embed_url))

@@ -556,6 +556,10 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         self.create_task(self.manager.scrape_mapper.send_to_crawler(scrape_item))
 
     @final
+    def handle_embed(self, scrape_item: ScrapeItem) -> None:
+        self.handle_external_links(scrape_item, reset=False)
+
+    @final
     def get_filename_and_ext(
         self,
         filename: str,
