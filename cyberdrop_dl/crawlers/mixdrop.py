@@ -35,10 +35,8 @@ class MixDropCrawler(Crawler):
 
     @error_handling_wrapper
     async def file(self, scrape_item: ScrapeItem, file_id: str) -> None:
-
         embed_url = self.PRIMARY_URL / "e" / file_id
-
-        if await self.check_complete(embed_url, embed_url):
+        if await self.check_complete(embed_url):
             return
 
         scrape_item.url = embed_url
@@ -51,6 +49,7 @@ class MixDropCrawler(Crawler):
             ext,
             custom_filename=filename,
             debrid_link=link,
+            referer=scrape_item.parent or scrape_item.url,
         )
 
     async def _request_file_info(self, file_id: str) -> tuple[str, AbsoluteHttpURL]:
