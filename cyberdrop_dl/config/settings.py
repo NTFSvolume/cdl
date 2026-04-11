@@ -1,3 +1,4 @@
+# ruff: noqa: RUF012
 import re
 from datetime import date, datetime, timedelta
 from logging import DEBUG
@@ -16,7 +17,7 @@ from cyberdrop_dl.constants import (
     Browser,
     Hashing,
 )
-from cyberdrop_dl.models import AliasModel, AppriseURL
+from cyberdrop_dl.models import AliasModel, AppriseURL, SettingsGroup
 from cyberdrop_dl.models.types import (
     ByteSizeSerilized,
     ListNonEmptyStr,
@@ -43,8 +44,7 @@ _SORTING_COMMON_FIELDS = {
 }
 
 
-@Parameter(name="*")
-class DownloadOptions(BaseModel):
+class DownloadOptions(SettingsGroup):
     block_download_sub_folders: bool = False
     disable_download_attempt_limit: bool = False
     disable_file_timestamps: bool = False
@@ -68,16 +68,14 @@ class DownloadOptions(BaseModel):
         return value
 
 
-@Parameter(name="*")
-class Files(AliasModel):
+class Files(SettingsGroup):
     download_folder: Path = Field(default=DEFAULT_DOWNLOAD_STORAGE, validation_alias="d")
     dump_json: bool = Field(default=False, validation_alias="j")
     input_file: Path = Field(default=Path("URLs.txt"), validation_alias="i")
     save_pages_html: bool = False
 
 
-@Parameter(name="*")
-class Logs(AliasModel):
+class Logs(SettingsGroup):
     download_error_urls: LogPath = Path("Download_Error_URLs.csv")
     last_forum_post: LogPath = Path("Last_Scraped_Forum_Posts.csv")
     log_folder: Path = DEFAULT_APP_STORAGE / "Logs"
@@ -135,8 +133,7 @@ class Logs(AliasModel):
         _ = delete_empty_files_and_folders(self.log_folder)
 
 
-@Parameter(name="*")
-class FileSizeLimits(BaseModel):
+class FileSizeLimits(SettingsGroup):
     maximum_image_size: ByteSizeSerilized = ByteSize(0)
     maximum_other_size: ByteSizeSerilized = ByteSize(0)
     maximum_video_size: ByteSizeSerilized = ByteSize(0)
@@ -145,8 +142,7 @@ class FileSizeLimits(BaseModel):
     minimum_video_size: ByteSizeSerilized = ByteSize(0)
 
 
-@Parameter(name="*")
-class MediaDurationLimits(BaseModel):
+class MediaDurationLimits(SettingsGroup):
     maximum_video_duration: timedelta = timedelta(seconds=0)
     maximum_audio_duration: timedelta = timedelta(seconds=0)
     minimum_video_duration: timedelta = timedelta(seconds=0)
@@ -166,8 +162,7 @@ class MediaDurationLimits(BaseModel):
         return to_timedelta(input_date)
 
 
-@Parameter(name="*")
-class IgnoreOptions(BaseModel):
+class IgnoreOptions(SettingsGroup):
     exclude_audio: bool = False
     exclude_images: bool = False
     exclude_other: bool = False
@@ -193,8 +188,7 @@ class IgnoreOptions(BaseModel):
         return value
 
 
-@Parameter(name="*")
-class RuntimeOptions(BaseModel):
+class RuntimeOptions(SettingsGroup):
     console_log_level: NonNegativeInt = 100
     deep_scrape: bool = False
     delete_partial_files: bool = False
@@ -210,8 +204,7 @@ class RuntimeOptions(BaseModel):
     update_last_forum_post: bool = True
 
 
-@Parameter(name="*")
-class Sorting(BaseModel):
+class Sorting(SettingsGroup):
     scan_folder: PathOrNone = None
     sort_downloads: bool = False
     sort_folder: Path = DEFAULT_DOWNLOAD_STORAGE / "Cyberdrop-DL Sorted Downloads"
@@ -270,14 +263,12 @@ class Sorting(BaseModel):
         return value
 
 
-@Parameter(name="*")
-class BrowserCookies(BaseModel):
+class BrowserCookies(SettingsGroup):
     auto_import: bool = False
     browser: Browser | None = Browser.firefox
 
 
-@Parameter(name="*")
-class DupeCleanup(BaseModel):
+class DupeCleanup(SettingsGroup):
     add_md5_hash: bool = False
     add_sha256_hash: bool = False
     auto_dedupe: bool = True
