@@ -129,18 +129,19 @@ class AppData:
 
     @classmethod
     def default(cls) -> Self:
-        return cls.from_path(Path("AppData").resolve())
+        return cls.from_path(Path("AppData"))
 
     @classmethod
     def from_path(cls, path: Path) -> Self:
-        assert path.is_absolute()
+        path = path.expanduser().resolve().absolute()
         cache = path / "Cache"
+        configs = path / "Configs"
         return cls(
             path=path,
             cache=cache,
-            configs=path / "Configs",
+            configs=configs,
             cookies=path / "Cookies",
-            config_file=path / "config.yaml",
+            config_file=configs / "Default" / "settings.yaml",
             cache_file=cache / "cache.yaml",
             db_file=cache / "cyberdrop.db",
         )

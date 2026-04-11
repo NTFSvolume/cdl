@@ -117,10 +117,10 @@ def download(
     cli.links = links
     config = config or Config()
     appdata = AppData.from_path(cli.appdata_folder) if cli.appdata_folder else AppData.default()
-    if cli.config_file:
-        config = Config.create(appdata, cli.config_file).update(config)
 
+    config = Config.create(appdata, cli.config_file).update(config)
     manager = Manager(cli, appdata, config)
+
     _main(manager)
 
 
