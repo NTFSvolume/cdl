@@ -22,9 +22,12 @@ class _Response(Protocol):
     async def text(self) -> str: ...
 
 
-async def check(content: _Response | str, /) -> None:
+async def check(content: _Response | str | BeautifulSoup, /) -> None:
     if isinstance(content, str):
         soup = BeautifulSoup(content, "html.parser")
+
+    elif isinstance(content, BeautifulSoup):
+        soup = content
 
     elif "html" not in content.content_type:
         return

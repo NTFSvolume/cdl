@@ -11,10 +11,11 @@ import re
 import weakref
 from abc import ABC, abstractmethod
 from collections import Counter
+from contextvars import ContextVar
 from functools import wraps
 from pathlib import Path
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, ClassVar, Concatenate, Final, Literal, ParamSpec, Self, TypeAlias, TypeVar, final
+from typing import TYPE_CHECKING, Any, ClassVar, Concatenate, Final, Literal, ParamSpec, Self, TypeVar, final
 
 from aiolimiter import AsyncLimiter
 from typing_extensions import deprecated
@@ -54,10 +55,11 @@ _P = ParamSpec("_P")
 _R = TypeVar("_R")
 _T = TypeVar("_T")
 
-OneOrTuple: TypeAlias = _T | tuple[_T, ...]
-SupportedPaths: TypeAlias = dict[str, OneOrTuple[str]]
-SupportedDomains: TypeAlias = OneOrTuple[str]
+OneOrTuple = _T | tuple[_T, ...]
+SupportedPaths = dict[str, OneOrTuple[str]]
+SupportedDomains = OneOrTuple[str]
 RateLimit = tuple[float, float]
+SKIP_DOWNLOAD: ContextVar[bool] = ContextVar("SKIP_DOWNLOAD", default=False)
 
 
 _HASH_PREFIXES = "md5:", "sha1:", "sha256:", "xxh128:"
@@ -446,6 +448,8 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
     @final
     async def _download(self, media_item: MediaItem, m3u8: m3u8.Rendition | None) -> None:
         try:
+            if SKIP_DOWNLOAD.get():
+                return
             if m3u8:
                 await self.downloader.download_hls(media_item, m3u8)
             else:
@@ -461,17 +465,24 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         await self.manager.logs.write_jsonl([media_item.serialize()])
 
     @final
-    async def check_complete(self, url: AbsoluteHttpURL, referer: AbsoluteHttpURL) -> bool:
+    async def check_complete(self, url: AbsoluteHttpURL, referer: AbsoluteHttpURL | None = None) -> bool:
         """Checks if this URL has been download before.
 
         This method is called automatically on a created media item,
         but Crawler code can use it to skip unnecessary requests"""
+
         db_path = self.__db_path__(url)
-        was_completed = await self.manager.database.history.check_complete(self.DOMAIN, url, referer, db_path)
-        if was_completed:
-            logger.info(f"Skipping {url} as it has already been downloaded")
+        current_referer, downloaded = await self.manager.database.history.check_complete(self.DOMAIN, db_path)
+        if downloaded:
+            logger.info("Skipping %s as it has already been downloaded", url)
             self.manager.progress_manager.download_progress.add_previously_completed()
-        return was_completed
+
+            if referer and url != referer and str(referer) != current_referer:
+                # Update the referer if it has changed so that check_complete_by_referer can work
+                logger.info("Updating referer of %s from %s to %s", url, current_referer, referer)
+                await self.manager.database.history.update_referer(self.DOMAIN, db_path, referer)
+
+        return downloaded
 
     async def handle_media_item(self, media_item: MediaItem, m3u8: m3u8.Rendition | None = None) -> None:
         if await self.check_complete(media_item.url, media_item.referer):
@@ -543,6 +554,10 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         if reset:
             scrape_item.reset()
         self.create_task(self.manager.scrape_mapper.send_to_crawler(scrape_item))
+
+    @final
+    def handle_embed(self, scrape_item: ScrapeItem) -> None:
+        self.handle_external_links(scrape_item, reset=False)
 
     @final
     def get_filename_and_ext(

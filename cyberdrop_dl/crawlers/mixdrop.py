@@ -1,27 +1,17 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+import asyncio
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, get_text_between
+from cyberdrop_dl.utils import css, js_unpacker
+from cyberdrop_dl.utils.utilities import error_handling_wrapper
 
 if TYPE_CHECKING:
-    from bs4 import BeautifulSoup
+    from collections.abc import Generator
 
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
-
-
-class Selectors:
-    JS = "script:-soup-contains('MDCore.ref')"
-    FILE_NAME = "div.tbl-c.title b"
-
-
-_SELECTOR = Selectors()
-
-PRIMARY_URL = AbsoluteHttpURL("https://mixdrop.sb")
 
 
 class MixDropCrawler(Crawler):
@@ -31,49 +21,49 @@ class MixDropCrawler(Crawler):
             "/f/<file_id>",
         )
     }
-    SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = "mxdrop", "mixdrop"
-    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = PRIMARY_URL
+    SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = "mxdrop", "mixdrop", "m1xdrop"
+    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://mixdrop.sb")
     DOMAIN: ClassVar[str] = "mixdrop"
     FOLDER_DOMAIN: ClassVar[str] = "MixDrop"
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
-        if any(p in scrape_item.url.parts for p in ("f", "e")):
-            return await self.file(scrape_item)
-        raise ValueError
+        match scrape_item.url.parts[1:]:
+            case ["f" | "e", file_id]:
+                return await self.file(scrape_item, file_id)
+            case _:
+                raise ValueError
 
     @error_handling_wrapper
-    async def file(self, scrape_item: ScrapeItem) -> None:
-        file_id = scrape_item.url.name
-        video_url = PRIMARY_URL / "f" / file_id
-        embed_url = self.get_embed_url(video_url)
-
-        if await self.check_complete_from_referer(embed_url):
+    async def file(self, scrape_item: ScrapeItem, file_id: str) -> None:
+        embed_url = self.PRIMARY_URL / "e" / file_id
+        if await self.check_complete(embed_url):
             return
 
         scrape_item.url = embed_url
-        soup = await self.request_soup(video_url)
+        title, link = await self._request_file_info(file_id)
+        filename, ext = self.get_filename_and_ext(title)
+        await self.handle_file(
+            scrape_item.url,
+            scrape_item,
+            title,
+            ext,
+            custom_filename=filename,
+            debrid_link=link,
+            referer=scrape_item.parent or scrape_item.url,
+        )
 
-        title = css.select_text(soup, _SELECTOR.FILE_NAME)
+    async def _request_file_info(self, file_id: str) -> tuple[str, AbsoluteHttpURL]:
+        video_url = self.PRIMARY_URL / "f" / file_id
+        embed_url = self.PRIMARY_URL / "e" / file_id
 
-        soup = await self.request_soup(embed_url)
+        soup, embed_html = await asyncio.gather(self.request_soup(video_url), self.request_text(embed_url))
+        title = css.select_text(soup, "div.tbl-c.title b")
+        md_props = dict(_extract_properties(embed_html))
+        return title, self.parse_url(md_props["wurl"])
 
-        link = self.create_download_link(soup)
-        filename, ext = self.get_filename_and_ext(link.name)
-        custom_filename = self.create_custom_filename(title, ext)
-        await self.handle_file(video_url, scrape_item, filename, ext, custom_filename=custom_filename, debrid_link=link)
 
-    @staticmethod
-    def create_download_link(soup: BeautifulSoup) -> AbsoluteHttpURL:
-        # Defined as a method to simplify subclasses calls
-        js_text = css.select_text(soup, _SELECTOR.JS)
-        file_id = get_text_between(js_text, "|v2||", "|")
-        parts = get_text_between(js_text, "MDCore||", "|thumbs").split("|")
-        secure_key = get_text_between(js_text, f"{file_id}|", "|")
-        timestamp = int((datetime.now() + timedelta(hours=1)).timestamp())
-        host, ext, expires = ".".join(parts[:-3]), parts[-3], parts[-1]
-        url = AbsoluteHttpURL(f"https://s-{host}/v2/{file_id}.{ext}")
-        return url.with_query(s=secure_key, e=expires, t=timestamp)
-
-    @staticmethod
-    def get_embed_url(url: AbsoluteHttpURL) -> AbsoluteHttpURL:
-        return PRIMARY_URL / "e" / url.name
+def _extract_properties(html: str) -> Generator[tuple[str, str]]:
+    content = js_unpacker.unpack(html)
+    for line in content.split(";MDCore."):
+        name, _, value = line.partition("=")
+        yield name.removeprefix("MDCore."), value.strip('"').strip()
