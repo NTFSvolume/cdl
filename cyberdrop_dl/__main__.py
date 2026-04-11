@@ -99,6 +99,7 @@ app = App(
     help="Bulk asynchronous downloader for multiple file hosts",
     version=f"{__version__}.NTFS",
     default_parameter=Parameter(negative_iterable=[]),
+    result_action="return_value",
 )
 
 
