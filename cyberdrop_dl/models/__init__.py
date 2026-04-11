@@ -2,6 +2,7 @@
 
 from typing import ClassVar, TypedDict
 
+from cyclopts import Parameter
 from pydantic import AnyUrl, BaseModel, Secret, SerializationInfo, model_serializer, model_validator
 
 
@@ -22,6 +23,7 @@ class _AppriseURLDict(TypedDict):
     tags: set[str]
 
 
+@Parameter(name="*")
 class AppriseURL(AliasModel):
     url: Secret[AnyUrl]
     tags: set[str] = set()

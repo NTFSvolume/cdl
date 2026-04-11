@@ -2,6 +2,7 @@ import random
 from typing import Literal
 
 import aiohttp
+from cyclopts import Parameter
 from pydantic import (
     BaseModel,
     ByteSize,
@@ -21,6 +22,7 @@ MIN_REQUIRED_FREE_SPACE = to_bytesize("512MB")
 DEFAULT_REQUIRED_FREE_SPACE = to_bytesize("5GB")
 
 
+@Parameter(name="*")
 class General(BaseModel):
     ssl_context: Literal["truststore", "certifi", "truststore+certifi"] | None = "truststore+certifi"
     disable_crawlers: ListNonEmptyStr = []
@@ -58,6 +60,7 @@ class General(BaseModel):
         return max(value, MIN_REQUIRED_FREE_SPACE)
 
 
+@Parameter(name="*")
 class RateLimiting(BaseModel):
     download_attempts: PositiveInt = 2
     download_delay: NonNegativeFloat = 0.0
@@ -95,10 +98,12 @@ class RateLimiting(BaseModel):
         return random.uniform(0, self.jitter)
 
 
+@Parameter(name="*")
 class UIOptions(BaseModel):
     refresh_rate: PositiveInt = 10
 
 
+@Parameter(name="*")
 class GenericCrawlerInstances(BaseModel):
     wordpress_media: ListPydanticURL = []
     wordpress_html: ListPydanticURL = []
@@ -106,6 +111,7 @@ class GenericCrawlerInstances(BaseModel):
     chevereto: ListPydanticURL = []
 
 
+@Parameter(name="*")
 class GlobalSettings(AliasModel):
     general: General = General()
     rate_limiting_options: RateLimiting = RateLimiting()

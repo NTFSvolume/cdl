@@ -1,14 +1,15 @@
 # ruff: noqa: E402
-from __future__ import annotations
-
 from rich.traceback import install as install_rich_tracebacks
+
+from cyberdrop_dl.models.types import HttpURL
 
 _ = install_rich_tracebacks(width=None)
 
 
 import logging
 import sys
-from typing import TYPE_CHECKING
+from collections.abc import Sequence
+from typing import Annotated
 
 from cyclopts import App, Parameter
 
@@ -22,9 +23,6 @@ from cyberdrop_dl.ui import program_ui
 from cyberdrop_dl.utils import apprise, check_latest_pypi
 from cyberdrop_dl.utils.sorting import Sorter
 from cyberdrop_dl.utils.utilities import check_partials_and_empty_folders
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
 
 logger = logging.getLogger("cyberdrop_dl")
 
@@ -105,10 +103,18 @@ app = App(
 
 @app.default()
 def download(
+    links: Annotated[
+        tuple[HttpURL, ...],
+        Parameter(
+            help="link(s) to content to download (passing multiple links is supported)",
+        ),
+    ] = (),
+    *,
     cli: CLIargs | None = None,
     config: Config | None = None,
 ):
     cli = cli or CLIargs()
+    cli.links = links
     config = config or Config()
     appdata = AppData.from_path(cli.appdata_folder) if cli.appdata_folder else AppData.default()
     if cli.config_file:

@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path  # noqa: TC003
 from typing import TYPE_CHECKING, Self, TypeVar
 
+from cyclopts import Parameter
 from pydantic import BaseModel, Field
 
 from cyberdrop_dl import yaml
@@ -20,6 +21,7 @@ if TYPE_CHECKING:
     _BaseModelT = TypeVar("_BaseModelT", bound=BaseModel)
 
 
+@Parameter(name="*")
 class Config(BaseModel):
     source: Path | None = None
 

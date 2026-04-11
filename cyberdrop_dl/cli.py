@@ -2,7 +2,7 @@ import datetime
 from collections.abc import Iterable
 from enum import StrEnum, auto
 from pathlib import Path
-from typing import Any, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from cyclopts import Parameter
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
@@ -19,8 +19,8 @@ class UIOptions(StrEnum):
 
 @Parameter(name="*")
 class CLIargs(BaseModel):
-    links: list[HttpURL] = Field(
-        default=[],
+    links: Annotated[tuple[HttpURL, ...], Parameter(show=False)] = Field(
+        default=(),
         description="link(s) to content to download (passing multiple links is supported)",
     )
     appdata_folder: Path | None = Field(

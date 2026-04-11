@@ -1,3 +1,4 @@
+from cyclopts import Parameter
 from pydantic import BaseModel
 
 from cyberdrop_dl.models import AliasModel
@@ -38,6 +39,7 @@ class RealDebridAuth(AliasModel):
     api_key: str = ""
 
 
+@Parameter(show=False)
 class AuthSettings(AliasModel):
     coomer: CoomerAuth = CoomerAuth()
     gofile: GoFileAuth = GoFileAuth()
