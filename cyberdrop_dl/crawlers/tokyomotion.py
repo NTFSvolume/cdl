@@ -2,33 +2,30 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, ClassVar
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
+from cyberdrop_dl import signature
+from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, auto_task_id
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, remove_parts
+from cyberdrop_dl.utils import css, open_graph
+from cyberdrop_dl.utils.utilities import error_handling_wrapper
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
+    from bs4 import BeautifulSoup
+
     from cyberdrop_dl.data_structures.url_objects import ScrapeItem
 
-PRIMARY_URL = AbsoluteHttpURL("https://www.tokyomotion.net")
 
-
-class Selectors:
+class Selector:
     ALBUM = 'a[href^="/album/"]'
-    IMAGE = "img[class='img-responsive-mw']"
-    IMAGE_THUMB = "div[id*='_photo_'] img[id^='album_photo_']"
-    VIDEO_DIV = "div[id*='video_']"
-    VIDEO = 'a[href^="/video/"]'
-    SEARCH_DIV = "div[class^='well']"
-    VIDEO_DATE = "div.pull-right.big-views-xs.visible-xs > span.text-white"
-    ALBUM_TITLE = "div.panel.panel-default > div.panel-heading > div.pull-left"
-    VIDEO_SRC_SD = 'source[title="SD"]'
-    VIDEO_SRC_HD = 'source[title="HD"]'
-    VIDEO_SRC = f"{VIDEO_SRC_HD}, {VIDEO_SRC_SD}"
+    ALBUM_NAME = ".panel-heading > .pull-left"
 
+    IMAGE = "img.img-responsive-mw"
+    THUMBNAIL = "img[id^='album_photo_']"
 
-_SELECTORS = Selectors()
+    VIDEO = "a[href^='/video/']"
+    VIDEO_SRC = "source[title='HD'], source[title='SD']"
 
 
 class TokioMotionCrawler(Crawler):
@@ -46,173 +43,140 @@ class TokioMotionCrawler(Crawler):
         "Search Results": "/search?...",
         "Video": "/video/<video_id>",
     }
-    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = PRIMARY_URL
+    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://www.tokyomotion.net")
     NEXT_PAGE_SELECTOR: ClassVar[str] = "a.prevnext"
     DOMAIN: ClassVar[str] = "tokyomotion"
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         scrape_item.url = scrape_item.url.without_query_params("page")
 
-        if "video" in scrape_item.url.parts:
-            return await self.video(scrape_item)
-        if "videos" in scrape_item.url.parts:
-            return await self.playlist(scrape_item)
-        if "photo" in scrape_item.url.parts:
-            return await self.image(scrape_item)
-        if any(part in scrape_item.url.parts for part in ("album", "photos")):
-            return await self.album(scrape_item)
-        if "albums" in scrape_item.url.parts:
-            return await self.albums(scrape_item)
-        if "user" in scrape_item.url.parts:
-            return await self.profile(scrape_item)
-        if "search" in scrape_item.url.parts and scrape_item.url.query.get("search_type") != "users":
-            return await self.search(scrape_item)
-        raise ValueError
+        match scrape_item.url.parts[1:]:
+            case ["video", video_id, *_]:
+                return await self.video(scrape_item, video_id)
+            case ["photo", _]:
+                return await self.photo(scrape_item)
+            case ["album", album_id, *_]:
+                return await self.album(scrape_item, album_id)
+            case ["user", user, *_]:
+                title = self.create_title(f"{user} [user]")
+                scrape_item.setup_as_profile(title)
+                return await self.profile(scrape_item)
+            case ["search"] if (
+                (query := scrape_item.url.query.get("search_query"))
+                and (query_type := scrape_item.url.query.get("search_type"))
+                and query_type != "users"
+            ):
+                return await self.search(scrape_item, query, query_type)
+            case _:
+                raise ValueError
 
     @error_handling_wrapper
-    async def video(self, scrape_item: ScrapeItem) -> None:
-        if await self.check_complete_from_referer(scrape_item):
+    async def video(self, scrape_item: ScrapeItem, video_id: str) -> None:
+        if await self.check_complete_from_referer(scrape_item.url):
             return
 
-        canonical_url = scrape_item.url.with_path("/".join(scrape_item.url.parts[1:3]))
-        scrape_item.url = canonical_url
-        if await self.check_complete_from_referer(canonical_url):
+        scrape_item.url = scrape_item.url.with_path(f"video/{video_id}")
+        if await self.check_complete_from_referer(scrape_item.url):
             return
 
-        video_id = scrape_item.url.parts[2]
         soup = await self.request_soup(scrape_item.url)
-
-        src = soup.select_one(_SELECTORS.VIDEO_SRC)
-        if not src:
-            if "This is a private" in soup.text:
-                raise ScrapeError(401, "Private video")
-            raise ScrapeError(422, "Couldn't find video source")
-
-        scrape_item.uploaded_at = self.parse_date(css.select_text(soup, _SELECTORS.VIDEO_DATE))
-        link_str = css.attr(src, "src")
-        link = self.parse_url(link_str)
-        title = css.select_text(soup, "title").rsplit(" - TOKYO Motion")[0].strip()
-        filename, ext = f"{video_id}.mp4", ".mp4"
-        custom_filename = self.create_custom_filename(title, ext, file_id=video_id)
-        await self.handle_file(link, scrape_item, filename, ext, custom_filename=custom_filename)
+        _check_private(soup)
+        src = css.select(soup, Selector.VIDEO_SRC, "src")
+        link = self.parse_url(src)
+        title = open_graph.title(soup)
+        filename = self.create_custom_filename(title, ext := ".mp4", file_id=video_id)
+        await self.handle_file(link, scrape_item, video_id + ext, ext, custom_filename=filename)
 
     @error_handling_wrapper
-    async def image(self, scrape_item: ScrapeItem) -> None:
+    async def photo(self, scrape_item: ScrapeItem) -> None:
         if await self.check_complete_from_referer(scrape_item):
             return
 
         soup = await self.request_soup(scrape_item.url)
-
-        img = soup.select_one(_SELECTORS.IMAGE)
-        if not img:
-            if "This is a private" in soup.text:
-                raise ScrapeError(401, "Private Photo")
-            raise ScrapeError(422, "Couldn't find image source")
-
-        link_str: str = css.attr(img, "src")
-        link = self.parse_url(link_str)
-        filename, ext = self.get_filename_and_ext(link.name)
-        await self.handle_file(link, scrape_item, filename, ext)
+        _check_private(soup)
+        src = css.select(soup, Selector.IMAGE, "src")
+        await self.direct_file(scrape_item, self.parse_url(src))
 
     @error_handling_wrapper
-    async def album(self, scrape_item: ScrapeItem) -> None:
-        title = await self.get_album_title(scrape_item)
-        if "user" in scrape_item.url.parts:
-            self.add_user_title(scrape_item)
+    async def album(self, scrape_item: ScrapeItem, album_id: str) -> None:
+        soup = await self.request_soup(scrape_item.url)
+        _check_private(soup)
+        title = css.select_text(soup, Selector.ALBUM_NAME)
+        scrape_item.setup_as_album(self.create_title(title, album_id), album_id=album_id)
 
-        else:
-            canonical_url = scrape_item.url.with_path("/".join(scrape_item.url.parts[1:3]))
-            scrape_item.url = canonical_url
-            album_id = scrape_item.url.parts[2]
-            scrape_item.album_id = album_id
-            title = self.create_title(title, album_id)
+        while True:
+            self._iter_album_images(scrape_item, soup)
+            try:
+                next_page = css.select(soup, self.NEXT_PAGE_SELECTOR, "href")
+            except css.SelectorError:
+                break
+            soup = await self.request_soup(self.parse_url(next_page))
 
-        scrape_item.part_of_album = True
-
-        if title not in scrape_item.parent_title:
-            scrape_item.add_to_parent_title(title)
-        if title == "favorite":
-            scrape_item.add_to_parent_title("photos")
-
-        async for soup in self.web_pager(scrape_item.url):
-            if "This is a private" in soup.text:
-                raise ScrapeError(401, "Private album")
-            for _, link in self.iter_tags(soup, _SELECTORS.IMAGE_THUMB, "src"):
-                link = remove_parts(link, "tmb")
-                filename, ext = self.get_filename_and_ext(link.name)
-                await self.handle_file(link, scrape_item, filename, ext)
-
-    """------------------------------------------------------------------------------------------------------------------------"""
-
-    @error_handling_wrapper
-    async def albums(self, scrape_item: ScrapeItem) -> None:
-        self.add_user_title(scrape_item)
-        async for soup in self.web_pager(scrape_item.url):
-            for _, new_scrape_item in self.iter_children(scrape_item, soup, _SELECTORS.ALBUM, new_title_part="albums"):
-                await self.album(new_scrape_item)
+    def _iter_album_images(self, scrape_item: ScrapeItem, soup: BeautifulSoup) -> None:
+        for link in css.iselect(soup, Selector.THUMBNAIL, "src"):
+            src = self.parse_url(link.replace("/tmb/", "/"))
+            self.create_task(self.direct_file(scrape_item, src))
 
     @error_handling_wrapper
     async def profile(self, scrape_item: ScrapeItem) -> None:
-        self.add_user_title(scrape_item)
-        new_parts = ["albums", "favorite/photos", "videos", "favorite/videos"]
-        scrapers = [self.albums, self.album, self.playlist, self.playlist]
-        for part, scraper in zip(new_parts, scrapers, strict=False):
-            link = scrape_item.url / part
-            new_scrape_item = scrape_item.create_child(link)
-            await scraper(new_scrape_item)
+        match scrape_item.url.parts[3:]:
+            case ["favorite", "videos"]:
+                scrape_item.setup_as_album("favorite")
+                scrape_item.add_to_parent_title("videos")
+                return await self.crawl_children(scrape_item, Selector.VIDEO)
+
+            case ["videos"]:
+                scrape_item.setup_as_album("videos")
+                return await self.crawl_children(scrape_item, Selector.VIDEO)
+
+            case ["favorite", "photos"]:
+                scrape_item.setup_as_album("favorite")
+                scrape_item.add_to_parent_title("photos")
+                async for soup in self.web_pager(scrape_item.url):
+                    self._iter_album_images(scrape_item, soup)
+
+            case ["photos"]:
+                scrape_item.setup_as_album("photos")
+                async for soup in self.web_pager(scrape_item.url):
+                    self._iter_album_images(scrape_item, soup)
+
+            case ["albums"]:
+                scrape_item.setup_as_album("albums")
+                return await self.crawl_children(scrape_item, Selector.ALBUM)
+
+            case []:
+                for path in ("albums", "favorite/photos", "videos", "favorite/videos"):
+                    new_item = scrape_item.create_child(scrape_item.url / path)
+                    self.create_task(self._profile_page(new_item))
+                    scrape_item.add_children()
+            case _:
+                raise ScrapeError("Unknown URL path")
+
+    _profile_page = auto_task_id(profile)
 
     @error_handling_wrapper
-    async def search(self, scrape_item: ScrapeItem) -> None:
-        search_type = scrape_item.url.query.get("search_type")
-        search_query = scrape_item.url.query.get("search_query")
-        search_title = f"{search_query} [{search_type} search]"
-        is_album = search_type == "photos"
-        if not scrape_item.parent_title:
-            search_title = self.create_title(search_title)
-
-        scrape_item.setup_as_album(search_title)
-        selector = f"{_SELECTORS.SEARCH_DIV} "
-        selector += _SELECTORS.ALBUM if is_album else _SELECTORS.VIDEO
-        scraper = self.album if is_album else self.video
-
-        async for soup in self.web_pager(scrape_item.url):
-            for _, new_scrape_item in self.iter_children(scrape_item, soup, selector):
-                await scraper(new_scrape_item)
+    async def search(self, scrape_item: ScrapeItem, query: str, query_type: str) -> None:
+        title = f"{query} [{query_type} search]"
+        scrape_item.setup_as_album(self.create_title(title))
+        selector = Selector.ALBUM if query_type == "photos" else Selector.VIDEO
+        return await self.crawl_children(scrape_item, selector)
 
     @error_handling_wrapper
-    async def playlist(self, scrape_item: ScrapeItem) -> None:
-        self.add_user_title(scrape_item)
-        if "favorite" in scrape_item.url.parts:
-            scrape_item.add_to_parent_title("favorite")
-
-        scrape_item.setup_as_album("videos")
-        selector = f"{_SELECTORS.VIDEO_DIV} {_SELECTORS.VIDEO}"
-
+    async def crawl_children(self, scrape_item: ScrapeItem, selector: str) -> None:
         async for soup in self.web_pager(scrape_item.url):
-            if "This is a private" in soup.text:
-                raise ScrapeError(401, "Private playlist")
-            for _, new_scrape_item in self.iter_children(scrape_item, soup, selector):
-                await self.video(new_scrape_item)
+            for _, new_item in self.iter_children(scrape_item, soup, selector):
+                self.create_task(self.run(new_item))
 
-    """--------------------------------------------------------------------------------------------------------------------------"""
+    @signature.copy(Crawler.web_pager)
+    async def web_pager(self, url: AbsoluteHttpURL, *args, **kwargs) -> AsyncIterator[BeautifulSoup]:
+        is_fist_page: bool = True
+        async for soup in super().web_pager(url):
+            if is_fist_page:
+                _check_private(soup)
+                is_fist_page = False
+            yield soup
 
-    async def get_album_title(self, scrape_item: ScrapeItem) -> str:
-        if "favorite" in scrape_item.url.parts:
-            return "favorite"
-        if "album" in scrape_item.url.parts and len(scrape_item.url.parts) > 3:
-            return scrape_item.url.parts[3]
-        soup = await self.request_soup(scrape_item.url)
-        return css.select_text(soup, _SELECTORS.ALBUM_TITLE)
 
-    def add_user_title(self, scrape_item: ScrapeItem) -> None:
-        try:
-            user_index = scrape_item.url.parts.index("user")
-            user = scrape_item.url.parts[user_index + 1]
-        except ValueError:
-            return
-        user_title = f"{user} [user]"
-        full_user_title = self.create_title(user_title)
-        if not scrape_item.parent_title:
-            scrape_item.add_to_parent_title(full_user_title)
-        if user_title not in scrape_item.parent_title:
-            scrape_item.add_to_parent_title(user_title)
+def _check_private(soup: BeautifulSoup) -> None:
+    if "This is a private" in soup.get_text():
+        raise ScrapeError(401, "Private - Requires being friends with the owner")

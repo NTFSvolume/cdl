@@ -88,17 +88,19 @@ class XVideosCrawler(Crawler):
         self._seen_domains: set[str] = set()
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
-        if ".red" not in scrape_item.url.host:
-            match scrape_item.url.parts[1:]:
-                case [part, _] if part.startswith("video"):
-                    return await self.video(scrape_item)
-                case [_ as part, _] if part in _EXTENDED_ACCOUNTS:
-                    return await self.account(scrape_item)
-                case [_ as part, _, "photos" | "post", gallery_id, *_] if part in _EXTENDED_ACCOUNTS:
-                    return await self.gallery(scrape_item, gallery_id)
-                case [_ as part] if part not in _EXTENDED_ACCOUNTS:  # channel
-                    return await self.account(scrape_item)
-        raise ValueError
+        if scrape_item.url.host.endswith(".red"):
+            raise ValueError
+        match scrape_item.url.parts[1:]:
+            case [part, _] if part.startswith("video"):
+                return await self.video(scrape_item)
+            case [_ as part, _] if part in _EXTENDED_ACCOUNTS:
+                return await self.account(scrape_item)
+            case [_ as part, _, "photos" | "post", gallery_id, *_] if part in _EXTENDED_ACCOUNTS:
+                return await self.gallery(scrape_item, gallery_id)
+            case [_ as part] if part not in _EXTENDED_ACCOUNTS:  # channel
+                return await self.account(scrape_item)
+            case _:
+                raise ValueError
 
     @error_handling_wrapper
     async def video(self, scrape_item: ScrapeItem) -> None:

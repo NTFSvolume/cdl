@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime
 from functools import partial
 from typing import TYPE_CHECKING, Any, ClassVar, Self
 
@@ -102,19 +102,7 @@ class OneDriveCrawler(Crawler):
     FOLDER_DOMAIN: ClassVar[str] = "OneDrive"
 
     def __post_init__(self) -> None:
-        badger_token: str = ""
-        badger_token_expires: str = ""
-        self.auth_headers = {}
-        expired = True
-        if badger_token_expires:
-            if badger_token_expires.endswith("Z"):
-                badger_token_expires = badger_token_expires.replace("Z", "+00:00")
-            expire_datetime = datetime.fromisoformat(badger_token_expires)
-            t_delta = expire_datetime - datetime.now(UTC)
-            if t_delta > timedelta(hours=12):
-                expired = False
-        if badger_token and not expired:
-            self.auth_headers = {"Prefer": "autoredeem", "Authorization": f"Badger {badger_token}"}
+        self.auth_headers: dict[str, str] = {}
 
     async def __async_post_init__(self) -> None:
         if self.auth_headers:

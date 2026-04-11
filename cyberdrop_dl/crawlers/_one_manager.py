@@ -21,17 +21,13 @@ if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
 
 
-class Selectors:
+class Selector:
     TABLE = "table#list-table"
     FILE_LINK = "a.download"
     FOLDER_LINK = "a[name='folderlist']"
     FILE = f"tr:has({FILE_LINK})"
     FOLDER = f"tr:has({FOLDER_LINK})"
     DATE = "td.updated_at"
-    README = "div#head.markdown-body"
-
-
-_SELECTORS = Selectors()
 
 
 class OneManagerCrawler(Crawler, is_abc=True):
@@ -41,51 +37,49 @@ class OneManagerCrawler(Crawler, is_abc=True):
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         scrape_item.url = scrape_item.url.with_query(None)
         if self.PRIMARY_URL not in scrape_item.parent_threads:
-            self.init_item(scrape_item)
-        await self.process_path(scrape_item)
+            self._init_item(scrape_item)
+        await self._path(scrape_item)
 
     async def __async_post_init__(self) -> None:
         self.manager.client_manager.download_slots.update({self.DOMAIN: 2})
 
     @error_handling_wrapper
-    async def process_path(self, scrape_item: ScrapeItem) -> None:
+    async def _path(self, scrape_item: ScrapeItem) -> None:
         try:
             soup = await self.request_soup(scrape_item.url)
-        except InvalidContentTypeError:  # This is a file, not html
+        except InvalidContentTypeError:  # This is a file, not HTML
             scrape_item.parent_title = scrape_item.parent_title.rsplit("/", 1)[0]
             link = scrape_item.url
             scrape_item.url = link.parent
-            return await self._process_file(scrape_item, link)
-
-        # TODO: save readme as a sidecard
-        if soup.select_one(_SELECTORS.README):
-            pass
+            return await self._file(scrape_item, link)
 
         # href are not actual links, they only have the name of the new part
-        table = css.select(soup, _SELECTORS.TABLE)
-        for file in css.iselect(table, _SELECTORS.FILE):
-            await self.process_file(scrape_item, file)
+        table = css.select(soup, Selector.TABLE)
+
+        for file in css.iselect(table, Selector.FILE):
+            await self.file(scrape_item, file)
             scrape_item.add_children()
 
-        for folder in css.iselect(table, _SELECTORS.FOLDER):
-            link = scrape_item.url / css.select(folder, _SELECTORS.FOLDER_LINK, "href")
-            new_scrape_item = scrape_item.create_child(link, new_title_part=link.name)
-            self.create_task(self.run(new_scrape_item))
+        for folder in css.iselect(table, Selector.FOLDER):
+            link = scrape_item.url / css.select(folder, Selector.FOLDER_LINK, "href")
+            new_item = scrape_item.create_child(link)
+            new_item.add_to_parent_title(link.name)
+            self.create_task(self.run(new_item))
             scrape_item.add_children()
 
     @error_handling_wrapper
-    async def process_file(self, scrape_item: ScrapeItem, file: Tag) -> None:
-        datetime = self.parse_date(css.select_text(file, _SELECTORS.DATE))
-        link = scrape_item.url / css.select(file, _SELECTORS.FILE_LINK, "href")
-        await self._process_file(scrape_item, link, datetime)
+    async def file(self, scrape_item: ScrapeItem, file: Tag) -> None:
+        datetime = self.parse_iso_date(css.select_text(file, Selector.DATE))
+        link = scrape_item.url / css.select(file, Selector.FILE_LINK, "href")
+        await self._file(scrape_item, link, datetime)
 
-    async def _process_file(self, scrape_item: ScrapeItem, link: AbsoluteHttpURL, datetime: int | None = None) -> None:
+    async def _file(self, scrape_item: ScrapeItem, link: AbsoluteHttpURL, uploaded_at: int | None = None) -> None:
         preview_url = link.with_query("preview")  # The query param needs to be `?preview` exactly, with no value or `=`
-        new_scrape_item = scrape_item.create_child(preview_url, possible_datetime=datetime)
-        filename, ext = self.get_filename_and_ext(link.name)
-        await self.handle_file(link, new_scrape_item, filename, ext)
+        new_item = scrape_item.create_child(preview_url)
+        new_item.uploaded_at = uploaded_at
+        await self.direct_file(new_item, link)
 
-    def init_item(self, scrape_item: ScrapeItem) -> None:
+    def _init_item(self, scrape_item: ScrapeItem) -> None:
         scrape_item.setup_as_album(self.FOLDER_DOMAIN, album_id=self.DOMAIN)
         for part in scrape_item.url.parts[1:]:
             scrape_item.add_to_parent_title(part)
