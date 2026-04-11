@@ -77,30 +77,21 @@ class HistoryTable:
         await self.db_conn.execute(query)
         await self.db_conn.commit()
 
-    async def check_complete(self, domain: str, url: URL, referer: URL, db_path: str) -> bool:
+    async def check_complete(self, domain: str, db_path: str) -> tuple[str, bool]:
         """Checks whether an individual file has completed given its domain and url path."""
         if self._database.ignore_history:
-            return False
-
-        async def select_referer_and_completed() -> tuple[str, bool]:
-            query = "SELECT referer, completed FROM media WHERE domain = ? and url_path = ?"
-            cursor = await self.db_conn.execute(query, (domain, db_path))
-            if row := await cursor.fetchone():
-                return row[0], row[1]
             return "", False
 
-        async def update_referer() -> None:
-            query = "UPDATE media SET referer = ? WHERE domain = ? and url_path = ?"
-            await self.db_conn.execute(query, (str(referer), domain, db_path))
-            await self.db_conn.commit()
+        query = "SELECT referer, completed FROM media WHERE domain = ? and url_path = ?"
+        cursor = await self.db_conn.execute(query, (domain, db_path))
+        if row := await cursor.fetchone():
+            return row[0], row[1]
+        return "", False
 
-        current_referer, completed = await select_referer_and_completed()
-        if completed and url != referer and str(referer) != current_referer:
-            # Update the referer if it has changed so that check_complete_by_referer can work
-            logger.info(f"Updating referer of {url} from {current_referer} to {referer}")
-            await update_referer()
-
-        return completed
+    async def update_referer(self, domain: str, db_path: str, referer: URL) -> None:
+        query = "UPDATE media SET referer = ? WHERE domain = ? and url_path = ?"
+        await self.db_conn.execute(query, (str(referer), domain, db_path))
+        await self.db_conn.commit()
 
     async def check_album(self, domain: str, album_id: str) -> dict[str, bool]:
         """Checks whether an album has completed given its domain and album id."""
