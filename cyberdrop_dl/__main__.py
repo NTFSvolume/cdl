@@ -1,10 +1,7 @@
 # ruff: noqa: E402
 from rich.traceback import install as install_rich_tracebacks
 
-from cyberdrop_dl.models.types import HttpURL
-
 _ = install_rich_tracebacks(width=None)
-
 
 import logging
 import sys
@@ -18,6 +15,7 @@ from cyberdrop_dl.cli import CLIargs
 from cyberdrop_dl.config import Config
 from cyberdrop_dl.logs import log_spacer, setup_console_logging, setup_file_logging
 from cyberdrop_dl.managers.manager import AppData, Manager
+from cyberdrop_dl.models.types import HttpURL
 from cyberdrop_dl.scrape_mapper import ScrapeMapper
 from cyberdrop_dl.ui import program_ui
 from cyberdrop_dl.utils import apprise, check_latest_pypi

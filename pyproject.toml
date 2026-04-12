@@ -74,12 +74,16 @@ dev = [
     "tox>=4.52.0"
 ]
 
+[tool.basedpyright]
+ignore = ["cyberdrop_dl/dependencies/browser_cookie3.py"]
+reportExplicitAny = false
+typeCheckingMode = "recommended"
+
 [tool.coverage.report]
 exclude_also = [
     '@(abc\.)?abstractmethod',
     'class .*\bProtocol\):',
     'if __name__ == .__main__.:',
-    'if env.DEBUG_VAR:',
     'if TYPE_CHECKING:'
 ]
 
