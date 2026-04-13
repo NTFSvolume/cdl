@@ -1,6 +1,31 @@
 from __future__ import annotations
 
+import time
+
+from cyberdrop_dl.config import Config, settings
 from cyberdrop_dl.config.merge import merge_dicts
+
+
+def test_config_equality():
+    config1 = Config()
+    time.sleep(0.1)
+    config2 = Config()
+    assert config1.__dict__ == config2.__dict__
+    assert config1 == config2
+    assert config1.model_dump() == config2.model_dump()
+    config1.settings.resolve_paths()
+    config2.settings.resolve_paths()
+    assert config1 == config2
+    assert config1.model_dump() == config2.model_dump()
+
+
+def test_logs_equality():
+    logs1 = settings.Logs()
+    time.sleep(0.1)
+    logs2 = settings.Logs()
+    assert logs1._created_at != logs2._created_at
+    assert logs1.__dict__ == logs2.__dict__
+    assert logs1 == logs2
 
 
 class TestMergeDicts:

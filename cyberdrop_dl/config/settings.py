@@ -127,6 +127,19 @@ class Logs(SettingsGroup):
 
         _ = delete_empty_files_and_folders(self.log_folder)
 
+    def __eq__(self, other: object) -> bool:
+        # Exclude _created_at from compare (AKA __pydantic_private__)
+        if not isinstance(other, BaseModel):
+            return NotImplemented
+
+        self_type = self.__pydantic_generic_metadata__["origin"] or self.__class__
+        other_type = other.__pydantic_generic_metadata__["origin"] or other.__class__
+
+        if not (self_type == other_type and self.__pydantic_extra__ == other.__pydantic_extra__):
+            return False
+
+        return self.__dict__ == other.__dict__
+
 
 class FileSizeLimits(SettingsGroup):
     maximum_image_size: ByteSizeSerilized = ByteSize(0)
