@@ -64,7 +64,7 @@ class Config(BaseModel):
         global _APP
         if _APP is None:
             _APP = App(print_error=False, exit_on_error=False)
-        _ = _APP.command(name="coerce")(_coerce)
+            _ = _APP.command(name="coerce")(_coerce)
         fn, bound, *_ = _APP.parse_args(["coerce", *normalize_tokens(tokens)])
         assert fn is _coerce
         return _coerce(*bound.args, **bound.kwargs)
