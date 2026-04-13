@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import time
 
+import pytest
+from cyclopts.exceptions import UnknownOptionError
+
 from cyberdrop_dl.config import Config, settings
 from cyberdrop_dl.config.merge import merge_dicts
 
@@ -17,6 +20,26 @@ def test_config_equality():
     config2.settings.resolve_paths()
     assert config1 == config2
     assert config1.model_dump() == config2.model_dump()
+
+
+def test_parse_config_from_args():
+    assert Config() == Config.parse_args([])
+
+
+def test_parse_config_from_args2():
+    config = Config.model_validate(
+        {
+            "settings": {
+                "files": {
+                    "input_file": "test.txt",
+                }
+            }
+        }
+    )
+    assert config == Config.parse_args(["--input-file", "test.txt"])
+    assert config == Config.parse_args(["-i", "test.txt"])
+    with pytest.raises(UnknownOptionError):
+        _ = Config.parse_args(["--i", "test.txt"])
 
 
 def test_logs_equality():

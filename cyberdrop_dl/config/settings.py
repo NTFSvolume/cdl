@@ -68,9 +68,11 @@ class DownloadOptions(SettingsGroup):
 
 
 class Files(SettingsGroup):
-    download_folder: Path = Field(default=DEFAULT_DOWNLOAD_STORAGE, validation_alias="d")
-    dump_json: bool = Field(default=False, validation_alias="j")
-    input_file: Path = Field(default=Path("URLs.txt"), validation_alias="i")
+    download_folder: Annotated[Path, Parameter(alias=("--output", "-o", "-d"))] = Field(
+        default=DEFAULT_DOWNLOAD_STORAGE, validation_alias="d"
+    )
+    dump_json: Annotated[bool, Parameter(alias="-j")] = Field(default=False, validation_alias="j")
+    input_file: Annotated[Path, Parameter(alias="-i")] = Field(default=Path("URLs.txt"), validation_alias="i")
     save_pages_html: bool = False
 
 

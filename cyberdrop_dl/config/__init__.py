@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path  # noqa: TC003
-from typing import TYPE_CHECKING, Self, TypeVar
+from typing import TYPE_CHECKING, ClassVar, Self, TypeVar
 
-from cyclopts import Parameter
+from cyclopts import App, ArgumentCollection, Parameter
+from cyclopts.bind import normalize_tokens
 from pydantic import BaseModel, Field
 
 from cyberdrop_dl import yaml
@@ -16,6 +18,8 @@ from .auth import AuthSettings
 from .settings import ConfigSettings
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
     from cyberdrop_dl.managers.manager import AppData, Manager
 
     _BaseModelT = TypeVar("_BaseModelT", bound=BaseModel)
@@ -54,6 +58,10 @@ class Config(BaseModel):
     def update(self, other: Self) -> Self:
         return merge_models(self, other)
 
+    @classmethod
+    def parse_args(cls, tokens: str | Iterable[str]) -> Config:
+        return _ConfigParser()(tokens)
+
 
 def _load_config_file(file: Path, model: type[_BaseModelT]) -> _BaseModelT:
     try:
@@ -64,6 +72,33 @@ def _load_config_file(file: Path, model: type[_BaseModelT]) -> _BaseModelT:
         return default
     else:
         return model.model_validate(content)
+
+
+def _coerce(*, config: Config | None = None) -> Config:
+    if config is None:
+        return Config()
+    return config
+
+
+@dataclasses.dataclass(slots=True)
+class _ConfigParser:
+    app: App = dataclasses.field(init=False)
+    args: ArgumentCollection = dataclasses.field(init=False)
+
+    _instance: ClassVar[_ConfigParser | None] = None
+
+    def __new__(cls) -> _ConfigParser:
+        if cls._instance is None:
+            cls._instance = self = super(_ConfigParser, cls).__new__(cls)
+            self.app = App(print_error=False, exit_on_error=False)
+            _ = self.app.command(name="coerce")(_coerce)
+            self.args = self.app["coerce"].assemble_argument_collection()
+        return cls._instance
+
+    def __call__(self, tokens: str | Iterable[str]) -> Config:
+        fn, bound, *_ = self.app.parse_args(["coerce", *normalize_tokens(tokens)])  # pyright: ignore[reportUnknownMemberType]
+        assert fn is _coerce
+        return _coerce(*bound.args, **bound.kwargs)
 
 
 __all__ = ["AuthSettings", "Config", "ConfigSettings", "GlobalSettings"]

@@ -6,7 +6,7 @@
         "Python": {
             "show_whitespaces": "all",
             "show_edit_predictions": true,
-            "hard_tabs": true,
+            "hard_tabs": false,
             "format_on_save": "on",
             "formatter": {
                 "language_server": {
