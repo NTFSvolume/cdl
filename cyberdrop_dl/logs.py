@@ -284,7 +284,7 @@ def setup_file_logging(file: Path, /, level: int = logging.DEBUG) -> Generator[N
             ),
         ),
     ):
-        logger.info(f"Debug log file: '{debug_log_file}'")
+        logger.info(f"Debug log file: {debug_log_file}")
         token = MAIN_LOG_FILE.set(file)
         try:
             yield
