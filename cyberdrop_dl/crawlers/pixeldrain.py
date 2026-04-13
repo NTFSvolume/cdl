@@ -119,6 +119,9 @@ class PixelDrainCrawler(Crawler):
             msg = f"{json_resp['message']} ({json_resp['value']})"
             raise ScrapeError(resp.status, msg)
 
+    def _prepare_headers(self, scrape_item: ScrapeItem) -> dict[str, str]:
+        return super()._prepare_headers(scrape_item) | self._headers
+
     async def _api_request(self, api_url: AbsoluteHttpURL) -> str:
         return await self.request_text(api_url, headers=self._headers)
 

@@ -443,7 +443,14 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
             media_item.metadata = metadata
         if referer:
             media_item.referer = referer
+        media_item.headers.update(self._prepare_headers(scrape_item))
         await self.handle_media_item(media_item, m3u8)
+
+    def _prepare_headers(self, scrape_item: ScrapeItem) -> dict[str, str]:
+        return {
+            "User-Agent": self.manager.config.global_settings.general.user_agent,
+            "Referer": str(scrape_item.url),
+        }
 
     @final
     async def _download(self, media_item: MediaItem, m3u8: m3u8.Rendition | None) -> None:

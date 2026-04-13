@@ -40,6 +40,9 @@ class MegaCloudCrawler(Crawler):
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = _PRIMARY_URL
     DOMAIN: ClassVar[str] = "megacloud"
 
+    def _prepare_headers(self, scrape_item: ScrapeItem) -> dict[str, str]:
+        return super()._prepare_headers(scrape_item) | {"Referer": "https://megacloud.blog/"}
+
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
             case ["embed-2", "v3", _, _]:

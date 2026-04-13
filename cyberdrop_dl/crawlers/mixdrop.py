@@ -26,6 +26,9 @@ class MixDropCrawler(Crawler):
     DOMAIN: ClassVar[str] = "mixdrop"
     FOLDER_DOMAIN: ClassVar[str] = "MixDrop"
 
+    def _prepare_headers(self, scrape_item: ScrapeItem) -> dict[str, str]:
+        return super()._prepare_headers(scrape_item) | {"Referer": "https://m1xdrop.click/"}
+
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
             case ["f" | "e", file_id]:

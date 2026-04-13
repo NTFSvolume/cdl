@@ -17,6 +17,9 @@ if TYPE_CHECKING:
 
 _find_video_ids = re.compile("/video/(\\d+)").finditer
 
+_CHROME_ANDROID_USER_AGENT: str = (
+    "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.7204.180 Mobile Safari/537.36"
+)
 _HEADERS = {
     "Accept-Language": "en-gb, en;q=0.8",
     "Referer": "https://ok.ru/",
@@ -24,7 +27,7 @@ _HEADERS = {
 }
 
 _MOBILE_HEADERS = _HEADERS | {
-    "User-Agent": "Mozilla/5.0 (Linux; Android 16) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.7204.180 Mobile Safari/537.36",
+    "User-Agent": _CHROME_ANDROID_USER_AGENT,
     "Referer": "https://m.ok.ru/",
     "Origin": "https://m.ok.ru",
 }
@@ -58,6 +61,9 @@ class OdnoklassnikiCrawler(Crawler):
     PRIMARY_URL = AbsoluteHttpURL("https://ok.ru")
     DOMAIN = "odnoklassniki"
     FOLDER_DOMAIN = "ok.ru"
+
+    def _prepare_headers(self, scrape_item: ScrapeItem) -> dict[str, str]:
+        return super()._prepare_headers(scrape_item) | _MOBILE_HEADERS
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:

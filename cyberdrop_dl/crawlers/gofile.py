@@ -113,6 +113,9 @@ class GoFileCrawler(Crawler):
     async def __async_post_init__(self) -> None:
         await self._get_credentials(_API_ENTRYPOINT)
 
+    def _prepare_headers(self, scrape_item: ScrapeItem) -> dict[str, str]:
+        return super()._prepare_headers(scrape_item) | {"Authorization": f"Bearer {self._api_key}"}
+
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
             case ["d", content_id]:
