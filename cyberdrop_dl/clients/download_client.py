@@ -94,7 +94,6 @@ class DownloadClient:
 
     async def _download(self, domain: str, media_item: MediaItem) -> bool:
         """Downloads a file."""
-        download_headers = self._get_download_headers(domain, media_item.referer)
         downloaded_filename = await self.manager.database.history.get_downloaded_filename(domain, media_item)
         download_dir = self.get_download_dir(media_item)
         if media_item.is_segment:
@@ -105,14 +104,14 @@ class DownloadClient:
         resume_point = 0
         if self._supports_ranges and media_item.partial_file and (size := await aio.get_size(media_item.partial_file)):
             resume_point = size
-            download_headers["Range"] = f"bytes={size}-"
+            media_item.headers["Range"] = f"bytes={size}-"
 
         await asyncio.sleep(self.manager.config.global_settings.rate_limiting_options.total_delay)
 
-        def process_response(resp: aiohttp.ClientResponse | AbstractResponse):
+        def process_response(resp: aiohttp.ClientResponse | AbstractResponse[Any]):
             return self._process_response(media_item, domain, resume_point, resp)
 
-        return await self._request_download(media_item, download_headers, process_response)
+        return await self._request_download(media_item, process_response)
 
     async def _process_response(
         self,
@@ -197,7 +196,6 @@ class DownloadClient:
     async def _request_download(
         self,
         media_item: MediaItem,
-        download_headers: dict[str, str],
         process_response: Callable[[aiohttp.ClientResponse | AbstractResponse], Coroutine[None, None, bool]],
     ) -> bool:
         download_url = media_item.debrid_link or media_item.url
@@ -208,7 +206,7 @@ class DownloadClient:
         while True:
             resp = None
             try:
-                async with self.__request_context(download_url, media_item.domain, download_headers) as resp:
+                async with self.__request_context(download_url, media_item.domain, media_item.headers) as resp:
                     return await process_response(resp)
             except (DownloadError, DDOSGuardError):
                 if resp is None:

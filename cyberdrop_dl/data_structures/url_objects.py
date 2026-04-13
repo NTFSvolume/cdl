@@ -167,6 +167,7 @@ class MediaItem:
 
     id: tuple[str, ...] = field(init=False)
     base64_id: str = field(init=False)
+    headers: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.id = self.domain, self.db_path
