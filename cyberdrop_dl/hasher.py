@@ -61,6 +61,7 @@ class Hasher:
     )
     _sem: asyncio.BoundedSemaphore = dataclasses.field(init=False, default_factory=lambda: asyncio.BoundedSemaphore(20))
     _cwd: Path = dataclasses.field(init=False, default_factory=Path.cwd)
+    _hashed_items: set[tuple[str, ...]] = dataclasses.field(default_factory=set)
 
     @property
     def config(self) -> DupeCleanup:
@@ -126,6 +127,7 @@ class Hasher:
         if not await aio.get_size(file):
             return
 
+        logger.info("Computing hashes of '%s'", file)
         hash = await self._update_db_and_retrive_hash(file, original_filename, referer, hash_type="xxh128")
         if self.config.add_md5_hash:
             await self._update_db_and_retrive_hash(file, original_filename, referer, hash_type="md5")
@@ -180,6 +182,7 @@ class Hasher:
         if hash:
             media_item.hash = hash
         self.hashes_dict[hash][size].add(absolute_path)
+        self._hashed_items.add(media_item.id)
 
     async def cleanup_dupes_after_download(self) -> None:
         if self.config.hashing == Hashing.OFF:
@@ -232,13 +235,14 @@ class Hasher:
             self._sem.release()
 
     async def get_file_hashes_dict(self) -> dict[str, dict[int, set[Path]]]:
-        downloads = self.manager.completed_downloads
 
         async def exists(item: MediaItem) -> MediaItem | None:
             if await aio.is_file(item.path):
                 return item
 
-        results = await asyncio.gather(*(exists(item) for item in downloads))
+        results = await asyncio.gather(
+            *(exists(item) for item in self.manager.completed_downloads if item.id not in self._hashed_items)
+        )
         for media_item in results:
             if media_item is None:
                 continue

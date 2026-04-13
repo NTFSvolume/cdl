@@ -129,11 +129,11 @@ class AppData:
 
     @classmethod
     def default(cls) -> Self:
-        return cls.from_path(Path("AppData"))
+        return cls.from_path(Path.cwd())
 
     @classmethod
     def from_path(cls, path: Path) -> Self:
-        path = path.expanduser().resolve().absolute()
+        path = path.expanduser().resolve().absolute() / "AppData"
         cache = path / "Cache"
         configs = path / "Configs"
         return cls(
