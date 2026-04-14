@@ -18,25 +18,17 @@ if TYPE_CHECKING:
 
 
 @dataclasses.dataclass(slots=True)
-class HashingStats:
-    xxh128: int = 0
-    md5: int = 0
-    sha256: int = 0
-
-    new_hashed: int = 0
-    prev_hashed: int = 0
+class DedupeStats:
+    keeped: int = 0
+    deleted: int = 0
 
     @property
-    def files(self) -> int:
-        return self.new_hashed + self.prev_hashed
-
-    @property
-    def computed_hashes(self) -> int:
-        return sum((self.xxh128, self.md5, self.sha256))
+    def total(self):
+        return self.keeped + self.deleted
 
 
 @final
-class HashingUI(LiveUI):
+class DedupeUI(LiveUI):
     def __init__(self, base_dir: Path) -> None:
         self._base_dir = base_dir
         self._progress = Progress(
@@ -46,9 +38,10 @@ class HashingUI(LiveUI):
             SpinnerColumn("dots3"),
             "[progress.description]{task.description}",
         )
-        self._stats: HashingStats = HashingStats()
-        self._tasks_map: dict[str, TaskID] = dict(self._init_tasks())
+
+        self._stats: DedupeStats = DedupeStats()
         self._total: int = 0
+        self._tasks_map: dict[str, TaskID] = dict(self._init_tasks())
         self._panel = Panel(
             Group(
                 "[green]Base dir: [blue]" + escape(f"{base_dir}"),
@@ -56,33 +49,27 @@ class HashingUI(LiveUI):
                 Align.center("----------"),
                 self._files,
             ),
-            title="Hashing",
+            title="Dedupe",
             border_style="green",
             padding=(1, 1),
         )
 
-    def _init_tasks(self) -> Generator[tuple[str, TaskID]]:
-        for algo in ("xxh128", "md5", "sha256"):
-            desc = "[cyan]Hashed " + escape(f"[{algo}]")
-            yield algo, self._progress.add_task(desc, total=None)
-
-        yield "prev_hashed", self._progress.add_task("[yellow]Previously Hashed", total=None)
-
     @property
-    def stats(self) -> HashingStats:
+    def stats(self) -> DedupeStats:
         return self._stats
 
     def __rich__(self) -> Panel:
-        current_total = self._stats.files
+        current_total = self._stats.total
         if current_total != self._total:
             for name, task_id in self._tasks_map.items():
                 self._progress.update(task_id, total=current_total, completed=getattr(self._stats, name))
             self._total = current_total
 
-        self._panel.subtitle = (
-            f"Files:  [white]{current_total:,}[/white], Hashes: [white]{self._stats.computed_hashes:,}[/white]"
-        )
+        self._panel.subtitle = f"Total: [white]{current_total:,}"
         return self._panel
+
+    def _init_tasks(self) -> Generator[tuple[str, TaskID]]:
+        yield "deleted", self._progress.add_task("[yellow]Deleted", total=None)
 
     def new_file(self, file: Path):
         task_id = self._files.add_task(
@@ -94,18 +81,15 @@ class HashingUI(LiveUI):
 
 
 if __name__ == "__main__":
-    panel = HashingUI(folder := Path("/folder1/cdl_downloads"))
+    panel = DedupeUI(folder := Path("/folder1/cdl_downloads"))
 
     with panel(transient=False):
         with panel.new_file(folder / "file.txt"):
             time.sleep(3)
-            panel.stats.md5 += 1
-            panel.stats.prev_hashed += 1
-            panel.stats.new_hashed += 1
+            panel.stats.deleted += 1
             with panel.new_file(folder / "subfolder/file2.txt"), panel.new_file(folder / "subfolder/file3.txt"):
                 time.sleep(1)
-                panel.stats.sha256 += 5
-                panel.stats.new_hashed += 5
+                panel.stats.keeped += 5
                 time.sleep(1)
-            panel.stats.xxh128 += 15
+            panel.stats.deleted += 15
             time.sleep(3)
