@@ -61,8 +61,7 @@ class FileProgress(DequeProgress):
         """Adds a new task to the progress bar."""
         filename = filename.split("/")[-1].encode("ascii", "ignore").decode().strip()
         description = escape(adjust_title(filename, length=40))
-        if not self.manager.progress_manager.portrait:
-            description = f"({domain.upper()}) {description}"
+        description = f"({domain.upper()}) {description}"
         return super().add_task(description, expected_size)
 
     def advance_file(self, task_id: TaskID, amount: int) -> None:

@@ -102,13 +102,13 @@ class DownloadClient:
             proceed, skip = await self.get_final_file_info(media_item, domain)
             self.client_manager.check_content_length(resp.headers)
             if skip:
-                self.manager.progress_manager.download_progress.add_skipped()
+                self.manager.scrape_mapper.tui.files.stats.skipped += 1
                 return False
             if not proceed:
                 if media_item.is_segment:
                     return True
                 logger.info(f"Skipping {media_item.url} as it has already been downloaded")
-                self.manager.progress_manager.download_progress.add_previously_completed(False)
+                self.manager.scrape_mapper.tui.files.stats.previously_completed += 1
                 await self.process_completed(media_item, domain)
                 await self.handle_media_item_completion(media_item, downloaded=False)
 
@@ -254,7 +254,7 @@ class DownloadClient:
         """Starts a file."""
         if self.manager.config.settings.download_options.skip_download_mark_completed and not media_item.is_segment:
             logger.info(f"Download removed {media_item.url} due to mark completed option")
-            self.manager.progress_manager.download_progress.add_skipped()
+            self.manager.scrape_mapper.tui.files.stats.skipped += 1
             # set completed path
             await self.process_completed(media_item, domain)
             return False
@@ -271,7 +271,7 @@ class DownloadClient:
                     logger.info(f"Download skipped {media_item.url} due to runtime restrictions")
                     await aio.unlink(media_item.path)
                     await self.mark_incomplete(media_item, domain)
-                    self.manager.progress_manager.download_progress.add_skipped()
+                    self.manager.scrape_mapper.tui.files.stats.skipped += 1
                     return False
                 await self.process_completed(media_item, domain)
                 await self.handle_media_item_completion(media_item, downloaded=True)

@@ -81,7 +81,6 @@ class Downloader:
                 if not e.retry:
                     raise
 
-                self.attempt_task_removal(media_item)
                 if e.status != 999:
                     media_item.attempts += 1
 
@@ -167,23 +166,25 @@ class Downloader:
         # TODO: compute approx size for UI from the m3u8 info
         media_item.download_filename = media_item.path.name
         await self.manager.database.history.add_download_filename(self.domain, media_item)
-        task_id = self.manager.progress_manager.file_progress.add_task(domain=self.domain, filename=media_item.filename)
-        media_item.set_task_id(task_id)
-        video, audio, _subs = await self._download_rendition_group(media_item, m3u8_group)
-        if not audio:
-            await aio.move(video, media_item.path)
-        else:
-            # TODO: add remux method to ffmpeg to create an mkv file instead of mp4
-            # Subtitles format may be incompatible with mp4 and they will be silently dropped by ffmpeg
-            # so we leave them as independent files for now
-            ffmpeg_result = await ffmpeg.merge((video, audio), media_item.path)
 
-            if not ffmpeg_result.success:
-                raise DownloadError("FFmpeg Concat Error", ffmpeg_result.stderr, media_item)
+        with self.manager.scrape_mapper.tui.downloads.download_hls(
+            media_item.filename, segments=sum(len(m.segments) for m in m3u8_group if m is not None)
+        ):
+            video, audio, _subs = await self._download_rendition_group(media_item, m3u8_group)
+            if not audio:
+                await aio.move(video, media_item.path)
+            else:
+                # TODO: add remux method to ffmpeg to create an mkv file instead of mp4
+                # Subtitles format may be incompatible with mp4 and they will be silently dropped by ffmpeg
+                # so we leave them as independent files for now
+                ffmpeg_result = await ffmpeg.merge((video, audio), media_item.path)
 
-        await self.client.process_completed(media_item, self.domain)
-        await self.client.handle_media_item_completion(media_item, downloaded=True)
-        await self.finalize_download(media_item, downloaded=True)
+                if not ffmpeg_result.success:
+                    raise DownloadError("FFmpeg Concat Error", ffmpeg_result.stderr, media_item)
+
+            await self.client.process_completed(media_item, self.domain)
+            await self.client.handle_media_item_completion(media_item, downloaded=True)
+            await self.finalize_download(media_item, downloaded=True)
 
     async def _download_rendition_group(
         self, media_item: MediaItem, m3u8_group: Rendition
@@ -283,8 +284,7 @@ class Downloader:
         if downloaded:
             await aio.chmod(media_item.path, 0o666)
             await self.set_file_datetime(media_item, media_item.path)
-        self.attempt_task_removal(media_item)
-        self.manager.progress_manager.download_progress.add_completed()
+        self.manager.scrape_mapper.tui.files.stats.completed += 1
         logger.info(f"Download finished: {media_item.url}")
 
     """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
@@ -320,18 +320,6 @@ class Downloader:
         except OSError:
             pass
 
-    def attempt_task_removal(self, media_item: MediaItem) -> None:
-        """Attempts to remove the task from the progress bar."""
-        if media_item.is_segment:
-            return
-        if media_item.task_id is not None:
-            try:
-                self.manager.progress_manager.file_progress.remove_task(media_item.task_id)
-            except ValueError:
-                pass
-
-            media_item.set_task_id(None)
-
     """~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"""
 
     async def start_download(self, media_item: MediaItem) -> bool:
@@ -366,16 +354,14 @@ class Downloader:
                 await aio.chmod(media_item.path, 0o666)
                 if not media_item.is_segment:
                     await self.set_file_datetime(media_item, media_item.path)
-                    self.manager.progress_manager.download_progress.add_completed()
+                    self.manager.scrape_mapper.tui.files.stats.completed += 1
                     logger.info(f"Download finished: {media_item.url}")
-            self.attempt_task_removal(media_item)
             return downloaded
 
         except SkipDownloadError as e:
             if not media_item.is_segment:
                 logger.info(f"Download skipped {media_item.url}: {e}")
-                self.manager.progress_manager.download_progress.add_skipped()
-            self.attempt_task_removal(media_item)
+                self.manager.scrape_mapper.tui.files.stats.skipped += 1
 
         except (DownloadError, ClientResponseError, InvalidContentTypeError):
             raise
@@ -405,11 +391,10 @@ class Downloader:
         error_log_msg: ErrorLogMessage,
         exc_info: Exception | None = None,
     ) -> None:
-        self.attempt_task_removal(media_item)
         logger.error(
             f"{self.log_prefix} Failed: {media_item.url} ({error_log_msg.main_log_msg}) \n -> Referer: {media_item.referer}",
             exc_info=exc_info,
         )
         self.manager.logs.write_download_error(media_item, error_log_msg.csv_log_msg)
-        self.manager.progress_manager.download_stats_progress.add_failure(error_log_msg.ui_failure)
-        self.manager.progress_manager.download_progress.add_failed()
+        self.manager.scrape_mapper.tui.files.stats.failed += 1
+        self.manager.scrape_mapper.tui.scrape_errors.add(error_log_msg.ui_failure)

@@ -45,7 +45,6 @@ if TYPE_CHECKING:
     import yarl
     from bs4 import BeautifulSoup, Tag
     from curl_cffi.requests.impersonate import BrowserTypeLiteral
-    from rich.progress import TaskID
 
     from cyberdrop_dl.managers.manager import Manager
 
@@ -366,15 +365,10 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         raise exc
 
     @final
-    @contextlib.contextmanager
-    def new_task_id(self, url: AbsoluteHttpURL) -> Generator[TaskID]:
+    def new_task_id(self, url: AbsoluteHttpURL):
         """Creates a new task_id (shows the URL in the UI and logs)"""
         self.log.info(f"Scraping {url}")
-        task_id = self.manager.progress_manager.scraping_progress.add_task(url)
-        try:
-            yield task_id
-        finally:
-            self.manager.progress_manager.scraping_progress.remove_task(task_id)
+        return self.manager.scrape_mapper.tui.scrape.new(url)
 
     @final
     @staticmethod
@@ -482,7 +476,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         current_referer, downloaded = await self.manager.database.history.check_complete(self.DOMAIN, db_path)
         if downloaded:
             logger.info("Skipping %s as it has already been downloaded", url)
-            self.manager.progress_manager.download_progress.add_previously_completed()
+            self.manager.scrape_mapper.tui.files.stats.previously_completed += 1
 
             if referer and url != referer and str(referer) != current_referer:
                 # Update the referer if it has changed so that check_complete_by_referer can work
@@ -498,7 +492,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
             return
 
         if await self.check_skip_by_config(media_item):
-            self.manager.progress_manager.download_progress.add_skipped()
+            self.manager.scrape_mapper.tui.files.stats.skipped += 1
             return
 
         self.manager.scrape_mapper.create_download_task(self._download(media_item, m3u8))
@@ -535,7 +529,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         downloaded = await self.manager.database.history.check_complete_by_referer(domain, url)
         if downloaded:
             logger.info(f"Skipping {url} as it has already been downloaded")
-            self.manager.progress_manager.download_progress.add_previously_completed()
+            self.manager.scrape_mapper.tui.files.stats.previously_completed += 1
         return downloaded
 
     @final
@@ -547,7 +541,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         if downloaded:
             url = _url(scrape_item)
             logger.info(f"Skipping {url} as its hash ({hash_type}:{hash_value}) has already been downloaded")
-            self.manager.progress_manager.download_progress.add_previously_completed()
+            self.manager.scrape_mapper.tui.files.stats.previously_completed += 1
         return downloaded
 
     @final
@@ -595,7 +589,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         url_path = self.__db_path__(url)
         if album_results.get(url_path) is True:
             logger.info(f"Skipping {url} as it has already been downloaded")
-            self.manager.progress_manager.download_progress.add_previously_completed()
+            self.manager.scrape_mapper.tui.files.stats.previously_completed += 1
             return True
         return False
 

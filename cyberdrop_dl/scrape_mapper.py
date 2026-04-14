@@ -25,6 +25,7 @@ from cyberdrop_dl.crawlers.wordpress import WordPressHTMLCrawler, WordPressMedia
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.exceptions import JDownloaderError, NoExtensionError
 from cyberdrop_dl.logs import log_spacer
+from cyberdrop_dl.progress.scraping import ScrapingUI
 from cyberdrop_dl.utils import filepath
 from cyberdrop_dl.utils.utilities import get_download_path, remove_trailing_slash
 
@@ -129,6 +130,7 @@ class ScrapeMapper:
     _seen_urls: set[AbsoluteHttpURL] = dataclasses.field(init=False, default_factory=set)
     _crawlers_disabled_at_runtime: set[str] = dataclasses.field(init=False, default_factory=set)
     _factory: CrawlerFactory = dataclasses.field(init=False)
+    tui: ScrapingUI = dataclasses.field(init=False, default_factory=ScrapingUI)
 
     def __post_init__(self) -> None:
         self._direct_http = DirectHttpFile(self.manager)
@@ -161,24 +163,25 @@ class ScrapeMapper:
         await self.manager.client_manager.load_cookie_files()
 
         ## IMPORTANT: Order of each context matters!
-        async with (
-            self.manager.client_manager,
-            storage.monitor(self.manager.config.global_settings.general.required_free_space),
-            self.manager.logs.task_group,
-            self._task_groups.downloads,
-        ):
-            done = asyncio.Event()
-            token = CURRENT_SCRAPE_DONE.set(done)
-            try:
-                async with self._task_groups.scrape:
-                    self.manager.scrape_mapper = self
+        with self.tui():
+            async with (
+                self.manager.client_manager,
+                storage.monitor(self.manager.config.global_settings.general.required_free_space),
+                self.manager.logs.task_group,
+                self._task_groups.downloads,
+            ):
+                done = asyncio.Event()
+                token = CURRENT_SCRAPE_DONE.set(done)
+                try:
+                    async with self._task_groups.scrape:
+                        self.manager.scrape_mapper = self
 
-                    yield self
+                        yield self
 
-            finally:
-                # The done event signals that all scraping is done, but there may still be downloads pending
-                done.set()
-                CURRENT_SCRAPE_DONE.reset(token)
+                finally:
+                    # The done event signals that all scraping is done, but there may still be downloads pending
+                    done.set()
+                    CURRENT_SCRAPE_DONE.reset(token)
 
     async def run(self) -> ScrapeStats:
         self._init_crawlers()
@@ -266,12 +269,12 @@ class ScrapeMapper:
             else:
                 success = True
 
-            self.manager.progress_manager.scrape_stats_progress.add_unsupported(sent_to_jdownloader=success)
+            self.tui.scrape_errors.add_unsupported(sent_to_jdownloader=success)
             return
 
         logger.warning(f"Unsupported URL: {scrape_item.url}")
         self.manager.logs.write_unsupported(scrape_item.url, scrape_item.parents[0] if scrape_item.parents else None)
-        self.manager.progress_manager.scrape_stats_progress.add_unsupported()
+        self.tui.scrape_errors.add_unsupported()
 
     def _should_scrape(self, scrape_item: ScrapeItem) -> bool:
         if scrape_item.url in self._seen_urls:

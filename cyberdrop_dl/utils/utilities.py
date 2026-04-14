@@ -145,7 +145,7 @@ def error_handling_context(self: _HasManager, item: ScrapeItem | MediaItem | yar
 
     logger.error(f"Scrape Failed: {link_to_show} ({error_log_msg.main_log_msg})", exc_info=exc_info)
     self.manager.logs.write_scrape_error(link_to_show, error_log_msg.csv_log_msg, origin)
-    self.manager.progress_manager.scrape_stats_progress.add_failure(error_log_msg.ui_failure)
+    self.manager.scrape_mapper.tui.scrape_errors.add(error_log_msg.ui_failure)
 
 
 @overload
