@@ -67,10 +67,10 @@ class Hasher:
     _tui: HashingUI = dataclasses.field(init=False)
     _dedupe_tui: DedupeUI = dataclasses.field(init=False)
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         base_dir = self.manager.config.settings.files.download_folder
-        _tui: HashingUI = HashingUI(base_dir)
-        _dedupe_tui: DedupeUI = DedupeUI(base_dir)
+        self._tui = HashingUI(base_dir)
+        self._dedupe_tui = DedupeUI(base_dir)
 
     @property
     def stats(self):
