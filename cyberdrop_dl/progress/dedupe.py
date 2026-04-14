@@ -19,12 +19,8 @@ if TYPE_CHECKING:
 
 @dataclasses.dataclass(slots=True)
 class DedupeStats:
-    keeped: int = 0
     deleted: int = 0
-
-    @property
-    def total(self):
-        return self.keeped + self.deleted
+    total: int = 0
 
 
 @final
@@ -76,6 +72,7 @@ class DedupeUI(LiveUI):
             "[blue]" + escape(str(file.relative_to(self._base_dir))),
             total=None,
         )
+        self._stats.total += 1
 
         return ProgressHook(lambda _: None, lambda: 0, lambda: self._files.remove_task(task_id))
 
@@ -89,7 +86,7 @@ if __name__ == "__main__":
             panel.stats.deleted += 1
             with panel.new_file(folder / "subfolder/file2.txt"), panel.new_file(folder / "subfolder/file3.txt"):
                 time.sleep(1)
-                panel.stats.keeped += 5
+                panel.stats.total += 5
                 time.sleep(1)
             panel.stats.deleted += 15
             time.sleep(3)

@@ -3,7 +3,7 @@ from __future__ import annotations
 import dataclasses
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, final
+from typing import TYPE_CHECKING, Literal, final
 
 from rich.align import Align
 from rich.console import Group
@@ -91,6 +91,9 @@ class HashingUI(LiveUI):
         )
 
         return ProgressHook(lambda _: None, lambda: 0, lambda: self._files.remove_task(task_id))
+
+    def add_completed(self, hash_type: Literal["xxh128", "md5", "sha256"]):
+        setattr(self._stats, hash_type, getattr(self._stats, hash_type) + 1)
 
 
 if __name__ == "__main__":

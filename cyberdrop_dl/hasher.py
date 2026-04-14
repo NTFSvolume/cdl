@@ -13,6 +13,8 @@ from send2trash import send2trash
 
 from cyberdrop_dl import aio
 from cyberdrop_dl.constants import Hashing, TempExt
+from cyberdrop_dl.progress.dedupe import DedupeUI
+from cyberdrop_dl.progress.hashing import HashingStats, HashingUI
 
 if TYPE_CHECKING:
     from yarl import URL
@@ -47,9 +49,9 @@ def _compute_hash(file: Path, algorithm: Literal["xxh128", "md5", "sha256"]) -> 
 async def hash_directory_scanner(manager: Manager, path: Path) -> None:
     manager.async_db_hash_startup()
     async with manager.database:
-        await manager.hasher.hash_directory(path)
-        manager.progress_manager.print_dedupe_stats()
-        manager.progress_manager.hash_progress.reset()
+        stats = await manager.hasher.hash_directory(path)
+
+    manager.progress_manager.print_hashing_stats(stats)
 
 
 @dataclasses.dataclass(slots=True)
@@ -62,6 +64,17 @@ class Hasher:
     _sem: asyncio.BoundedSemaphore = dataclasses.field(init=False, default_factory=lambda: asyncio.BoundedSemaphore(20))
     _cwd: Path = dataclasses.field(init=False, default_factory=Path.cwd)
     _hashed_items: set[tuple[str, ...]] = dataclasses.field(default_factory=set)
+    _tui: HashingUI = dataclasses.field(init=False)
+    _dedupe_tui: DedupeUI = dataclasses.field(init=False)
+
+    def __post_init__(self):
+        base_dir = self.manager.config.settings.files.download_folder
+        _tui: HashingUI = HashingUI(base_dir)
+        _dedupe_tui: DedupeUI = DedupeUI(base_dir)
+
+    @property
+    def stats(self):
+        return self._tui.stats, self._dedupe_tui.stats
 
     @property
     def config(self) -> DupeCleanup:
@@ -79,17 +92,22 @@ class Hasher:
     def _deleted_file_suffix(self) -> Literal["Sent to trash", "Permanently deleted"]:
         return "Sent to trash" if self._to_trash else "Permanently deleted"
 
-    async def hash_directory(self, path: Path) -> None:
+    async def hash_directory(self, path: Path) -> HashingStats:
         path = Path(path)
-        with (
-            self.manager.live_manager.get_hash_live(stop=True),
-            self.manager.progress_manager.hash_progress.currently_hashing_dir(path),
-        ):
+        tui = HashingUI(path)
+        old_tui = self._tui
+        with tui():
             if not await aio.is_dir(path):
                 raise NotADirectoryError(None, path)
 
-            async for file in aio.rglob(path, "*"):
-                _ = await self.update_db_and_retrive_hash(file)
+            try:
+                self._tui = tui
+                async for file in aio.rglob(path, "*"):
+                    _ = await self.update_db_and_retrive_hash(file)
+            finally:
+                self._tui = old_tui
+
+        return tui.stats
 
     async def hash_item(self, media_item: MediaItem) -> None:
         if media_item.is_segment:
@@ -127,14 +145,15 @@ class Hasher:
         if not await aio.get_size(file):
             return
 
-        logger.info("Computing hashes of '%s'", file)
-        hash = await self._update_db_and_retrive_hash(file, original_filename, referer, hash_type="xxh128")
-        if self.config.add_md5_hash:
-            await self._update_db_and_retrive_hash(file, original_filename, referer, hash_type="md5")
-        if self.config.add_sha256_hash:
-            await self._update_db_and_retrive_hash(file, original_filename, referer, hash_type="sha256")
+        with self._tui.new_file(file):
+            logger.info("Computing hashes of '%s'", file)
+            hash = await self._update_db_and_retrive_hash(file, original_filename, referer, hash_type="xxh128")
+            if self.config.add_md5_hash:
+                await self._update_db_and_retrive_hash(file, original_filename, referer, hash_type="md5")
+            if self.config.add_sha256_hash:
+                await self._update_db_and_retrive_hash(file, original_filename, referer, hash_type="sha256")
 
-        return hash
+            return hash
 
     async def _update_db_and_retrive_hash(
         self,
@@ -144,7 +163,7 @@ class Hasher:
         hash_type: Literal["xxh128", "md5", "sha256"],
     ) -> str | None:
         """Generates hash of a file."""
-        self.manager.progress_manager.hash_progress.update_currently_hashing(file)
+
         hash = await self.manager.database.hash.get_file_hash_exists(file, hash_type)
         try:
             if not hash:
@@ -156,9 +175,9 @@ class Hasher:
                     original_filename,
                     referer,
                 )
-                self.manager.progress_manager.hash_progress.add_new_completed_hash(hash_type)
+                self._tui.add_completed(hash_type)
             else:
-                self.manager.progress_manager.hash_progress.add_prev_hash()
+                self._tui.stats.prev_hashed += 1
                 await self.manager.database.hash.insert_or_update_hash_db(
                     hash,
                     hash_type,
@@ -191,9 +210,9 @@ class Hasher:
             return
         if self.manager.config.settings.runtime_options.ignore_history:
             return
-        with self.manager.live_manager.get_hash_live(stop=True):
+        with self._tui():
             file_hashes_dict = await self.get_file_hashes_dict()
-        with self.manager.live_manager.get_remove_file_via_hash_live(stop=True):
+        with self._dedupe_tui():
             await self.final_dupe_cleanup(file_hashes_dict)
 
     async def final_dupe_cleanup(self, final_dict: dict[str, dict[int, set[Path]]]) -> None:
@@ -215,24 +234,25 @@ class Hasher:
 
     async def _delete_and_log(self, file: Path, xxh128_value: str) -> None:
         hash_string = f"xxh128:{xxh128_value}"
-        try:
-            deleted = await _delete_file(file, self._to_trash)
-        except OSError as e:
-            logger.exception(f"Unable to remove '{file}' ({hash_string}): {e}")
+        with self._dedupe_tui.new_file(file):
+            try:
+                deleted = await _delete_file(file, self._to_trash)
+            except OSError as e:
+                logger.exception(f"Unable to remove '{file}' ({hash_string}): {e}")
 
-        else:
-            if not deleted:
-                return
+            else:
+                if not deleted:
+                    return
 
-            msg = (
-                f"Removed new download '{file}' [{self._deleted_file_suffix}]. "
-                f"File hash matches with a previous download ({hash_string})"
-            )
-            logger.info(msg)
-            self.manager.progress_manager.hash_progress.add_removed_file()
+                msg = (
+                    f"Removed new download '{file}' [{self._deleted_file_suffix}]. "
+                    f"File hash matches with a previous download ({hash_string})"
+                )
+                logger.info(msg)
+                self._dedupe_tui.stats.deleted += 1
 
-        finally:
-            self._sem.release()
+            finally:
+                self._sem.release()
 
     async def get_file_hashes_dict(self) -> dict[str, dict[int, set[Path]]]:
 

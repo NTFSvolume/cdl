@@ -27,6 +27,8 @@ if TYPE_CHECKING:
     from rich.panel import Panel
 
     from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.progress.dedupe import DedupeStats
+    from cyberdrop_dl.progress.hashing import HashingStats
     from cyberdrop_dl.scrape_mapper import ScrapeStats
     from cyberdrop_dl.ui.progress.statistic_progress import UiFailureTotal
 
@@ -154,7 +156,9 @@ class ProgressManager:
         logger.info(f"  Sent to Jdownloader: {self.scrape_stats_progress.sent_to_jdownloader:,}")
         logger.info(f"  Skipped: {self.scrape_stats_progress.unsupported_urls_skipped:,}")
 
-        self.print_dedupe_stats()
+        hash_stats, dedupe_stats = self.manager.hasher.stats
+        self.print_hashing_stats(hash_stats)
+        self.print_dedupe_stats(dedupe_stats)
 
         log_spacer()
         logger.info("Sort Stats:", extra={"color": "cyan"})
@@ -163,14 +167,23 @@ class ProgressManager:
         logger.info(f"  Videos: {self.sort_progress.video_count:,}")
         logger.info(f"  Other Files: {self.sort_progress.other_count:,}")
 
+        self.print_errors()
+
+    def print_errors(self):
+
         _log_errors(self.scrape_stats_progress.return_totals(), self.download_stats_progress.return_totals())
 
-    def print_dedupe_stats(self) -> None:
+    def print_hashing_stats(self, stats: HashingStats) -> None:
+        log_spacer()
+        logger.info("Checksum Stats:", extra={"color": "cyan"})
+        logger.info(f"  Newly hashed: {stats.new_hashed:,} files")
+        logger.info(f"  Previously hashed: {stats.prev_hashed:,} files")
+
+    def print_dedupe_stats(self, stats: DedupeStats) -> None:
         log_spacer()
         logger.info("Dupe Stats:", extra={"color": "cyan"})
-        logger.info(f"  Newly hashed: {self.hash_progress.hashed_files:,} files")
-        logger.info(f"  Previously hashed: {self.hash_progress.prev_hashed_files:,} files")
-        logger.info(f"  Deleted (duplicates of previous downloads): {self.hash_progress.removed_files:,} files")
+        logger.info(f"  Deleted (duplicates of previous downloads): {stats.deleted:,} files")
+        logger.info(f"  Errors: {stats.total - stats.deleted:,} files")
 
 
 def _log_errors(scrape_errors: Sequence[UiFailureTotal], download_errors: Sequence[UiFailureTotal]) -> None:
