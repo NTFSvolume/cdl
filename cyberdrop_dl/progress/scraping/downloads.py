@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, ClassVar, Final, final
 
 from rich.jupyter import JupyterMixin
+from rich.markup import escape
 from rich.measure import Measurement
 from rich.progress import (
     BarColumn,
@@ -140,7 +141,9 @@ class DownloadsPanel(OverFlowPanel):
         self._total_bytes = 0
 
     @contextlib.contextmanager
-    def download_hls(self, filename: str, /, segments: float | None = None) -> Generator[None]:
+    def download_hls(
+        self, filename: str, /, segments: float | None = None, domain: str | None = None
+    ) -> Generator[None]:
         # For HLS downloads, we use 2 different tasks. One on a hidden progress to track the downloaded bytes
         # and one on the user facing progress to track the number of downloaded segments (with a known total)
         # We create both at the same time and smuggle the bytes task as a field of the segments task
@@ -148,7 +151,10 @@ class DownloadsPanel(OverFlowPanel):
 
         task_id = self._hls_progress.add_task("", total=None, visible=False)
         filename = str(filename).rsplit("/", 1)[-1]
-        segments_task = self._add_task(filename, segments)
+        desc = escape(
+            (f"({domain.upper()}) {filename}" if domain else filename).encode().decode("ascii", errors="ignore")
+        )
+        segments_task = self._add_task(desc, segments)
         bytes_task = self._hls_progress[task_id]
         self._progress.update(segments_task.id, HLS=bytes_task)
         token = _current_hls_task.set(segments_task.id)
@@ -167,7 +173,9 @@ class DownloadsPanel(OverFlowPanel):
         domain: str | None = None,
     ) -> ProgressHook:
         filename = str(description).rsplit("/", 1)[-1]
-        desc = f"({domain.upper()}) {filename}" if domain else filename
+        desc = escape(
+            (f"({domain.upper()}) {filename}" if domain else filename).encode().decode("ascii", errors="ignore")
+        )
         task = self._add_task(desc, total)
 
         def advance(amount: int = 1) -> None:
