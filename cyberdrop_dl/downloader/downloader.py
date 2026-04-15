@@ -264,6 +264,7 @@ class Downloader:
                 ext=media_item.ext,
             )
             seg_media_item.is_segment = True
+            seg_media_item.headers = media_item.headers.copy()
             return SegmentDownloadResult(
                 seg_media_item,
                 await self.start_download(seg_media_item),

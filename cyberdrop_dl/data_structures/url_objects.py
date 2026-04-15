@@ -221,7 +221,7 @@ class MediaItem:
         me = asdict(self)
         if self.hash:
             me["hash"] = f"xxh128:{self.hash}"
-        for name in ("fallbacks", "_task_id", "is_segment", "parent_media_item"):
+        for name in ("fallbacks", "is_segment"):
             del me[name]
         return me
 

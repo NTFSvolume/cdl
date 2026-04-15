@@ -35,6 +35,7 @@ class MissAVCrawler(Crawler):
     DOMAIN: ClassVar[str] = "missav"
     FOLDER_DOMAIN: ClassVar[str] = "MissAV"
     NEXT_PAGE_SELECTOR: ClassVar[str] = Selector.NEXT_PAGE
+    _IMPERSONATE: ClassVar[str | bool | None] = True
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         n_parts = len(scrape_item.url.parts)
@@ -49,7 +50,7 @@ class MissAVCrawler(Crawler):
         title = self.create_title(f"{name} [{collection_type}]")
         scrape_item.setup_as_album(title)
 
-        async for soup in self.web_pager(scrape_item.url.update_query(page=1), impersonate=True):
+        async for soup in self.web_pager(scrape_item.url.update_query(page=1)):
             for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.ITEM):
                 self.create_task(self.run(new_scrape_item))
 
@@ -60,24 +61,21 @@ class MissAVCrawler(Crawler):
         if await self.check_complete_from_referer(canonical_url):
             return
 
-        soup = await self.request_soup(scrape_item.url, impersonate=True)
+        soup = await self.request_soup(scrape_item.url)
 
         title, date_str = open_graph.title(soup), open_graph.get("video_release_date", soup)
         if dvd_code_tag := soup.select_one(Selector.DVD_CODE):
             title = _fix_title(title, dvd_code_tag)
 
-        if date_str:
-            scrape_item.uploaded_at = self.parse_iso_date(date_str)
-        elif date_tag := soup.select_one(Selector.DATE):
-            scrape_item.uploaded_at = self.parse_iso_date(css.attr(date_tag, "datetime"))
-        else:
-            _ = self.parse_date("")  # Trigger warning
+        scrape_item.uploaded_at = self.parse_iso_date(date_str or css.select(soup, Selector.DATE, "datetime"))
 
         uuid = _get_uuid(soup)
         m3u8_playlist_url = _M3U8_SERVER / uuid / "playlist.m3u8"
-        m3u8, info = await self.get_m3u8_from_playlist_url(m3u8_playlist_url)
-        ext = ".mp4"
-        filename = self.create_custom_filename(title, ext, resolution=info.resolution)
+        m3u8, info = await self.get_m3u8_from_playlist_url(
+            m3u8_playlist_url,
+            headers={"Referer": "https://missav.ws/"},
+        )
+        filename = self.create_custom_filename(title, ext := ".mp4", resolution=info.resolution)
         await self.handle_file(m3u8_playlist_url, scrape_item, title, ext, m3u8=m3u8, custom_filename=filename)
 
 
