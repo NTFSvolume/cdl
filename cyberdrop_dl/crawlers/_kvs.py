@@ -132,7 +132,9 @@ class KernelVideoSharingCrawler(Crawler, is_abc=True):
             date_str = css.json_ld(soup)["uploadDate"]
             scrape_item.uploaded_at = self.parse_iso_date(date_str)
         except (LookupError, ValueError, css.SelectorError):
-            date_str = css.select_text(soup, _SELECTORS.DATE).split(":", 1)[-1].strip()
+            # Human date parsing was removed from parse_date. This fallback
+            # no longer supports relative strings like "2 hours ago".
+            pass
 
         await self.handle_file(
             scrape_item.url, scrape_item, filename, ext, custom_filename=custom_filename, debrid_link=video.url
