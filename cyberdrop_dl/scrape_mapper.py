@@ -214,6 +214,7 @@ class ScrapeMapper:
 
             async def wait_until_scrape_is_done() -> None:
                 _ = await done.wait()
+                self.tui.hide_scrape_panel()
                 stats.url_count.update(
                     (crawler.DOMAIN, count) for crawler in self._factory if (count := len(crawler._scraped_items))
                 )

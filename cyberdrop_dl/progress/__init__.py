@@ -103,6 +103,7 @@ class LiveUI(ABC):
             with Live(
                 refresh_per_second=REFRESH_RATE.get(),
                 auto_refresh="pytest" not in sys.modules,
+                screen=transient,
                 transient=transient,
                 get_renderable=self.__rich__ if "pytest" not in sys.modules else None,
             ):
