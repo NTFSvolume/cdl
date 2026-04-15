@@ -22,6 +22,31 @@ All notable changes to this project will be documented here. For more details, v
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.2.0] - 2026-04-15
+
+### Added
+
+- tabootube support
+
+### Changed
+
+- Check for DDoS-Guard even on successful responses
+- New hashing, dedupe and scraping UI
+- Show accurate download progress for HLS downloads
+
+### Removed
+
+- Flugel anime support (No longer exists)
+- Safe.soul support (No longer exists)
+- Xbunkr support (No longer exists)
+
+### Fixed
+
+- Switch to v2 API (nHentai)
+- Download URL extraction (MixDrop)
+- Do not try to parse relative dates (KVS)
+- Use impersonation for downloads (MissAV)
+
 ## [9.1.0] - 2026-04-08
 
 ⚠️**IMPORTANT**
@@ -93,7 +118,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ⚠️**BREAKING CHANGES**
 
- > You can only upgrade to this version from v8.10.
+> You can only upgrade to this version from v8.10.
 
 ### Added
 
@@ -339,7 +364,7 @@ Several config options:
 
 ### Changed
 
-- Use impersonation for all Chevereto sites  
+- Use impersonation for all Chevereto sites
 
 ### Fixed
 
@@ -917,7 +942,7 @@ Several config options:
 - TikTok crawler returning 403 on all downloads
 - Use new API to download files (bunkr)
 - Download encrypted URLs (jpg5)
-- Do not overwrite user provided regex  (`--filename-regex-filter`)
+- Do not overwrite user provided regex (`--filename-regex-filter`)
 
 ### Changed
 
@@ -999,7 +1024,7 @@ Several config options:
 - Support cookie extraction from Arc Browser, Lynx and W3M
 - `--exclude-files-with-no-extension` option: <https://script-ware.gitbook.io/cyberdrop-dl/reference/configuration-options/settings/ignore_options#exclude_files_with_no_extension>
 - `--print-stats` CLI only option
-- Scrape nested threads with  `--maximum-thread-depth`: <https://script-ware.gitbook.io/cyberdrop-dl/reference/configuration-options/settings/download_options#maximum-thread-depth>
+- Scrape nested threads with `--maximum-thread-depth`: <https://script-ware.gitbook.io/cyberdrop-dl/reference/configuration-options/settings/download_options#maximum-thread-depth>
 
 ### Removed
 
@@ -1168,7 +1193,6 @@ Several config options:
 1. Stricter config validation logic. CDL will verify that every config value and CLI argument is valid before running
 
 2. All dedupe and hashing functions has been replaced.
-
    - `xxh128` is now the default hashing algorithm, replacing `md5`
    - By default, all v5 hashes will be ignored for deduplication matches. You can re-enable md5 with `--add-md5-hash`
    - It's no longer possible to keep the newest file while deduplicating.
@@ -1177,7 +1201,6 @@ Several config options:
 3. Removed `--sort-cdl-only` option
 
 4. The following arguments are deprecated and will be removed in a future version:
-
    - `--output-folder`
    - `--download-all-configs`
    - `--sort-all-configs`
@@ -1344,7 +1367,7 @@ This update introduces the following changes:
 ### Details
 
 1. Users can include the password as a query parameter in the input URL, adding `?password=<URL_PASSWORD>` to it.
- Example: <https://gofile.io/d/xUprGg?password=1234>
+   Example: <https://gofile.io/d/xUprGg?password=1234>
 
 ## [5.6.43] - 2024-10-03
 
@@ -1357,7 +1380,7 @@ This update introduces the following changes:
 - CLI arguments that toggle settings to `True` or `False` can now be passed as either `--arg` or `--no-arg` to set the value to `True` or `False` respectively.
 - This also solves an issue where CLI arguments that toggle settings would override config file settings even if the CLI argument was never passed.
 
-## [5.6.42] -  2024-10-03
+## [5.6.42] - 2024-10-03
 
 This update introduces the following changes:
 
