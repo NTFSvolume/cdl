@@ -14,6 +14,7 @@ from multidict import CIMultiDict, CIMultiDictProxy
 
 from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError
+from cyberdrop_dl.progress.scraping import show_msg
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Mapping
@@ -148,9 +149,11 @@ class FlareSolverrClient:
             params["postData"] = aiohttp.FormData(data)().decode()
 
         async with self._request_lock:
-            logger.debug(f"Making FlareSolverr request #{self._request_id()} with {params = }")
-            async with self._aiohttp_session.post(self.url, json=params, **timeout) as response:
-                return Response.from_dict(await response.json())
+            request_id = self._request_id()
+            with show_msg(f"Waiting for flaresolver [{request_id}]"):
+                logger.debug(f"Making FlareSolverr request #{request_id} with {params = }")
+                async with self._aiohttp_session.post(self.url, json=params, **timeout) as response:
+                    return Response.from_dict(await response.json())
 
     async def _create_session(self) -> None:
         session_id = "cyberdrop-dl"

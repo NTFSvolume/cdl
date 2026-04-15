@@ -27,7 +27,7 @@ _generate_unique_id = itertools.count(1).__next__
 @final
 @dataclasses.dataclass(slots=True, frozen=True)
 class StatusMessage:
-    description: Text | str = f"Running cyberdrop-dl [blue]v{__version__}[/blue]"
+    description: Text | str = f" cyberdrop-dl [blue]v{__version__}[/blue]"
     _messages: dict[int, tuple[Spinner, Text]] = dataclasses.field(init=False, default_factory=dict)
     _cols: Columns = dataclasses.field(init=False, default_factory=Columns)
 

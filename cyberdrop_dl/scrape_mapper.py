@@ -7,7 +7,6 @@ import datetime
 import logging
 import re
 import time
-from contextvars import ContextVar
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Self, TypeVar
 
@@ -45,8 +44,6 @@ logger = logging.getLogger(__name__)
 
 
 REGEX_LINKS = re.compile(r"(?:http.*?)(?=($|\n|\r\n|\r|\s|\"|\[/URL]|']\[|]\[|\[/img]))")
-
-CURRENT_SCRAPE_DONE: ContextVar[asyncio.Event] = ContextVar("CURRENT_SCRAPE_DONE")
 
 
 def _filter_by_date(scrape_item: ScrapeItem, before: datetime.date | None, after: datetime.date | None) -> bool:
@@ -131,6 +128,7 @@ class ScrapeMapper:
     _crawlers_disabled_at_runtime: set[str] = dataclasses.field(init=False, default_factory=set)
     _factory: CrawlerFactory = dataclasses.field(init=False)
     tui: ScrapingUI = dataclasses.field(init=False, default_factory=ScrapingUI)
+    _done: asyncio.Event = dataclasses.field(init=False, default_factory=asyncio.Event)
 
     def _scrape_queue(self) -> int:
         return sum(f.waiting_items for f in self._factory)
@@ -167,6 +165,7 @@ class ScrapeMapper:
 
     @contextlib.asynccontextmanager
     async def __call__(self) -> AsyncGenerator[Self]:
+        assert not self._done.is_set()
         _ = filepath.MAX_FILE_LEN.set(self.manager.config.global_settings.general.max_file_name_length)
         _ = filepath.MAX_FOLDER_LEN.set(self.manager.config.global_settings.general.max_folder_name_length)
 
@@ -180,8 +179,6 @@ class ScrapeMapper:
                 self.manager.logs.task_group,
                 self._task_groups.downloads,
             ):
-                done = asyncio.Event()
-                token = CURRENT_SCRAPE_DONE.set(done)
                 try:
                     async with self._task_groups.scrape:
                         self.manager.scrape_mapper = self
@@ -190,8 +187,7 @@ class ScrapeMapper:
 
                 finally:
                     # The done event signals that all scraping is done, but there may still be downloads pending
-                    done.set()
-                    CURRENT_SCRAPE_DONE.reset(token)
+                    self._done.set()
 
     async def run(self) -> ScrapeStats:
         self._init_crawlers()
@@ -210,10 +206,9 @@ class ScrapeMapper:
         source_name, source = _source(self.manager)
         async with contextlib.aclosing(source) as items:
             stats = ScrapeStats(source_name)
-            done = CURRENT_SCRAPE_DONE.get()
 
             async def wait_until_scrape_is_done() -> None:
-                _ = await done.wait()
+                _ = await self._done.wait()
                 self.tui.hide_scrape_panel()
                 stats.url_count.update(
                     (crawler.DOMAIN, count) for crawler in self._factory if (count := len(crawler._scraped_items))
