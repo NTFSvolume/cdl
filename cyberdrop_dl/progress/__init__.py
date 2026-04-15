@@ -93,7 +93,7 @@ class LiveUI(ABC):
     def __rich__(self) -> RenderableType: ...
 
     @contextlib.contextmanager
-    def __call__(self, *, transient: bool = False) -> Generator[None]:
+    def __call__(self, *, transient: bool = True) -> Generator[None]:
         if self.disabled:
             yield None
             return
