@@ -134,7 +134,9 @@ class DownloadClient:
         else:
             size = (media_item.filesize + resume_point) if media_item.filesize is not None else None
             hook = self.manager.scrape_mapper.tui.downloads.download_file(
-                media_item.filename, size, domain=media_item.domain
+                media_item.filename,
+                media_item.domain,
+                size,
             )
 
         if resume_point:

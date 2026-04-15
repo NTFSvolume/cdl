@@ -165,7 +165,9 @@ class Downloader:
         await self.manager.database.history.add_download_filename(self.domain, media_item)
 
         with self.manager.scrape_mapper.tui.downloads.download_hls(
-            media_item.filename, segments=sum(len(m.segments) for m in m3u8_group if m is not None)
+            media_item.filename,
+            media_item.domain,
+            segments=sum(len(m.segments) for m in m3u8_group if m is not None),
         ):
             video, audio, _subs = await self._download_rendition_group(media_item, m3u8_group)
             if not audio:

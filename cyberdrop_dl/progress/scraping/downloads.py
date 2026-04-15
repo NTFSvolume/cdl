@@ -142,7 +142,11 @@ class DownloadsPanel(OverFlowPanel):
 
     @contextlib.contextmanager
     def download_hls(
-        self, filename: str, /, segments: float | None = None, domain: str | None = None
+        self,
+        filename: str,
+        /,
+        domain: str,
+        segments: float,
     ) -> Generator[None]:
         # For HLS downloads, we use 2 different tasks. One on a hidden progress to track the downloaded bytes
         # and one on the user facing progress to track the number of downloaded segments (with a known total)
@@ -151,9 +155,7 @@ class DownloadsPanel(OverFlowPanel):
 
         task_id = self._hls_progress.add_task("", total=None, visible=False)
         filename = str(filename).rsplit("/", 1)[-1]
-        desc = escape(
-            (f"({domain.upper()}) {filename}" if domain else filename).encode().decode("ascii", errors="ignore")
-        )
+        desc = escape((f"({domain.upper()}) {filename}").encode().decode("ascii", errors="ignore"))
         segments_task = self._add_task(desc, segments)
         bytes_task = self._hls_progress[task_id]
         self._progress.update(segments_task.id, HLS=bytes_task)
@@ -169,13 +171,11 @@ class DownloadsPanel(OverFlowPanel):
         self,
         description: object,
         /,
-        total: float | None = None,
-        domain: str | None = None,
+        domain: str,
+        total: float | None,
     ) -> ProgressHook:
         filename = str(description).rsplit("/", 1)[-1]
-        desc = escape(
-            (f"({domain.upper()}) {filename}" if domain else filename).encode().decode("ascii", errors="ignore")
-        )
+        desc = escape((f"({domain.upper()}) {filename}").encode().decode("ascii", errors="ignore"))
         task = self._add_task(desc, total)
 
         def advance(amount: int = 1) -> None:
@@ -219,7 +219,7 @@ class DownloadsPanel(OverFlowPanel):
 
         async def download_file(filename: str) -> None:
             size = random.randint(int(1e2), int(1e9))
-            hook = self.download_file(filename, size)
+            hook = self.download_file(filename, "example.com", size)
             await download(hook, size)
 
         async def download_hls(filename: str) -> None:
@@ -234,7 +234,7 @@ class DownloadsPanel(OverFlowPanel):
                 finally:
                     segments_sem.release()
 
-            with self.download_hls(filename, n_segments):
+            with self.download_hls(filename, "example.com", n_segments):
                 async with asyncio.TaskGroup() as tg:
                     for _ in range(n_segments):
                         await segments_sem.acquire()
