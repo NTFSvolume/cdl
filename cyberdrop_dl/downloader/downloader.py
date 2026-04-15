@@ -107,10 +107,7 @@ class Downloader:
         if self.manager.config.settings.sorting.sort_downloads:
             self.manager.config.settings.sorting.sort_folder.mkdir(parents=True, exist_ok=True)
 
-    def update_queued_files(self, increase_total: bool = True):
-        queued_files = self.manager.progress_manager.file_progress.get_queue_length()
-        self.manager.progress_manager.download_progress.update_queued(queued_files)
-        self.manager.progress_manager.download_progress.update_total(increase_total)
+    def update_queued_files(self, increase_total: bool = True): ...
 
     @contextlib.asynccontextmanager
     async def _download_context(self, media_item: MediaItem):

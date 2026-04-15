@@ -18,13 +18,8 @@ def _item(url: str) -> ScrapeItem:
     return ScrapeItem(url=AbsoluteHttpURL(url))
 
 
-class MockProgress:
-    scraping_progress = None
-
-
 manager = Manager()
-scrape_item = _item("https://xenforo.com/community")
-manager.progress_manager = MockProgress()  # type: ignore
+scrape_item = _item("https://xenforo.com/community")  # type: ignore
 crawler_instances = {crawler: crawler(manager) for crawler in crawlers.XF_CRAWLERS}
 TEST_CRAWLER = crawler_instances[crawlers.CelebForumCrawler]
 
