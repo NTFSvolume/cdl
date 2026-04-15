@@ -33,14 +33,13 @@ async def _scrape(manager: Manager) -> None:
         async with manager.database:
             log_spacer()
             logger.info("Starting CDL...")
-            with manager.live_manager.get_main_live(stop=True):
-                async with ScrapeMapper(manager)() as scrape_mapper:
-                    stats = await scrape_mapper.run()
+            async with ScrapeMapper(manager)() as scrape_mapper:
+                stats = await scrape_mapper.run()
 
             log_spacer()
             await _post_runtime(manager)
 
-            stats_summary = manager.progress_manager.print_stats(stats)
+            stats_summary = manager.print_stats(stats)
 
             log_spacer()
             await check_latest_pypi()

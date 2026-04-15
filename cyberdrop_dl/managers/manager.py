@@ -16,7 +16,6 @@ from cyberdrop_dl.database import Database
 from cyberdrop_dl.hasher import Hasher
 from cyberdrop_dl.logs import capture_logs, log_spacer
 from cyberdrop_dl.managers.client_manager import ClientManager
-from cyberdrop_dl.managers.live_manager import LiveManager
 from cyberdrop_dl.managers.logs import LogManager
 from cyberdrop_dl.utils.utilities import get_system_information
 
@@ -51,7 +50,6 @@ class Manager:
         self._completed_downloads: list[MediaItem] = []
         self.hasher: Hasher = Hasher(self)
         self.logs: LogManager = LogManager.from_manager(self)
-        self.live_manager: LiveManager = LiveManager(self)
         self.scrape_mapper: ScrapeMapper
         self.database: Database
         self.client_manager: ClientManager
@@ -127,7 +125,6 @@ class Manager:
             return ""
 
         log_spacer()
-        logger.info("Printing Stats...\n")
 
         with capture_logs() as stream:
             self._print_stats(stats)
@@ -170,7 +167,7 @@ class Manager:
         hash_stats, dedupe_stats = self.hasher.stats
         self.print_hashing_stats(hash_stats)
         self.print_dedupe_stats(dedupe_stats)
-        self.print_sort_stats()
+        # self.print_sort_stats()
         self.print_errors()
 
     def print_sort_stats(self, stats: SortStats):
