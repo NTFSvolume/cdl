@@ -94,7 +94,7 @@ class LiveUI(ABC):
 
     @contextlib.contextmanager
     def __call__(self, *, transient: bool = True) -> Generator[None]:
-        if self.disabled:
+        if self.disabled or "pytest" in sys.modules:
             yield None
             return
 
@@ -102,10 +102,10 @@ class LiveUI(ABC):
         try:
             with Live(
                 refresh_per_second=REFRESH_RATE.get(),
-                auto_refresh="pytest" not in sys.modules,
+                auto_refresh=True,
                 screen=transient,
                 transient=transient,
-                get_renderable=self.__rich__ if "pytest" not in sys.modules else None,
+                get_renderable=self.__rich__,
             ):
                 yield
         finally:

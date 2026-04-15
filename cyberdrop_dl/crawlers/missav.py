@@ -14,7 +14,6 @@ if TYPE_CHECKING:
 
 
 _M3U8_SERVER = AbsoluteHttpURL("https://surrit.com/")
-_PRIMARY_URL = AbsoluteHttpURL("https://missav.ws")
 _COLLECTION_TYPES = "makers", "search", "genres", "labels", "tags"
 
 
@@ -31,22 +30,23 @@ class MissAVCrawler(Crawler):
         "Video": "/...",
         **{name.capitalize(): f"/{name}/<{name.removesuffix('s')}>" for name in _COLLECTION_TYPES},
     }
-    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = _PRIMARY_URL
+    PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://missav.ws")
     DOMAIN: ClassVar[str] = "missav"
     FOLDER_DOMAIN: ClassVar[str] = "MissAV"
     NEXT_PAGE_SELECTOR: ClassVar[str] = Selector.NEXT_PAGE
     _IMPERSONATE: ClassVar[str | bool | None] = True
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
-        n_parts = len(scrape_item.url.parts)
-        for part in _COLLECTION_TYPES:
-            if part in scrape_item.url.parts and n_parts == scrape_item.url.parts.index(part) + 2:
-                return await self.collection(scrape_item, part)
-        return await self.video(scrape_item)
+        match scrape_item.url.parts[1:]:
+            case [*_, collection_type, name] if collection_type in _COLLECTION_TYPES:
+                return await self.collection(scrape_item, collection_type, name)
+            case [*_, video_id]:
+                return await self.video(scrape_item, video_id)
+            case _:
+                raise ValueError
 
     @error_handling_wrapper
-    async def collection(self, scrape_item: ScrapeItem, collection_type: str) -> None:
-        name = scrape_item.url.name
+    async def collection(self, scrape_item: ScrapeItem, collection_type: str, name: str) -> None:
         title = self.create_title(f"{name} [{collection_type}]")
         scrape_item.setup_as_album(title)
 
@@ -55,31 +55,32 @@ class MissAVCrawler(Crawler):
                 self.create_task(self.run(new_scrape_item))
 
     @error_handling_wrapper
-    async def video(self, scrape_item: ScrapeItem) -> None:
-        canonical_url = _PRIMARY_URL / "en" / scrape_item.url.name
-        scrape_item.url = canonical_url
+    async def video(self, scrape_item: ScrapeItem, video_id: str) -> None:
+        scrape_item.url = canonical_url = self.PRIMARY_URL / "en" / video_id
         if await self.check_complete_from_referer(canonical_url):
             return
 
         soup = await self.request_soup(scrape_item.url)
 
-        title, date_str = open_graph.title(soup), open_graph.get("video_release_date", soup)
+        title = open_graph.title(soup)
         if dvd_code_tag := soup.select_one(Selector.DVD_CODE):
             title = _fix_title(title, dvd_code_tag)
 
-        scrape_item.uploaded_at = self.parse_iso_date(date_str or css.select(soup, Selector.DATE, "datetime"))
+        scrape_item.uploaded_at = self.parse_iso_date(
+            open_graph.get("video_release_date", soup) or css.select(soup, Selector.DATE, "datetime")
+        )
 
-        uuid = _get_uuid(soup)
-        m3u8_playlist_url = _M3U8_SERVER / uuid / "playlist.m3u8"
+        uuid = _extract_uuid(soup)
+        m3u8_url = _M3U8_SERVER / uuid / "playlist.m3u8"
         m3u8, info = await self.get_m3u8_from_playlist_url(
-            m3u8_playlist_url,
+            m3u8_url,
             headers={"Referer": "https://missav.ws/"},
         )
         filename = self.create_custom_filename(title, ext := ".mp4", resolution=info.resolution)
-        await self.handle_file(m3u8_playlist_url, scrape_item, title, ext, m3u8=m3u8, custom_filename=filename)
+        await self.handle_file(m3u8_url, scrape_item, title, ext, m3u8=m3u8, custom_filename=filename)
 
 
-def _get_uuid(soup: BeautifulSoup) -> str:
+def _extract_uuid(soup: BeautifulSoup) -> str:
     js_text = css.select_text(soup, Selector.UUID)
     uuid_joined_parts = js_text.split("m3u8|", 1)[-1].split("|com|surrit", 1)[0]
     uuid_parts = reversed(uuid_joined_parts.split("|"))
