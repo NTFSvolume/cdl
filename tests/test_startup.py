@@ -1,7 +1,7 @@
 import pytest
 
+from cyberdrop_dl import program_ui
 from cyberdrop_dl.__main__ import main
-from cyberdrop_dl.ui import program_ui
 
 
 def test_startup(capsys: pytest.CaptureFixture[str]) -> None:
