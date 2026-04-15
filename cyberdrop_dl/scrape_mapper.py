@@ -132,11 +132,21 @@ class ScrapeMapper:
     _factory: CrawlerFactory = dataclasses.field(init=False)
     tui: ScrapingUI = dataclasses.field(init=False, default_factory=ScrapingUI)
 
+    def _scrape_queue(self) -> int:
+        return sum(f.waiting_items for f in self._factory)
+
+    def _download_queue(self):
+        total = sum(f.downloader.waiting_items for f in self._factory)
+        self.tui.files.stats.queued = total
+        return total
+
     def __post_init__(self) -> None:
         self._direct_http = DirectHttpFile(self.manager)
         self._jdownloader = JDownloader.from_manager(self.manager)
         self._real_debrid = RealDebridCrawler(self.manager)
         self._factory = CrawlerFactory(self.manager)
+        self.tui.scrape.get_queue = self._scrape_queue
+        self.tui.downloads.get_queue = self._download_queue
 
     def create_task(self, coro: Coroutine[Any, Any, _T]) -> None:
         _ = self._task_groups.scrape.create_task(coro)

@@ -12,6 +12,8 @@ from rich.progress import Task, TaskID
 from cyberdrop_dl.progress import DictProgress
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from rich.progress import ProgressColumn, Task, TaskID
 
 _COLOR: str = "plum3"
@@ -54,12 +56,19 @@ class OverFlow:
 class OverFlowPanel:
     unit: ClassVar[str]
 
-    def __init__(self, *columns: ProgressColumn | str, max_rows: int, expand: bool = True) -> None:
+    def __init__(
+        self,
+        *columns: ProgressColumn | str,
+        max_rows: int,
+        expand: bool = True,
+        get_queue: Callable[[], int] = lambda: 0,
+    ) -> None:
         self.max_rows: int = max_rows
         self._progress: Final[DictProgress] = DictProgress(*columns, expand=expand)
         self._overflow: Final[OverFlow] = OverFlow(self.unit)
         self._invisible_rows: Final[deque[TaskID]] = deque()
         self._visible_rows: int = 0
+        self.get_queue: Callable[[], int] = get_queue
         self._panel: Final[Panel] = Panel(
             Group(self._progress, self._overflow),
             title=type(self).__name__.removesuffix("Panel"),
@@ -70,6 +79,7 @@ class OverFlowPanel:
     @final
     def __rich__(self) -> Panel:
         self._overflow.count = len(self._progress) - self._visible_rows
+        self._overflow.queued = self.get_queue()
         return self._panel
 
     @final

@@ -107,8 +107,6 @@ class Downloader:
         if self.manager.config.settings.sorting.sort_downloads:
             self.manager.config.settings.sorting.sort_folder.mkdir(parents=True, exist_ok=True)
 
-    def update_queued_files(self, increase_total: bool = True): ...
-
     @contextlib.asynccontextmanager
     async def _download_context(self, media_item: MediaItem):
 
@@ -119,7 +117,6 @@ class Downloader:
             return
 
         self.waiting_items += 1
-        self.update_queued_files()
 
         server = (media_item.debrid_link or media_item.url).host
         server_limit, domain_limit, global_limit = (
@@ -130,7 +127,6 @@ class Downloader:
 
         async with server_limit, domain_limit, global_limit:
             self.processed_items.add(media_item.db_path)
-            self.update_queued_files(increase_total=False)
             self.waiting_items -= 1
             yield
 
