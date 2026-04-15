@@ -213,7 +213,6 @@ class DownloadClient:
     ) -> None:
         """Appends content to a file."""
 
-        assert media_item.task_id is not None
         check_free_space = storage.create_free_space_checker(media_item)
         check_download_speed = self.make_speed_checker(media_item, hook)
         await check_free_space()

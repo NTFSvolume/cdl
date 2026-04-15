@@ -19,7 +19,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Generator
 
     import aiohttp
-    from rich.progress import TaskID
 
     from cyberdrop_dl import signature
     from cyberdrop_dl.managers.manager import Manager
@@ -158,8 +157,6 @@ class MediaItem:
     hash: str | None = None
     downloaded: bool = field(default=False)
 
-    parent_media_item: MediaItem | None = None
-    _task_id: TaskID | None = None
     metadata: object = field(init=False, default_factory=dict)
 
     uploaded_at_date: datetime.datetime | None = field(init=False, default=None)
@@ -217,26 +214,8 @@ class MediaItem:
             original_filename=original_filename or filename,
             parents=origin.parents.copy(),
             uploaded_at=origin.uploaded_at,
-            parent_media_item=None if isinstance(origin, ScrapeItem) else origin,
             parent_threads=origin.parent_threads.copy(),
         )
-
-    @property
-    def task_id(self) -> TaskID | None:
-        if self.parent_media_item is not None:
-            return self.parent_media_item.task_id
-        return self._task_id
-
-    def set_task_id(self, task_id: TaskID | None) -> None:
-        if self.task_id is not None and task_id is not None:
-            # We already have a task_id; we can't replace it, only reset it.
-            # This should never happen. Calling code should always check the value before making a new task.
-            # We can't silently ignore it either because we will lose any reference to the created task.
-            raise ValueError("task_id is already set")
-        if self.parent_media_item is not None:
-            self.parent_media_item.set_task_id(task_id)
-        else:
-            self._task_id = task_id
 
     def serialize(self) -> dict[str, Any]:
         me = asdict(self)
