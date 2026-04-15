@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, final
 
 import aiofiles
 from mega.chunker import MegaChunker, get_chunks
@@ -17,20 +17,22 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.data_structures.url_objects import MediaItem
     from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.progress import ProgressHook
 
 
+@final
 class MegaDownloadClient(DownloadClient):
     def __init__(self, manager: Manager) -> None:
         super().__init__(manager, manager.client_manager)
         self._decrypt_mapping: dict[URL, tuple[Crypto, int]] = {}
         self._supports_ranges = False
 
-    async def _append_content(self, media_item: MediaItem, content: aiohttp.StreamReader) -> None:
+    async def _append_content(self, media_item: MediaItem, hook: ProgressHook, content: aiohttp.StreamReader) -> None:
         """Appends content to a file."""
 
         assert media_item.task_id is not None
         check_free_space = storage.create_free_space_checker(media_item)
-        check_download_speed = self.make_speed_checker(media_item)
+        check_download_speed = self.make_speed_checker(media_item, hook)
         await check_free_space()
         await self._pre_download_check(media_item)
 
@@ -46,7 +48,7 @@ class MegaDownloadClient(DownloadClient):
 
                 await self.client_manager.speed_limiter.acquire(chunk_size)
                 await f.write(chunk)
-                self.manager.progress_manager.file_progress.advance_file(media_item.task_id, chunk_size)
+                hook.advance(chunk_size)
                 check_download_speed()
 
         await self._post_download_check(media_item)

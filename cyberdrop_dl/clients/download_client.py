@@ -27,6 +27,7 @@ if TYPE_CHECKING:
     from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
     from cyberdrop_dl.managers.client_manager import ClientManager
     from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.progress import ProgressHook
 
 
 logger = logging.getLogger(__name__)
@@ -127,21 +128,24 @@ class DownloadClient:
             )
             media_item.uploaded_at = last_modified
 
-        task_id = media_item.task_id
-        if task_id is None:
+        if media_item.is_segment:
+            hook = self.manager.scrape_mapper.tui.downloads.download_hls_seg()
+
+        else:
             size = (media_item.filesize + resume_point) if media_item.filesize is not None else None
-            task_id = self.manager.progress_manager.file_progress.add_task(
-                domain=domain, filename=media_item.filename, expected_size=size
+            hook = self.manager.scrape_mapper.tui.downloads.download_file(
+                media_item.filename, size, domain=media_item.domain
             )
-            media_item.set_task_id(task_id)
 
-        self.manager.progress_manager.file_progress.advance_file(task_id, resume_point)
+        if resume_point:
+            hook.advance(resume_point)
 
-        await self._append_content(media_item, self._get_resp_reader(resp))
+        with hook:
+            await self._append_content(media_item, hook, self._get_resp_reader(resp))
         return True
 
     def _get_resp_reader(
-        self, resp: aiohttp.ClientResponse | AbstractResponse
+        self, resp: aiohttp.ClientResponse | AbstractResponse[Any]
     ) -> AbstractResponse | aiohttp.StreamReader:
         if isinstance(resp, AbstractResponse):
             return resp
@@ -165,7 +169,7 @@ class DownloadClient:
     async def _request_download(
         self,
         media_item: MediaItem,
-        process_response: Callable[[aiohttp.ClientResponse | AbstractResponse], Coroutine[None, None, bool]],
+        process_response: Callable[[aiohttp.ClientResponse | AbstractResponse[Any]], Coroutine[None, None, bool]],
     ) -> bool:
         download_url = media_item.debrid_link or media_item.url
 
@@ -200,13 +204,16 @@ class DownloadClient:
                 raise
 
     async def _append_content(
-        self, media_item: MediaItem, content: aiohttp.StreamReader | AbstractResponse[Any]
+        self,
+        media_item: MediaItem,
+        hook: ProgressHook,
+        content: aiohttp.StreamReader | AbstractResponse[Any],
     ) -> None:
         """Appends content to a file."""
 
         assert media_item.task_id is not None
         check_free_space = storage.create_free_space_checker(media_item)
-        check_download_speed = self.make_speed_checker(media_item)
+        check_download_speed = self.make_speed_checker(media_item, hook)
         await check_free_space()
         await self._pre_download_check(media_item)
 
@@ -216,7 +223,7 @@ class DownloadClient:
                 chunk_size = len(chunk)
                 await self.client_manager.speed_limiter.acquire(chunk_size)
                 await f.write(chunk)
-                self.manager.progress_manager.file_progress.advance_file(media_item.task_id, chunk_size)
+                hook.advance(chunk_size)
                 check_download_speed()
 
         await self._post_download_check(media_item)
@@ -232,15 +239,15 @@ class DownloadClient:
             await aio.unlink(media_item.partial_file, missing_ok=True)
             raise DownloadError(HTTPStatus.INTERNAL_SERVER_ERROR, message="File is empty")
 
-    def make_speed_checker(self, media_item: MediaItem) -> Callable[[], None]:
+    def make_speed_checker(self, media_item: MediaItem, hook: ProgressHook) -> Callable[[], None]:
         last_slow_speed_read = None
 
         def check_download_speed() -> None:
             nonlocal last_slow_speed_read
             if not self.download_speed_threshold:
                 return
-            assert media_item.task_id is not None
-            speed = self.manager.progress_manager.file_progress.get_speed(media_item.task_id)
+
+            speed = hook.get_speed()
             if speed > self.download_speed_threshold:
                 last_slow_speed_read = None
             elif not last_slow_speed_read:

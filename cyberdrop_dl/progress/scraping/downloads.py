@@ -159,9 +159,16 @@ class DownloadsPanel(OverFlowPanel):
             self._hls_progress.remove_task(task_id)
             _current_hls_task.reset(token)
 
-    def download_file(self, description: object, /, total: float | None = None) -> ProgressHook:
+    def download_file(
+        self,
+        description: object,
+        /,
+        total: float | None = None,
+        domain: str | None = None,
+    ) -> ProgressHook:
         filename = str(description).rsplit("/", 1)[-1]
-        task = self._add_task(filename, total)
+        desc = f"({domain.upper()}) {filename}" if domain else filename
+        task = self._add_task(desc, total)
 
         def advance(amount: int = 1) -> None:
             self._total_bytes += amount

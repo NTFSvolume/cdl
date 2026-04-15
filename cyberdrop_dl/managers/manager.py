@@ -2,25 +2,34 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+import time
+from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Self
+
+from pydantic.types import ByteSize
 
 from cyberdrop_dl import __version__, ffmpeg, yaml
 from cyberdrop_dl.cli import CLIargs
 from cyberdrop_dl.config import Config
 from cyberdrop_dl.database import Database
 from cyberdrop_dl.hasher import Hasher
+from cyberdrop_dl.logs import capture_logs, log_spacer
 from cyberdrop_dl.managers.client_manager import ClientManager
 from cyberdrop_dl.managers.live_manager import LiveManager
 from cyberdrop_dl.managers.logs import LogManager
-from cyberdrop_dl.managers.progress_manager import ProgressManager
 from cyberdrop_dl.utils.utilities import get_system_information
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
     from os import PathLike
 
     from cyberdrop_dl.data_structures.url_objects import MediaItem
-    from cyberdrop_dl.scrape_mapper import ScrapeMapper
+    from cyberdrop_dl.progress.dedupe import DedupeStats
+    from cyberdrop_dl.progress.hashing import HashingStats
+    from cyberdrop_dl.progress.scraping.errors import Error
+    from cyberdrop_dl.progress.sorting import SortStats
+    from cyberdrop_dl.scrape_mapper import ScrapeMapper, ScrapeStats
 
 
 logger = logging.getLogger(__name__)
@@ -43,8 +52,6 @@ class Manager:
         self.hasher: Hasher = Hasher(self)
         self.logs: LogManager = LogManager.from_manager(self)
         self.live_manager: LiveManager = LiveManager(self)
-        self.progress_manager: ProgressManager = ProgressManager(self)
-
         self.scrape_mapper: ScrapeMapper
         self.database: Database
         self.client_manager: ClientManager
@@ -114,6 +121,108 @@ class Manager:
 
     async def close(self) -> None:
         await self.client_manager.close()
+
+    def print_stats(self, stats: ScrapeStats) -> str:
+        if not self.cli_args.print_stats:
+            return ""
+
+        log_spacer()
+        logger.info("Printing Stats...\n")
+
+        with capture_logs() as stream:
+            self._print_stats(stats)
+
+        return stream.getvalue()
+
+    def _print_stats(self, stats: ScrapeStats) -> None:
+
+        elapsed = timedelta(seconds=int(time.monotonic() - stats.start_time))
+        total_data_written = ByteSize(self.scrape_mapper.tui.downloads.bytes_downloaded).human_readable(decimal=True)
+
+        logger.info("Run Stats:", extra={"color": "cyan"})
+        logger.info(f"  Config file: {self.config.source}")
+        logger.info(f"  URLs source: {stats.source}")
+        logger.info(f"  URLs: {stats.count:,}")
+        logger.info(f"  URL groups: {len(stats.unique_groups):,}")
+        logger.info(f"  Logs folder: {self.config.settings.logs.log_folder}")
+        logger.info(f"  Total runtime: {elapsed}")
+        logger.info(f"  Total downloaded data: {total_data_written}")
+
+        if stats.domain_stats:
+            log_spacer()
+            logger.info("URLs by domain:", extra={"color": "cyan"})
+            logger.info(" - " + "\n - ".join(map(str, stats.domain_stats.items())))
+
+        log_spacer()
+        logger.info("Download Stats:", extra={"color": "cyan"})
+        logger.info(f"  Downloaded: {self.scrape_mapper.tui.files.stats.completed:,} files")
+        logger.info(f"  Skipped (by config): {self.scrape_mapper.tui.files.stats.skipped:,} files")
+        logger.info(
+            f"  Skipped (previously downloaded): {self.scrape_mapper.tui.files.stats.previously_completed:,} files"
+        )
+        logger.info(f"  Failed: {self.scrape_mapper.tui.files.stats.failed:,} files")
+
+        log_spacer()
+        logger.info("Unsupported URLs Stats:", extra={"color": "cyan"})
+        logger.info(f"  Sent to Jdownloader: {self.scrape_mapper.tui.scrape_errors.sent_to_jdownloader:,}")
+        logger.info(f"  Skipped: {self.scrape_mapper.tui.scrape_errors.skipped:,}")
+
+        hash_stats, dedupe_stats = self.hasher.stats
+        self.print_hashing_stats(hash_stats)
+        self.print_dedupe_stats(dedupe_stats)
+        self.print_sort_stats()
+        self.print_errors()
+
+    def print_sort_stats(self, stats: SortStats):
+        log_spacer()
+        logger.info("Sort Stats:", extra={"color": "cyan"})
+        logger.info(f"  Audios: {stats.audios:,}")
+        logger.info(f"  Images: {stats.images:,}")
+        logger.info(f"  Videos: {stats.videos:,}")
+        logger.info(f"  Other Files: {stats.others:,}")
+
+    def print_errors(self):
+        _log_errors(
+            tuple(self.scrape_mapper.tui.scrape_errors),
+            tuple(self.scrape_mapper.tui.download_errors),
+        )
+
+    def print_hashing_stats(self, stats: HashingStats) -> None:
+        log_spacer()
+        logger.info("Checksum Stats:", extra={"color": "cyan"})
+        logger.info(f"  Newly hashed: {stats.new_hashed:,} files")
+        logger.info(f"  Previously hashed: {stats.prev_hashed:,} files")
+
+    def print_dedupe_stats(self, stats: DedupeStats) -> None:
+        log_spacer()
+        logger.info("Dupe Stats:", extra={"color": "cyan"})
+        logger.info(f"  Deleted (duplicates of previous downloads): {stats.deleted:,} files")
+        logger.info(f"  Errors: {stats.total - stats.deleted:,} files")
+
+
+def _log_errors(scrape_errors: Sequence[Error], download_errors: Sequence[Error]) -> None:
+    error_codes = (error.code for error in (*scrape_errors, *download_errors) if error.code is not None)
+
+    try:
+        padding = len(str(max(error_codes)))
+    except ValueError:
+        padding = 0
+
+    for title, errors in (
+        ("Scrape Failures:", scrape_errors),
+        ("Download Failures:", download_errors),
+    ):
+        log_spacer()
+        logger.info(title, extra={"color": "cyan"})
+        if not errors:
+            logger.info(f"  {'None':>{padding}}", extra={"color": "green"})
+            continue
+
+        for error in errors:
+            error_code = error.code if error.code is not None else ""
+            logger.info(
+                f"  {error_code:>{padding}}{' ' if padding else ''}{error.msg}: {error.count:,}", extra={"color": "red"}
+            )
 
 
 @dataclasses.dataclass(slots=True, frozen=True, kw_only=True)
