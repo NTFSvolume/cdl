@@ -133,7 +133,6 @@ class KernelVideoSharingCrawler(Crawler, is_abc=True):
             scrape_item.uploaded_at = self.parse_iso_date(date_str)
         except (LookupError, ValueError, css.SelectorError):
             date_str = css.select_text(soup, _SELECTORS.DATE).split(":", 1)[-1].strip()
-            scrape_item.uploaded_at = self.parse_date(date_str)
 
         await self.handle_file(
             scrape_item.url, scrape_item, filename, ext, custom_filename=custom_filename, debrid_link=video.url
