@@ -142,7 +142,10 @@ class Hasher:
         if file.suffix in TempExt:
             return
 
-        if not await aio.get_size(file):
+        try:
+            if not await aio.get_size(file):
+                return
+        except IsADirectoryError:
             return
 
         with self._tui.new_file(file):

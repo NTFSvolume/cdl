@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from collections import Counter
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
@@ -9,8 +10,6 @@ import pytest
 from cyberdrop_dl.hasher import hash_directory_scanner
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from cyberdrop_dl.managers.manager import Manager
 
 
@@ -66,3 +65,16 @@ async def test_hash_directory_scanner(manager: Manager, expected_results: set[tu
     results = get_hashes(db_path)
     assert len(results) == len(expected_results)
     assert results == expected_results
+
+
+async def test_hash_directory_does_not_crash_with_subfolders(tmp_cwd: Path, manager: Manager):
+    manager.config.settings.dupe_cleanup_options.add_md5_hash = True
+    manager.config.settings.dupe_cleanup_options.add_sha256_hash = True
+    hash_folder = tmp_cwd / "sorted_downloads"
+    here = Path(__file__).parent
+    files = [hash_folder / f.relative_to(here) for f in here.rglob("*") if f.is_file()]
+    assert len(files) >= 10
+    for file in files:
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.touch()
+    await hash_directory_scanner(manager, hash_folder)
