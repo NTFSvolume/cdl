@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Awaitable, Callable
     from pathlib import Path
 
-    from cyberdrop_dl import MediaItem
+    from cyberdrop_dl.url_objects import MediaItem
 
 _required_free_space: ContextVar[int] = ContextVar("_required_free_space")
 

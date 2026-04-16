@@ -8,7 +8,8 @@ from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.url_objects import AbsoluteHttpURL, Resolution
+from cyberdrop_dl.mediaprops import Resolution
+from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, open_graph, parse_url
 
 if TYPE_CHECKING:
