@@ -32,6 +32,7 @@ class PlayGroup:
 class Playlist:
     id: str
     resolution: int
+    url: AbsoluteHttpURL
 
 
 @dataclasses.dataclass(slots=True)
@@ -77,9 +78,8 @@ class OnePaceCrawler(Crawler):
             best_group.sub,
             best_group.dub,
         )
-        best = max(best_group.playlists, key=lambda x: x.resolution)
-        child = scrape_item.create_child(_PD_BASE / best.id)
-        self.handle_embed(child)
+        best_playlist = max(best_group.playlists, key=lambda x: x.resolution)
+        self.handle_embed(scrape_item.create_child(best_playlist.url))
 
 
 def _extract_episodes(soup: BeautifulSoup) -> tuple[dict[str, Any], ...]:
