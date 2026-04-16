@@ -12,7 +12,7 @@ from cyberdrop_dl.downloader.downloader import Downloader
 
 if TYPE_CHECKING:
     import aiohttp
-    from mega import Crypto
+    from mega.data_structures import Crypto
     from yarl import URL
 
     from cyberdrop_dl.managers.manager import Manager
