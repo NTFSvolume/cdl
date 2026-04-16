@@ -17,8 +17,8 @@ from rich.text import Text
 from cyberdrop_dl import __version__
 from cyberdrop_dl.hasher import hash_directory_scanner
 from cyberdrop_dl.progress import hyperlink
+from cyberdrop_dl.sorter import Sorter
 from cyberdrop_dl.utils import text_editor
-from cyberdrop_dl.utils.sorting import Sorter
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable

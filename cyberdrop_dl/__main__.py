@@ -17,8 +17,9 @@ from cyberdrop_dl.logs import log_spacer, setup_console_logging, setup_file_logg
 from cyberdrop_dl.managers.manager import AppData, Manager
 from cyberdrop_dl.models.types import HttpURL
 from cyberdrop_dl.scrape_mapper import ScrapeMapper
-from cyberdrop_dl.utils import apprise, check_latest_pypi
-from cyberdrop_dl.utils.sorting import Sorter
+from cyberdrop_dl.sorter import Sorter
+from cyberdrop_dl.updates import check_latest_pypi
+from cyberdrop_dl.utils import apprise
 from cyberdrop_dl.utils.utilities import check_partials_and_empty_folders
 
 logger = logging.getLogger("cyberdrop_dl")
