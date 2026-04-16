@@ -92,6 +92,8 @@ class HashingUI(LiveUI):
 
     def add_completed(self, hash_type: Literal["xxh128", "md5", "sha256"]):
         setattr(self._stats, hash_type, getattr(self._stats, hash_type) + 1)
+        if hash_type == "xxh128":
+            self.stats.new_hashed += 1
 
 
 if __name__ == "__main__":
