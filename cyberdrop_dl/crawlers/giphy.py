@@ -30,7 +30,7 @@ class GiPhyCrawler(Crawler):
     def transform_url(cls, url: AbsoluteHttpURL) -> AbsoluteHttpURL:
         url = super().transform_url(url)
         match url.parts[1:]:
-            case ["media", gif_id, _] if cls.is_subdomain(url):
+            case ["media", *_, gif_id, _] if cls.is_subdomain(url):
                 return cls.PRIMARY_URL / "gifs" / gif_id
             case _:
                 return url
