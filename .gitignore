@@ -9,6 +9,8 @@
 *.csv
 .coverage
 .config.yaml
+debug_run.test
+URLs.txt
 /build
 
 # Python cache
