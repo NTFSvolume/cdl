@@ -8,7 +8,7 @@ from cyberdrop_dl.exceptions import NoExtensionError
 from cyberdrop_dl.utils.filepath import get_filename_and_ext
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.url_objects import ScrapeItem
 
 
 class DirectHttpFile(Crawler, is_generic=True):

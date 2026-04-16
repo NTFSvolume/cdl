@@ -13,10 +13,10 @@ from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Concatenate, Literal
 from pydantic import BeforeValidator, Field
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, auto_task_id
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import NoExtensionError, ScrapeError
 from cyberdrop_dl.models import AliasModel
 from cyberdrop_dl.models.validators import falsy_as, falsy_as_none
+from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, error_handling_wrapper, remove_parts
 from cyberdrop_dl.utils.dates import to_timestamp
 
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
     from bs4 import BeautifulSoup
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.url_objects import ScrapeItem
 
     _P = ParamSpec("_P")
 

@@ -24,8 +24,8 @@ if TYPE_CHECKING:
     from curl_cffi.requests.session import HttpMethod
 
     from cyberdrop_dl.clients import flaresolverr
-    from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
     from cyberdrop_dl.managers.client_manager import ClientManager
+    from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
 
 logger = logging.getLogger(__name__)

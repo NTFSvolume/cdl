@@ -14,7 +14,6 @@ from pydantic import (
     StringConstraints,
 )
 
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.models.validators import (
     bytesize_to_str,
     change_path_suffix,
@@ -22,6 +21,7 @@ from cyberdrop_dl.models.validators import (
     falsy_as_none,
     to_yarl_url,
 )
+from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
 # ~~~~~ Strings ~~~~~~~
 NonEmptyStr = Annotated[str, StringConstraints(min_length=1, strip_whitespace=True)]

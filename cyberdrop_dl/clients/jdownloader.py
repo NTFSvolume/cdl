@@ -15,8 +15,8 @@ if TYPE_CHECKING:
 
     from myjdapi.myjdapi import Jddevice
 
-    from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
     from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

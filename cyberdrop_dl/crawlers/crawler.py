@@ -22,10 +22,10 @@ from typing_extensions import deprecated
 
 from cyberdrop_dl.clients import HTTPClient, HTTPClientProxy
 from cyberdrop_dl.crawlers._hls import HLSParser
-from cyberdrop_dl.data_structures.mediaprops import ISO639Subtitle, Resolution
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
 from cyberdrop_dl.downloader.downloader import Downloader
 from cyberdrop_dl.exceptions import MaxChildrenError, NoExtensionError, ScrapeError
+from cyberdrop_dl.mediaprops import ISO639Subtitle, Resolution
+from cyberdrop_dl.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
 from cyberdrop_dl.utils import (
     css,
     dates,

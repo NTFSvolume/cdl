@@ -7,8 +7,8 @@ from functools import cached_property
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import DDOSGuardError, DownloadError, ScrapeError
+from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, error_handling_wrapper
 
 if TYPE_CHECKING:
@@ -16,8 +16,8 @@ if TYPE_CHECKING:
 
     from bs4 import BeautifulSoup
 
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
     from cyberdrop_dl.downloader.mega_nz import AnyDict
+    from cyberdrop_dl.url_objects import ScrapeItem
 
 
 JS_SELECTOR = "script#store-prefetch"

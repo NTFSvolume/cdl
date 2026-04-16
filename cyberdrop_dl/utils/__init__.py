@@ -33,9 +33,9 @@ from cyberdrop_dl.exceptions import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Coroutine, Generator
 
-    from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
     from cyberdrop_dl.downloader.downloader import Downloader
     from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.url_objects import AbsoluteHttpURL, MediaItem, ScrapeItem
 
     class _HasManager(Protocol):
         manager: Manager

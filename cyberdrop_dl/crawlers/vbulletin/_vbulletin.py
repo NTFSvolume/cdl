@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.crawlers._forum import Thread
     from cyberdrop_dl.crawlers.crawler import SupportedPaths
-    from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
+    from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem
 
 N_POSTS_PER_PAGE = 15
 

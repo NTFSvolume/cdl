@@ -5,12 +5,12 @@ from typing import TYPE_CHECKING, Any, ClassVar, NotRequired, TypedDict
 from bs4 import BeautifulSoup
 
 from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
+from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import error_handling_wrapper
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.data_structures.url_objects import ScrapeItem
+    from cyberdrop_dl.url_objects import ScrapeItem
 
 _API_ENTRYPOINT = AbsoluteHttpURL("https://a.4cdn.org/")
 _FILES_BASE_URL = AbsoluteHttpURL("https://i.4cdn.org/")

@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
     import aiohttp
 
-    from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+    from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
 
 class HLSParser(ABC):

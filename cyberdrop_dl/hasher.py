@@ -20,8 +20,8 @@ if TYPE_CHECKING:
     from yarl import URL
 
     from cyberdrop_dl.config.settings import DupeCleanup
-    from cyberdrop_dl.data_structures.url_objects import MediaItem
     from cyberdrop_dl.managers.manager import Manager
+    from cyberdrop_dl.url_objects import MediaItem
 
 
 _HASHERS: Final = {

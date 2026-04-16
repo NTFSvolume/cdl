@@ -14,8 +14,8 @@ if TYPE_CHECKING:
     import aiosqlite
     from yarl import URL
 
-    from cyberdrop_dl.data_structures.url_objects import MediaItem
     from cyberdrop_dl.database import Database
+    from cyberdrop_dl.url_objects import MediaItem
 
 
 _FETCH_MANY_SIZE: int = 1000

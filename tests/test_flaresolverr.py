@@ -5,7 +5,7 @@ import aiohttp
 import pytest
 
 from cyberdrop_dl.clients.flaresolverr import Command, FlareSolverrClient
-from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
 ENV_NAME = "CDL_FLARESOLVERR"
 FLARESOLVER_URL = os.environ.get(ENV_NAME, "")  # or "http://localhost:8191"

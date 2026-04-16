@@ -10,13 +10,13 @@ import m3u8.model
 from m3u8 import M3U8 as _M3U8
 from m3u8 import Media, Playlist
 
-from cyberdrop_dl.data_structures.mediaprops import Codecs, Resolution
+from cyberdrop_dl.mediaprops import Codecs, Resolution
 from cyberdrop_dl.utils import parse_url
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable
 
-    from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
+    from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
 
 class MediaType(StrEnum):

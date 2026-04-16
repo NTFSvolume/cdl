@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from cyberdrop_dl.utils.sorting import Sorter, _format_dest, _have_same_content, _move_file
+from cyberdrop_dl.sorter import Sorter, _format_dest, _have_same_content, _move_file
 
 DOWNLOADS = Path("/mnt/home/user/downloads/cdl/")
 SORT_DIR = DOWNLOADS.parent / "cdl_sorted"

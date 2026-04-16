@@ -8,7 +8,7 @@ from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.utils import dates, error_handling_wrapper, webdav
 
 if TYPE_CHECKING:
-    from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
+    from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem
 
 
 class OwnCloudCrawler(Crawler, is_generic=True):
