@@ -5,8 +5,7 @@ from typing import TYPE_CHECKING, ClassVar
 from cyberdrop_dl.crawlers._fluid_player import FluidPlayerCrawler
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import open_graph
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import error_handling_wrapper, open_graph
 
 if TYPE_CHECKING:
     from cyberdrop_dl.crawlers.crawler import SupportedPaths

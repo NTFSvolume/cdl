@@ -19,7 +19,7 @@ from typing_extensions import TypeVar, override
 from cyberdrop_dl.clients.flaresolverr import Solution as FlaresolverrSolution
 from cyberdrop_dl.data_structures import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import InvalidContentTypeError, ScrapeError
-from cyberdrop_dl.utils.utilities import parse_url
+from cyberdrop_dl.utils import parse_url
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator

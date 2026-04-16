@@ -345,7 +345,7 @@ class ScrapeItem:
         add_parent: AbsoluteHttpURL | bool | None = None,
     ) -> Self:
         """Creates a scrape item."""
-        from cyberdrop_dl.utils.utilities import is_absolute_http_url
+        from cyberdrop_dl.utils import is_absolute_http_url
 
         scrape_item = self.copy()
         assert is_absolute_http_url(url)

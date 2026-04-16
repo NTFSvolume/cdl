@@ -11,8 +11,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Literal
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, auto_task_id
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import css
-from cyberdrop_dl.utils.utilities import DictDataclass, error_handling_wrapper, is_blob_or_svg
+from cyberdrop_dl.utils import DictDataclass, css, error_handling_wrapper, is_blob_or_svg
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator

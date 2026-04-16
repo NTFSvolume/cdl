@@ -10,8 +10,7 @@ from pydantic import TypeAdapter
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths, auto_task_id
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils import dates
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import dates, error_handling_wrapper
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

@@ -22,8 +22,7 @@ from cyberdrop_dl.exceptions import (
     SkipDownloadError,
     TooManyCrawlerErrors,
 )
-from cyberdrop_dl.utils import dates
-from cyberdrop_dl.utils.utilities import error_handling_wrapper, parse_url
+from cyberdrop_dl.utils import dates, error_handling_wrapper, parse_url
 
 logger = logging.getLogger(__name__)
 

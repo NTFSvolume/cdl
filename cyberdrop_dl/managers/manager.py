@@ -17,7 +17,7 @@ from cyberdrop_dl.hasher import Hasher
 from cyberdrop_dl.logs import capture_logs, log_spacer
 from cyberdrop_dl.managers.client_manager import ClientManager
 from cyberdrop_dl.managers.logs import LogManager
-from cyberdrop_dl.utils.utilities import get_system_information
+from cyberdrop_dl.utils import get_system_information
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

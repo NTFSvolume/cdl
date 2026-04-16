@@ -15,8 +15,7 @@ import imagesize
 from cyberdrop_dl import aio, ffmpeg
 from cyberdrop_dl.constants import FileExt, TempExt
 from cyberdrop_dl.progress.sorting import SortingUI
-from cyberdrop_dl.utils import strings
-from cyberdrop_dl.utils.utilities import delete_empty_files_and_folders
+from cyberdrop_dl.utils import delete_empty_files_and_folders, strings
 
 if TYPE_CHECKING:
     from cyberdrop_dl.managers.manager import Manager

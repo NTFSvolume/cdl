@@ -25,8 +25,7 @@ from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.exceptions import JDownloaderError, NoExtensionError
 from cyberdrop_dl.logs import log_spacer
 from cyberdrop_dl.progress.scraping import ScrapingUI
-from cyberdrop_dl.utils import filepath
-from cyberdrop_dl.utils.utilities import get_download_path, remove_trailing_slash
+from cyberdrop_dl.utils import filepath, get_download_path, remove_trailing_slash
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Coroutine, Generator, Iterable, Iterator, Sequence

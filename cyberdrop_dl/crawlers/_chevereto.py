@@ -6,8 +6,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, final
 from cyberdrop_dl.crawlers.crawler import Crawler
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.exceptions import PasswordProtectedError
-from cyberdrop_dl.utils import css, json, open_graph
-from cyberdrop_dl.utils.utilities import error_handling_wrapper
+from cyberdrop_dl.utils import css, error_handling_wrapper, json, open_graph
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Mapping

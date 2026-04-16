@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, ClassVar, Self
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths, auto_task_id
 from cyberdrop_dl.data_structures.url_objects import AbsoluteHttpURL, MediaItem
 from cyberdrop_dl.exceptions import ScrapeError
-from cyberdrop_dl.utils.utilities import DictDataclass, error_handling_wrapper
+from cyberdrop_dl.utils import DictDataclass, error_handling_wrapper
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Mapping

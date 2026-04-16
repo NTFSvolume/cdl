@@ -28,8 +28,8 @@ from cyberdrop_dl.models.types import (
     PathOrNone,
 )
 from cyberdrop_dl.models.validators import falsy_as, to_timedelta
+from cyberdrop_dl.utils import delete_empty_files_and_folders
 from cyberdrop_dl.utils.strings import validate_format_string
-from cyberdrop_dl.utils.utilities import delete_empty_files_and_folders
 
 _SORTING_COMMON_FIELDS = {
     "base_dir",
