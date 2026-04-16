@@ -64,32 +64,34 @@ class ScrapingUI(LiveUI):
 
     def _create_screen(self) -> Screen:
         horizontal, vertical = Layout(), Layout()
+        bottom = (
+            Layout(self.scrape, name="scrape", size=self.scrape.max_rows + _PANEL_PADDING),
+            Layout(self.downloads, name="downloads", minimum_size=10),
+            Layout(self.status, name="status", size=2),
+        )
 
-        top = (
+        horizontal.split_column(Layout(name="top", size=self.scrape_errors.max_rows + _PANEL_PADDING), *bottom)
+        horizontal["top"].split_row(
             Layout(self.files, name="files"),
             Layout(self.scrape_errors, name="scrape_errors"),
             Layout(self.download_errors, name="download_errors"),
         )
 
-        bottom = (
-            Layout(self.scrape, name="scrape", size=self.scrape.max_rows + _PANEL_PADDING),
-            Layout(self.downloads, name="downloads"),
-            Layout(self.status, name="status", size=2),
+        vertical.split_column(
+            Layout(self.files, name="files", size=9),
+            Layout(self.scrape_errors, name="scrape_errors"),
+            Layout(self.download_errors, name="download_errors"),
+            *bottom,
         )
 
-        horizontal.split_column(Layout(name="top", size=self.scrape_errors.max_rows + _PANEL_PADDING), *bottom)
-        vertical.split_column(Layout(name="top", ratio=60), *bottom)
-
-        horizontal["top"].split_row(*top)
-        vertical["top"].split_column(*top)
         return Screen(horizontal, vertical)
 
     def hide_scrape_panel(self) -> None:
+        free_rows = self.scrape.max_rows + _PANEL_PADDING
+
         for layout in self._screen:
             layout["scrape"].visible = False
-            layout["downloads"].ratio = 2
-
-        free_rows = self.scrape.max_rows + _PANEL_PADDING
+            layout["downloads"].minimum_size += free_rows
 
         self.downloads.max_rows += free_rows
         for _ in range(free_rows):
