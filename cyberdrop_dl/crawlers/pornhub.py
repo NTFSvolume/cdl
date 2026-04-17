@@ -272,7 +272,7 @@ class PornHubCrawler(Crawler):
                 debrid_link = self.parse_url(best_format.url)
 
         if use_hls or best_format is None:
-            m3u8, _ = await self.get_m3u8_from_playlist_url(self.parse_url(best_hls.url))
+            m3u8, _ = await self.request_m3u8_playlist(self.parse_url(best_hls.url))
             best_format = best_hls
 
         scrape_item.url = page_url

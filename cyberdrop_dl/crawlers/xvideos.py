@@ -121,7 +121,7 @@ class XVideosCrawler(Crawler):
         scrape_item.uploaded_at = self.parse_iso_date(css.json_ld(soup)["uploadDate"])
         script = css.select_text(soup, Selectors.HLS_VIDEO_JS)
         m3u8_url = self.parse_url(get_text_between(script, "setVideoHLS('", "')"))
-        m3u8, info = await self.get_m3u8_from_playlist_url(m3u8_url)
+        m3u8, info = await self.request_m3u8_playlist(m3u8_url)
         custom_filename = self.create_custom_filename(title, ".mp4", file_id=encoded_id, resolution=info.resolution)
         # Remove url slug to prevent duplicates in database. It's language specific and not required.
         url = scrape_item.url.with_name("_")

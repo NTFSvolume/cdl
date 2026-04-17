@@ -198,7 +198,7 @@ class RumbleCrawler(Crawler):
         other_formats: list[Format] = [fmt for fmt in formats if fmt.is_single_file or hls_formats.append(fmt)]
 
         async def resolve_m3u8(format: Format) -> Format:
-            m3u8, info = await self.get_m3u8_from_playlist_url(format.url)
+            m3u8, info = await self.request_m3u8_playlist(format.url)
             return format._replace(
                 resolution=info.resolution,
                 m3u8=m3u8,

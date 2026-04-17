@@ -100,7 +100,7 @@ class VSCOCrawler(Crawler):
                 return
 
             ext = ".mp4"
-            m3u8, info = await self.get_m3u8_from_playlist_url(url)
+            m3u8, info = await self.request_m3u8_playlist(url)
             res = info.resolution
 
         name, ext = self.get_filename_and_ext(video["id"] + ext)

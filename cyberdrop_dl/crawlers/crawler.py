@@ -790,8 +790,7 @@ class Crawler(HTTPClientProxy, HLSParser, ABC):
         scrape_item.url = redirect
         self.create_task(self.run(scrape_item))
 
-    @deprecated("Use self.request_m3u8 instead")
-    async def get_m3u8_from_playlist_url(
+    async def request_m3u8_playlist(
         self,
         m3u8_playlist_url: AbsoluteHttpURL,
         /,

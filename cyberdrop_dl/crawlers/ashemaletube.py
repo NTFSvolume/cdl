@@ -194,6 +194,6 @@ class AShemaleTubeCrawler(Crawler):
         sources_data = json.loads(sources)
         url = self.parse_url(sources_data["hlsAuto"])
 
-        rendition, playlist_info = await self.get_m3u8_from_playlist_url(url)
+        rendition, playlist_info = await self.request_m3u8_playlist(url)
 
         return playlist_info.resolution, url, rendition

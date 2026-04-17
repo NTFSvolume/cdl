@@ -71,7 +71,7 @@ class CloudflareStreamCrawler(Crawler):
             return
 
         m3u8_url = self.PRIMARY_URL / (token or video_id) / "manifest/video.m3u8"
-        m3u8, info = await self.get_m3u8_from_playlist_url(m3u8_url)
+        m3u8, info = await self.request_m3u8_playlist(m3u8_url)
         filename, ext = self.get_filename_and_ext(video_id + ".mp4")
         custom_filename = self.create_custom_filename(
             video_id,

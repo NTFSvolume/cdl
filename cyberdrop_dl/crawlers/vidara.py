@@ -39,7 +39,7 @@ class VidaraCrawler(Crawler, db_path="path_qs_frag"):
             return
 
         m3u8_url, thumbnail = await self._request_stream(video_id)
-        m3u8, info = await self.get_m3u8_from_playlist_url(m3u8_url)
+        m3u8, info = await self.request_m3u8_playlist(m3u8_url)
         name, ext = self.get_filename_and_ext(video_id + ".mp4")
         custom_filename = self.create_custom_filename(name, ext, resolution=info.resolution)
 

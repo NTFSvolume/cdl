@@ -62,7 +62,7 @@ class MegaCloudCrawler(Crawler):
 
     async def _handle_video(self: Crawler, scrape_item: ScrapeItem, video: MegaCloudVideo) -> None:
         m3u8_url = video.sources[0]
-        m3u8, info = await self.get_m3u8_from_playlist_url(m3u8_url, headers=_HEADERS)
+        m3u8, info = await self.request_m3u8_playlist(m3u8_url, headers=_HEADERS)
         filename, ext = self.get_filename_and_ext(video.id + ".mp4")
         video_name = self.create_custom_filename(
             video.title or video.id, ext, file_id=video.id, resolution=info.resolution

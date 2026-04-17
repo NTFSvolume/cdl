@@ -115,7 +115,7 @@ class TwitchCrawler(Crawler):
             token=access_token["value"],
         )
 
-        m3u8, info = await self.get_m3u8_from_playlist_url(m3u8_url)
+        m3u8, info = await self.request_m3u8_playlist(m3u8_url)
         fps = info.stream_info.frame_rate
         filename = self.create_custom_filename(
             title,

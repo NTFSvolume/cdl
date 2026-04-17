@@ -71,7 +71,7 @@ class MissAVCrawler(Crawler):
 
         uuid = _extract_uuid(soup)
         m3u8_url = _M3U8_SERVER / uuid / "playlist.m3u8"
-        m3u8, info = await self.get_m3u8_from_playlist_url(
+        m3u8, info = await self.request_m3u8_playlist(
             m3u8_url,
             headers={"Referer": "https://missav.ws/"},
         )
