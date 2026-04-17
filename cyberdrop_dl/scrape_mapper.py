@@ -10,8 +10,6 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Self, TypeVar
 
-import aiofiles
-
 from cyberdrop_dl import aio, plugins, storage
 from cyberdrop_dl.clients.jdownloader import JDownloader
 from cyberdrop_dl.constants import BlockedDomains
@@ -372,7 +370,7 @@ async def _parse_input_file_groups(input_file: Path) -> AsyncGenerator[tuple[str
 
     block_quote = False
     current_group_name = ""
-    async with aiofiles.open(input_file, encoding="utf8") as f:
+    async with aio.open(input_file, encoding="utf8") as f:
         async for line in f:
             if line.startswith(("---", "===")):  # New group begins here
                 current_group_name = line.replace("---", "").replace("===", "").strip()

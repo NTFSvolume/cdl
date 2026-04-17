@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, final
 
-import aiofiles
 from mega.chunker import MegaChunker, get_chunks
 
 from cyberdrop_dl import aio, storage
@@ -38,7 +37,7 @@ class MegaDownloadClient(DownloadClient):
         crypto, file_size = self._decrypt_mapping.pop(media_item.url)
         chunk_decryptor = MegaChunker(crypto.key, crypto.iv, crypto.meta_mac)
 
-        async with aiofiles.open(media_item.partial_file, mode="ab") as f:
+        async with aio.open(media_item.partial_file, mode="ab") as f:
             for _, chunk_size in get_chunks(file_size):
                 raw_chunk = await content.readexactly(chunk_size)
                 chunk = chunk_decryptor.read(raw_chunk)

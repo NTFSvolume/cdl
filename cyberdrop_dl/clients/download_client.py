@@ -9,8 +9,6 @@ from collections.abc import Generator
 from http import HTTPStatus
 from typing import TYPE_CHECKING, Any
 
-import aiofiles
-
 from cyberdrop_dl import aio, constants, storage
 from cyberdrop_dl.clients.response import AbstractResponse
 from cyberdrop_dl.constants import FileExt
@@ -218,7 +216,7 @@ class DownloadClient:
         await check_free_space()
         await self._pre_download_check(media_item)
 
-        async with aiofiles.open(media_item.partial_file, mode="ab") as f:
+        async with aio.open(media_item.partial_file, mode="ab") as f:
             async for chunk in content.iter_chunked(self.client_manager.speed_limiter.chunk_size):
                 await check_free_space()
                 chunk_size = len(chunk)
