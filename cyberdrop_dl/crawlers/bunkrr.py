@@ -5,7 +5,6 @@ import dataclasses
 import json
 import re
 from collections.abc import Generator
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from aiohttp import ClientConnectorError
@@ -93,11 +92,7 @@ class File:
         if self.thumbnail.count("https://") != 1:
             return
 
-        thumb = parse_url(self.thumbnail)
-        if thumb.parts[1:2] != ("thumbs",):
-            return
-
-        src = thumb.with_path(thumb.path.replace("/thumbs/", "/")).with_suffix(Path(self.name).suffix)
+        src = parse_url(self.thumbnail).with_path(self.cdnEndpoint)
 
         if src.suffix.lower() not in FileExt.IMAGE:
             src = src.with_host(src.host.replace("i-", ""))
@@ -144,6 +139,8 @@ class BunkrrCrawler(Crawler):
                     return await self._direct_file(scrape_item, scrape_item.url)
 
                 raise ValueError
+            case _:
+                raise ValueError
 
     @error_handling_wrapper
     async def album(self, scrape_item: ScrapeItem, album_id: str) -> None:
@@ -162,7 +159,7 @@ class BunkrrCrawler(Crawler):
 
     @auto_task_id
     @error_handling_wrapper
-    async def _album_file(self, scrape_item: ScrapeItem, file: File, results: dict[str, int]) -> None:
+    async def _album_file(self, scrape_item: ScrapeItem, file: File, results: dict[str, bool]) -> None:
         db_url = scrape_item.url.with_host(self.PRIMARY_URL.host)
         if await self.check_complete_from_referer(db_url):
             return
