@@ -181,6 +181,8 @@ class JSONWebToken:
 
     @classmethod
     def decode(cls, jwt: str, /) -> Self:
+        if not is_jwt(jwt):
+            raise ValueError("Not a valid JSON Web Token", jwt)
         b64_headers, b64_payload, b64_signature = jwt.split(".")
         headers = cls._decode(b64_headers)
         return cls(headers["alg"], headers, cls._decode(b64_payload), b64_signature, jwt)

@@ -5,14 +5,13 @@ https://developers.cloudflare.com/stream/
 
 from __future__ import annotations
 
-import uuid
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import error_handling_wrapper
-from cyberdrop_dl.utils.json import JSONWebToken, is_jwt
+from cyberdrop_dl.utils.json import JSONWebToken
 
 if TYPE_CHECKING:
     from cyberdrop_dl.url_objects import ScrapeItem
@@ -21,7 +20,7 @@ _DEFAULT_VIDEO_CDN = AbsoluteHttpURL("https://watch.cloudflarestream.com")
 
 
 class CloudflareStreamCrawler(Crawler):
-    SUPPORTED_DOMAINS: SupportedDomains = "videodelivery.net", "cloudflarestream.com"
+    SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = "videodelivery.net", "cloudflarestream.com"
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "Public Video": (
             "/embed/___.js?video=<video_uid>",
@@ -51,18 +50,18 @@ class CloudflareStreamCrawler(Crawler):
                 raise ValueError
 
     async def video(self, scrape_item: ScrapeItem, video_id: str) -> None:
-        if is_jwt(video_id):
-            # https://developers.cloudflare.com/stream/viewing-videos/securing-your-stream/
-            token = video_id
-            jwt = JSONWebToken.decode(token)
+        # https://developers.cloudflare.com/stream/viewing-videos/securing-your-stream/
+        try:
+            jwt = JSONWebToken.decode(video_id)
+        except ValueError:
+            token = None
+        else:
+            token = jwt.encoded
             video_id = jwt.payload["sub"]
             if jwt.is_expired():
                 self.raise_exc(scrape_item, ScrapeError(401, "Access token to the video has expired"))
                 return
-        else:
-            token = None
 
-        _ = uuid.UUID(hex=video_id)  # raise ValueError if video_id is not a valid uuid
         scrape_item.url = _DEFAULT_VIDEO_CDN / video_id
         return await self._video(scrape_item, video_id, token)
 
