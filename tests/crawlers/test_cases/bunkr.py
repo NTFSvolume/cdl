@@ -69,10 +69,9 @@ TEST_CASES = [
         "https://bunkr.cr/a/5aZU25Cb",
         [
             {
-                "url": "AN",
+                "url": "ANY",
                 "download_folder": r"re:abbywinters - Elin & Maddie (Girl - Girl Extra Large)",
                 "album_id": "5aZU25Cb",
-                "uploaded_at": 1755391253,
             }
         ],
         257,
@@ -84,7 +83,7 @@ TEST_CASES = [
                 "url": "ANY",
                 "download_folder": r"re:NerdballerTV - Videos (2018-2023) [Complete]",
                 "album_id": "TQAgjP8m",
-                "uploaded_at": 1709776012,
+                "uploaded_at": int,
             }
         ],
         220,

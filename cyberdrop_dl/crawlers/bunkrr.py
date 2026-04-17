@@ -30,6 +30,7 @@ _REINFORCED_URL = AbsoluteHttpURL("https://get.bunkrr.su")
 class Selector:
     ALBUM_FILES = "script:-soup-contains('window.albumFiles = ')"
     DOWNLOAD_BTN = "a.btn.ic-download-01"
+    IMAGE_CONTAINER = "img.max-h-full.w-auto.object-cover.relative"
 
 
 _HOST_OPTIONS: frozenset[str] = frozenset(("bunkr.site", "bunkr.cr", "bunkr.ph"))
@@ -193,9 +194,20 @@ class BunkrrCrawler(Crawler):
             return
 
         soup = await self._request_soup_lenient(scrape_item.url)
-        reinforced_url = css.select(soup, Selector.DOWNLOAD_BTN, "href")
-        file_id = self.parse_url(reinforced_url).name
-        src = await self._request_download(file_id)
+        src = None
+        try:
+            image = self.parse_url(css.select(soup, Selector.IMAGE_CONTAINER, "src"))
+        except css.SelectorError:
+            pass
+        else:
+            if len(image.parts) == 2:
+                src = image
+
+        if self.deep_scrape or not src:
+            reinforced_url = css.select(soup, Selector.DOWNLOAD_BTN, "href")
+            file_id = self.parse_url(reinforced_url).name
+            src = await self._request_download(file_id)
+
         await self._direct_file(scrape_item, src, open_graph.title(soup))
 
     @error_handling_wrapper
