@@ -115,6 +115,12 @@ def download(
     appdata = AppData.from_path(cli.appdata_folder) if cli.appdata_folder else AppData.default()
 
     config = Config.create(appdata, cli.config_file).update(config)
+    if cli.retry_all or cli.retry_maintenance:
+        config.settings.runtime_options.ignore_history = True
+
+    if not cli.fullscreen_ui or cli.retry_any or cli.config_file or config.settings.sorting.sort_downloads:
+        cli.download = True
+
     manager = Manager(cli, appdata, config)
 
     _main(manager)
