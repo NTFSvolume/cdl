@@ -194,10 +194,14 @@ class Downloader:
             download_folder = temp_dir / m3u8.media_type
 
             n_segmets = len(m3u8.segments)
+            real_ext = parse_url(m3u8.segments[0].absolute_uri).suffix
             if n_segmets > 1:
-                suffix = f".{m3u8.media_type}.ts"
+                if m3u8.media_type == "subtitle":
+                    suffix = f".{m3u8.media_type}{real_ext}"
+                else:
+                    suffix = f".{m3u8.media_type}.ts"
             else:
-                suffix = media_item.path.suffix + parse_url(m3u8.segments[0].absolute_uri).suffix
+                suffix = media_item.path.suffix + real_ext
 
             output = media_item.path.with_suffix(suffix)
             if await aio.is_file(output):
@@ -214,9 +218,12 @@ class Downloader:
             seg_paths = [result.item.path for result in tasks_results]
 
             if n_segmets > 1:
-                ffmpeg_result = await ffmpeg.concat(seg_paths, output)
-                if not ffmpeg_result.success:
-                    raise DownloadError("FFmpeg Concat Error", ffmpeg_result.stderr, media_item)
+                if m3u8.media_type == "subtitle":
+                    await ffmpeg.merge_subs(seg_paths, output)
+                else:
+                    ffmpeg_result = await ffmpeg.concat(seg_paths, output, same_folder=False)
+                    if not ffmpeg_result.success:
+                        raise DownloadError("FFmpeg Concat Error", ffmpeg_result.stderr, media_item)
             else:
                 _ = await asyncio.to_thread(seg_paths[0].rename, output)
             return output

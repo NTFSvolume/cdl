@@ -1,4 +1,5 @@
 import datetime
+from pathlib import Path
 
 import pytest
 
@@ -65,3 +66,31 @@ def test_parse_duration(input: str, hours: float, minutes: float, seconds: float
 def test_parse_null_duration(input: str) -> None:
     output = ffmpeg._parse_duration(input)
     assert output is None
+
+
+class TestMergeSubs:
+    def test_normal_merge(self, tmp_path: Path) -> None:
+        srcs = [tmp_path / f"sub{i}.srt" for i in range(1, 4)]
+        for p, content in zip(srcs, (b"AAA\n", b"BBB\n", b"CCC\n"), strict=True):
+            p.write_bytes(content)
+
+        out = tmp_path / "merged.srt"
+
+        ffmpeg._raw_concat(srcs, out)
+
+        assert out.read_bytes() == b"AAA\nBBB\nCCC\n"
+        for p in srcs:
+            assert not p.exists()
+
+    def test_empty_input(self, tmp_path: Path) -> None:
+        out = tmp_path / "empty.srt"
+        ffmpeg._raw_concat([], out)
+        assert out.read_bytes() == b""
+
+    def test_single_file(self, tmp_path: Path) -> None:
+        src = tmp_path / "subtitles.srt"
+        src.write_bytes(b" test \n")
+        out = tmp_path / "out.srt"
+        ffmpeg._raw_concat([src], out)
+        assert out.read_bytes() == b" test \n"
+        assert not src.exists()

@@ -43,7 +43,7 @@ class HLSParser(ABC):
             rendition = m3u8.select_best_rendition(m3u8_obj, only=only, exclude=exclude)
             return await self._resolve_rendition(rendition, headers)
         m3u8_obj.media_type = "video"
-        return m3u8.Rendition(m3u8_obj), None
+        return m3u8.Rendition(m3u8_obj, None, None), None
 
     async def _resolve_rendition(
         self,
@@ -51,19 +51,24 @@ class HLSParser(ABC):
         /,
         headers: Mapping[str, str] | None = None,
     ):
-        video, *audio_and_subs = await asyncio.gather(
+
+        async def resolve(url: AbsoluteHttpURL | None, media_type: Literal["video", "audio", "subtitle"]):
+            if not url:
+                return
+            return await self._request_m3u8(url, headers, media_type)
+
+        video, audio, subs = await asyncio.gather(
             *(
-                self._request_m3u8(url, headers, name)
+                resolve(url, name)
                 for name, url in zip(
                     ("video", "audio", "subtitle"),
                     rendition.urls,
                     strict=True,
                 )
-                if url
             )
         )
-
-        return m3u8.Rendition(video, *audio_and_subs), rendition
+        assert video
+        return m3u8.Rendition(video, audio, subs), rendition
 
     async def _request_m3u8(
         self,
