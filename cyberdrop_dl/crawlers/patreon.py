@@ -122,7 +122,7 @@ class PatreonCrawler(Crawler):
         except Exception:
             return None
         else:
-            return Asset(attachment, url, attachment["name"])
+            return Asset(attachment["name"], url, attachment)
 
 
 def _extract_bootstrap(soup: BeautifulSoup) -> dict[str, Any]:
@@ -131,7 +131,7 @@ def _extract_bootstrap(soup: BeautifulSoup) -> dict[str, Any]:
     return envelope.get("pageBootstrap") or envelope["bootstrap"]
 
 
-def _flatten_included(included: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _flatten_included(included: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     flatten = {}
     for asset in included:
         flatten.setdefault(asset["type"], {})[asset["id"]] = asset["attributes"]
@@ -171,15 +171,15 @@ def _parse_files(
 
 def _parse_attributes(attributes: dict[str, Any]) -> Generator[tuple[str, Any]]:
     json_string = "_json_string"
-    json_keys = tuple(key.removesuffix(json_string) for key in attributes if key.endswith(json_string))
+    json_keys = tuple(key for key in attributes if key.endswith(json_string))
 
-    for key in json_keys:
-        value = attributes.pop(key, None)
-        json_value = attributes.pop(key + json_string, None)
+    for json_key in json_keys:
+        value = attributes.pop(json_key.removesuffix(json_string), None)
+        json_value = attributes.pop(json_key, None)
         if not value and json_value:
             value = json.loads(json_value)
 
-        yield key, value
+        yield json_key, value
 
     yield from attributes.items()
 
