@@ -51,19 +51,24 @@ class HLSParser(ABC):
         /,
         headers: Mapping[str, str] | None = None,
     ):
-        video, *audio_and_subs = await asyncio.gather(
+
+        async def resolve(url: AbsoluteHttpURL | None, media_type: Literal["video", "audio", "subtitle"]):
+            if not url:
+                return
+            return await self._request_m3u8(url, headers, media_type)
+
+        video, audio, subs = await asyncio.gather(
             *(
-                self._request_m3u8(url, headers, name)
+                resolve(url, name)
                 for name, url in zip(
                     ("video", "audio", "subtitle"),
                     rendition.urls,
                     strict=True,
                 )
-                if url
             )
         )
-
-        return m3u8.Rendition(video, *audio_and_subs), rendition
+        assert video
+        return m3u8.Rendition(video, audio, subs), rendition
 
     async def _request_m3u8(
         self,
