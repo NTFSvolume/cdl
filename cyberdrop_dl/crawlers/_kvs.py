@@ -101,6 +101,8 @@ class KernelVideoSharingCrawler(Crawler, is_abc=True):
             title = title.partition("Showing")[0].partition("Tagged with")[-1].strip()
         elif title.startswith(trash := "New Videos for: "):
             title = title.partition(trash)[-1]
+        elif title.startswith(trash := "Videos for: "):
+            title = title.partition(trash)[-1]
         else:
             title = title.partition("New Videos")[0].strip()
 

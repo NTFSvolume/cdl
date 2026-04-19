@@ -25,4 +25,26 @@ TEST_CASES = [
         ],
         112,
     ),
+    (
+        "https://thothub.to/tags/daringkiara/",
+        [
+            {
+                "url": "ANY",
+                "datetime": None,
+                "download_folder": r"re:daringkiara [tags] (ThotHub)",
+            }
+        ],
+        range(31, 50),
+    ),
+    (
+        "https://thothub.to/search/daringkiara/",
+        [
+            {
+                "url": "ANY",
+                "datetime": None,
+                "download_folder": r"re:daringkiara [search] (ThotHub)",
+            }
+        ],
+        range(31, 50),
+    ),
 ]
