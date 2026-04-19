@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import dataclasses
+import itertools
 import re
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths
-from cyberdrop_dl.exceptions import ScrapeError
+from cyberdrop_dl.exceptions import DownloadError, ScrapeError
 from cyberdrop_dl.mediaprops import Resolution
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, open_graph, parse_url
@@ -163,6 +164,46 @@ class KernelVideoSharingCrawler(Crawler, is_abc=True):
         soup = await self.request_soup(scrape_item.url)
         src = self.parse_url(css.select(soup, Selector.PICTURE, "src"))
         await self.direct_file(scrape_item, src)
+
+    async def _ajax_pagination(
+        self,
+        url: AbsoluteHttpURL,
+        block_id: str,
+        *,
+        last_page: int | None = None,
+        mode: str = "async",
+        function: str = "get_block",
+        is_private: int = 0,
+        sort_by: str = "",
+        from_query_param_name: str = "from",
+        q: str | None = None,
+        **kwargs: int | str,
+    ):
+        page_url = url.with_query(
+            mode=mode,
+            function=function,
+            block_id=block_id,
+            is_private=is_private,
+            sort_by=sort_by,
+        )
+        if q is not None:
+            page_url = page_url.update_query(q=q)
+
+        if kwargs:
+            page_url = page_url.update_query(kwargs)
+
+        for page in itertools.count(2):
+            if last_page is not None and page > last_page:
+                break
+            page_url = page_url.update_query({from_query_param_name: page})
+            try:
+                soup = await self.request_soup(page_url)
+            except DownloadError as e:
+                if e.status == 404:
+                    break
+                raise
+
+            yield soup
 
 
 def extract_kvs_video(cls: Crawler, soup: BeautifulSoup) -> KVSVideo:
