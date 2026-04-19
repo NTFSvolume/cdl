@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import dataclasses
-from dataclasses import dataclass
 from datetime import timedelta
 from enum import StrEnum
 from functools import cached_property
@@ -77,7 +76,7 @@ class Rendition:
         return iter(dataclasses.astuple(self))
 
 
-@dataclass(frozen=True, slots=True, order=True)
+@dataclasses.dataclass(frozen=True, slots=True, order=True)
 class StreamInfo:
     """Exactly the same as m3u8.model.StreamInfo but as a dataclass, to support sorting rendition groups with the same resolution but different bitrates (bandwidth)"""
 
@@ -100,7 +99,7 @@ class StreamInfo:
     __str__ = m3u8.model.StreamInfo.__str__
 
 
-@dataclass(frozen=True, slots=True, order=True)
+@dataclasses.dataclass(frozen=True, slots=True, order=True)
 class RenditionDetails:
     resolution: Resolution
     codecs: Codecs

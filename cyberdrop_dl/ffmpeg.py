@@ -155,11 +155,11 @@ async def _delete_files(files: Iterable[Path], *, same_folder: bool) -> None:
 
 
 async def merge_subs(files: Iterable[Path], output: Path) -> None:
-    await asyncio.to_thread(_merge_subs, files, output)
-
-
-def _merge_subs(files: Iterable[Path], output: Path) -> None:
     logger.debug("Merging subs to '%s'", output)
+    await asyncio.to_thread(_raw_concat, files, output)
+
+
+def _raw_concat(files: Iterable[Path], output: Path) -> None:
     with output.open("wb") as out:
         for file in files:
             with file.open("rb") as fp_in:
