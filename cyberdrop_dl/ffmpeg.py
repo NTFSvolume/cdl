@@ -148,6 +148,7 @@ async def _try_delete(file: Path) -> None:
 async def _delete_files(files: Iterable[Path], *, same_folder: bool) -> None:
     if same_folder:
         folder = next(iter(files)).parent
+        logger.debug("Deleting all files inside '%s'", folder)
         await asyncio.to_thread(shutil.rmtree, folder, ignore_errors=True)
     else:
         _ = await asyncio.gather(*map(_try_delete, files))
