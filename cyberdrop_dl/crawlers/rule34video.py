@@ -7,6 +7,7 @@ from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.utils import css, error_handling_wrapper
 
 if TYPE_CHECKING:
+    from cyberdrop_dl.crawlers.crawler import SupportedPaths
     from cyberdrop_dl.url_objects import ScrapeItem
 
 
@@ -19,6 +20,14 @@ class Selector:
 
 
 class Rule34VideoCrawler(KernelVideoSharingCrawler):
+    SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
+        "Search": "/search/<query>",
+        "Category": "/categories/<name>",
+        "Tag": "/tags/<name>",
+        "Video": "/video/<id>/<slug>",
+        "Members": "/members/<member_id>",
+        "Model": "/models/<name>",
+    }
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://rule34video.com/")
     DOMAIN: ClassVar[str] = "rule34video"
     FOLDER_DOMAIN: ClassVar[str] = "Rule34Video"

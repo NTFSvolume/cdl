@@ -55,9 +55,8 @@ class KernelVideoSharingCrawler(Crawler, is_abc=True):
         "Videos": "/videos/<slug>",
         "Members": "/members/<member_id>",
     }
-
     NEXT_PAGE_SELECTOR: ClassVar[str] = Selector.NEXT_PAGE
-    _RATE_LIMIT: ClassVar[RateLimit] = 3, 10
+    _RATE_LIMIT: ClassVar[RateLimit] = 6, 5
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
@@ -77,6 +76,22 @@ class KernelVideoSharingCrawler(Crawler, is_abc=True):
                 if query := scrape_item.url.query.get("q"):
                     return await self.collection(scrape_item, query)
                 raise ValueError
+
+    @classmethod
+    def _clean_title(cls, title: str) -> str:
+        if title.startswith("New Videos Tagged"):
+            title = title.partition("Showing")[0].partition("Tagged with")[-1].strip()
+        elif title.startswith(trash := "New Videos for: "):
+            title = title.partition(trash)[-1]
+        else:
+            title = title.partition("New Videos")[0].strip()
+
+        title, _, rest = title.rpartition(", Page")
+        return title or rest
+
+    @classmethod
+    def _collection_title(cls, soup: BeautifulSoup):
+        return cls._clean_title(css.select_text(soup, Selector.COMMON_VIDEOS_TITLE))
 
     @error_handling_wrapper
     async def collection(self, scrape_item: ScrapeItem, query: str | None = None) -> None:
@@ -99,7 +114,9 @@ class KernelVideoSharingCrawler(Crawler, is_abc=True):
     @error_handling_wrapper
     async def profile(self, scrape_item: ScrapeItem) -> None:
         soup = await self.request_soup(scrape_item.url)
-        user_name: str = css.select_text(soup, Selector.USER_NAME).split("'s Profile")[0].strip()
+        user_name: str = (
+            css.select_text(soup, Selector.USER_NAME).split("'s Profile")[0].strip().removesuffix("'s Page")
+        )
         title = self.create_title(f"{user_name} [user]")
         scrape_item.setup_as_profile(title)
 
