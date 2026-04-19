@@ -67,7 +67,7 @@ class KernelVideoSharingCrawler(Crawler, is_abc=True):
     @final
     @classmethod
     def transform_kvs_url(cls, url: AbsoluteHttpURL) -> AbsoluteHttpURL:
-        return cls.ensure_trailing_slash(cls.transform_url(url))
+        return cls.ensure_trailing_slash(super().transform_url(url))
 
     @final
     @classmethod

@@ -10,10 +10,11 @@ if TYPE_CHECKING:
     from cyberdrop_dl.url_objects import ScrapeItem
 
 
-class ThotHubCrawler(KernelVideoSharingCrawler):
+class ThotHubCrawler(KernelVideoSharingCrawler, ensure_trailing_slash=True):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
-        "Albums": "/albums/<album_id>/<album_name>",
-        "Videos": "/videos/...",
+        "Album": "/albums/<id>/<name>",
+        "Image": "/get_image/...",
+        "Video": "/videos/<id>/<slug>",
     }
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://thothub.to")
     DEFAULT_TRIM_URLS: ClassVar[bool] = False
@@ -21,11 +22,10 @@ class ThotHubCrawler(KernelVideoSharingCrawler):
     FOLDER_DOMAIN: ClassVar[str] = "ThotHub"
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
-        scrape_item.url = scrape_item.url / ""
-        match scrape_item.url.parts[1:]:
-            case ["albums", album_id, _, *_]:
+        match scrape_item.url.parts[1:-1]:
+            case ["albums", album_id, _]:
                 return await self.album(scrape_item, album_id)
-            case ["videos", _, _, *_]:
+            case ["videos", _, _]:
                 return await self.video(scrape_item)
             case ["get_image", _, *_]:
                 return await self.direct_file(scrape_item)
