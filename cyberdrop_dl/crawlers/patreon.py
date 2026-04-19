@@ -120,7 +120,7 @@ class PatreonCrawler(Crawler):
         try:
             url = await self._get_redirect_url(self.parse_url(attachment["url"]))
         except Exception:
-            return None
+            self.log.exception(f"Unable to resolve {attachment = }")
         else:
             return Asset(attachment["name"], url, attachment)
 
