@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import itertools
 from typing import TYPE_CHECKING, ClassVar
 
 from cyberdrop_dl.crawlers._kvs import KernelVideoSharingCrawler
+from cyberdrop_dl.exceptions import DownloadError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL, ScrapeItem
 from cyberdrop_dl.utils import css, error_handling_wrapper
 
@@ -38,7 +40,12 @@ class Rule34VideoCrawler(KernelVideoSharingCrawler):
     FOLDER_DOMAIN: ClassVar[str] = "Rule34Video"
 
     async def __async_post_init__(self) -> None:
-        self.update_cookies({"kt_rt_popAccess": 1, "kt_tcookie": 1})
+        self.update_cookies(
+            {
+                "kt_rt_popAccess": 1,
+                "kt_tcookie": 1,
+            }
+        )
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
@@ -51,17 +58,57 @@ class Rule34VideoCrawler(KernelVideoSharingCrawler):
 
     @error_handling_wrapper
     async def collection(self, scrape_item: ScrapeItem, type_: str) -> None:
-        title: str = ""
-        async for soup in self.web_pager(scrape_item.url):
-            if not title:
-                title_tag = css.select(soup, Selector.TITLE)
-                css.decompose(title_tag, "span")
-                title = css.text(title_tag)
-                for trash in ("Videos for: ", "Tagged with "):
-                    title = title.removeprefix(trash)
+        soup = await self.request_soup(scrape_item.url)
+        title = css.select_text(soup, Selector.TITLE, decompose="span")
+        for trash in ("Videos for: ", "Tagged with "):
+            title = title.removeprefix(trash)
 
-                title = self.create_title(f"{title} [{type_}]")
-                scrape_item.setup_as_album(title)
+        title = self.create_title(f"{title} [{type_}]")
+        scrape_item.setup_as_album(title)
 
+        for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.THUMBS):
+            self.create_task(self.run(new_scrape_item))
+
+        async for soup in self._ajax_pagination(
+            scrape_item.url,
+            block_id="list_videos_uploaded_videos",
+            from_param_name="from_videos",
+        ):
             for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.THUMBS):
                 self.create_task(self.run(new_scrape_item))
+
+    async def _ajax_pagination(
+        self,
+        url: AbsoluteHttpURL,
+        block_id: str,
+        *,
+        last_page: int | None = None,
+        mode: str = "async",
+        function: str = "get_block",
+        is_private: int = 0,
+        sort_by: str = "",
+        from_param_name: str = "from",
+        **kwargs: int | str,
+    ):
+        page_url = url.with_query(
+            mode=mode,
+            function=function,
+            block_id=block_id,
+            is_private=is_private,
+            sort_by=sort_by,
+        )
+        if kwargs:
+            page_url = page_url.update_query(kwargs)
+
+        for page in itertools.count(2):
+            if last_page is not None and page > last_page:
+                break
+            page_url = page_url.update_query({from_param_name: page})
+            try:
+                soup = await self.request_soup(page_url)
+            except DownloadError as e:
+                if e.status == 404:
+                    break
+                raise
+
+            yield soup

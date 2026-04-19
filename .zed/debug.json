@@ -18,7 +18,7 @@
       "--flaresolverr",
       "http://localhost:8191",
       "--input-file",
-      "debug_run.test",
+      "URLs.txt",
       "--main-log",
       "debug_run.log",
     ],
