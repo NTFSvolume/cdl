@@ -19,12 +19,13 @@ def find_subclasses_of(domain: str):
 
     Registry.import_all()
 
+    crawlers = tuple(Registry.abc | Registry.generic | Registry.concrete)
     if domain.endswith("Crawler"):
-        crawlers = {c.__name__: c for c in Registry.abc | Registry.generic | Registry.concrete}
+        target = next(c for c in crawlers if c.__name__ == domain)
     else:
-        crawlers = {c.DOMAIN: c for c in Registry.abc | Registry.generic | Registry.concrete}
-    target = crawlers[domain]
-    return dict(sorted((c.__name__, c) for c in crawlers.values() if issubclass(c, target) and c is not target))
+        target = next(c for c in crawlers if getattr(c, "DOMAIN", None) == domain)
+
+    return dict(sorted((c.__name__, c) for c in crawlers if issubclass(c, target) and c is not target))
 
 
 def module_path(cls: type):
