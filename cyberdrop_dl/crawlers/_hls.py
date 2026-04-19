@@ -43,7 +43,7 @@ class HLSParser(ABC):
             rendition = m3u8.select_best_rendition(m3u8_obj, only=only, exclude=exclude)
             return await self._resolve_rendition(rendition, headers)
         m3u8_obj.media_type = "video"
-        return m3u8.Rendition(m3u8_obj), None
+        return m3u8.Rendition(m3u8_obj, None, None), None
 
     async def _resolve_rendition(
         self,

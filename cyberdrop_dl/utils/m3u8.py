@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
 from datetime import timedelta
 from enum import StrEnum
@@ -66,10 +67,11 @@ class MediaURLs(NamedTuple):
     subtitle: AbsoluteHttpURL | None
 
 
-class Rendition(NamedTuple):
+@dataclasses.dataclass(slots=True)
+class Rendition:
     video: M3U8
-    audio: M3U8 | None = None
-    subtitle: M3U8 | None = None
+    audio: M3U8 | None
+    subtitle: M3U8 | None
 
 
 @dataclass(frozen=True, slots=True, order=True)
