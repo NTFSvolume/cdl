@@ -69,7 +69,7 @@ def test_parse_null_duration(input: str) -> None:
 
 
 class TestMergeSubs:
-    def test_happy_path(self, tmp_path: Path) -> None:
+    def test_normal_merge(self, tmp_path: Path) -> None:
         srcs = [tmp_path / f"sub{i}.srt" for i in range(1, 4)]
         for p, content in zip(srcs, (b"AAA\n", b"BBB\n", b"CCC\n"), strict=True):
             p.write_bytes(content)
