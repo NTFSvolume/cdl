@@ -15,7 +15,7 @@ from cyberdrop_dl.mediaprops import Codecs, Resolution
 from cyberdrop_dl.utils import parse_url
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable
+    from collections.abc import Generator, Iterable, Iterator
 
     from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
@@ -72,6 +72,9 @@ class Rendition:
     video: M3U8
     audio: M3U8 | None
     subtitle: M3U8 | None
+
+    def __iter__(self) -> Iterator[M3U8 | None]:
+        return iter(dataclasses.astuple(self))
 
 
 @dataclass(frozen=True, slots=True, order=True)

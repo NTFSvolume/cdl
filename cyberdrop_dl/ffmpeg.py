@@ -154,6 +154,20 @@ async def _delete_files(files: Iterable[Path], *, same_folder: bool) -> None:
         _ = await asyncio.gather(*map(_try_delete, files))
 
 
+async def merge_subs(files: Iterable[Path], output: Path) -> None:
+    await asyncio.to_thread(_merge_subs, files, output)
+
+
+def _merge_subs(files: Iterable[Path], output: Path) -> None:
+    logger.debug("Merging subs to '%s'", output)
+    with output.open("wb") as out:
+        for file in files:
+            with file.open("rb") as fp_in:
+                out.write(fp_in.read())
+
+            file.unlink()
+
+
 @overload
 async def probe(input: Path, /) -> FFprobeResult: ...
 

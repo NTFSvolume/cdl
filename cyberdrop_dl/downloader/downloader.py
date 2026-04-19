@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable
+    from collections.abc import Generator
     from pathlib import Path
 
     from cyberdrop_dl.clients.download_client import DownloadClient
@@ -219,7 +219,7 @@ class Downloader:
 
             if n_segmets > 1:
                 if m3u8.media_type == "subtitle":
-                    await asyncio.to_thread(_merge_subs, seg_paths, output)
+                    await ffmpeg.merge_subs(seg_paths, output)
                 else:
                     ffmpeg_result = await ffmpeg.concat(seg_paths, output, same_folder=False)
                     if not ffmpeg_result.success:
@@ -400,13 +400,3 @@ class Downloader:
         self.manager.logs.write_download_error(media_item, error_log_msg.csv_log_msg)
         self.manager.scrape_mapper.tui.files.stats.failed += 1
         self.manager.scrape_mapper.tui.scrape_errors.add(error_log_msg.ui_failure)
-
-
-def _merge_subs(files: Iterable[Path], output: Path):
-    logger.debug("Merging subs to '%s'", output)
-    with output.open("wb") as out:
-        for file in files:
-            with file.open("rb") as fp_in:
-                out.write(fp_in.read())
-
-            file.unlink()
