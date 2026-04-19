@@ -5,7 +5,7 @@ from __future__ import annotations
 import dataclasses
 import itertools
 import re
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, final
 
 from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths
 from cyberdrop_dl.exceptions import DownloadError, ScrapeError
@@ -57,6 +57,24 @@ class KernelVideoSharingCrawler(Crawler, is_abc=True):
     }
     NEXT_PAGE_SELECTOR: ClassVar[str] = Selector.NEXT_PAGE
     _RATE_LIMIT: ClassVar[RateLimit] = 6, 5
+
+    def __init_subclass__(cls, ensure_trailing_slash: bool = False, **kwargs) -> None:
+        super().__init_subclass__(**kwargs)
+        if ensure_trailing_slash:
+            cls.transform_url = cls.transform_kvs_url
+            cls.DEFAULT_TRIM_URLS = False
+
+    @final
+    @classmethod
+    def transform_kvs_url(cls, url: AbsoluteHttpURL) -> AbsoluteHttpURL:
+        return cls.ensure_trailing_slash(cls.transform_url(url))
+
+    @final
+    @classmethod
+    def ensure_trailing_slash(cls, url: AbsoluteHttpURL) -> AbsoluteHttpURL:
+        if url.name:
+            return url / ""
+        return url
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:

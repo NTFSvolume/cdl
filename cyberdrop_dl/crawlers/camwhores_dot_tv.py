@@ -15,7 +15,7 @@ class Selector:
     VIDEOS = ".list-videos .item a"
 
 
-class CamwhoresTVCrawler(KernelVideoSharingCrawler):
+class CamwhoresTVCrawler(KernelVideoSharingCrawler, ensure_trailing_slash=True):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "Search": "/search/<query>/",
         "Category": "/categories/<name>/",
@@ -25,7 +25,6 @@ class CamwhoresTVCrawler(KernelVideoSharingCrawler):
 
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://www.camwhores.tv")
     DOMAIN: ClassVar[str] = "camwhores.tv"
-    DEFAULT_TRIM_URLS: ClassVar[bool] = False
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:-1]:
@@ -37,14 +36,6 @@ class CamwhoresTVCrawler(KernelVideoSharingCrawler):
                 return await self.video(scrape_item)
             case _:
                 raise ValueError
-
-    @classmethod
-    def transform_url(cls, url: AbsoluteHttpURL) -> AbsoluteHttpURL:
-        # Returns 404 without the trailing slash
-        url = super().transform_url(url)
-        if url.name:
-            return url / ""
-        return url
 
     @error_handling_wrapper
     async def search(self, scrape_item: ScrapeItem, type_: str, query: str | None = None):
