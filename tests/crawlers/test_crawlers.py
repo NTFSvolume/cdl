@@ -159,6 +159,8 @@ def _validate_results(crawler: Crawler, test_case: CrawlerTestCase, results: lis
     for index, (expected, media_item) in enumerate(zip(expected_results, results, strict=False), 1):
         for attr_name, expected_value in expected.items():
             result_value = getattr(media_item, attr_name)
+            if isinstance(result_value, Path):
+                result_value = result_value.as_posix()
 
             match expected_value:
                 case type():
@@ -180,7 +182,8 @@ def _validate_results(crawler: Crawler, test_case: CrawlerTestCase, results: lis
                             elif expected_value.startswith("re:"):
                                 expected_value = expected_value.removeprefix("re:")
                                 assert _re_search(expected_value, str(result_value)), (
-                                    f"{result_value = } does not match {expected_value}"
+                                    f"{attr_name} for result#{index} is different, "
+                                    f"{result_value = } does not match {expected_value!r}"
                                 )
                                 continue
 
