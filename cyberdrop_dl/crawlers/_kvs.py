@@ -48,10 +48,10 @@ class KernelVideoSharingCrawler(Crawler, is_abc=True):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "Albums": "/albums/<album_name>",
         "Image": "/albums/<album_name>/<image_name>",
-        "Search": "/search/?q=...",
-        "Categories": "/categories/...",
-        "Tags": "/tags/...",
-        "Videos": "/videos/...",
+        "Search": "/search/?q=<query>",
+        "Categories": "/categories/<name>",
+        "Tags": "/tags/<name>",
+        "Videos": "/videos/<slug>",
         "Members": "/members/<member_id>",
     }
 
