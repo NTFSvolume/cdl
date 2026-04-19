@@ -1,4 +1,4 @@
-"""Kernel Video Sharing, https://www.kernel-video-sharing.com)"""
+"""Kernel Video Sharing, https://www.kernel-video-sharing.com"""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import dataclasses
 import re
 from typing import TYPE_CHECKING, ClassVar
 
-from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
+from cyberdrop_dl.crawlers.crawler import Crawler, RateLimit, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.mediaprops import Resolution
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
@@ -28,7 +28,7 @@ class KVSVideo:
     resolution: Resolution
 
 
-class Selectors:
+class Selector:
     UNAUTHORIZED = "div.video-holder:-soup-contains('This video is a private video')"
     FLASHVARS = "script:-soup-contains('video_id:')"
     USER_NAME = "div.headline > h2"
@@ -42,12 +42,6 @@ class Selectors:
     VIDEOS = "div#list_videos_common_videos_list_items a"
     NEXT_PAGE = "li.pagination-next > a"
     ALBUM_ID = "script:-soup-contains('album_id')"
-    DATE2 = "span:-soup-contains('Added:') + span"
-    DATE1 = "div.info span:-soup-contains('Submitted:')"
-    DATE = f"{DATE1}, {DATE2}"
-
-
-_SELECTORS = Selectors()
 
 
 class KernelVideoSharingCrawler(Crawler, is_abc=True):
@@ -61,31 +55,35 @@ class KernelVideoSharingCrawler(Crawler, is_abc=True):
         "Members": "/members/<member_id>",
     }
 
-    NEXT_PAGE_SELECTOR: ClassVar[str] = _SELECTORS.NEXT_PAGE
-    _RATE_LIMIT = 3, 10
+    NEXT_PAGE_SELECTOR: ClassVar[str] = Selector.NEXT_PAGE
+    _RATE_LIMIT: ClassVar[RateLimit] = 3, 10
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
-        if any(p in scrape_item.url.parts for p in ("categories", "tags")) or scrape_item.url.query.get("q"):
-            return await self.search(scrape_item)
-        if "members" in scrape_item.url.parts:
-            return await self.profile(scrape_item)
-        if "videos" in scrape_item.url.parts:
-            return await self.video(scrape_item)
-        if "albums" in scrape_item.url.parts:
-            if len(scrape_item.url.parts) > 3:
+        match scrape_item.url.parts[1:]:
+            case ["categories" | "tags", _]:
+                return await self.collection(scrape_item)
+            case ["search", query]:
+                return await self.collection(scrape_item, query)
+            case ["members", _, *_]:
+                return await self.profile(scrape_item)
+            case ["videos", _, *_]:
+                return await self.video(scrape_item)
+            case ["albums", _]:
+                return await self.album(scrape_item)
+            case ["albums", _, _, *_]:
                 return await self.picture(scrape_item)
-            return await self.album(scrape_item)
-        raise ValueError
+            case _:
+                if query := scrape_item.url.query.get("q"):
+                    return await self.collection(scrape_item, query)
+                raise ValueError
 
     @error_handling_wrapper
-    async def search(self, scrape_item: ScrapeItem) -> None:
+    async def collection(self, scrape_item: ScrapeItem, query: str | None = None) -> None:
         soup = await self.request_soup(scrape_item.url)
-        title = ""
-        if (search_query := scrape_item.url.query.get("q")) or scrape_item.url.parts[1] == "search":
-            search_query = search_query or scrape_item.url.parts[2]
-            title = f"{search_query} [search]"
+        if query:
+            title = f"{query} [search]"
         else:
-            common_title = css.select_text(soup, _SELECTORS.COMMON_VIDEOS_TITLE)
+            common_title = css.select_text(soup, Selector.COMMON_VIDEOS_TITLE)
             if common_title.startswith("New Videos Tagged"):
                 common_title = common_title.split("Showing")[0].split("Tagged with")[1].strip()
                 title = f"{common_title} [tag]"
@@ -100,23 +98,21 @@ class KernelVideoSharingCrawler(Crawler, is_abc=True):
     @error_handling_wrapper
     async def profile(self, scrape_item: ScrapeItem) -> None:
         soup = await self.request_soup(scrape_item.url)
-
-        user_name: str = css.select_text(soup, _SELECTORS.USER_NAME).split("'s Profile")[0].strip()
-        title = f"{user_name} [user]"
-        title = self.create_title(title)
+        user_name: str = css.select_text(soup, Selector.USER_NAME).split("'s Profile")[0].strip()
+        title = self.create_title(f"{user_name} [user]")
         scrape_item.setup_as_profile(title)
 
-        if soup.select(_SELECTORS.PUBLIC_VIDEOS):
+        if soup.select_one(Selector.PUBLIC_VIDEOS):
             await self.iter_videos(scrape_item, "public_videos")
-        if soup.select(_SELECTORS.FAVOURITE_VIDEOS):
+        if soup.select_one(Selector.FAVOURITE_VIDEOS):
             await self.iter_videos(scrape_item, "favourite_videos")
-        if soup.select(_SELECTORS.PRIVATE_VIDEOS):
+        if soup.select_one(Selector.PRIVATE_VIDEOS):
             await self.iter_videos(scrape_item, "private_videos")
 
     async def iter_videos(self, scrape_item: ScrapeItem, video_category: str = "") -> None:
         url = scrape_item.url / video_category if video_category else scrape_item.url
         async for soup in self.web_pager(url):
-            for _, new_scrape_item in self.iter_children(scrape_item, soup, _SELECTORS.VIDEOS):
+            for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.VIDEOS):
                 self.create_task(self.run(new_scrape_item))
 
     @error_handling_wrapper
@@ -137,21 +133,26 @@ class KernelVideoSharingCrawler(Crawler, is_abc=True):
             pass
 
         await self.handle_file(
-            scrape_item.url, scrape_item, filename, ext, custom_filename=custom_filename, debrid_link=video.url
+            scrape_item.url,
+            scrape_item,
+            filename,
+            ext,
+            custom_filename=custom_filename,
+            debrid_link=video.url,
         )
 
     @error_handling_wrapper
     async def album(self, scrape_item: ScrapeItem, album_id: str | None = None) -> None:
         soup = await self.request_soup(scrape_item.url)
         if not album_id:
-            js_text = css.select_text(soup, _SELECTORS.ALBUM_ID)
+            js_text = css.select_text(soup, Selector.ALBUM_ID)
             album_id = get_text_between(js_text, "params['album_id'] =", ";")
 
         results = await self.get_album_results(album_id)
-        title = css.select_text(soup, _SELECTORS.ALBUM_NAME)
+        title = css.select_text(soup, Selector.ALBUM_NAME)
         title = self.create_title(f"{title} [album]", album_id)
         scrape_item.setup_as_album(title, album_id=album_id)
-        for _, new_scrape_item in self.iter_children(scrape_item, soup, _SELECTORS.ALBUM_PICTURES, results=results):
+        for _, new_scrape_item in self.iter_children(scrape_item, soup, Selector.ALBUM_PICTURES, results=results):
             self.create_task(self.run(new_scrape_item))
 
     @error_handling_wrapper
@@ -160,16 +161,15 @@ class KernelVideoSharingCrawler(Crawler, is_abc=True):
             return
 
         soup = await self.request_soup(scrape_item.url)
-        url = self.parse_url(css.select(soup, _SELECTORS.PICTURE, "src"))
-        filename, ext = self.get_filename_and_ext(url.name)
-        await self.handle_file(url, scrape_item, filename, ext)
+        src = self.parse_url(css.select(soup, Selector.PICTURE, "src"))
+        await self.direct_file(scrape_item, src)
 
 
 def extract_kvs_video(cls: Crawler, soup: BeautifulSoup) -> KVSVideo:
-    if soup.select_one(_SELECTORS.UNAUTHORIZED):
+    if soup.select_one(Selector.UNAUTHORIZED):
         raise ScrapeError(401, "Private video")
 
-    script = css.select_text(soup, _SELECTORS.FLASHVARS)
+    script = css.select_text(soup, Selector.FLASHVARS)
     video = _parse_video_vars(script)
     if not video.title:
         title = open_graph.get_title(soup) or css.page_title(soup)
