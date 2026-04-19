@@ -161,21 +161,27 @@ class KernelVideoSharingCrawler(Crawler, is_abc=True):
         soup = await self.request_soup(scrape_item.url)
         video = extract_kvs_video(self, soup)
         filename, ext = self.get_filename_and_ext(video.url.name)
-        custom_filename = self.create_custom_filename(video.title, ext, file_id=video.id, resolution=video.resolution)
+
         try:
             date_str = css.json_ld(soup)["uploadDate"]
-            scrape_item.uploaded_at = self.parse_iso_date(date_str)
         except (LookupError, ValueError, css.SelectorError):
             # Human date parsing was removed from parse_date. This fallback
             # no longer supports relative strings like "2 hours ago".
             pass
+        else:
+            scrape_item.uploaded_at = self.parse_iso_date(date_str)
 
         await self.handle_file(
             scrape_item.url,
             scrape_item,
             filename,
             ext,
-            custom_filename=custom_filename,
+            custom_filename=self.create_custom_filename(
+                video.title,
+                ext,
+                file_id=video.id,
+                resolution=video.resolution,
+            ),
             debrid_link=video.url,
         )
 
@@ -214,7 +220,6 @@ class KernelVideoSharingCrawler(Crawler, is_abc=True):
         sort_by: str = "",
         from_query_param_name: str = "from",
         q: str | None = None,
-        **kwargs: int | str,
     ):
         page_url = url.with_query(
             mode=mode,
@@ -225,9 +230,6 @@ class KernelVideoSharingCrawler(Crawler, is_abc=True):
         )
         if q is not None:
             page_url = page_url.update_query(q=q)
-
-        if kwargs:
-            page_url = page_url.update_query(kwargs)
 
         for page in itertools.count(2):
             if last_page is not None and page > last_page:
