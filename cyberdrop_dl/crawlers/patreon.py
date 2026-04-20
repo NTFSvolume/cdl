@@ -10,7 +10,7 @@ from typing_extensions import ReadOnly
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.exceptions import NoExtensionError, ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import css, error_handling_wrapper
+from cyberdrop_dl.utils import css, error_handling_wrapper, get_text_between, next_js
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator, Generator
@@ -65,7 +65,7 @@ class PatreonCrawler(Crawler):
         match scrape_item.url.parts[1:]:
             case ["posts", _]:
                 return await self.post(scrape_item)
-            case [creator]:
+            case [creator] | ["cw", creator]:
                 return await self.creator(scrape_item, creator)
             case _:
                 raise ValueError
@@ -197,8 +197,22 @@ class PatreonCrawler(Crawler):
 
     async def _get_campaign_id(self, creator: str) -> str:
         soup = await self.request_soup(self.PRIMARY_URL / creator, impersonate=True)
-        bootstrap = _extract_bootstrap(soup)
-        return bootstrap["campaign"]["data"]["id"]
+        try:
+            bootstrap = _extract_bootstrap(soup)
+        except css.SelectorError:
+            # TODO: fix next_js chunk parsing
+            return _extract_campaig_id(soup)
+        else:
+            return bootstrap["campaign"]["data"]["id"]
+
+
+def _extract_campaig_id(soup: BeautifulSoup):
+    return get_text_between(str(soup), r"{\"value\":{\"campaign\":{\"data\":{\"id\":\"", r"\"")
+
+
+def _extract_campaig_id_next_js(soup: BeautifulSoup) -> str:
+    included = next_js.ifind(next_js.extract(soup), "id", "type", "attributes")
+    return next(incl["id"] for incl in included if incl["type"] == "campaign")
 
 
 def _flatten_included(included: list[Included]) -> dict[str, Included]:
