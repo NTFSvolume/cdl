@@ -51,8 +51,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - KeyError trying to parse a response from Flaresolver
 - Update query hashes (Twitch)
 
-### Security
-
 ## [9.2.0] - 2026-04-15
 
 ### Added
