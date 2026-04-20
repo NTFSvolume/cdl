@@ -46,6 +46,9 @@ class TrannyOneCrawler(Crawler):
                 return await self.model(scrape_item, model_id)
             case ["pics", "album", album_id]:
                 return await self.album(scrape_item, album_id)
+            case ["work", "orig", _, _, _]:
+                return await self.direct_file(scrape_item)
+
             case _:
                 raise ValueError
 
