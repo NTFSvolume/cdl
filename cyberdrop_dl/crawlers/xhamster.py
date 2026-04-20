@@ -207,15 +207,20 @@ class XhamsterCrawler(Crawler):
         if await self.check_complete_from_referer(scrape_item):
             return
 
+        def choose_best_format(video: Video) -> tuple[str, str]:
+            best_format = video.best_mp4 or video.best_hls
+            return best_format.codec.name.lower(), best_format.resolution
+
         initials = await self._get_window_initials(scrape_item.url)
         video = _parse_video(initials)
         scrape_item.uploaded_at = video.created
+        video_codec, resolution = choose_best_format(video)
         custom_filename = self.create_custom_filename(
             video.title,
             ".mp4",
             file_id=video.id,
-            video_codec=video.best_mp4.codec.name.lower(),
-            resolution=video.best_mp4.resolution,
+            video_codec=video_codec,
+            resolution=resolution,
         )
         filename = video.id + ".mp4"
         media_kwargs = {}
@@ -280,17 +285,20 @@ def _parse_video(initials: dict[str, Any]) -> Video:
         title=video["title"],
         created=video.get("created") or video["addTime"],
         best_hls=max(hls_sources, default=None),
-        best_mp4=max(mp4_sources),
+        best_mp4=max(mp4_sources) if mp4_sources else None,
     )
 
 
-def _get_xplayer_sources(initials: dict[str, Any]) -> dict[str, Any]:
-    settings = initials.get("xplayerSettings2") or initials.get("xplayerSettings", {})
-    return settings.get("sources", {}) or {}
+def _get_xplayer_sources(initials: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+    old_xplayer_settings: bool = False
+    if not (settings := initials.get("xplayerSettings2")):
+         settings = initials.get("xplayerSettings", {})
+         old_xplayer_settings = True
+    return settings.get("sources", {}) or {}, old_xplayer_settings
 
 
 def _parse_xplayer_sources(initials: dict[str, Any]) -> Iterable[Format]:
-    xplayer_sources = _get_xplayer_sources(initials)
+    xplayer_sources, old_xplayer_settings = _get_xplayer_sources(initials)
     if not xplayer_sources:
         return
 
@@ -318,10 +326,11 @@ def _parse_xplayer_sources(initials: dict[str, Any]) -> Iterable[Format]:
 
             yield Format(res, Codec[codec.upper()], url)
 
-    standard_sources: dict[str, list[dict[str, Any]]] = xplayer_sources.get("standard", {})
-    for codec, formats_list in standard_sources.items():
-        for format_dict in formats_list:
-            yield from parse_format(format_dict, codec)
+    if not old_xplayer_settings:
+        standard_sources: dict[str, list[dict[str, Any]]] = xplayer_sources.get("standard", {})
+        for codec, formats_list in standard_sources.items():
+            for format_dict in formats_list:
+                yield from parse_format(format_dict, codec)
 
     hls_sources: dict[str, dict[str, str]] = xplayer_sources.get("hls", {})
     for codec, format_dict in hls_sources.items():
