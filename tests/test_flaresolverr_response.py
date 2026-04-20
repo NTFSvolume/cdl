@@ -4,7 +4,6 @@ import time
 
 from cyberdrop_dl.clients.flaresolverr import Solution, _parse_cookies
 from cyberdrop_dl.clients.response import _FlareSolverrResponse, _infer_content_type_from_body
-from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
 # ---------------------------------------------------------------------------
 # Fixtures: example FlareSolverr JSON responses
@@ -30,7 +29,7 @@ FLARESOLVERR_RESPONSE_EMPTY_HEADERS = {
         ],
         "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
         "headers": {},
-        "response": "<html><head>\n<meta charset=\"utf></html>",
+        "response": '<html><head>\n<meta charset="utf></html>',
     },
     "startTimestamp": 1776518283422,
     "endTimestamp": 1776518297487,
@@ -56,7 +55,7 @@ def test_infer_content_type_json_object() -> None:
 
 
 def test_infer_content_type_json_array() -> None:
-    assert _infer_content_type_from_body('[1, 2, 3]') == "application/json"
+    assert _infer_content_type_from_body("[1, 2, 3]") == "application/json"
 
 
 def test_infer_content_type_empty_string() -> None:
