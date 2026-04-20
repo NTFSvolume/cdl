@@ -51,7 +51,7 @@ def select_text(tag: Tag, selector: str, strip: bool = True, *, decompose: str |
     """Same as `tag.select_one.get_text(strip=strip)` but asserts the result is not `None`"""
     inner_tag = select(tag, selector)
     if decompose:
-        for trash in iselect(inner_tag, decompose):
+        for trash in inner_tag.select(decompose):
             trash.decompose()
     return text(inner_tag, strip)
 

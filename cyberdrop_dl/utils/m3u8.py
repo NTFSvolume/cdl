@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import dataclasses
 from datetime import timedelta
 from enum import StrEnum
 from functools import cached_property
@@ -14,7 +14,7 @@ from cyberdrop_dl.mediaprops import Codecs, Resolution
 from cyberdrop_dl.utils import parse_url
 
 if TYPE_CHECKING:
-    from collections.abc import Generator, Iterable
+    from collections.abc import Generator, Iterable, Iterator
 
     from cyberdrop_dl.url_objects import AbsoluteHttpURL
 
@@ -66,13 +66,17 @@ class MediaURLs(NamedTuple):
     subtitle: AbsoluteHttpURL | None
 
 
-class Rendition(NamedTuple):
+@dataclasses.dataclass(slots=True)
+class Rendition:
     video: M3U8
-    audio: M3U8 | None = None
-    subtitle: M3U8 | None = None
+    audio: M3U8 | None
+    subtitle: M3U8 | None
+
+    def __iter__(self) -> Iterator[M3U8 | None]:
+        return iter(dataclasses.astuple(self))
 
 
-@dataclass(frozen=True, slots=True, order=True)
+@dataclasses.dataclass(frozen=True, slots=True, order=True)
 class StreamInfo:
     """Exactly the same as m3u8.model.StreamInfo but as a dataclass, to support sorting rendition groups with the same resolution but different bitrates (bandwidth)"""
 
@@ -95,7 +99,7 @@ class StreamInfo:
     __str__ = m3u8.model.StreamInfo.__str__
 
 
-@dataclass(frozen=True, slots=True, order=True)
+@dataclasses.dataclass(frozen=True, slots=True, order=True)
 class RenditionDetails:
     resolution: Resolution
     codecs: Codecs

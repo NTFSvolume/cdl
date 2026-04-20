@@ -9,8 +9,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Generic, Literal, Self, final
 
 import aiohttp.multipart
-from aiohttp import hdrs
-from aiohttp.client_reqrep import ClientResponse, ContentDisposition
+from aiohttp import ClientResponse, hdrs
 from bs4 import BeautifulSoup
 from multidict import CIMultiDict, CIMultiDictProxy
 from propcache import under_cached_property
@@ -28,7 +27,8 @@ if TYPE_CHECKING:
 
 
 else:
-    CurlResponse = object
+
+    class CurlResponse: ...
 
 
 __all__ = ["AbstractResponse"]
@@ -38,6 +38,21 @@ _ResponseT = TypeVar(
     bound=ClientResponse | CurlResponse | FlaresolverrSolution,
     infer_variance=True,
 )
+
+
+@dataclasses.dataclass(slots=True, frozen=True)
+class ContentDisposition:
+    type: str | None
+    parameters: MappingProxyType[str, str]
+    raw_filename: str | None
+
+    @property
+    def filename(self) -> str:
+        if name := self.raw_filename:
+            return name
+
+        msg = "Content disposition has no filename information"
+        raise ScrapeError(422, msg)
 
 
 @dataclasses.dataclass(slots=True)
@@ -114,19 +129,11 @@ class AbstractResponse(ABC, Generic[_ResponseT]):
         except KeyError:
             msg = f"No content disposition header found in response from {self.url}"
             raise ScrapeError(422, msg) from None
+
         disposition_type, params = aiohttp.multipart.parse_content_disposition(header)
         params = MappingProxyType(params)
         filename = aiohttp.multipart.content_disposition_filename(params)
         return ContentDisposition(disposition_type, params, filename)
-
-    @final
-    @property
-    def filename(self) -> str:
-        if name := self.content_disposition.filename:
-            return name
-
-        msg = "Content disposition has no filename information"
-        raise ScrapeError(422, msg)
 
     @property
     def consumed(self) -> bool:

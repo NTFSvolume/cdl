@@ -20,9 +20,31 @@ TEST_CASES = [
                 "referer": "https://thothub.lol/get_image/45/0fd48eeb530b9232d216b579cd58ce9b/sources/42000/42921/2113169.jpg/",
                 "album_id": "42921",
                 "datetime": None,
-                "download_folder": r"re:Ivy King \- OF Selects \[album\] \(ThotHub\)",
+                "download_folder": r"re:Ivy King - OF Selects [album] (ThotHub)",
             }
         ],
         112,
+    ),
+    (
+        "https://thothub.to/tags/daringkiara/",
+        [
+            {
+                "url": "ANY",
+                "datetime": None,
+                "download_folder": r"re:daringkiara [tags] (ThotHub)",
+            }
+        ],
+        range(31, 50),
+    ),
+    (
+        "https://thothub.to/search/daringkiara/",
+        [
+            {
+                "url": "ANY",
+                "datetime": None,
+                "download_folder": r"re:daringkiara [search] (ThotHub)",
+            }
+        ],
+        range(31, 50),
     ),
 ]

@@ -11,5 +11,15 @@ TEST_CASES = [
                 "datetime": 1734826081,
             }
         ],
-    )
+    ),
+    (
+        "https://www.redgifs.com/users/mylovely.ai",
+        [
+            {
+                "url": "ANY",
+                "download_folder": "re:mylovely.ai (RedGifs)",
+            }
+        ],
+        range(216, 300),
+    ),
 ]

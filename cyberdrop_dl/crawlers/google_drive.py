@@ -192,7 +192,7 @@ class GoogleDriveCrawler(Crawler):
         async with self.request(export_url, method=method) as resp:
             assert resp.ok and "html" not in resp.content_type
 
-        return resp.url, resp.filename
+        return resp.url, resp.content_disposition.filename
 
 
 def _get_proper_doc_format(doc: str, format: str | None) -> str:

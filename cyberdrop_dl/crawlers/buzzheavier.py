@@ -35,7 +35,7 @@ class BuzzHeavierCrawler(Crawler):
                 "HX-Request": "true",
             },
         ) as resp:
-            filename: str = resp.filename
+            filename = resp.content_disposition.filename
 
         link = self.parse_url(resp.headers["hx-redirect"])
         filename, ext = self.get_filename_and_ext(filename, assume_ext=".zip")

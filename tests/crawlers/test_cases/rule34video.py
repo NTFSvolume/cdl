@@ -14,4 +14,16 @@ TEST_CASES = [
             },
         ],
     ),
+    (
+        "https://rule34video.com/members/4283979",
+        [
+            {
+                "url": "ANY",
+                "album_id": None,
+                "uploaded_at": int,
+                "download_folder": "re:Lozi3d [members] (Rule34Video)",
+            },
+        ],
+        11,
+    ),
 ]

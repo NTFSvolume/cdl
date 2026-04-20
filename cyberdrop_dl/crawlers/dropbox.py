@@ -78,7 +78,7 @@ class DropboxCrawler(Crawler):
     async def file(self, scrape_item: ScrapeItem) -> None:
         scrape_item.url = await self._ensure_rlkey(scrape_item.url)
         async with self.request(scrape_item.url.update_query(dl=1)) as resp:
-            self._file(scrape_item, resp.filename)
+            self._file(scrape_item, resp.content_disposition.filename)
 
     def _file(self, scrape_item: ScrapeItem, filename: str) -> None:
         scrape_item.url = view_url = scrape_item.url.with_query(rlkey=scrape_item.url.query["rlkey"], dl=0)
