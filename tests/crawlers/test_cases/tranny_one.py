@@ -42,5 +42,5 @@ TEST_CASES = [
                 "referer": "https://pics.tranny.one/work/orig/2915/385865/1.jpg",
             }
         ],
-    )
+    ),
 ]
