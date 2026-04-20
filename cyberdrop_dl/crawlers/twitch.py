@@ -12,7 +12,7 @@ from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import error_handling_wrapper, parse_url
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import Generator, Mapping
 
     from cyberdrop_dl.url_objects import ScrapeItem
     from cyberdrop_dl.utils import m3u8
@@ -68,14 +68,14 @@ class TwitchCrawler(Crawler):
     def __post_init__(self) -> None:
         self.api = TwitchAPI(self)
 
-    async def _get_m3u8(
+    async def _request_m3u8(
         self,
         url: AbsoluteHttpURL,
         /,
-        headers: dict[str, str] | None = None,
-        media_type: Literal["video", "audio", "subtitles"] | None = None,
+        headers: Mapping[str, str] | None = None,
+        media_type: Literal["video", "audio", "subtitle"] | None = None,
     ) -> m3u8.M3U8:
-        m3u8_obj = await super()._get_m3u8(url, headers=headers, media_type=media_type)
+        m3u8_obj = await super()._request_m3u8(url, headers=headers, media_type=media_type)
 
         # Some formats are "hidden" unless the user is logged in (1080p+ resolutions)
         # We can extract and parse them manually, bypasing the logging requirement
@@ -145,9 +145,6 @@ class TwitchCrawler(Crawler):
             return
 
         clip = await self.api.clip(slug)
-        if not clip:
-            raise ScrapeError(404)
-
         title: str = clip.get("title") or "clip"
         scrape_item.uploaded_at = self.parse_iso_date(clip["createdAt"])
         access_token: dict[str, str] = clip["playbackAccessToken"]
@@ -213,7 +210,10 @@ class TwitchAPI:
             },
             "45111672eea2e507f8ba44d101a61862f9c56b11dee09a15634cb75cb9b9084d",
         )
-        return resp["data"]["video"]
+        video = resp["data"]["video"]
+        if video is None:
+            raise ScrapeError(404)
+        return video
 
     async def collection(self, collection_id: str) -> dict[str, Any]:
         resp = await self._request(
@@ -223,7 +223,10 @@ class TwitchAPI:
             },
             "016e1e4ccee0eb4698eb3bf1a04dc1c077fb746c78c82bac9a8f0289658fbd1a",
         )
-        return resp["data"]["collection"]
+        col = resp["data"]["collection"]
+        if col is None:
+            raise ScrapeError(404)
+        return col
 
     async def clip(self, slug: str) -> dict[str, Any]:
         resp = await self._request(
@@ -231,9 +234,12 @@ class TwitchAPI:
             {
                 "slug": slug,
             },
-            "1844261bb449fa51e6167040311da4a7a5f1c34fe71c71a3e0c4f551bc30c698",
+            "0a02bb974443b576f5579aab0fef1d4b7f44e58a8a256f0c5adfead0db70640f",
         )
-        return resp["data"]["clip"]
+        clip = resp["data"]["clip"]
+        if clip is None:
+            raise ScrapeError(404)
+        return clip
 
     async def access_token(self, video_id: str) -> dict[str, str]:
         resp = await self._request(

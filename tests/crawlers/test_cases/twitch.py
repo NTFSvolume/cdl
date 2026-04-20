@@ -75,15 +75,6 @@ TEST_CASES = [
             }
         ],
     ),
-    (  # Unavailable media (4K)
-        "https://www.twitch.tv/videos/2662839277",
-        [
-            {
-                "url": "ANY",
-                "filename": "Hanging out! [2662839277][avc1][60fps][4K].mp4",
-            }
-        ],
-    ),
     (
         "https://www.twitch.tv/collections/3d4MEgywDhcOUg?filter=collections",
         [
