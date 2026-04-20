@@ -183,6 +183,6 @@ def _parse_cookies(cookies: Iterable[Mapping[str, Any]]) -> SimpleCookie:
         morsel["domain"] = cookie["domain"]
         morsel["path"] = cookie["path"]
         morsel["secure"] = "TRUE" if cookie.get("secure") else ""
-        if expires := cookie.get("expires"):
+        if expires := cookie.get("expiry") or cookie.get("expires"):
             morsel["max-age"] = str(max(0, int(expires) - int(now)))
     return simple_cookie
