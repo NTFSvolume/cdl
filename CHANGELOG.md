@@ -22,6 +22,37 @@ All notable changes to this project will be documented here. For more details, v
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [9.3.0] - 2026-04-15
+
+### Added
+
+- Patreon Support
+- OnePace support
+- Giphy support
+- XMegaDrive support
+- Search, tag and category support (ThotHub)
+
+### Changed
+
+- Hash multiple files (20) at once when using the UI menu option
+- Default to HLS downloads (xHamster)
+- Improve support for Flaresolverr forks using NoDriver/DrissionPage
+
+### Fixed
+
+- Downloads panel not showing up in vertical layout
+- Do no try to hash folders
+- Do not try to normalize usernames (RedGifs)
+- Search and user's pagination (Rule34Video, CamWhores)
+- Do not download random unrelated videos from profiles (Rule34Video)
+- Merging of m3u8 substitles
+- Subtitles sometimes being deleted after download
+- Handle subdomains (Tranny.one)
+- KeyError trying to parse a response from Flaresolver
+- Update query hashes (Twitch)
+
+### Security
+
 ## [9.2.0] - 2026-04-15
 
 ### Added
