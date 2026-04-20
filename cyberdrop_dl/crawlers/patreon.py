@@ -44,6 +44,7 @@ class Post(Included):
     campaign_id: str
     published_at: str
     title: str
+    url: str
 
 
 class PatreonCrawler(Crawler):
@@ -73,7 +74,6 @@ class PatreonCrawler(Crawler):
     async def post(self, scrape_item: ScrapeItem) -> None:
         soup = await self.request_soup(scrape_item.url, impersonate=True)
         post: dict[str, Any] = _extract_bootstrap(soup)["post"]
-        scrape_item.setup_as_album("")
         self._post(
             scrape_item,
             post=_flatten_post(post["data"]),
@@ -87,7 +87,7 @@ class PatreonCrawler(Crawler):
 
         campaign_name: str = included[post["campaign_id"]]["attributes"]["name"]
         title = self.create_title(campaign_name)
-        scrape_item.add_to_parent_title(title)
+        scrape_item.setup_as_album(title)
 
         scrape_item.uploaded_at = date = self.parse_iso_date(post["published_at"])
         post_title = self.create_separate_post_title(post["title"], post["id"], date)
@@ -138,6 +138,7 @@ class PatreonCrawler(Crawler):
                 yield Media(media_id, attributes.get("file_name"), self.parse_url(url), attributes)
 
         return
+        # TODO: convert tiptap JSON to HTML or extract media ids from tiptap
         if not post["content"]:
             return
         soup = BeautifulSoup(post["content"], "html.parser")
@@ -181,7 +182,8 @@ class PatreonCrawler(Crawler):
                 cursor = resp["meta"]["pagination"]["cursors"]["next"]
             except LookupError:
                 break
-
+            if not cursor:
+                break
             api_url = api_url.update_query({"page[cursor]": cursor})
 
     async def _get_campaign_id(self, creator: str) -> str:
@@ -250,6 +252,7 @@ _CAMPAIGN_API_PARAMS = (
                 "attachments",
                 "attachments_media",
                 "audio",
+                "video",
                 "images",
                 "media",
                 "native_video_insights",
@@ -265,7 +268,6 @@ _CAMPAIGN_API_PARAMS = (
                 "show_audio_post_download_links",
                 "avatar_photo_url",
                 "avatar_photo_image_urls",
-                "earnings_visibility",
                 "is_nsfw",
                 "is_monthly",
                 "name",
@@ -277,7 +279,6 @@ _CAMPAIGN_API_PARAMS = (
         "fields[post]",
         ",".join(
             (
-                "change_visibility_at",
                 "content",
                 "content_json_string",
                 "current_user_can_view",
@@ -289,7 +290,6 @@ _CAMPAIGN_API_PARAMS = (
                 "post_file",
                 "post_metadata",
                 "published_at",
-                "patreon_url",
                 "post_type",
                 "pledge_url",
                 "thumbnail",
