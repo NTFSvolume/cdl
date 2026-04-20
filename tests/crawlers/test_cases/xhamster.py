@@ -7,9 +7,24 @@ TEST_CASES = [
                 "url": "https://ge.xhamster.desi/videos/horny-asian-slut-fucking-with-big-toy-and-cumming-a-lot-xhW9s1z",
                 "filename": "Horny Asian slut fucking with Big Toy and CUMMING a lot [xhW9s1z][h264][720p].mp4",
                 "original_filename": "xhW9s1z.mp4",
+                "debrid_link": str,
                 "referer": "https://ge.xhamster.desi/videos/horny-asian-slut-fucking-with-big-toy-and-cumming-a-lot-xhW9s1z",
                 "album_id": None,
                 "datetime": 1609776316,
+            }
+        ],
+    ),
+    (
+        "https://xhamster45.desi/videos/eating-her-ass-xhdR056",
+        [
+            {
+                "url": "https://xhamster45.desi/videos/eating-her-ass-xhdR056",
+                "filename": "Eating her ass [xhdR056][h264][720p].mp4",
+                "original_filename": "xhdR056.mp4",
+                "debrid_link": None,  # Should download an HLS stream
+                "referer": "https://xhamster45.desi/videos/eating-her-ass-xhdR056",
+                "album_id": None,
+                "datetime": 1764724818,
             }
         ],
     ),
@@ -67,19 +82,6 @@ TEST_CASES = [
             },
         ],
         range(50, 70),
-    ),
-    (
-        "https://xhamster45.desi/videos/eating-her-ass-xhdR056",
-        [
-            {
-                "url": "https://xhamster45.desi/videos/eating-her-ass-xhdR056",
-                "filename": "Eating her ass [xhdR056][h264][720p].mp4",
-                "original_filename": "xhdR056.mp4",
-                "referer": "https://xhamster45.desi/videos/eating-her-ass-xhdR056",
-                "album_id": None,
-                "datetime": 1764724818,
-            }
-        ],
     ),
     (
         "https://xhamster.com/creators/danielagomezz/exclusive",
