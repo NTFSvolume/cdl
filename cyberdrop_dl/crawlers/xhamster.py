@@ -292,8 +292,8 @@ def _parse_video(initials: dict[str, Any]) -> Video:
 def _get_xplayer_sources(initials: dict[str, Any]) -> tuple[dict[str, Any], bool]:
     old_xplayer_settings: bool = False
     if not (settings := initials.get("xplayerSettings2")):
-         settings = initials.get("xplayerSettings", {})
-         old_xplayer_settings = True
+        settings = initials.get("xplayerSettings", {})
+        old_xplayer_settings = True
     return settings.get("sources", {}) or {}, old_xplayer_settings
 
 
