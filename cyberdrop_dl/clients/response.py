@@ -317,10 +317,8 @@ def _parse_headers(url: AbsoluteHttpURL, headers: CIMultiDictProxy[str]) -> tupl
 
 def _infer_content_type_from_body(content: str) -> str:
     text = content.lstrip()
-    if not text:
-        return ""
-    if text.startswith("<"):
+    if text.startswith("<") and "html>" in text[:20]:
         return "text/html"
     if text.startswith(("{", "[")):
         return "application/json"
-    return "text/plain"
+    return ""
