@@ -2,16 +2,17 @@ from __future__ import annotations
 
 import dataclasses
 import json
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar, TypedDict
 
 from bs4 import BeautifulSoup
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
+from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
-from cyberdrop_dl.utils import DictDataclass, css, error_handling_wrapper
+from cyberdrop_dl.utils import css, error_handling_wrapper
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
+    from collections.abc import AsyncIterator, Generator
 
     from cyberdrop_dl.url_objects import ScrapeItem
 
@@ -24,43 +25,67 @@ class Media:
     props: dict[str, Any]
 
 
-@dataclasses.dataclass(slots=True)
-class User(DictDataclass):
-    full_name: str
-    url: str
+class Asset(TypedDict):
+    id: str
+    type: str
+
+
+class Included(Asset):
+    attributes: dict[str, Any]
 
 
 class PatreonCrawler(Crawler):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "Post": "/posts/<slug>",
+        "Creator": "/<creator>",
     }
 
     DOMAIN: ClassVar[str] = "patreon"
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://www.patreon.com")
 
+    @property
+    def separate_posts(self) -> bool:
+        return True
+
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
             case ["posts", _]:
                 return await self.post(scrape_item)
+            case [creator]:
+                return await self.creator(scrape_item, creator)
             case _:
                 raise ValueError
 
     @error_handling_wrapper
     async def post(self, scrape_item: ScrapeItem) -> None:
         soup = await self.request_soup(scrape_item.url, impersonate=True)
-        bootstrap = _extract_bootstrap(soup)
-        post = _flatten_post(bootstrap["post"])
-        title = self.create_title(post["title"])
-        scrape_item.setup_as_album(title)
-        scrape_item.uploaded_at = self.parse_iso_date(post["published_at"])
-        for media in self._parse_media(post):
+        post: dict[str, Any] = _extract_bootstrap(soup)["post"]
+        included = _flatten_included(post["included"])
+        post = _flatten_post(post["data"])
+        scrape_item.setup_as_album("")
+        self._post(scrape_item, post, included)
+
+    @error_handling_wrapper
+    def _post(self, scrape_item: ScrapeItem, post: dict[str, Any], included: dict[str, Included]):
+        if not post["current_user_can_view"]:
+            raise ScrapeError(402, "Locked post. Requires payment")
+
+        campaign_name: str = included[post["campaign_id"]]["attributes"]["name"]
+        title = self.create_title(campaign_name)
+        scrape_item.add_to_parent_title(title)
+
+        scrape_item.uploaded_at = date = self.parse_iso_date(post["published_at"])
+        post_title = self.create_separate_post_title(post["title"], post["id"], date)
+        scrape_item.add_to_parent_title(post_title)
+
+        for media in self._parse_media(post, included):
             self.create_task(self._media(scrape_item, media))
             scrape_item.add_children()
 
     @error_handling_wrapper
     async def _media(self, scrape_item: ScrapeItem, media: Media):
         if media.url.suffix == ".m3u8":
-            return await self._m3u8_asset(scrape_item, media)
+            return await self._m3u8_media(scrape_item, media)
 
         name = media.name
         if not name:
@@ -70,7 +95,7 @@ class PatreonCrawler(Crawler):
         filename, ext = self.get_filename_and_ext(name)
         await self.handle_file(media.url, scrape_item, name, ext, custom_filename=filename)
 
-    async def _m3u8_asset(self, scrape_item: ScrapeItem, media: Media):
+    async def _m3u8_media(self, scrape_item: ScrapeItem, media: Media):
         m3u8, info = await self.request_m3u8_playlist(media.url)
         filename = self.create_custom_filename(
             media.url.name.removesuffix(".m3u8"),
@@ -81,7 +106,7 @@ class PatreonCrawler(Crawler):
         )
         await self.handle_file(media.url, scrape_item, filename, ext, m3u8=m3u8)
 
-    def _parse_media(self, post: dict[str, Any]) -> Generator[Media]:
+    def _parse_media(self, post: dict[str, Any], included: dict[str, Included]) -> Generator[Media]:
         media_ids: set[str] = set()
         if post_file := post.get("post_file"):
             media_id = str(post_file["media_id"])
@@ -89,32 +114,70 @@ class PatreonCrawler(Crawler):
             url = self.parse_url(post_file["url"])
             yield Media(media_id, post_file.get("name"), url, post_file)
 
-        included: dict[str, Any]
-        for included in post["included"]:
-            asset_type: str = included["type"]
-            attributes: dict[str, Any] = included["attributes"]
+        post_medias = (str(m["id"]) for m in post["relationships"]["media"]["data"] or ())
+        for media_id in post_medias:
+            media = included[media_id]
+            attributes = media["attributes"]
 
-            match asset_type:
-                case "media" if url := attributes.get("download_url"):
-                    media_id: str = str(included["id"])
-                    if media_id in media_ids:
-                        continue
-
-                    media_ids.add(media_id)
-                    yield Media(media_id, attributes.get("file_name"), self.parse_url(url), attributes)
-                case _:
-                    continue
-
-        if not post["content"]:
-            return
+            if media["type"] == "media" and (url := attributes.get("download_url")) and media_id not in media_ids:
+                media_ids.add(media_id)
+                yield Media(media_id, attributes.get("file_name"), self.parse_url(url), attributes)
 
         return
+        if not post["content"]:
+            return
         soup = BeautifulSoup(post["content"], "html.parser")
         for media_id in css.iselect(soup, "[data-media-id]", "data-media-id"):
             if media_id in media_ids:
                 continue
             self.log.warning("Found extra media id %s", media_id)
             media_ids.add(media_id)
+
+    @error_handling_wrapper
+    async def creator(self, scrape_item: ScrapeItem, creator: str) -> None:
+        campaign_id = await self._get_campaign_id(creator)
+        await self.campaign(scrape_item, campaign_id)
+
+    @error_handling_wrapper
+    async def campaign(self, scrape_item: ScrapeItem, campaign_id: str) -> None:
+        scrape_item.setup_as_profile("")
+        api_url = (
+            (self.PRIMARY_URL / "api/posts")
+            .with_query(_CAMPAIGN_API_PARAMS)
+            .extend_query(
+                {
+                    "filter[campaign_id]": campaign_id,
+                }
+            )
+        )
+        async for resp in self._api_pager(api_url):
+            included = _flatten_included(resp["included"])
+            for post in resp["data"]:
+                post = _flatten_post(post)
+                new_item = scrape_item.create_child(self.parse_url(post["url"]))
+                self._post(new_item, post, included)
+                scrape_item.add_children()
+
+    async def _api_pager(self, api_url: AbsoluteHttpURL) -> AsyncIterator[dict[str, Any]]:
+        while True:
+            resp = await self.request_json(api_url, impersonate=True)
+            yield resp
+
+            try:
+                cursor = resp["meta"]["pagination"]["cursors"]["next"]
+            except LookupError:
+                break
+
+            api_url = api_url.update_query({"page[cursor]": cursor})
+
+    async def _get_campaign_id(self, creator: str) -> str:
+        soup = await self.request_soup(self.PRIMARY_URL / creator, impersonate=True)
+        bootstrap = _extract_bootstrap(soup)
+        return bootstrap["campaign"]["data"]["id"]
+
+
+def _flatten_included(included: list[Included]) -> dict[str, Included]:
+    return {incl["id"]: incl for incl in included}
 
 
 def _extract_bootstrap(soup: BeautifulSoup) -> dict[str, Any]:
@@ -124,10 +187,9 @@ def _extract_bootstrap(soup: BeautifulSoup) -> dict[str, Any]:
 
 
 def _parse_post(post: dict[str, Any]) -> Generator[tuple[str, Any]]:
-    post_data = post["data"]
-    yield "id", int(post_data["id"])
-    yield from _parse_attributes(post_data["attributes"])
-    yield "included", post["included"]
+    yield "id", str(post["id"])
+    yield from _parse_attributes(post["attributes"])
+    yield "campaign_id", post["relationships"]["campaign"]["data"]["id"]
 
 
 def _parse_attributes(attributes: dict[str, Any]) -> Generator[tuple[str, Any]]:
@@ -149,3 +211,94 @@ def _parse_attributes(attributes: dict[str, Any]) -> Generator[tuple[str, Any]]:
 
 def _flatten_post(post: dict[str, Any]) -> dict[str, Any]:
     return dict(sorted(_parse_post(post)))
+
+
+_CAMPAIGN_API_PARAMS = (
+    (
+        "include",
+        ",".join(
+            (
+                "campaign",
+                "attachments",
+                "attachments_media",
+                "audio",
+                "images",
+                "media",
+                "native_video_insights",
+                "user",
+            )
+        ),
+    ),
+    (
+        "fields[campaign]",
+        ",".join(
+            (
+                "currency",
+                "show_audio_post_download_links",
+                "avatar_photo_url",
+                "avatar_photo_image_urls",
+                "earnings_visibility",
+                "is_nsfw",
+                "is_monthly",
+                "name",
+                "url",
+            )
+        ),
+    ),
+    (
+        "fields[post]",
+        ",".join(
+            (
+                "change_visibility_at",
+                "content",
+                "content_json_string",
+                "current_user_can_view",
+                "embed",
+                "image",
+                "insights_last_updated_at",
+                "is_paid",
+                "meta_image_url",
+                "post_file",
+                "post_metadata",
+                "published_at",
+                "patreon_url",
+                "post_type",
+                "pledge_url",
+                "thumbnail",
+                "thumbnail_url",
+                "teaser_text",
+                "title",
+                "upgrade_url",
+                "url",
+                "moderation_status",
+                "video_preview",
+                "view_count",
+            )
+        ),
+    ),
+    (
+        "fields[user]",
+        ",".join(
+            (
+                "image_url",
+                "full_name",
+                "url",
+            )
+        ),
+    ),
+    (
+        "fields[media]",
+        ",".join(
+            (
+                "id",
+                "image_urls",
+                "download_url",
+                "metadata",
+                "file_name",
+            )
+        ),
+    ),
+    ("sort", "-published_at"),
+    ("filter[is_draft]", "false"),
+    ("json-api-version", "1.0"),
+)
