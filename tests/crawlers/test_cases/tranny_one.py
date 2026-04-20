@@ -31,4 +31,16 @@ TEST_CASES = [
         ],
         17,
     ),
+    # Direct image download
+    (
+        "https://pics.tranny.one/work/orig/2915/385865/1.jpg",
+        [
+            {
+                "url": "https://pics.tranny.one/work/orig/2915/385865/1.jpg",
+                "filename": "1.jpg",
+                "download_folder": r"re:Tranny\.One",
+                "referer": "https://pics.tranny.one/work/orig/2915/385865/1.jpg",
+            }
+        ],
+    )
 ]
