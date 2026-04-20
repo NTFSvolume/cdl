@@ -229,6 +229,9 @@ class _FlareSolverrResponse(AbstractResponse[FlaresolverrSolution]):
     @classmethod
     def create(cls, solution: FlaresolverrSolution, /) -> Self:
         content_type, location = _parse_headers(solution.url, solution.headers)
+        if not content_type:
+            content_type = _infer_content_type_from_body(solution.content)
+
         return cls(
             content_type=content_type,
             status=solution.status,
@@ -317,3 +320,12 @@ def _parse_headers(url: AbsoluteHttpURL, headers: CIMultiDictProxy[str]) -> tupl
 
     content_type = (headers.get(hdrs.CONTENT_TYPE) or "").lower()
     return content_type, location
+
+
+def _infer_content_type_from_body(content: str) -> str:
+    text = content.lstrip()
+    if text.startswith("<") and "html>" in text[:20]:
+        return "text/html"
+    if text.startswith(("{", "[")):
+        return "application/json"
+    return ""

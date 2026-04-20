@@ -7,9 +7,24 @@ TEST_CASES = [
                 "url": "https://ge.xhamster.desi/videos/horny-asian-slut-fucking-with-big-toy-and-cumming-a-lot-xhW9s1z",
                 "filename": "Horny Asian slut fucking with Big Toy and CUMMING a lot [xhW9s1z][h264][720p].mp4",
                 "original_filename": "xhW9s1z.mp4",
+                "debrid_link": None,
                 "referer": "https://ge.xhamster.desi/videos/horny-asian-slut-fucking-with-big-toy-and-cumming-a-lot-xhW9s1z",
                 "album_id": None,
                 "datetime": 1609776316,
+            }
+        ],
+    ),
+    (
+        "https://xhamster45.desi/videos/eating-her-ass-xhdR056",
+        [
+            {
+                "url": "https://xhamster45.desi/videos/eating-her-ass-xhdR056",
+                "filename": "Eating her ass [xhdR056][h264][720p].mp4",
+                "original_filename": "xhdR056.mp4",
+                "debrid_link": None,  # Should download an HLS stream
+                "referer": "https://xhamster45.desi/videos/eating-her-ass-xhdR056",
+                "album_id": None,
+                "datetime": 1764724818,
             }
         ],
     ),
@@ -51,7 +66,7 @@ TEST_CASES = [
                 "filename": "18yo Alexandra student BDSM real casting [2023793][h264][240p].mp4",
                 "original_filename": "2023793.mp4",
                 "referer": "https://xhamster.com/videos/18yo-alexandra-student-bdsm-real-casting-2023793",
-                "download_folder": r"re:ombreto \[user\] \(xHamster\)/videos",
+                "download_folder": r"re:ombreto \[user\] \(xHamster\)[\\/]videos",
                 "album_id": None,
                 "datetime": 1372456260,
             }
@@ -66,12 +81,12 @@ TEST_CASES = [
                 "download_folder": r"re:DanielaGomezx \[user\] \(xHamster\)",
             },
         ],
-        range(50, 60),
+        range(50, 70),
     ),
     (
         "https://xhamster.com/creators/danielagomezz/exclusive",
         [],
-        range(50, 60),
+        range(50, 70),
     ),
     (
         "https://xhamster.com/creators/danielagomezz/photos",
@@ -81,7 +96,7 @@ TEST_CASES = [
                 "filename": "001 - 698_1000 [517308698].jpg",
                 "original_filename": "698_1000.jpg",
                 "referer": "https://xhamster.com/photos/gallery/16252066/517308698",
-                "download_folder": r"re:DanielaGomezx \[user\] \(xHamster\)/galleries/New image change",
+                "download_folder": r"re:DanielaGomezx \[user\] \(xHamster\)[\\/]galleries[\\/]New image change",
                 "album_id": "16252066",
                 "datetime": 1738917721,
             },
@@ -90,7 +105,7 @@ TEST_CASES = [
                 "filename": "002 - 699_1000 [517308699].jpg",
                 "original_filename": "699_1000.jpg",
                 "referer": "https://xhamster.com/photos/gallery/16252066/517308699",
-                "download_folder": r"re:DanielaGomezx \[user\] \(xHamster\)/galleries/New image change",
+                "download_folder": r"re:DanielaGomezx \[user\] \(xHamster\)[\\/]galleries[\\/]New image change",
                 "album_id": "16252066",
                 "datetime": 1738917721,
             },

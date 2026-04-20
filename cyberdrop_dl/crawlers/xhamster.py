@@ -210,19 +210,29 @@ class XhamsterCrawler(Crawler):
         initials = await self._get_window_initials(scrape_item.url)
         video = _parse_video(initials)
         scrape_item.uploaded_at = video.created
+        m3u8 = debrid_link = None
+
+        if best_format := video.best_mp4:
+            debrid_link = video.best_mp4.url
+        else:
+            best_format = video.best_hls
+            m3u8, _ = await self.request_m3u8_playlist(video.best_hls.url)
+
         custom_filename = self.create_custom_filename(
             video.title,
-            ".mp4",
+            ext := ".mp4",
             file_id=video.id,
-            video_codec=video.best_mp4.codec.name.lower(),
-            resolution=video.best_mp4.resolution,
+            video_codec=best_format.codec.name.lower(),
+            resolution=best_format.resolution,
         )
+
         await self.handle_file(
             scrape_item.url,
             scrape_item,
-            filename=video.id + ".mp4",
+            filename=video.id + ext,
             custom_filename=custom_filename,
-            debrid_link=video.best_mp4.url,
+            m3u8=m3u8,
+            debrid_link=debrid_link,
         )
 
     async def _get_window_initials(self, url: AbsoluteHttpURL) -> dict[str, Any]:
@@ -250,8 +260,8 @@ class Video:
     id: str
     title: str
     created: int
-    best_hls: Format | None
-    best_mp4: Format
+    best_hls: Format
+    best_mp4: Format | None
 
 
 def _parse_video(initials: dict[str, Any]) -> Video:
@@ -260,23 +270,28 @@ def _parse_video(initials: dict[str, Any]) -> Video:
     hls_sources: list[Format] = []
     mp4_sources: list[Format] = []
 
-    for src in _parse_xplayer_sources(initials):
-        if src.url.suffix == ".m3u8":
-            hls_sources.append(src)
-        else:
-            mp4_sources.append(src)
+    for name, allow_mp4 in [
+        ("xplayerSettings2", True),
+        ("xplayerSettings", False),
+    ]:
+        xplayer_sources: dict[str, Any] = initials.get(name, {}).get("sources", {}) or {}
+
+        for src in _parse_xplayer_sources(xplayer_sources):
+            if src.url.suffix == ".m3u8":
+                hls_sources.append(src)
+            elif allow_mp4:
+                mp4_sources.append(src)
 
     return Video(
         id=video.get("idHashSlug") or video["videoIdHashSlug"],
         title=video["title"],
         created=video.get("created") or video["addTime"],
-        best_hls=max(hls_sources, default=None),
-        best_mp4=max(mp4_sources),
+        best_hls=max(hls_sources),
+        best_mp4=max(mp4_sources, default=None),
     )
 
 
-def _parse_xplayer_sources(initials: dict[str, Any]) -> Iterable[Format]:
-    xplayer_sources: dict[str, Any] = initials.get("xplayerSettings2", {}).get("sources", {})
+def _parse_xplayer_sources(xplayer_sources: dict[str, Any]) -> Iterable[Format]:
     if not xplayer_sources:
         return
 
