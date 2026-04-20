@@ -207,36 +207,31 @@ class XhamsterCrawler(Crawler):
         if await self.check_complete_from_referer(scrape_item):
             return
 
-        def choose_best_format(video: Video) -> tuple[str, str]:
-            best_format = video.best_mp4 or video.best_hls
-            return best_format.codec.name.lower(), best_format.resolution
-
         initials = await self._get_window_initials(scrape_item.url)
         video = _parse_video(initials)
         scrape_item.uploaded_at = video.created
-        video_codec, resolution = choose_best_format(video)
+        best_format = video.best_mp4 or video.best_hls
         custom_filename = self.create_custom_filename(
             video.title,
             ".mp4",
             file_id=video.id,
-            video_codec=video_codec,
-            resolution=resolution,
+            video_codec=best_format.codec.name.lower(),
+            resolution=best_format.resolution,
         )
-        filename = video.id + ".mp4"
-        media_kwargs = {}
 
+        m3u8 = debrid_link = None
         if video.best_hls is not None:
-            playlist, _ = await self.request_m3u8_playlist(video.best_hls.url)
-            media_kwargs["m3u8"] = playlist
+            m3u8, _ = await self.request_m3u8_playlist(video.best_hls.url)
         else:
-            media_kwargs["debrid_link"] = video.best_mp4.url
+            debrid_link = video.best_mp4.url
 
         await self.handle_file(
             scrape_item.url,
             scrape_item,
-            filename,
+            filename=video.id + ".mp4",
             custom_filename=custom_filename,
-            **media_kwargs,
+            m3u8=m3u8,
+            debrid_link=debrid_link,
         )
 
     async def _get_window_initials(self, url: AbsoluteHttpURL) -> dict[str, Any]:
