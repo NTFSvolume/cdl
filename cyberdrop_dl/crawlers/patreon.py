@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import dataclasses
 import json
-from typing import TYPE_CHECKING, Any, ClassVar, TypedDict
+from typing import TYPE_CHECKING, Any, ClassVar, NotRequired, TypedDict, cast
 
 from bs4 import BeautifulSoup
+from typing_extensions import ReadOnly
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
@@ -28,10 +29,21 @@ class Media:
 class Asset(TypedDict):
     id: str
     type: str
+    attributes: ReadOnly[NotRequired[dict[str, Any]]]
+    relationships: ReadOnly[NotRequired[dict[str, Any]]]
 
 
 class Included(Asset):
     attributes: dict[str, Any]
+
+
+class Post(Included):
+    relationships: dict[str, Any]
+
+    current_user_can_view: bool
+    campaign_id: str
+    published_at: str
+    title: str
 
 
 class PatreonCrawler(Crawler):
@@ -42,6 +54,7 @@ class PatreonCrawler(Crawler):
 
     DOMAIN: ClassVar[str] = "patreon"
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://www.patreon.com")
+    DEFAULT_POST_TITLE_FORMAT: ClassVar[str] = "{date:%Y-%m-%d} - {title}"
 
     @property
     def separate_posts(self) -> bool:
@@ -60,13 +73,15 @@ class PatreonCrawler(Crawler):
     async def post(self, scrape_item: ScrapeItem) -> None:
         soup = await self.request_soup(scrape_item.url, impersonate=True)
         post: dict[str, Any] = _extract_bootstrap(soup)["post"]
-        included = _flatten_included(post["included"])
-        post = _flatten_post(post["data"])
         scrape_item.setup_as_album("")
-        self._post(scrape_item, post, included)
+        self._post(
+            scrape_item,
+            post=_flatten_post(post["data"]),
+            included=_flatten_included(post["included"]),
+        )
 
     @error_handling_wrapper
-    def _post(self, scrape_item: ScrapeItem, post: dict[str, Any], included: dict[str, Included]):
+    def _post(self, scrape_item: ScrapeItem, post: Post, included: dict[str, Included]):
         if not post["current_user_can_view"]:
             raise ScrapeError(402, "Locked post. Requires payment")
 
@@ -106,7 +121,7 @@ class PatreonCrawler(Crawler):
         )
         await self.handle_file(media.url, scrape_item, filename, ext, m3u8=m3u8)
 
-    def _parse_media(self, post: dict[str, Any], included: dict[str, Included]) -> Generator[Media]:
+    def _parse_media(self, post: Post, included: dict[str, Included]) -> Generator[Media]:
         media_ids: set[str] = set()
         if post_file := post.get("post_file"):
             media_id = str(post_file["media_id"])
@@ -114,8 +129,7 @@ class PatreonCrawler(Crawler):
             url = self.parse_url(post_file["url"])
             yield Media(media_id, post_file.get("name"), url, post_file)
 
-        post_medias = (str(m["id"]) for m in post["relationships"]["media"]["data"] or ())
-        for media_id in post_medias:
+        for media_id in _get_post_media(post):
             media = included[media_id]
             attributes = media["attributes"]
 
@@ -189,6 +203,7 @@ def _extract_bootstrap(soup: BeautifulSoup) -> dict[str, Any]:
 def _parse_post(post: dict[str, Any]) -> Generator[tuple[str, Any]]:
     yield "id", str(post["id"])
     yield from _parse_attributes(post["attributes"])
+    yield "relationships", post["relationships"]
     yield "campaign_id", post["relationships"]["campaign"]["data"]["id"]
 
 
@@ -209,8 +224,21 @@ def _parse_attributes(attributes: dict[str, Any]) -> Generator[tuple[str, Any]]:
     yield from attributes.items()
 
 
-def _flatten_post(post: dict[str, Any]) -> dict[str, Any]:
-    return dict(sorted(_parse_post(post)))
+def _flatten_post(post: dict[str, Any]) -> Post:
+    return cast("Post", dict(sorted(_parse_post(post))))  # pyright: ignore[reportInvalidCast]
+
+
+def _get_post_media(post: Post) -> Generator[str]:
+    for name in ("media", "video", "audio", "images", "attachments", "attachments_media"):
+        relationships = post["relationships"].get(name, {}).get("data")
+        if not relationships:
+            continue
+
+        if type(relationships) is not list:
+            relationships = [relationships]
+
+        for asset in relationships:
+            yield asset["id"]
 
 
 _CAMPAIGN_API_PARAMS = (
