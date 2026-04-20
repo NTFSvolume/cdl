@@ -214,14 +214,13 @@ class XhamsterCrawler(Crawler):
 
         if best_format := video.best_mp4:
             debrid_link = video.best_mp4.url
-        elif best_format := video.best_hls:
-            m3u8, _ = await self.request_m3u8_playlist(video.best_hls.url)
         else:
-            raise ScrapeError(422, "No formats found")
+            best_format = video.best_hls
+            m3u8, _ = await self.request_m3u8_playlist(video.best_hls.url)
 
         custom_filename = self.create_custom_filename(
             video.title,
-            ".mp4",
+            ext := ".mp4",
             file_id=video.id,
             video_codec=best_format.codec.name.lower(),
             resolution=best_format.resolution,
@@ -230,7 +229,7 @@ class XhamsterCrawler(Crawler):
         await self.handle_file(
             scrape_item.url,
             scrape_item,
-            filename=video.id + ".mp4",
+            filename=video.id + ext,
             custom_filename=custom_filename,
             m3u8=m3u8,
             debrid_link=debrid_link,
@@ -261,7 +260,7 @@ class Video:
     id: str
     title: str
     created: int
-    best_hls: Format | None
+    best_hls: Format
     best_mp4: Format | None
 
 
@@ -287,7 +286,7 @@ def _parse_video(initials: dict[str, Any]) -> Video:
         id=video.get("idHashSlug") or video["videoIdHashSlug"],
         title=video["title"],
         created=video.get("created") or video["addTime"],
-        best_hls=max(hls_sources, default=None),
+        best_hls=max(hls_sources),
         best_mp4=max(mp4_sources, default=None),
     )
 
