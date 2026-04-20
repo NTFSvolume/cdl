@@ -274,31 +274,28 @@ def _parse_video(initials: dict[str, Any]) -> Video:
     hls_sources: list[Format] = []
     mp4_sources: list[Format] = []
 
-    for src in _parse_xplayer_sources(initials):
-        if src.url.suffix == ".m3u8":
-            hls_sources.append(src)
-        else:
-            mp4_sources.append(src)
+    for name, allow_mp4 in [
+        ("xplayerSettings2", True),
+        ("xplayerSettings", False),
+    ]:
+        xplayer_sources: dict[str, Any] = initials.get(name, {}).get("sources", {}) or {}
+
+        for src in _parse_xplayer_sources(xplayer_sources):
+            if src.url.suffix == ".m3u8":
+                hls_sources.append(src)
+            elif allow_mp4:
+                mp4_sources.append(src)
 
     return Video(
         id=video.get("idHashSlug") or video["videoIdHashSlug"],
         title=video["title"],
         created=video.get("created") or video["addTime"],
         best_hls=max(hls_sources, default=None),
-        best_mp4=max(mp4_sources) if mp4_sources else None,
+        best_mp4=max(mp4_sources),
     )
 
 
-def _get_xplayer_sources(initials: dict[str, Any]) -> tuple[dict[str, Any], bool]:
-    old_xplayer_settings: bool = False
-    if not (settings := initials.get("xplayerSettings2")):
-        settings = initials.get("xplayerSettings", {})
-        old_xplayer_settings = True
-    return settings.get("sources", {}) or {}, old_xplayer_settings
-
-
-def _parse_xplayer_sources(initials: dict[str, Any]) -> Iterable[Format]:
-    xplayer_sources, old_xplayer_settings = _get_xplayer_sources(initials)
+def _parse_xplayer_sources(xplayer_sources: dict[str, Any]) -> Iterable[Format]:
     if not xplayer_sources:
         return
 
@@ -326,11 +323,10 @@ def _parse_xplayer_sources(initials: dict[str, Any]) -> Iterable[Format]:
 
             yield Format(res, Codec[codec.upper()], url)
 
-    if not old_xplayer_settings:
-        standard_sources: dict[str, list[dict[str, Any]]] = xplayer_sources.get("standard", {})
-        for codec, formats_list in standard_sources.items():
-            for format_dict in formats_list:
-                yield from parse_format(format_dict, codec)
+    standard_sources: dict[str, list[dict[str, Any]]] = xplayer_sources.get("standard", {})
+    for codec, formats_list in standard_sources.items():
+        for format_dict in formats_list:
+            yield from parse_format(format_dict, codec)
 
     hls_sources: dict[str, dict[str, str]] = xplayer_sources.get("hls", {})
     for codec, format_dict in hls_sources.items():
