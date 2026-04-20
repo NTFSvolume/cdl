@@ -50,7 +50,7 @@ class Post(Included):
 class PatreonCrawler(Crawler):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "Post": "/posts/<slug>",
-        "Creator": "/<creator>",
+        "Creator": ("/<creator>", "/cw/<creator>"),
     }
 
     DOMAIN: ClassVar[str] = "patreon"
@@ -83,7 +83,7 @@ class PatreonCrawler(Crawler):
     @error_handling_wrapper
     def _post(self, scrape_item: ScrapeItem, post: Post, included: dict[str, Included]):
         if not post["current_user_can_view"]:
-            raise ScrapeError(402, "Locked post. Requires payment")
+            raise ScrapeError(402, "You do not have access to this post")
 
         campaign_name: str = included[post["campaign_id"]]["attributes"]["name"]
         title = self.create_title(campaign_name)
