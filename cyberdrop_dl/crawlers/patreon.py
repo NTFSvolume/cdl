@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 from typing_extensions import ReadOnly
 
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
-from cyberdrop_dl.exceptions import ScrapeError
+from cyberdrop_dl.exceptions import NoExtensionError, ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, error_handling_wrapper
 
@@ -111,7 +111,12 @@ class PatreonCrawler(Crawler):
             async with self.request(media.url) as resp:
                 name = resp.content_disposition.filename
 
-        filename, ext = self.get_filename_and_ext(name)
+        try:
+            filename, ext = self.get_filename_and_ext(name)
+        except NoExtensionError:
+            name = media.url.name
+            filename, ext = self.get_filename_and_ext(name)
+
         await self.handle_file(media.url, scrape_item, name, ext, custom_filename=filename)
 
     async def _m3u8_media(self, scrape_item: ScrapeItem, media: Media):
