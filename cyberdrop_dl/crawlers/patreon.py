@@ -208,16 +208,16 @@ class PatreonCrawler(Crawler):
             bootstrap = _extract_bootstrap(soup)
         except css.SelectorError:
             # TODO: fix next_js chunk parsing
-            return _extract_campaig_id(soup)
+            return _extract_campaign_id(soup)
         else:
             return bootstrap["campaign"]["data"]["id"]
 
 
-def _extract_campaig_id(soup: BeautifulSoup):
+def _extract_campaign_id(soup: BeautifulSoup):
     return get_text_between(str(soup), r"{\"value\":{\"campaign\":{\"data\":{\"id\":\"", r"\"")
 
 
-def _extract_campaig_id_next_js(soup: BeautifulSoup) -> str:
+def _extract_campaign_id_next_js(soup: BeautifulSoup) -> str:
     included = next_js.ifind(next_js.extract(soup), "id", "type", "attributes")
     return next(incl["id"] for incl in included if incl["type"] == "campaign")
 
