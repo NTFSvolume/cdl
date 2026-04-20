@@ -23,7 +23,7 @@ class Media:
     id: str
     name: str | None
     url: AbsoluteHttpURL
-    props: dict[str, Any]
+    attributes: dict[str, Any]
 
 
 class Asset(TypedDict):
@@ -93,13 +93,17 @@ class PatreonCrawler(Crawler):
         post_title = self.create_separate_post_title(post["title"], post["id"], date)
         scrape_item.add_to_parent_title(post_title)
 
+        self.create_task(self.write_metadata(scrape_item, f"post_{post['id']}", post))
         for media in self._parse_media(post, included):
             self.create_task(self._media(scrape_item, media))
+            self.create_task(self.write_metadata(scrape_item, f"media_{media.id}", media))
             scrape_item.add_children()
 
         if embed := post.get("embed"):
             new_item = scrape_item.create_child(self.parse_url(embed["url"]))
             self.handle_embed(new_item)
+            self.create_task(self.write_metadata(scrape_item, f"embed_{post['id']}", embed))
+            scrape_item.add_children()
 
     @error_handling_wrapper
     async def _media(self, scrape_item: ScrapeItem, media: Media):
