@@ -50,7 +50,10 @@ class Post(Included):
 class PatreonCrawler(Crawler):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "Post": "/posts/<slug>",
-        "Creator": ("/<creator>", "/cw/<creator>"),
+        "Creator": (
+            "/<creator>",
+            "/cw/<creator>",
+        ),
     }
 
     DOMAIN: ClassVar[str] = "patreon"
