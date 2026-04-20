@@ -22,11 +22,11 @@ All notable changes to this project will be documented here. For more details, v
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [9.3.0] - 2026-04-15
+## [9.3.0] - 2026-04-20
 
 ### Added
 
-- Patreon Support
+- Patreon support
 - OnePace support
 - Giphy support
 - XMegaDrive support
@@ -45,10 +45,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Do not try to normalize usernames (RedGifs)
 - Search and user's pagination (Rule34Video, CamWhores)
 - Do not download random unrelated videos from profiles (Rule34Video)
-- Merging of m3u8 substitles
+- Merging of m3u8 subtitles
 - Subtitles sometimes being deleted after download
 - Handle subdomains (Tranny.one)
-- KeyError trying to parse a response from Flaresolver
+- `KeyError` trying to parse a response from Flaresolverr instance using Selenium as backend
 - Update query hashes (Twitch)
 
 ## [9.2.0] - 2026-04-15
