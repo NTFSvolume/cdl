@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.progress.dedupe import DedupeStats
     from cyberdrop_dl.progress.hashing import HashingStats
-    from cyberdrop_dl.progress.scraping.errors import Error
+    from cyberdrop_dl.progress.scraping.errors import UIError
     from cyberdrop_dl.progress.sorting import SortStats
     from cyberdrop_dl.scrape_mapper import ScrapeMapper, ScrapeStats
     from cyberdrop_dl.url_objects import MediaItem
@@ -197,7 +197,7 @@ class Manager:
         logger.info(f"  Errors: {stats.total - stats.deleted:,} files")
 
 
-def _log_errors(scrape_errors: Sequence[Error], download_errors: Sequence[Error]) -> None:
+def _log_errors(scrape_errors: Sequence[UIError], download_errors: Sequence[UIError]) -> None:
     error_codes = (error.code for error in (*scrape_errors, *download_errors) if error.code is not None)
 
     try:
