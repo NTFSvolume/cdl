@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, final
 
 from rich.console import Group
 from rich.panel import Panel
-from rich.progress import BarColumn, Progress, TaskID
+from rich.progress import BarColumn, Progress, TaskID, TextColumn
 from rich.spinner import Spinner
 from rich.text import Text
 
@@ -40,8 +40,8 @@ class SortingUI(LiveUI):
             "[progress.description]{task.description}",
             BarColumn(bar_width=None),
             "[progress.percentage]{task.percentage:>6.1f}%",
-            "━",
-            "{task.completed:,}",
+            "•",
+            TextColumn("{task.completed:,}", justify="right"),
             expand=False,
         )
         self._stats: SortStats = SortStats()

@@ -6,7 +6,7 @@ import time
 from typing import TYPE_CHECKING, final
 
 from rich.panel import Panel
-from rich.progress import BarColumn, Progress, TaskID
+from rich.progress import BarColumn, Progress, TaskID, TextColumn
 
 from cyberdrop_dl.progress import create_test_live
 
@@ -36,8 +36,8 @@ class FileStatsPanel:
             "[progress.description]{task.description}",
             BarColumn(bar_width=None),
             "[progress.percentage]{task.percentage:>6.2f}%",
-            "━",
-            "{task.completed:,}",
+            "•",
+            TextColumn("{task.completed:,}", justify="right"),
         )
 
         self._progress: Progress = Progress(*columns, expand=True)

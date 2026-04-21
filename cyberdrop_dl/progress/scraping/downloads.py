@@ -129,11 +129,11 @@ class DownloadsPanel(OverFlowPanel):
             ),
             BarColumn(bar_width=None),
             "[progress.percentage]{task.percentage:>6.1f}%",
-            "━",
+            "•",
             AutoDownloadColumn(table_column=Column(justify="right", no_wrap=True)),
-            "━",
-            AutoTransferSpeedColumn(table_column=Column(justify="right", no_wrap=True, min_width=12)),
-            "━",
+            "•",
+            AutoTransferSpeedColumn(table_column=Column(justify="right", no_wrap=True, min_width=11)),
+            "•",
             TimeRemainingColumn(
                 compact=True,
                 elapsed_when_finished=True,
@@ -270,5 +270,8 @@ class DownloadsPanel(OverFlowPanel):
 
 if __name__ == "__main__":
     panel = DownloadsPanel()
+    import itertools
+
+    panel.get_queue = itertools.count(1).__next__
     with create_test_live(panel):
         asyncio.run(panel.simulate())

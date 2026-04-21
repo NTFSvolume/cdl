@@ -9,7 +9,7 @@ from rich.align import Align
 from rich.console import Group
 from rich.markup import escape
 from rich.panel import Panel
-from rich.progress import BarColumn, Progress, SpinnerColumn, TaskID
+from rich.progress import BarColumn, Progress, SpinnerColumn, TaskID, TextColumn
 
 from cyberdrop_dl.progress import LiveUI, ProgressHook
 
@@ -28,7 +28,9 @@ class DedupeUI(LiveUI):
     def __init__(self, base_dir: Path) -> None:
         self._base_dir = base_dir
         self._progress = Progress(
-            "[progress.description]{task.description}", BarColumn(bar_width=None), "{task.completed:,}"
+            "[progress.description]{task.description}",
+            BarColumn(bar_width=None),
+            TextColumn("{task.completed:,}", justify="right"),
         )
         self._files = Progress(
             SpinnerColumn("dots3"),
