@@ -132,9 +132,13 @@ class DownloadsPanel(OverFlowPanel):
             "━",
             AutoDownloadColumn(table_column=Column(justify="right", no_wrap=True)),
             "━",
-            AutoTransferSpeedColumn(table_column=Column(justify="right", no_wrap=True)),
+            AutoTransferSpeedColumn(table_column=Column(justify="right", no_wrap=True, min_width=12)),
             "━",
-            TimeRemainingColumn(compact=True, elapsed_when_finished=True),
+            TimeRemainingColumn(
+                compact=True,
+                elapsed_when_finished=True,
+                table_column=Column(justify="right", no_wrap=True),
+            ),
             max_rows=max_rows,
         )
         self._hls_progress: Final[DictProgress] = DictProgress("")

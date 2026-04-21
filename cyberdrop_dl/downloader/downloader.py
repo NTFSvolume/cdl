@@ -399,4 +399,4 @@ class Downloader:
         )
         self.manager.logs.write_download_error(media_item, error_log_msg.csv_log_msg)
         self.manager.scrape_mapper.tui.files.stats.failed += 1
-        self.manager.scrape_mapper.tui.scrape_errors.add(error_log_msg.ui_failure)
+        self.manager.scrape_mapper.tui.download_errors.add(error_log_msg.ui_failure)
