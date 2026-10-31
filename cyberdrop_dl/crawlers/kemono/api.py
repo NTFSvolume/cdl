@@ -23,7 +23,7 @@ UserPostT = TypeVar("UserPostT", bound=BaseModel)
 class KemonoAPI(API, Generic[UserPostT]):  # noqa: UP046
     ENTRYPOINT: ClassVar[AbsoluteHttpURL]
     CDN: ClassVar[AbsoluteHttpURL]
-    VALID_QUERY_PARAMS: ClassVar[set[str]] = {"o", "q", "tags", "order", "sort"}
+    VALID_QUERY_PARAMS: ClassVar[set[str]] = {"o", "q", "tags", "order", "sort", "hide", "only"}
     __post__: type[UserPostT] = UserPostModel  # pyright: ignore[reportAssignmentType]
 
     def __init_subclass__(cls, **kwargs: Any) -> None:

@@ -66,6 +66,23 @@ class PawchiveCrawler(KemonoBaseCrawler[PawchiveAPI]):
             case _:
                 await super().fetch(scrape_item)
 
+    @override
+    @error_handling_wrapper
+    async def search(self, scrape_item: ScrapeItem, search_query: str) -> None:
+        for dt, name in ((self.config.filters.after, "after:"), (self.config.filters.before, "before:")):
+            if dt and name not in search_query:
+                search_query += f" {name}{dt}"
+
+        with scrape_item.track_changes:
+            scrape_item.url = scrape_item.url.update_query(q=search_query)
+
+        title = search_query
+        for kind in ("image", "video", "audio", "archive"):
+            title = title.replace(f"has:{kind}", "")
+
+        title = " ".join(title.strip().split())
+        await super().search(scrape_item, title)
+
     @error_handling_wrapper
     async def revision(
         self, scrape_item: ScrapeItem, service: str, creator_id: str, post_id: str, revision_id: int
