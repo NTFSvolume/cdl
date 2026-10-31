@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support direct media URLs (Patreon)
 - Support collections URLs (Patreon)
 - Support sub-albums (Lensdump)
+- Support folders (Doodstream)
 - Support hotlinked files (Fileditch)
 - Support custom search operators as filters (Pawchive)
 

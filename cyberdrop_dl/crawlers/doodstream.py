@@ -1,14 +1,16 @@
 from __future__ import annotations
 
-import dataclasses
 import random
 import string
 import time
 from typing import TYPE_CHECKING, ClassVar
 
+from cyberdrop_dl import aio
+from cyberdrop_dl.clients.http import HTTPConfig
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedDomains, SupportedPaths
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, extr_text
+from cyberdrop_dl.utils.dataclass import struct
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
@@ -23,16 +25,21 @@ class Selector:
     FILE_ID_JS = "script:-soup-contains('file_id')"
 
 
-@dataclasses.dataclass(slots=True)
+@struct
 class Video:
     id: str
     title: str
     dl_link: AbsoluteHttpURL
 
 
+@HTTPConfig(impersonate=True)
 class DoodStreamCrawler(Crawler):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
-        "Video": "/e/<video_id>",
+        "Video": (
+            "/e/<video_id>",
+            "/v/<video_id>",
+            "/d/<video_id>",
+        ),
     }
     SUPPORTED_DOMAINS: ClassVar[SupportedDomains] = (
         "all3do.com",
@@ -54,21 +61,40 @@ class DoodStreamCrawler(Crawler):
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
-            case ["e", _, *_]:
-                await self.video(scrape_item)
+            case ["e" | "v" | "d", video_id, *_]:
+                await self.video(scrape_item, video_id)
+            case ["f", folder_id, *_]:
+                await self.folder(scrape_item, folder_id)
             case _:
                 raise ValueError
 
     @error_handling_wrapper
-    async def video(self, scrape_item: ScrapeItem) -> None:
-        canonical_url = scrape_item.url.with_host(self.PRIMARY_URL.host)
-        if await self.check_complete_from_referer(canonical_url):
+    async def folder(self, scrape_item: ScrapeItem, folder_id: str) -> None:
+        async with self.request(scrape_item.url) as resp:
+            scrape_item.url = resp.url
+            soup = await resp.soup()
+
+        title = css.select_text(soup, "h1")
+        scrape_item.setup_as_album(self.create_title(title, folder_id), album_id=folder_id)
+
+        downloaded = await self.get_completed_by_album(folder_id)
+        sleep = aio.periodic_sleep(10)
+        for url in self.iter_urls(soup, ".search-files li a.btn"):
+            if url in downloaded:
+                continue
+            self.create_task(self.run(scrape_item.create_child(url)))
+            await sleep()
+
+    @error_handling_wrapper
+    async def video(self, scrape_item: ScrapeItem, video_id: str) -> None:
+        embed_url = self.PRIMARY_URL / "e" / video_id
+        if await self.check_complete(embed_url):
             return
 
-        video = await self._get_video_info(scrape_item.url)
+        video = await self._get_video_info(embed_url)
         filename, ext = self.get_filename_and_ext(f"{video.id}.mp4")
         custom_filename = self.create_custom_filename(video.title, ext, file_id=video.id)
-        scrape_item.url = canonical_url
+        scrape_item.url = embed_url
 
         await self.handle_file(
             scrape_item.url,
