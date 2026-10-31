@@ -76,7 +76,8 @@ class BeegComCrawler(Crawler):
 
     async def _video(self, scrape_item: ScrapeItem, video: Video) -> None:
         scrape_item.uploaded_at = video.created_at
-        m3u8, info = await self.request_m3u8_playlist(video.m3u8, headers={"Referer": str(scrape_item.url)})
+        m3u8_url = await self.api.play(video.id)
+        m3u8, info = await self.request_m3u8_playlist(m3u8_url, headers={"Referer": str(scrape_item.url)})
         await self.handle_file(
             scrape_item.url,
             scrape_item,
@@ -116,6 +117,10 @@ class BeegAPI(API):
         resp: dict[str, Any] = await self.request_json(_STORE / f"facts/file/{video_id}")
         return _parse_video(resp)
 
+    async def play(self, video_id: int) -> AbsoluteHttpURL:
+        key = await self.request_text(_STORE / f"video/play_url/{video_id}")
+        return _VIDEO / key
+
     async def tag(self, slug: str) -> dict[str, Any]:
         url = (_STORE / "tag").with_query(slug=slug, get_original="true")
         resp = await self.request_json(url)
@@ -137,7 +142,6 @@ class Video:
     title: str
     created_at: int
     thumb: AbsoluteHttpURL
-    m3u8: AbsoluteHttpURL
     tags: tuple[dict[str, Any], ...]
 
 
@@ -174,6 +178,5 @@ def _parse_video(video: dict[str, Any]) -> Video:
         title=next(d for d in file["data"] if d.get("cd_file") == video_id)["cd_value"],
         created_at=int(Crawler.parse_iso_date(facts["fc_created"])),
         thumb=_THUMBS / f"videos/{video_id}/{thumb}.webp",
-        m3u8=_VIDEO / file["hls_resources"]["fl_cdn_multi"],
         tags=tuple(map(_normalize_tag, video.get("tags", ()))),
     )

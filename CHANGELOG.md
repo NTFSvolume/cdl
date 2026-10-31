@@ -39,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Download of VODs only available at 1440p/4K without logged in cookies (Twitch)
+- `422 - Unprocessable Content` downloading any video (Beeg)
 - Rework crawler for new site design (Leakedzone)
 
 ## [10.14.0] - 2026-10-27
