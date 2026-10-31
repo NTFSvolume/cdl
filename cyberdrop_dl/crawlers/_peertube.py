@@ -79,8 +79,8 @@ class PeerTubeGenericCrawler(Crawler, is_generic=True):
     async def get_instances(self) -> tuple[str, ...]:
         try:
             return await self.api.instances()
-        except Exception:
-            self.log.exception("Unable to fetch additional PeerTube instances")
+        except Exception as e:  # noqa: BLE001
+            self.log.error(f"Unable to fetch additional PeerTube instances {e!r}")
             return ()
 
     @error_handling_wrapper
