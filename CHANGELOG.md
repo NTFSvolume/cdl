@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New `--logs.rotate-date-position` option
 - Support Patreon creators with custom domains. User must define the domains with the new `--crawlers.generic.patreon` option
 - Support direct media URLs (Patreon)
+- Support collections URLs (Patreon)
 - Support sub-albums (Lensdump)
 - Support hotlinked files (Fileditch)
 - Support custom search operators as filters (Pawchive)

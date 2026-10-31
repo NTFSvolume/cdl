@@ -8,17 +8,18 @@ from typing import TYPE_CHECKING, Any, ClassVar, NotRequired, TypedDict, TypeGua
 from typing_extensions import ReadOnly
 
 from cyberdrop_dl import aio
+from cyberdrop_dl.cache import async_lru_cache
 from cyberdrop_dl.clients.http import HTTPConfig
 from cyberdrop_dl.crawlers.crawler import API, Crawler, SupportedDomains, SupportedPaths, URLConfig, auto_task_id
 from cyberdrop_dl.exceptions import MaxChildrenError, NoExtensionError, ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, extr_text, next_js, traversal
 from cyberdrop_dl.utils._url import URLDeduper
-from cyberdrop_dl.utils.dataclass import DictDataclass
+from cyberdrop_dl.utils.dataclass import DictDataclass, deserialize, struct
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Generator
+    from collections.abc import AsyncGenerator, Generator, Mapping
 
     from bs4 import BeautifulSoup
 
@@ -80,6 +81,7 @@ class PatreonGenericCrawler(Crawler, is_generic=True):
             "/<creator>",
             "/cw/<creator>",
         ),
+        "Collection": "/collection/<collection_id>",
         "Direct Media": (
             "/media-u/v3/<media_id>",
             ".patreonusercontent.com/...",
@@ -110,6 +112,8 @@ class PatreonGenericCrawler(Crawler, is_generic=True):
             case ["posts", slug] | [_, "posts", slug]:
                 post_id = slug.rpartition("-")[-1]
                 await self.post(scrape_item, post_id)
+            case ["collection", col_id]:
+                await self.collection(scrape_item, col_id)
             case [_creator] | ["cw", _creator]:
                 await self.creator(scrape_item)
             case [] | [""] | ["cw"] if self.is_custom_domain():
@@ -134,8 +138,7 @@ class PatreonGenericCrawler(Crawler, is_generic=True):
             raise ScrapeError(402, "You do not have access to this post")
 
         campaign_name: str = included[post["campaign_id"]]["attributes"]["name"]
-        title = self.create_title(campaign_name)
-        scrape_item.setup_as_album(title)
+        scrape_item.setup_as_album(self.create_title(campaign_name))
 
         scrape_item.uploaded_at = date = self.parse_iso_date(post["published_at"])
         post_title = self.create_separate_post_title(post["title"], post["id"], date)
@@ -260,16 +263,31 @@ class PatreonGenericCrawler(Crawler, is_generic=True):
         await self.handle_file(media.url, scrape_item, filename, ext, m3u8=m3u8)
 
     @error_handling_wrapper
-    async def creator(self, scrape_item: ScrapeItem) -> None:
-        campaign_id = await self.api.campaign_id(scrape_item.url)
-        await self.campaign(scrape_item, campaign_id)
+    async def collection(self, scrape_item: ScrapeItem, collection_id: str) -> None:
+        collection = await self.api.collection(collection_id)
+        scrape_item.setup_as_album(self.create_title(collection.title, collection.id))
+        self.create_eager_task(self.write_metadata(scrape_item, f"collection_{collection.id}", collection))
+        posts = self.api.posts(
+            collection.campaign_id,
+            {
+                "filter[contains_exclusive_posts]": "true",
+                "filter[collection_id]": collection_id,
+                "filter[include_drops]": "true",
+            },
+        )
+
+        await self._iter_posts(scrape_item, posts)
 
     @error_handling_wrapper
-    async def campaign(self, scrape_item: ScrapeItem, campaign_id: str) -> None:
+    async def creator(self, scrape_item: ScrapeItem) -> None:
+        campaign_id = await self.api.campaign_id(scrape_item.url)
         scrape_item.setup_as_profile("")
+        await self._iter_posts(scrape_item, self.api.posts(campaign_id))
+
+    async def _iter_posts(self, scrape_item: ScrapeItem, raw_posts: AsyncGenerator[dict[str, Any]]) -> None:
         sleep = aio.periodic_sleep(10)
         async with aio.non_cancelling_taskgroup() as tg:
-            async for resp in self.api.posts(campaign_id):
+            async for resp in raw_posts:
                 included = _flatten_included(resp["included"])
                 for post in resp["data"]:
                     post = _flatten_post(post)
@@ -279,6 +297,16 @@ class PatreonGenericCrawler(Crawler, is_generic=True):
                     await sleep()
 
     _post_task = auto_task_id(_post)
+
+
+@struct(extras="ignore")
+class Collection:
+    id: str
+    campaign_id: str
+    title: str
+    thumb: str
+    post_ids: list[int]
+    description: str | None = None
 
 
 @URLConfig(allow_empty_path=False)
@@ -333,9 +361,18 @@ class PatreonV1API(API):
     # https://docs.patreon.com/#apiv2-resource-endpoints
     ENTRYPOINT: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://www.patreon.com/api")
 
+    def __post_init__(self) -> None:
+        self.campaign_id = async_lru_cache(self._campaign_id)
+
     async def post(self, post_id: str) -> dict[str, Any]:
         url = (self.ENTRYPOINT / "posts" / post_id).with_query(_API_PARAMS)
         return await self.request_json(url)
+
+    async def collection(self, collection_id: str) -> Collection:
+        url = (self.ENTRYPOINT / "collection" / collection_id).with_query(_API_PARAMS)
+        resp = await self.request_json(url)
+        data = _flatten_post(resp["data"])
+        return deserialize(Collection, data, thumb=data.get("thumbnail", {}).get("original"))
 
     async def media(self, media_id: str) -> Media:
         url = (self.ENTRYPOINT / "media" / media_id).with_query(_API_PARAMS)
@@ -346,7 +383,7 @@ class PatreonV1API(API):
 
         return Media(media_id, attrs.get("file_name"), self.parse_url(url, self.origin), attrs)
 
-    async def campaign_id(self, url: AbsoluteHttpURL) -> str:
+    async def _campaign_id(self, url: AbsoluteHttpURL) -> str:
         async with self.request(url, impersonate=True) as resp:
             soup = await resp.soup()
             with contextlib.suppress(css.SelectorError):
@@ -360,7 +397,7 @@ class PatreonV1API(API):
             # TODO: fix next_js chunk parsing
             return _extract_campaign_id(await resp.text())
 
-    def posts(self, campaign_id: str) -> AsyncGenerator[dict[str, Any]]:
+    def posts(self, campaign_id: str, filter_query: Mapping[str, Any] | None = None) -> AsyncGenerator[dict[str, Any]]:
         url = (
             (self.ENTRYPOINT / "posts")
             .with_query(_API_PARAMS)
@@ -370,6 +407,8 @@ class PatreonV1API(API):
                 }
             )
         )
+        if filter_query:
+            url = url.update_query(filter_query)
         return self.pager(url)
 
     async def pager(self, api_url: AbsoluteHttpURL) -> AsyncGenerator[dict[str, Any]]:
