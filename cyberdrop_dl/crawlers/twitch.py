@@ -108,7 +108,7 @@ class TwitchCrawler(Crawler):
         m3u8_url = (_M3U8_BASE / f"vod/{video_id}.m3u8").with_query(
             allow_source="true",
             allow_spectre="true",
-            allow_audio_only="false",
+            allow_audio_only="true",
             include_unavailable="true",
             platform="web",
             player="twitchweb",
