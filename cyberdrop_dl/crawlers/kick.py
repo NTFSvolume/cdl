@@ -225,7 +225,7 @@ class VODEndpoint(API.Endpoint[KickAPI]):
         url = self.api.V1 / "channels" / creator_id / "videos" / vod_uuid
         vod: dict[str, Any] = (await self.api.request_json(url))["data"]
         if vod.get("is_live"):
-            raise ScrapeError(422, "Livestreams are not supported")
+            raise ScrapeError.live_stream()
 
         return VODMetadata.parse(vod)
 

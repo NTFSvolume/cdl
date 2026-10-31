@@ -255,7 +255,7 @@ class RumbleAPI(API):
         video: dict[str, Any] = await self.request_json(api_url)
 
         if video.get("live") == LiveStatus.CURRENTLY_LIVE:
-            raise ScrapeError(422, "livestreams are not supported")
+            raise ScrapeError.live_stream()
 
         thumb = max(video.get("t", ()), key=lambda t: t["w"], default=None)
         return Video(

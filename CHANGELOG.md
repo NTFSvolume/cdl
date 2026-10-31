@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Download of VODs only available at 1440p/4K without logged in cookies (Twitch)
 - `403 - Forbidden` for some downloads (Twitter, Erome)
+- Do not try to download HLS videos if they are from an active livestream (generic unsupported sites)
 - `422 - Unprocessable Content` downloading any video (Beeg)
 - Rework crawler for new site design (Leakedzone)
 

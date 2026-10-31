@@ -232,6 +232,13 @@ class ScrapeError(CDLBaseError):
     def unknown_url() -> ScrapeError:
         return ScrapeError("Unknown URL path")
 
+    @staticmethod
+    def live_stream(source: object = None) -> ScrapeError:
+        msg = "Live streams are not supported"
+        if source is not None:
+            msg += f" [{source}]"
+        return ScrapeError("Live Stream", msg)
+
 
 class LoginError(CDLBaseError):
     def __init__(self, message: str | None = None, *, origin: HasParents | yarl.URL | None = None) -> None:

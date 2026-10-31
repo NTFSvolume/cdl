@@ -11,7 +11,7 @@ from m3u8 import M3U8 as _M3U8
 from m3u8 import Media, Playlist
 from m3u8.mixins import BasePathMixin, GroupedBasePathMixin
 
-from cyberdrop_dl.exceptions import DownloadError
+from cyberdrop_dl.exceptions import DownloadError, ScrapeError
 from cyberdrop_dl.mediaprops import Codecs, Resolution
 from cyberdrop_dl.signature import dataclass_repr, vars_repr
 from cyberdrop_dl.utils import parse_url
@@ -223,6 +223,10 @@ def _validate_keys(stream: M3U8) -> None:
             )
 
 
+def is_live_stream(m3u8: _M3U8) -> bool:
+    return not (m3u8.is_variant or m3u8.is_endlist)
+
+
 @dataclass_repr("media_type", "base_uri", "is_variant", "source")
 class M3U8(_M3U8):
     def __init__(
@@ -238,6 +242,8 @@ class M3U8(_M3U8):
         self.source: AbsoluteHttpURL | Path | None = source
         super().__init__(content, base_uri=str(base_uri) if base_uri else None)
         _validate_keys(self)
+        if is_live_stream(self):
+            raise ScrapeError.live_stream(source)
 
     @property
     def total_segments(self) -> int:

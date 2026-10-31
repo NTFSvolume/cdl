@@ -210,7 +210,7 @@ class Video:
     @classmethod
     def parse(cls, video: dict[str, Any]) -> Self:
         if video.get("isLive"):
-            raise ScrapeError(422, "Livestreams are not supported")
+            raise ScrapeError.live_stream()
 
         *_, thumb = max((t["width"], t["height"], t["fileUrl"]) for t in video["thumbnails"])
 
