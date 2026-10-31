@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import binascii
+from http import HTTPStatus
 from typing import TYPE_CHECKING, ClassVar, Literal, final
 
 from cyberdrop_dl import aio
 from cyberdrop_dl.clients.http import HTTPConfig
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
+from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, extr_text
 from cyberdrop_dl.utils.dataclass import struct
@@ -16,11 +18,14 @@ if TYPE_CHECKING:
 
     from cyberdrop_dl.url_objects import ScrapeItem
 
+_PREMIUM_ONLY = "This creator's media is for Premium members only"
+
 
 @final
 class Selector:
     JW_PLAYER = "script:-soup-contains('playerInstance.setup')"
     IMAGE = "[data-fancybox] img"
+    PREMIUM_OVERLAY = "div.premium-lock-overlay"
     THUMB = "#media-player img"
     NEXT_PAGE = "a.page-btn[rel=next]"
     PROFILE_MEDIA = (
@@ -42,7 +47,7 @@ class Post:
     thumb: str | None = None
 
 
-@HTTPConfig(rate_limit=(3, 1))
+@HTTPConfig(rate_limit=(3, 10))
 class LeakedZoneCrawler(Crawler):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "Video": "/<model_id>/video/<video_id>",
@@ -67,8 +72,10 @@ class LeakedZoneCrawler(Crawler):
                         await self.short(scrape_item, model, post_id)
                     case ["photo", post_id]:
                         await self.image(scrape_item, model, post_id)
-                    case [] | ["short" | "photo"]:
-                        await self.model(scrape_item)
+                    case [] | ["short"]:
+                        await self.model(scrape_item, model)
+                    case ["photo"]:
+                        await self.model(scrape_item, model, photos=True)
                     case _:
                         raise ValueError
             case _:
@@ -76,7 +83,13 @@ class LeakedZoneCrawler(Crawler):
 
     @classmethod
     def _extract_video(cls, soup: BeautifulSoup, post_id: str) -> Post:
-        js_text = css.select_text(soup, Selector.JW_PLAYER)
+        try:
+            js_text = css.select_text(soup, Selector.JW_PLAYER)
+        except css.SelectorError:
+            if not soup.select_one(Selector.PREMIUM_OVERLAY):
+                raise
+            raise ScrapeError(HTTPStatus.PAYMENT_REQUIRED, _PREMIUM_ONLY) from None
+
         return Post(
             id=post_id,
             type="video",
@@ -86,7 +99,13 @@ class LeakedZoneCrawler(Crawler):
 
     @classmethod
     def _extract_short(cls, soup: BeautifulSoup, post_id: str) -> Post:
-        video = css.select(soup, f"video[aria-label*='#{post_id}']")
+        try:
+            video = css.select(soup, f"video[aria-label*='#{post_id}']")
+        except css.SelectorError:
+            if not soup.select_one(Selector.PREMIUM_OVERLAY):
+                raise
+            raise ScrapeError(HTTPStatus.PAYMENT_REQUIRED, _PREMIUM_ONLY) from None
+
         return Post(
             id=post_id,
             type="short",
@@ -96,20 +115,37 @@ class LeakedZoneCrawler(Crawler):
 
     @classmethod
     def _extract_image(cls, soup: BeautifulSoup, post_id: str) -> Post:
+        try:
+            src = css.select(soup, Selector.IMAGE, "src")
+        except css.SelectorError:
+            ol = css.select(soup, Selector.PREMIUM_OVERLAY)
+            assert ol.parent
+            src = css.select(ol.parent, "img", "src")
+
         return Post(
             id=post_id,
             type="image",
-            src=css.select(soup, Selector.IMAGE, "src"),
+            src=src,
             thumb=None,
         )
 
     @error_handling_wrapper
-    async def model(self, scrape_item: ScrapeItem) -> None:
+    async def model(self, scrape_item: ScrapeItem, model: str, *, photos: bool = False) -> None:
         soup = await self.request_soup(scrape_item.url)
         scrape_item.setup_as_profile("")
 
+        soup, pages = await aio.peek_first(self.web_pager(scrape_item.url))
+        if soup.select_one(Selector.PREMIUM_OVERLAY):
+            if not photos:
+                photos_url = self.PRIMARY_URL / model / "photo"
+                exc = ScrapeError(HTTPStatus.PAYMENT_REQUIRED, _PREMIUM_ONLY)
+                exc.add_note(f"You can use '{photos_url}' as input to download photos, even without premium")
+                raise exc
+
+            self.log.warning(f"{_PREMIUM_ONLY}. Trying to download photos")
+
         sleep = aio.periodic_sleep(10)
-        async for soup in self.web_pager(scrape_item.url):
+        async for soup in pages:
             for new_item in self.iter_children(scrape_item, soup, Selector.PROFILE_MEDIA):
                 self.create_task(self.run(new_item))
                 scrape_item.add_children()
@@ -163,6 +199,8 @@ class LeakedZoneCrawler(Crawler):
         scrape_item.append_folders("photos")
         post = self._extract_image(soup, video_id)
         src = self.parse_url(post.src)
+        if stem := src.name.rpartition("_")[0]:
+            src = src.with_name(stem + src.suffix)
         filename, ext = self.get_filename_and_ext(src.name)
         await self.handle_file(
             src,

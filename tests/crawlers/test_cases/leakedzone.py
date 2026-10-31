@@ -29,6 +29,31 @@ TEST_CASES = [
         "count": 1,
     },
     {
+        "url": "https://leakedzone.com/savannah-lee/photo/25325844",
+        "description": "premium only image",
+        "results": [
+            {
+                "url": "https://image-cdn.leakedzone.com/storage/images/219385/25325844/25325844.webp",
+                "filename": "25325844 [25325844].webp",
+                "debrid_url": None,
+                "original_filename": "25325844.webp",
+                "referer": "https://leakedzone.com/savannah-lee/photo/25325844",
+                "album_id": None,
+                "uploaded_at": None,
+                "download_folder": "re:@savannah-lee (LeakedZone)/photos",
+                "metadata": {
+                    "id": "25325844",
+                    "type": "image",
+                    "src": "https://image-cdn.leakedzone.com/storage/images/219385/25325844/25325844_300.webp",
+                    "thumb": None,
+                },
+                "extra_info": {},
+                "id": ["leakedzone", "/storage/images/219385/25325844/25325844.webp"],
+            }
+        ],
+        "count": 1,
+    },
+    {
         "url": "https://leakedzone.com/lydiagh0st/short/27627972",
         "results": [
             {
