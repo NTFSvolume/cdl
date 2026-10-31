@@ -36,9 +36,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support hotlinked files (Fileditch)
 - Support custom search operators as filters (Pawchive)
 
+### Changed
+
+- Assume `download` subcommand if an URL is provided as the first CLI argument, ex: `cyberdrop-dl <URL>` is equivalent to `cyberdrop-dl download <URL>`
+
 ### Fixed
 
 - Download of VODs only available at 1440p/4K without logged in cookies (Twitch)
+- `403 - Forbidden` for some downloads (Twitter, Erome)
 - `422 - Unprocessable Content` downloading any video (Beeg)
 - Rework crawler for new site design (Leakedzone)
 
