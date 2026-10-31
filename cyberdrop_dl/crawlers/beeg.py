@@ -1,24 +1,20 @@
 from __future__ import annotations
 
-import dataclasses
 import itertools
 from typing import TYPE_CHECKING, Any, ClassVar, Final
 
+from cyberdrop_dl import aio
 from cyberdrop_dl.clients.http import HTTPConfig
 from cyberdrop_dl.crawlers.crawler import API, Crawler, SupportedPaths
 from cyberdrop_dl.exceptions import ScrapeError
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
+from cyberdrop_dl.utils.dataclass import struct
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, Mapping
 
     from cyberdrop_dl.url_objects import ScrapeItem
-
-
-_VIDEO: Final = AbsoluteHttpURL("https://video.beeg.com")
-_THUMBS: Final = AbsoluteHttpURL("https://thumbs.externulls.com")
-_STORE: Final = AbsoluteHttpURL("https://store.externulls.com")
 
 
 @HTTPConfig(rate_limit=(4, 1))
@@ -93,6 +89,7 @@ class BeegComCrawler(Crawler):
             ),
             m3u8=m3u8,
             thumbnail=video.thumb,
+            metadata=video,
         )
 
     @error_handling_wrapper
@@ -101,48 +98,54 @@ class BeegComCrawler(Crawler):
         scrape_item.setup_as_album(self.create_title(slug))
 
         found_videos: bool = False
-        async for videos in self.api.tag_videos(*tags):
-            for video in videos:
-                found_videos = True
-                new_item = scrape_item.create_child(self.PRIMARY_URL / _video_slug(video.id))
-                self.create_task(self._video_task(new_item, video))
-                scrape_item.add_children()
+        sleep = aio.periodic_sleep(10)
+        async with aio.non_cancelling_taskgroup() as tg:
+            async for videos in self.api.tag_videos(*tags):
+                for video in videos:
+                    found_videos = True
+                    new_item = scrape_item.create_child(self.PRIMARY_URL / _video_slug(video.id))
+                    tg.create_task(self._video_task(new_item, video))
+                    scrape_item.add_children()
+                    sleep()
 
         if not found_videos:
             raise ScrapeError(404)
 
 
-class BeegAPI(API):
-    async def video(self, video_id: int) -> Video:
-        resp: dict[str, Any] = await self.request_json(_STORE / f"facts/file/{video_id}")
-        return _parse_video(resp)
-
-    async def play(self, video_id: int) -> AbsoluteHttpURL:
-        key = await self.request_text(_STORE / f"video/play_url/{video_id}")
-        return _VIDEO / key
-
-    async def tag(self, slug: str) -> dict[str, Any]:
-        url = (_STORE / "tag").with_query(slug=slug, get_original="true")
-        resp = await self.request_json(url)
-        return _normalize_tag(resp)
-
-    async def tag_videos(self, *tags: str) -> AsyncGenerator[map[Video]]:
-        limit = 48
-        url = (_STORE / "tag/videos" / ",".join(tags)).with_query(limit=limit)
-        for offset in itertools.count(0, limit):
-            resp = await self.request_json(url.update_query(offset=offset))
-            yield map(_parse_video, resp)
-            if len(resp) < limit:
-                break
-
-
-@dataclasses.dataclass(order=True, frozen=True, slots=True)
+@struct
 class Video:
     id: int
     title: str
     created_at: int
     thumb: AbsoluteHttpURL
     tags: tuple[dict[str, Any], ...]
+
+
+class BeegAPI(API):
+    VIDEO: Final = AbsoluteHttpURL("https://video.beeg.com")
+    THUMBS: Final = AbsoluteHttpURL("https://thumbs.externulls.com")
+    STORE: Final = AbsoluteHttpURL("https://store.externulls.com")
+
+    async def video(self, video_id: int) -> Video:
+        resp: dict[str, Any] = await self.request_json(self.STORE / f"facts/file/{video_id}")
+        return _parse_video(resp)
+
+    async def play(self, video_id: int) -> AbsoluteHttpURL:
+        key = await self.request_text(self.STORE / f"video/play_url/{video_id}")
+        return self.VIDEO / key
+
+    async def tag(self, slug: str) -> dict[str, Any]:
+        url = (self.STORE / "tag").with_query(slug=slug, get_original="true")
+        tag = await self.request_json(url)
+        return _normalize_tag(tag)
+
+    async def tag_videos(self, *tags: str, limit: int = 48) -> AsyncGenerator[map[Video]]:
+        url = (self.STORE / "tag/videos" / ",".join(tags)).with_query(limit=limit)
+        for offset in itertools.count(0, limit):
+            resp = await self.request_json(url.update_query(offset=offset))
+            yield map(_parse_video, resp)
+            if len(resp) < limit:
+                break
 
 
 def _video_slug(video_id: str | int) -> str:
@@ -177,6 +180,6 @@ def _parse_video(video: dict[str, Any]) -> Video:
         id=video_id,
         title=next(d for d in file["data"] if d.get("cd_file") == video_id)["cd_value"],
         created_at=int(Crawler.parse_iso_date(facts["fc_created"])),
-        thumb=_THUMBS / f"videos/{video_id}/{thumb}.webp",
+        thumb=BeegAPI.THUMBS / f"videos/{video_id}/{thumb}.webp",
         tags=tuple(map(_normalize_tag, video.get("tags", ()))),
     )
