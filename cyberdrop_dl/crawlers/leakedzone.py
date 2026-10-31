@@ -1,152 +1,179 @@
 from __future__ import annotations
 
 import binascii
-import dataclasses
-import itertools
-from enum import IntEnum
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, ClassVar, Literal, final
 
+from cyberdrop_dl import aio
 from cyberdrop_dl.clients.http import HTTPConfig
 from cyberdrop_dl.crawlers.crawler import Crawler, SupportedPaths
 from cyberdrop_dl.url_objects import AbsoluteHttpURL
 from cyberdrop_dl.utils import css, extr_text
+from cyberdrop_dl.utils.dataclass import struct
 from cyberdrop_dl.utils.errors import error_handling_wrapper
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator
-
     from bs4 import BeautifulSoup
 
     from cyberdrop_dl.url_objects import ScrapeItem
 
 
-class PostType(IntEnum):
-    IMAGE = 0
-    VIDEO = 1
-
-
+@final
 class Selector:
     JW_PLAYER = "script:-soup-contains('playerInstance.setup')"
-    MODEL_NAME_FROM_PROFILE = "div.actor-name > h1"
-    MODEL_NAME_FROM_VIDEO = "h2.actor-title-port"
-    MODEL_NAME = f"{MODEL_NAME_FROM_VIDEO}, {MODEL_NAME_FROM_PROFILE}"
+    IMAGE = "[data-fancybox] img"
+    THUMB = "#media-player img"
+    NEXT_PAGE = "a.page-btn[rel=next]"
+    PROFILE_MEDIA = (
+        "#media "
+        + css.where(
+            "#media-items-videos",
+            "#media-items-photos",
+            "#media-items-shorts",
+        )
+        + " > a[href]"
+    )
 
 
-@dataclasses.dataclass(slots=True)
+@struct
 class Post:
     id: str
-    type: PostType
-    created_at: str | None = None
-    image: str = ""
-    stream_url_play: str = ""
-
-    @staticmethod
-    def from_dict(post: dict[str, Any]) -> Post:
-        return Post(
-            id=str(post["id"]),
-            type=PostType(post["type"]),
-            created_at=post["created_at"],
-            image=post["image"].replace("_thumb", ""),
-            stream_url_play=post.get("stream_url_play", ""),
-        )
+    type: Literal["video", "image", "short"]
+    src: str
+    thumb: str | None = None
 
 
-@HTTPConfig(rate_limit=(3, 10))
+@HTTPConfig(rate_limit=(3, 1))
 class LeakedZoneCrawler(Crawler):
     SUPPORTED_PATHS: ClassVar[SupportedPaths] = {
         "Video": "/<model_id>/video/<video_id>",
-        "Model": "/<model_id>",
+        "Short": "/<model_id>/short/<short_id>",
+        "Photo": "/<model_id>/photo/<short_id>",
+        "Model videos": "/<model_id>",
+        "Model shorts": "/<model_id>/short",
+        "Model photos": "/<model_id>/photo",
     }
     DOMAIN: ClassVar[str] = "leakedzone"
     FOLDER_DOMAIN: ClassVar[str] = "LeakedZone"
     PRIMARY_URL: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://leakedzone.com")
-    IMAGES_CDN: ClassVar[AbsoluteHttpURL] = AbsoluteHttpURL("https://image-cdn.leakedzone.com/storage/")
+    NEXT_PAGE_SELECTOR: ClassVar[str] = Selector.NEXT_PAGE
 
     async def fetch(self, scrape_item: ScrapeItem) -> None:
         match scrape_item.url.parts[1:]:
-            case [_, "video", video_id]:
-                await self.video(scrape_item, video_id)
-            case [_]:
-                await self.model(scrape_item)
+            case [model, *rest]:
+                match rest:
+                    case ["video", post_id]:
+                        await self.video(scrape_item, model, post_id)
+                    case ["short", post_id]:
+                        await self.short(scrape_item, model, post_id)
+                    case ["photo", post_id]:
+                        await self.image(scrape_item, model, post_id)
+                    case [] | ["short" | "photo"]:
+                        await self.model(scrape_item)
+                    case _:
+                        raise ValueError
             case _:
                 raise ValueError
 
     @classmethod
-    def _extract_video(cls, soup: BeautifulSoup) -> str:
+    def _extract_video(cls, soup: BeautifulSoup, post_id: str) -> Post:
         js_text = css.select_text(soup, Selector.JW_PLAYER)
-        return extr_text(js_text, 'file: f("', '"),')
+        return Post(
+            id=post_id,
+            type="video",
+            src=_decode_video_url(extr_text(js_text, 'file: f("', '"),')),
+            thumb=css.select(soup, "#media-player img", "src"),
+        )
+
+    @classmethod
+    def _extract_short(cls, soup: BeautifulSoup, post_id: str) -> Post:
+        video = css.select(soup, f"video[aria-label*='#{post_id}']")
+        return Post(
+            id=post_id,
+            type="short",
+            src=_decode_video_url(css.attr(video, "data-src")),
+            thumb=css.attr(video, "poster"),
+        )
+
+    @classmethod
+    def _extract_image(cls, soup: BeautifulSoup, post_id: str) -> Post:
+        return Post(
+            id=post_id,
+            type="image",
+            src=css.select(soup, Selector.IMAGE, "src"),
+            thumb=None,
+        )
 
     @error_handling_wrapper
     async def model(self, scrape_item: ScrapeItem) -> None:
         soup = await self.request_soup(scrape_item.url)
-        model_name = css.select_text(soup, Selector.MODEL_NAME_FROM_PROFILE)
-        scrape_item.setup_as_profile(self.create_title(model_name))
+        scrape_item.setup_as_profile("")
 
-        async for posts in self.api_pager(scrape_item.url):
-            for post in posts:
-                if post.type is PostType.VIDEO:
-                    post_url = self.PRIMARY_URL / model_name / "video" / post.id
-                    self.create_task(self._video(scrape_item.create_child(post_url), post))
-                else:
-                    post_url = self.PRIMARY_URL / model_name / "photo" / post.id
-                    self.create_eager_task(self._image(scrape_item.create_child(post_url), post))
+        sleep = aio.periodic_sleep(10)
+        async for soup in self.web_pager(scrape_item.url):
+            for new_item in self.iter_children(scrape_item, soup, Selector.PROFILE_MEDIA):
+                self.create_task(self.run(new_item))
                 scrape_item.add_children()
-
-    async def api_pager(self, url: AbsoluteHttpURL) -> AsyncGenerator[tuple[Post, ...]]:
-        for page in itertools.count(1):
-            posts = tuple(
-                map(
-                    Post.from_dict,
-                    await self.request_json(
-                        url.with_query(page=page),
-                        headers={
-                            "X-Requested-With": "XMLHttpRequest",
-                        },
-                    ),
-                )
-            )
-            yield posts
-            if len(posts) < 48:
-                break
+                await sleep()
 
     @error_handling_wrapper
-    async def video(self, scrape_item: ScrapeItem, video_id: str) -> None:
+    async def video(self, scrape_item: ScrapeItem, model: str, post_id: str) -> None:
         if await self.check_complete_from_referer(scrape_item.url):
             return
 
         soup = await self.request_soup(scrape_item.url)
-        model_name = css.select_text(soup, Selector.MODEL_NAME)
-        scrape_item.setup_as_album(self.create_title(model_name))
-        encoded_url = self._extract_video(soup)
-        post = Post(video_id, PostType.VIDEO, stream_url_play=encoded_url)
-        await self._handle_video(scrape_item, post)
+        scrape_item.setup_as_album(self.create_title(f"@{model}"))
+        scrape_item.append_folders("videos")
+        post = self._extract_video(soup, post_id)
+        await self._video(scrape_item, post)
 
     @error_handling_wrapper
-    async def _video(self, scrape_item: ScrapeItem, post: Post) -> None:
+    async def short(self, scrape_item: ScrapeItem, model: str, post_id: str) -> None:
         if await self.check_complete_from_referer(scrape_item.url):
             return
-        await self._handle_video(scrape_item, post)
 
-    async def _handle_video(self, scrape_item: ScrapeItem, post: Post) -> None:
-        url = self.parse_url(_decode_video_url(post.stream_url_play))
-        async with self.downloader.lock(url):
-            m3u8, _ = await self.request_m3u8(url)
+        soup = await self.request_soup(scrape_item.url)
+        scrape_item.setup_as_album(self.create_title(f"@{model}"))
+        scrape_item.append_folders("shorts")
+        post = self._extract_short(soup, post_id)
+        await self._video(scrape_item, post)
+
+    async def _video(self, scrape_item: ScrapeItem, post: Post) -> None:
+        src = self.parse_url(post.src)
+        async with self.downloader.lock(src):
+            m3u8, _ = await self.request_m3u8(src)
+
         filename, ext = self.get_filename_and_ext(f"{post.id}.mp4")
-        if post.created_at:
-            scrape_item.uploaded_at = self.parse_iso_date(post.created_at)
-        await self.handle_file(scrape_item.url, scrape_item, filename, ext, m3u8=m3u8)
+        await self.handle_file(
+            scrape_item.url,
+            scrape_item,
+            filename,
+            ext,
+            m3u8=m3u8,
+            thumbnail=post.thumb,
+            metadata=post,
+        )
 
     @error_handling_wrapper
-    async def _image(self, scrape_item: ScrapeItem, post: Post) -> None:
-        image_url = self.IMAGES_CDN / post.image
-        filename, ext = self.get_filename_and_ext(image_url.name)
-        assert post.created_at
-        scrape_item.uploaded_at = self.parse_iso_date(post.created_at)
-        custom_filename = self.create_custom_filename(filename, ext, file_id=post.id)
-        await self.handle_file(image_url, scrape_item, filename, ext, custom_filename=custom_filename)
+    async def image(self, scrape_item: ScrapeItem, model: str, video_id: str) -> None:
+        if await self.check_complete_from_referer(scrape_item.url):
+            return
+
+        soup = await self.request_soup(scrape_item.url)
+        scrape_item.setup_as_album(self.create_title(f"@{model}"))
+        scrape_item.append_folders("photos")
+        post = self._extract_image(soup, video_id)
+        src = self.parse_url(post.src)
+        filename, ext = self.get_filename_and_ext(src.name)
+        await self.handle_file(
+            src,
+            scrape_item,
+            filename,
+            ext,
+            custom_filename=self.create_custom_filename(filename, ext, file_id=post.id),
+            metadata=post,
+        )
 
 
 def _decode_video_url(url: str) -> str:
     # cut first and last 16 characters, reverse, base64 decode
-    # TODO: Research if this work on any JW Player
     return binascii.a2b_base64(url[-17:15:-1]).decode()
