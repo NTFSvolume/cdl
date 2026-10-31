@@ -621,7 +621,7 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
             await asyncio.to_thread(check_path_traversal, self.config.download_folder, media_item.download_folder)
         check_dangerous_filename(media_item.download_filename or media_item.filename)
         await self.handle_media_item(media_item, m3u8)
-        await self._handle_thumb(media_item, scrape_item)
+        await self.handle_thumb(media_item.thumbnail, media_item.filename, scrape_item)
 
     @final
     @classmethod
@@ -634,16 +634,20 @@ class Crawler(HTTPMixin, HLSMixin, ABC):
 
         return url
 
-    async def _handle_thumb(self, media_item: MediaItem, scrape_item: ScrapeItem) -> None:
-        if not (media_item.thumbnail and self.config.filters.files.thumbnails):
+    @final
+    async def handle_thumb(
+        self, url: AbsoluteHttpURL | None, filename: str, scrape_item: ScrapeItem, suffix: str = "_thumb"
+    ) -> None:
+        if not (url and self.config.filters.files.thumbnails):
             return
 
-        async with self.catch_errors(media_item.thumbnail):
-            ext = await self.sniff_ext(media_item.thumbnail)
-            thumb_name = f"{Path(media_item.filename).stem}_thumb{ext}"
+        suffix = suffix if suffix.startswith("_") else f"_{suffix}"
+        async with self.catch_errors(url):
+            ext = await self.sniff_ext(url)
+            thumb_name = f"{Path(filename).stem}{suffix}{ext}"
             filename, _ = self.get_filename_and_ext(thumb_name)
             await self.handle_file(
-                media_item.thumbnail,
+                url,
                 scrape_item,
                 thumb_name,
                 ext,
